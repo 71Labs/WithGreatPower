@@ -283,6 +283,9 @@ export const FLUID_REGEN = 4;
 export const LANDING_HEAL = 0.08;
 export const BOSS_HP = 1.05;
 
+/** Real-time play swings dozens of times a night; only this many per stop earn XP. */
+export const SIM_SWING_XP_CAP = 3;
+
 export const SWING = {
   perfect: { xp: 6, fluid: -2, hp: 0, combo: 1, label: "Perfect swing" },
   good: { xp: 3, fluid: -4, hp: 0, combo: 0, label: "Good swing" },

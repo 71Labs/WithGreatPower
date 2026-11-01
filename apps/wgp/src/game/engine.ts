@@ -23,6 +23,7 @@ import {
   STARTER_POWERS,
   STARTER_UNLOCK_LEVEL,
   SUITS,
+  SIM_SWING_XP_CAP,
   SWING,
   VILLAINS,
   XP_TO_NEXT,
@@ -530,7 +531,8 @@ function edition(save: Save, p: Patrol, hero: Hero, rep: number, responsibility:
   }
 
   if (p.quote) stories.push({ headline: "Masked menace speaks", dek: `“${p.quote}” — ${name}, to this newspaper, under duress`, who: "bearson" });
-  if (p.perfectSwings >= 3)
+  // A real-time night has dozens of swings; it takes a lot more of them to be "reckless".
+  if (p.perfectSwings >= (p.realtime ? 15 : 3))
     stories.push({ headline: "Reckless stunts over the rooftops", dek: `${p.perfectSwings} perfect swings in one night. Pigeons file complaints`, who: "mary-jpeg" });
   // One story per person: Bearson doesn't vouch for you in the same paper he quotes you in.
   const covered = (who: Story["who"]) => stories.some((s) => s.who === who);
@@ -751,6 +753,9 @@ export function reduce(save: Save, action: Action): Save {
       if (!p || p.phase !== "swing") return save;
       const perfect = Math.max(0, Math.round(action.perfect));
       const good = Math.max(0, Math.round(action.good));
+      // Every perfect swing counts for the paper; only the first few per stop earn XP.
+      const xpPerfect = Math.min(perfect, SIM_SWING_XP_CAP);
+      const xpGood = Math.min(good, SIM_SWING_XP_CAP - xpPerfect);
       const stop = p.stops[p.index];
       return {
         ...save,
@@ -762,7 +767,8 @@ export function reduce(save: Save, action: Action): Save {
           fluid: clamp(Math.round(action.fluid), 0, MAX_FLUID),
           combo: Math.max(0, Math.round(action.combo)),
           perfectSwings: p.perfectSwings + perfect,
-          swingXp: p.swingXp + perfect * SWING.perfect.xp + good * SWING.good.xp,
+          swingXp: p.swingXp + xpPerfect * SWING.perfect.xp + xpGood * SWING.good.xp,
+          realtime: true,
           // Same fight the turn-based mode starts, so a player can switch to classic mid-night.
           fight: stop.kind === "fight" ? startFight(stop, (p.seed ^ Math.imul(p.index + 1, 0x9e3779b1)) >>> 0) : null,
         },
