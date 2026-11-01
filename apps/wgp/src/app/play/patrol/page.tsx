@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 
-import { PatrolScreen } from "@/components/patrol/patrol-screen";
+import { PatrolGame } from "@/sim/ui/patrol-game";
 
 export const metadata: Metadata = { title: "Patrol" };
 
+/** The real-time swing sim, full screen over the app shell. */
 export default function PatrolPage() {
-  return <PatrolScreen />;
+  return <PatrolGame />;
 }
