@@ -7,6 +7,8 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 
+import { stopMusic } from "@/audio/player";
+import { simAudio } from "@/audio/sim-audio";
 import { StickerLink, StickerPanel } from "@/components/game/kit";
 import { castById, type CastId } from "@/content/cast";
 import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@/game/data";
@@ -234,6 +236,7 @@ function PlaySurface({ save }: { save: HeroSave }) {
       }
     };
     loop.bus.on(onEvent);
+    loop.bus.on(simAudio(stops));
 
     buildSprites(colors, ids).then((sprites) => {
       if (cancelled || !canvasRef.current) return;
@@ -309,6 +312,7 @@ function PlaySurface({ save }: { save: HeroSave }) {
       cancelAnimationFrame(raf);
       loop.dispose();
       renderer?.dispose();
+      stopMusic();
       session.current = null;
       if (debug) delete window.__wgpSim;
     };

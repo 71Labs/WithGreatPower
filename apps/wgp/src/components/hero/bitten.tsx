@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 
+import { playVoice } from "@/audio/player";
 import { HeroArt } from "@/components/cast";
 import { ON_PAPER, StickerButton, StickerFrame, StickerIconButton, StickerPanel } from "@/components/game/kit";
 import { GameLoading } from "@/components/game/ui";
@@ -229,7 +230,12 @@ export function Bitten() {
     return (
       <>
         <TopBar step={0} onBack={back} />
-        <Intro onStart={() => setStep(1)} />
+        <Intro
+          onStart={() => {
+            playVoice("narrator-bite");
+            setStep(1);
+          }}
+        />
       </>
     );
   }

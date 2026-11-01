@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { setSoundEnabled, soundEnabled, subscribeSound } from "@/audio/player";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ArrowUpRight, City, HelpCircle, Medal, Newspaper, Settings, Shirt, TriangleAlert, Vote, Zap } from "@/components/icons";
 import type { CastId } from "@/content/cast";
@@ -193,6 +194,34 @@ function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 /* ------------------------------------------------------------------ settings */
 
+/** Sound on or off, remembered in this browser. A real switch, labelled by the state it turns on. */
+function SoundSwitch() {
+  const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-[20px] border-2 border-game-ink bg-game-paper-2 px-4 py-3">
+      <span className="flex flex-col">
+        <span id="sound-switch-label" className="text-[15px] font-semibold leading-5">
+          Play sound
+        </span>
+        <span className="text-[13px] leading-5 text-game-muted">Effects, voices and music</span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-labelledby="sound-switch-label"
+        onClick={() => setSoundEnabled(!on)}
+        className={`relative h-8 w-14 shrink-0 rounded-full border-2 border-game-ink shadow-[var(--game-shadow-sm)] ${on ? "bg-game-mint" : "bg-game-paper"}`}
+      >
+        <span
+          aria-hidden
+          className={`absolute top-1/2 size-5 -translate-y-1/2 rounded-full border-2 border-game-ink bg-game-paper motion-safe:transition-[left] motion-safe:duration-150 ${on ? "left-[26px]" : "left-[3px]"}`}
+        />
+      </button>
+    </div>
+  );
+}
+
 function SettingsSheet({ save, open, onClose }: { save: Save; open: boolean; onClose: () => void }) {
   const { dispatch } = useGame();
   const router = useRouter();
@@ -265,6 +294,8 @@ function SettingsSheet({ save, open, onClose }: { save: Save; open: boolean; onC
               </span>
             </span>
           </div>
+
+          <SoundSwitch />
 
           <StickerLink href="/" size="sm" className="self-start">
             Visit the website
