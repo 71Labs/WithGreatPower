@@ -1,0 +1,355 @@
+@import "tailwindcss";
+
+/*
+ * Neue Montreal (Pangram Pangram), self-hosted from /public/fonts. The files are not in
+ * git (commercial license); without them the stack falls back to Inter.
+ */
+@font-face {
+  font-family: "Neue Montreal";
+  src: local("Neue Montreal Regular"), local("NeueMontreal-Regular"), url("/fonts/NeueMontreal-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neue Montreal";
+  src: local("Neue Montreal Medium"), local("NeueMontreal-Medium"), url("/fonts/NeueMontreal-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neue Montreal";
+  src: local("Neue Montreal Bold"), local("NeueMontreal-Bold"), url("/fonts/NeueMontreal-Bold.woff2") format("woff2");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * Vessel design tokens. Components use the semantic names below, never raw values.
+ * Theme: warm editorial (71UI playbook C1). Dark mode is designed separately, not inverted.
+ */
+/*
+ * Vessel design tokens. Components use the semantic names below, never raw values.
+ * Theme: cool, structured and light — a framed page with hairline rails, crosshairs at
+ * section joints, chips for labels and two-tone headlines. Dark mode is designed
+ * separately, not inverted.
+ */
+:root {
+  color-scheme: light;
+
+  --vs-backdrop: #e6e6e4; /* outside the framed sheet */
+  --vs-page: #f2f2f1; /* the sheet: section backgrounds */
+  --vs-canvas: #ffffff; /* raised things: cards, chips, inputs */
+  --vs-surface: #f7f7f6; /* quiet fills inside cards */
+  --vs-surface-2: #ebebea; /* tracks, hover */
+  --vs-hairline: #e3e3e1;
+  --vs-hairline-strong: #d4d4d1;
+  --vs-control-border: #8c8c88; /* 3.3:1 on canvas */
+
+  --vs-ink-strong: #0e0e0e; /* 18.6:1 on page */
+  --vs-ink: #282828; /* 13.5:1 */
+  --vs-ink-subtle: #5e5e5c; /* 5.8:1 on page, 6.5:1 on canvas */
+  --vs-ink-faint: #868684; /* first half of two-tone headlines, large text only: 3.3:1 on page */
+
+  --vs-inverse: #141414;
+  --vs-inverse-hover: #2a2a2a;
+  --vs-on-inverse: #ffffff;
+
+  --vs-accent: #cf2a21; /* hero red: 4.7:1 on page, 5.2:1 with white */
+  --vs-accent-subtle: #fde8e6;
+  --vs-on-accent: #ffffff;
+  --vs-focus: #cf2a21;
+
+  --vs-success: #12a150;
+  --vs-success-fill: #e0f6e8;
+  --vs-on-success: #0b6b33;
+  --vs-warning-fill: #fff3d9;
+  --vs-on-warning: #8a4b00;
+  --vs-danger-fill: #fde8e6;
+  --vs-on-danger: #b42318;
+
+  --shadow-overlay: 0 0 0 1px rgb(0 0 0 / 0.05), 0 8px 16px -8px rgb(0 0 0 / 0.12), 0 28px 56px -16px rgb(0 0 0 / 0.18);
+  --shadow-panel: 0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -10px rgb(0 0 0 / 0.1);
+  --shadow-chip: 0 0 0 1px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 16px -6px rgb(0 0 0 / 0.12);
+  --shadow-float: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 4px rgb(0 0 0 / 0.04), 0 18px 40px -12px rgb(0 0 0 / 0.22);
+  --button-solid: linear-gradient(180deg, #343434 0%, #121212 100%);
+  --button-solid-hover: linear-gradient(180deg, #3e3e3e 0%, #1a1a1a 100%);
+  --shadow-button: inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -1px 0 rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.2),
+    0 12px 24px -10px rgb(0 0 0 / 0.55);
+  --tile-solid: linear-gradient(180deg, #2f2f2f 0%, #0f0f0f 100%);
+  --vs-on-tile: #ffffff;
+  --shadow-tile: var(--shadow-button);
+  --image-outline: rgb(0 0 0 / 0.08);
+  --deed-guilloche: rgb(0 0 0 / 0.05);
+  --grid-line: rgb(0 0 0 / 0.045);
+  --hero-wash: rgb(207 42 33 / 0.12);
+  --vs-sticker: #ececea; /* inside a character sticker; stickers stay light in both themes */
+  --vs-fluid: #3f73f0; /* web fluid meters */
+
+  /* The game's sticker kit. Stickers are objects, so these don't change with the theme. */
+  --game-ink: #141414; /* outlines and text on paper: 17:1 */
+  --game-paper: #fffdf8; /* panels, chips, buttons */
+  --game-paper-2: #f3efe6; /* wells inside paper */
+  --game-muted: #5e5a54; /* secondary text on paper: 6.6:1 */
+  --game-hero: #d62e21; /* the one red action: white text 4.9:1 */
+  --game-hero-press: #b3241a;
+  --game-on-hero: #ffffff; /* text on the red action */
+  --game-ink-2: #2a2a2a; /* ink button hover */
+  --game-gold: #ffd95a; /* lit windows, rewards */
+  --game-mint: #16a36a; /* success, with an icon or word */
+  --game-night: #22264f; /* behind the city */
+  --game-shadow: 0 4px 0 var(--game-ink); /* the hard sticker drop */
+  --game-shadow-sm: 0 2px 0 var(--game-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --vs-backdrop: #050506;
+    --vs-page: #0c0c0d;
+    --vs-canvas: #161617;
+    --vs-surface: #1b1b1d;
+    --vs-surface-2: #232325;
+    --vs-hairline: rgb(255 255 255 / 0.08);
+    --vs-hairline-strong: rgb(255 255 255 / 0.14);
+    --vs-control-border: rgb(255 255 255 / 0.4);
+
+    --vs-ink-strong: #f3f3f2;
+    --vs-ink: #cfcfcc;
+    --vs-ink-subtle: #8e8e8a; /* 6.0:1 on page */
+    --vs-ink-faint: #6e6e6b; /* large text only: 3.6:1 on page */
+
+    --vs-inverse: #f3f3f2;
+    --vs-inverse-hover: #dcdcda;
+    --vs-on-inverse: #0c0c0d;
+
+    --vs-accent: #ff5a4e; /* 6.4:1 on page */
+    --vs-accent-subtle: #3a1411;
+    --vs-on-accent: #0c0c0d;
+    --vs-focus: #ff5a4e;
+
+    --vs-success: #4ade80;
+    --vs-success-fill: #0f2619;
+    --vs-on-success: #6fdc96;
+    --vs-warning-fill: #2e2210;
+    --vs-on-warning: #f5b94a;
+    --vs-danger-fill: #3a1512;
+    --vs-on-danger: #f97066;
+
+    --shadow-overlay: 0 0 0 1px rgb(255 255 255 / 0.08), 0 24px 48px -12px rgb(0 0 0 / 0.7);
+    --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.07), 0 12px 32px -12px rgb(0 0 0 / 0.6);
+    --shadow-chip: 0 0 0 1px rgb(255 255 255 / 0.08), 0 6px 16px -6px rgb(0 0 0 / 0.6);
+    --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.08), 0 18px 40px -12px rgb(0 0 0 / 0.7);
+    --button-solid: linear-gradient(180deg, #ffffff 0%, #dadad7 100%);
+    --button-solid-hover: linear-gradient(180deg, #ffffff 0%, #e6e6e3 100%);
+    --shadow-button: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -1px 0 rgb(0 0 0 / 0.15), 0 12px 24px -10px rgb(0 0 0 / 0.8);
+    --tile-solid: linear-gradient(180deg, #3a3a3c 0%, #1c1c1e 100%);
+    --vs-on-tile: #f3f3f2;
+    --shadow-tile: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -1px 0 rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06),
+      0 8px 16px -8px rgb(0 0 0 / 0.8);
+    --image-outline: rgb(255 255 255 / 0.08);
+    --deed-guilloche: rgb(255 255 255 / 0.04);
+    --grid-line: rgb(255 255 255 / 0.035);
+    --hero-wash: rgb(255 90 78 / 0.14);
+    --vs-fluid: #7aa2ff;
+  }
+}
+
+@theme inline {
+  --color-backdrop: var(--vs-backdrop);
+  --color-page: var(--vs-page);
+  --color-canvas: var(--vs-canvas);
+  --color-surface: var(--vs-surface);
+  --color-surface-2: var(--vs-surface-2);
+  --color-hairline: var(--vs-hairline);
+  --color-hairline-strong: var(--vs-hairline-strong);
+  --color-control-border: var(--vs-control-border);
+  --color-ink-strong: var(--vs-ink-strong);
+  --color-ink: var(--vs-ink);
+  --color-ink-subtle: var(--vs-ink-subtle);
+  --color-ink-faint: var(--vs-ink-faint);
+  --color-inverse: var(--vs-inverse);
+  --color-inverse-hover: var(--vs-inverse-hover);
+  --color-on-inverse: var(--vs-on-inverse);
+  --color-on-tile: var(--vs-on-tile);
+  --color-sticker: var(--vs-sticker);
+  --color-fluid: var(--vs-fluid);
+  --color-game-ink: var(--game-ink);
+  --color-game-paper: var(--game-paper);
+  --color-game-paper-2: var(--game-paper-2);
+  --color-game-muted: var(--game-muted);
+  --color-game-hero: var(--game-hero);
+  --color-game-hero-press: var(--game-hero-press);
+  --color-game-on-hero: var(--game-on-hero);
+  --color-game-ink-2: var(--game-ink-2);
+  --color-game-gold: var(--game-gold);
+  --color-game-mint: var(--game-mint);
+  --color-game-night: var(--game-night);
+  --color-accent: var(--vs-accent);
+  --color-accent-subtle: var(--vs-accent-subtle);
+  --color-on-accent: var(--vs-on-accent);
+  --color-success: var(--vs-success);
+  --color-success-fill: var(--vs-success-fill);
+  --color-on-success: var(--vs-on-success);
+  --color-warning-fill: var(--vs-warning-fill);
+  --color-on-warning: var(--vs-on-warning);
+  --color-danger-fill: var(--vs-danger-fill);
+  --color-on-danger: var(--vs-on-danger);
+
+  --font-sans: "Neue Montreal", var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Neue Montreal", var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-panel: 24px;
+  --radius-chip: 8px;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  :root {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-optical-sizing: auto;
+  }
+
+  body {
+    background: var(--vs-backdrop);
+    color: var(--vs-ink);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    color: var(--vs-ink-strong);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    text-underline-position: from-font;
+    text-decoration-skip-ink: auto;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--vs-focus);
+    outline-offset: 2px;
+  }
+
+  img,
+  video {
+    outline: 1px solid var(--image-outline);
+    outline-offset: -1px;
+  }
+
+  [id] {
+    scroll-margin-top: 96px;
+  }
+}
+
+@layer components {
+  /* Grid backgrounds are retired (the user asked for none); kept as a no-op for old markup. */
+  .bg-grid {
+    background-image: none;
+  }
+
+  /* Soft accent light behind a hero product shot. Decorative only. */
+  .bg-hero-wash {
+    background-image: radial-gradient(ellipse 60% 55% at 50% 40%, var(--hero-wash), transparent 70%),
+      repeating-radial-gradient(circle at 50% 120%, transparent 0 22px, var(--grid-line) 22px 23px);
+  }
+
+  /* Every changing number: balances, prices, nonces, counters. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Addresses and hashes may break anywhere rather than overflow. */
+  .hash {
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--vs-ink-subtle);
+  }
+
+  /* Fine engraved border used on the deed. Decorative only. */
+  .guilloche {
+    background-image: repeating-linear-gradient(
+        45deg,
+        var(--deed-guilloche) 0 1px,
+        transparent 1px 6px
+      ),
+      repeating-linear-gradient(-45deg, var(--deed-guilloche) 0 1px, transparent 1px 6px);
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes seal-stamp {
+    0% {
+      opacity: 0;
+      scale: 1.35;
+      rotate: -14deg;
+      filter: blur(4px);
+    }
+    60% {
+      opacity: 1;
+      scale: 0.96;
+      rotate: -7deg;
+      filter: blur(0);
+    }
+    100% {
+      opacity: 1;
+      scale: 1;
+      rotate: -8deg;
+    }
+  }
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  @keyframes select-in {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+      scale: 0.98;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+      scale: 1;
+    }
+  }
+
+  .animate-seal {
+    animation: seal-stamp 520ms var(--ease-out-quint) both;
+  }
+
+  .animate-rise {
+    animation: rise-in 420ms var(--ease-out-quint) both;
+  }
+}

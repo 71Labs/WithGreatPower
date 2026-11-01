@@ -1,0 +1,23 @@
+# Rust
+contracts/**/target/
+
+# Node / Next.js
+node_modules/
+apps/*/.next/
+apps/*/out/
+apps/*/next-env.d.ts
+*.tsbuildinfo
+
+# Env and secrets — keys never go in the repo
+.env
+.env.*
+!.env.example
+
+# Submission payloads contain personal data
+submission*.json
+
+.DS_Store
+.vercel
+
+# Commercial font (Pangram Pangram). Needs a webfont license before it is committed or served publicly.
+apps/*/public/fonts/NeueMontreal-*
