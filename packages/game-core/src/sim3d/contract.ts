@@ -25,7 +25,10 @@ export interface Building {
   z1: number;
   /** Roof height of the main box. */
   h: number;
-  /** A setback tier on the roof, if any. */
+  /**
+   * A setback tier on the roof, if any. Its `h` is the tier's own roof height, measured from
+   * the street like the building's (so the tier spans y = building.h → top.h).
+   */
   top: { x0: number; z0: number; x1: number; z1: number; h: number } | null;
   district: DistrictId;
   /** Index into CITY.near/mid/far-like fills, chosen by the generator; the scene maps it to a color. */
@@ -72,12 +75,28 @@ export interface Zone {
   bounds: { x0: number; z0: number; x1: number; z1: number; h: number };
   villain: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil" | null;
   ally: "aunt-mainnet" | "uncle-gen" | "mary-jpeg" | "bearson" | "gwei" | null;
+  /** Errands: where the ally stands (on the roof, or on the water tower for Gwei). Added in v1.1. */
+  allyAt?: Vec3 | null;
 }
 
 export interface Bridge {
   /** Deck as a box; cables are listed as anchors. */
   deck: { x0: number; z0: number; x1: number; z1: number; y: number };
+  /** The tower legs' top centres; each leg is a square column from the street up to its y. */
   towers: Vec3[];
+  /** The axis the deck runs along (Doc's arms sweep in the vertical plane along it). Added in v1.1. */
+  axis?: "x" | "z";
+  /** Half the side of each square tower leg. Added in v1.1. */
+  towerHalf?: number;
+}
+
+/** A sagging line between two points: street wires, arena lines and bridge cables. Added in v1.1. */
+export interface Cable {
+  a: Vec3;
+  b: Vec3;
+  /** How far the middle hangs below the straight line: a point at t is lerp(a, b, t) − sag·4t(1 − t) in y. */
+  sag: number;
+  kind: "wire" | "arena" | "bridge";
 }
 
 export interface City {
@@ -91,8 +110,10 @@ export interface City {
   /** A river channel (a miss, like the street) running along one grid line, if this night has the bridge. */
   river: { x0: number; z0: number; x1: number; z1: number } | null;
   bridge: Bridge | null;
-  /** Where the hero starts: a central roof. */
+  /** Where the hero starts: a point on a central roof (feet on the roof; the sim adds the hero's radius). */
   start: Vec3;
+  /** Every cable, for drawing; their web anchors are already in `anchors`. Added in v1.1. */
+  cables?: Cable[];
 }
 
 /* ------------------------------------------------------------------ input */
