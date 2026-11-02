@@ -5,11 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { setSoundEnabled, soundEnabled, subscribeSound } from "@/audio/player";
+import { AccountCenter, AccountChip } from "@/components/account/account-center";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ArrowUpRight, City, HelpCircle, Medal, Newspaper, Settings, Shirt, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
 import type { CastId } from "@wgp/game-core/cast";
 import { XP_TO_NEXT } from "@wgp/game-core/data";
-import { useGame } from "@/game/store";
+import { useAccount, useGame } from "@/game/store";
 import type { Hero, Save } from "@wgp/game-core/types";
 
 import { GameBackdrop, type BackdropVariant } from "./backdrop";
@@ -165,6 +166,7 @@ const HOW_TO: { who: CastId; title: string; text: string }[] = [
 ];
 
 function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const signedIn = useAccount().status === "signed-in";
   return (
     <GameSheet open={open} onClose={onClose} eyebrow="With Great Power" title="How to play">
       <ol className="flex flex-col gap-3">
@@ -187,7 +189,8 @@ function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
         ))}
       </ol>
       <p className="mt-4 text-[13px] leading-5 text-game-muted">
-        Your hero is saved in this browser. Swing out from Tonight; everything else is one tap away in the dock.
+        {signedIn ? "Your hero is saved to your account." : "Your hero is saved in this browser."} Swing out from Tonight; everything else is one tap away in the
+        dock.
       </p>
     </GameSheet>
   );
@@ -225,6 +228,7 @@ function SoundSwitch() {
 
 function SettingsSheet({ save, open, onClose }: { save: Save; open: boolean; onClose: () => void }) {
   const { dispatch } = useGame();
+  const where = useAccount().status === "signed-in" ? "your account" : "this browser";
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const confirmRef = useRef<HTMLParagraphElement>(null);
@@ -280,7 +284,7 @@ function SettingsSheet({ save, open, onClose }: { save: Save; open: boolean; onC
         <div className="flex flex-col gap-3">
           {/* Focus lands here, so the consequence is the first thing read. */}
           <p ref={confirmRef} tabIndex={-1} className="rounded-[10px] text-[15px] leading-6 text-game-ink focus-visible:outline-offset-4">
-            This wipes {hero.name} from this browser: {what}. There’s no undo, and Bearson will print that you quit.
+            This wipes {hero.name} from {where}: {what}. There’s no undo, and Bearson will print that you quit.
           </p>
           <p className="text-[13px] leading-5 text-game-muted">You can get bitten again, but you start from level 1.</p>
         </div>
@@ -291,7 +295,7 @@ function SettingsSheet({ save, open, onClose }: { save: Save; open: boolean; onC
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-[16px] font-semibold leading-5">{hero.name}</span>
               <span className="num text-[13px] leading-5 text-game-muted">
-                Level {hero.level} · bitten on night {hero.createdNight} · saved in this browser
+                Level {hero.level} · bitten on night {hero.createdNight} · saved {where === "this browser" ? "in this browser" : "to your account"}
               </span>
             </span>
           </div>
@@ -308,7 +312,7 @@ function SettingsSheet({ save, open, onClose }: { save: Save; open: boolean; onC
               Danger zone
             </h3>
             <p className="text-[14px] leading-5 text-game-muted">
-              Deleting {hero.name} wipes {what} from this browser.
+              Deleting {hero.name} wipes {what} from {where}.
             </p>
             <StickerButton
               ref={dangerRef}
@@ -352,6 +356,7 @@ function TopChips({ save }: { save: Save | null }) {
             ) : null}
           </div>
           <div className="pointer-events-auto flex shrink-0 gap-2">
+            <AccountChip className={chip} phoneIcon="signed-in" />
             <StickerIconButton label="How to play" size="lg" onClick={() => setSheet("help")} className="text-[20px] font-bold">
               <HelpCircle aria-hidden strokeWidth={2} />
             </StickerIconButton>
@@ -418,10 +423,11 @@ function Dock({ pathname, save }: { pathname: string | null; save: Save | null }
 /* ------------------------------------------------------------------ the shell */
 
 /**
- * The frame round every game screen: the living city behind, the hero chip and the
- * help and settings buttons floating along the top, and the tab dock seated on the
- * bottom edge. The game itself (/play/patrol) gets the whole screen; onboarding
- * (/play/bitten) keeps the city but brings its own back control.
+ * The frame round every game screen: the living city behind, the hero, account, help
+ * and settings chips floating along the top, and the tab dock seated on the bottom edge.
+ * The game itself (/play/patrol) gets the whole screen; onboarding (/play/bitten) keeps
+ * the city and the account chip but brings its own back control. The account sheet,
+ * the import offer and toasts float over all of them.
  */
 export function GameShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -446,6 +452,15 @@ export function GameShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       {chrome ? <Dock pathname={pathname} save={save} /> : null}
+      {onboarding ? (
+        // Onboarding hides the chips, but a returning player on a new device lands here first: let them sign in.
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-30 px-3 pt-[max(12px,env(safe-area-inset-top))] sm:px-6">
+          <div className="mx-auto flex max-w-[1040px] justify-end">
+            <AccountChip className={chip} phoneIcon="always" />
+          </div>
+        </div>
+      ) : null}
+      <AccountCenter chrome={chrome} />
     </div>
   );
 }
