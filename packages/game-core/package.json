@@ -8,7 +8,8 @@
     "./data": "./src/rules/data.ts",
     "./engine": "./src/rules/engine.ts",
     "./cast": "./src/rules/cast.ts",
-    "./content": "./src/rules/content.ts"
+    "./content": "./src/rules/content.ts",
+    "./sim3d/contract": "./src/sim3d/contract.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
