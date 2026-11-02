@@ -312,7 +312,8 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
       put("arm", o.x, o.y, o.z, 20, armed && v.arms[i].len >= 110, armTip(v, i));
     }
   }
-  if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck);
+  // Gwei swings in on her own web: `to` is the anchor she hangs from.
+  if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck, s.gwei.anchor);
   hz.length = m;
   return out;
 }
