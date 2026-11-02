@@ -1,7 +1,8 @@
 /**
- * Sim events as scene effects: comic bursts where things happen, the card flip on a
- * perfect release, and a camera cut when the hero is moved further than a swing could
- * take him. Listens on the loop's bus; never touches game state.
+ * Sim events as scene effects: comic bursts where things happen, the hero's somersault on
+ * a perfect release, a slack strand when a web finds nothing, and a camera cut when the
+ * hero is moved further than a swing could take him. Listens on the loop's bus; never
+ * touches game state.
  */
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
@@ -12,6 +13,8 @@ export interface EffectsTarget {
   burst(word: string, at: Vec3, opts?: { size?: number; life?: number; rise?: number }): void;
   flip(): void;
   cut(): void;
+  /** A web that found nothing to stick to: the strand flies out and drops. */
+  fizzle?(): void;
 }
 
 /** Bursts sit a little above the point they mark, so they don't hide the sticker. */
@@ -42,6 +45,9 @@ export function sceneEffects(target: () => EffectsTarget | null) {
         break;
       case "blast":
         t.burst(ev.kind === "bomb" ? "WHAM!" : "POW!", above(ev.x, ev.y, ev.z, 20), { size: 100 });
+        break;
+      case "fizzle":
+        t.fizzle?.();
         break;
       case "shield-pop":
         t.burst("ZAP!", above(ev.x, ev.y, ev.z), { size: 80, life: 0.6 });

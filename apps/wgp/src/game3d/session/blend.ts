@@ -1,7 +1,8 @@
 /**
  * Drawing between ticks. The loop keeps the last two ticks' RenderFrame3Ds (filled by
  * game-core's fillRenderFrame) and writes the frame the scene reads as a blend of them,
- * in place: positions slide by `alpha`, everything else is the latest tick's. A jump too
+ * in place: positions slide by `alpha`, everything else (velocity, facing, the animation
+ * state words and their ages, Doc's arms, the Goblin's bank) is the latest tick's. A jump too
  * big for one tick (a teleport beside an errand ally, a resume) snaps instead of sliding.
  * Allocates only when a list grows.
  */
@@ -33,6 +34,14 @@ const copyInto = (out: Vec3, v: Vec3) => {
   out.y = v.y;
   out.z = v.z;
 };
+
+/** Copies an optional vector into `out`'s slot, reusing it; clears the slot when absent. */
+function copyOptional(v: Vec3 | undefined, slot: Vec3 | undefined): Vec3 | undefined {
+  if (!v) return undefined;
+  const out = slot ?? v3();
+  copyInto(out, v);
+  return out;
+}
 
 /** Whether the hero moved further than one tick allows between the two frames. */
 export function teleported(prev: RenderFrame3D, curr: RenderFrame3D): boolean {
@@ -72,6 +81,11 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
   h.fluid = c.fluid;
   h.hurtFlash = c.hurtFlash;
   h.shield = c.shield;
+  h.facing = copyOptional(c.facing, h.facing);
+  h.action = c.action;
+  h.actionTicks = c.actionTicks;
+  h.ropeLen = c.ropeLen;
+  h.cloak = c.cloak;
 
   const vs = out.villains;
   for (let i = 0; i < curr.villains.length; i++) {
@@ -84,6 +98,20 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
     slot.hits = cv.hits;
     slot.hitsMax = cv.hitsMax;
     slot.state = cv.state;
+    slot.vel = copyOptional(cv.vel, slot.vel);
+    slot.facing = copyOptional(cv.facing, slot.facing);
+    slot.stateTicks = cv.stateTicks;
+    slot.bank = cv.bank;
+    if (cv.arms) {
+      const same = pv && pv.id === cv.id && pv.copy === cv.copy && pv.arms?.length === cv.arms.length;
+      const arms = (slot.arms ??= []);
+      for (let a = 0; a < cv.arms.length; a++) {
+        const arm = (arms[a] ??= { from: v3(), to: v3() });
+        lerpInto(arm.from, same ? pv.arms![a].from : undefined, cv.arms[a].from, t);
+        lerpInto(arm.to, same ? pv.arms![a].to : undefined, cv.arms[a].to, t);
+      }
+      arms.length = cv.arms.length;
+    } else delete slot.arms;
     vs[i] = slot;
   }
   vs.length = curr.villains.length;
