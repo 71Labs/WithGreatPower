@@ -66,6 +66,14 @@ export function dispatch(action: Action) {
   listeners.forEach((l) => l());
 }
 
+/** Replaces the guest's save wholesale, e.g. with the save after an unranked night. */
+export function commitLocalSave(save: Save) {
+  if (save === current) return;
+  current = save;
+  persist(save);
+  listeners.forEach((l) => l());
+}
+
 /** The save (null during server render and the first client render) and dispatch. */
 export function useGame(): { save: Save | null; dispatch: (action: Action) => void } {
   const save = useSyncExternalStore(subscribe, snapshot, () => null);
