@@ -14,8 +14,6 @@ export interface QualityPreset {
   maxDpr: number;
   /** Multisampling (a context attribute: changing it needs a new canvas). */
   antialias: boolean;
-  /** Cards as extruded die-cut stickers, or flat quads with an offset ink quad. */
-  extrudedCards: boolean;
   /** Ink hulls on small rooftop props (buildings, towers and the bridge always get them). */
   propOutlines: boolean;
   /** Star points in the sky. */
@@ -24,12 +22,20 @@ export interface QualityPreset {
   skyline: boolean;
   /** Drawing-buffer pixels the tier may use. */
   pixelBudget: number;
+  /** Cars driving the streets (0: no traffic, and no draw calls for it). */
+  cars: number;
+  /** Ben-Day dots on shadow faces and in the far fog bands. */
+  halftone: boolean;
+  /** Near-sector detail: 1 is rooftop clutter only; 2 adds lamps, signals, fire escapes and parapets. */
+  detail: 1 | 2;
+  /** Comic speed lines at high speed (always off under reduced motion). */
+  speedLines: boolean;
 }
 
 export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
-  low: { tier: "low", maxDpr: 1, antialias: false, extrudedCards: false, propOutlines: false, stars: 60, skyline: true, pixelBudget: 1_200_000 },
-  medium: { tier: "medium", maxDpr: 1.5, antialias: false, extrudedCards: true, propOutlines: true, stars: 140, skyline: true, pixelBudget: 2_000_000 },
-  high: { tier: "high", maxDpr: 2, antialias: true, extrudedCards: true, propOutlines: true, stars: 220, skyline: true, pixelBudget: 4_000_000 },
+  low: { tier: "low", maxDpr: 1, antialias: false, propOutlines: false, stars: 60, skyline: true, pixelBudget: 1_200_000, cars: 0, halftone: false, detail: 1, speedLines: false },
+  medium: { tier: "medium", maxDpr: 1.5, antialias: false, propOutlines: true, stars: 140, skyline: true, pixelBudget: 2_000_000, cars: 120, halftone: true, detail: 2, speedLines: true },
+  high: { tier: "high", maxDpr: 2, antialias: true, propOutlines: true, stars: 220, skyline: true, pixelBudget: 4_000_000, cars: 240, halftone: true, detail: 2, speedLines: true },
 };
 
 export const TIERS: QualityTier[] = ["low", "medium", "high"];
