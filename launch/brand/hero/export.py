@@ -439,4 +439,5 @@ def main():
     print("[export] wrote", o["out"], f"{os.path.getsize(o['out']) / 1e6:.2f} MB")
 
 
-main()
+if __name__ == "__main__":
+    main()

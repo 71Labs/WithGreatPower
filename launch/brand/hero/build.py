@@ -851,4 +851,5 @@ def main():
         os.remove(path + "1")  # Blender's backup copy
 
 
-main()
+if __name__ == "__main__":
+    main()

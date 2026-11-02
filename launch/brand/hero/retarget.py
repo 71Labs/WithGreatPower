@@ -47,6 +47,17 @@ CLIPS = {
     "Death01": ("death", False),
 }
 
+# The cast's extra clips (retarget.py --cast → cast-anims.glb): the hero's file has the rest.
+CAST_CLIPS = {
+    "Interact": ("interact", False),
+    "Crouch_Idle_Loop": ("crouch-idle", True),
+    "Spell_Simple_Idle_Loop": ("spell-idle", True),
+    "Spell_Simple_Shoot": ("spell-shoot", False),
+    "Sword_Idle": ("sword-idle", True),
+    "Swim_Idle_Loop": ("swim-idle", True),
+}
+CAST_OUT = os.path.join(HERE, "..", "..", "..", "apps", "wgp", "public", "models", "cast-anims.glb")
+
 # UAL bone → hero bone (the same UE naming, bar the head).
 SIDES = ("clavicle", "upperarm", "lowerarm", "hand", "thigh", "calf", "foot", "ball")
 MAP = {"pelvis": "pelvis", "spine_01": "spine_01", "spine_02": "spine_02", "spine_03": "spine_03", "neck_01": "neck_01", "Head": "head"}
@@ -67,9 +78,12 @@ for s in ("l", "r"):
     NEXT.update({f"thigh_{s}": f"calf_{s}", f"calf_{s}": f"foot_{s}", f"foot_{s}": f"ball_{s}"})
 
 
-def out_path():
+def cli():
     a = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    return os.path.abspath(a[a.index("--out") + 1]) if "--out" in a else os.path.abspath(OUT)
+    cast = "--cast" in a
+    default = CAST_OUT if cast else OUT
+    out = os.path.abspath(a[a.index("--out") + 1]) if "--out" in a else os.path.abspath(default)
+    return out, (CAST_CLIPS if cast else CLIPS)
 
 
 def direction(rig, name, head_name):
@@ -86,7 +100,13 @@ def direction(rig, name, head_name):
 
 
 def main():
-    out = out_path()
+    out, clips = cli()
+    made = retarget(clips)
+    export(made, out)
+
+
+def retarget(clips):
+    """Put the UAL actions named in `clips` onto NodeRig; returns the new actions."""
     sc = bpy.context.scene
     tgt = bpy.data.objects["NodeRig"]
     for ob in list(sc.objects):
@@ -126,7 +146,7 @@ def main():
             walk(b)
 
     made = []
-    for action_name, (clip, loop) in CLIPS.items():
+    for action_name, (clip, loop) in clips.items():
         act = next(a for a in bpy.data.actions if a.name.endswith("|" + action_name))
         src.animation_data_create()
         src.animation_data.action = act
@@ -183,6 +203,12 @@ def main():
 
     # Only our clips, on the hero's armature alone.
     bpy.data.objects.remove(src, do_unlink=True)
+    return made
+
+
+def export(made, out):
+    sc = bpy.context.scene
+    tgt = bpy.data.objects["NodeRig"]
     for a in list(bpy.data.actions):
         if a not in made:
             bpy.data.actions.remove(a)
@@ -215,4 +241,5 @@ def main():
     print("[retarget] wrote", out, f"{os.path.getsize(out) / 1e6:.2f} MB")
 
 
-main()
+if __name__ == "__main__":
+    main()

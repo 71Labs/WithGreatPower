@@ -215,3 +215,75 @@ The coordinator fetched Quaternius' *Universal Animation Library* (CC0) into `mo
 - **In the game** (`anim/motion.ts`, `anim/mocap.ts`, `anim/stand.ts`):
   - **Standing:** the UAL idle has a wide, staggered stance, so standing uses its upper body and pelvis over procedural legs planted at hip width, with a contrapposto weight shift every 5–9 s and glances.
   - **Locomotion:** loops blend on one phase aligned to the left heel strike. Each loop's natural speed is measured at load by running its frames through the rig: walk ≈ 50 units/s, jog ≈ 230, sprint ≈ 220 at a faster cadence.
+
+## The rest of the cast (`build_cast.py`, `cast.py`)
+
+Every other character is now a real human body too, made the same way as the hero and on the
+same 53-bone skeleton, so the hero's clips and rig code drive them unchanged:
+
+```sh
+launch/brand/hero/make.sh cast                                       # all nine, plus cast-anims.glb (~8 min)
+blender -b -P launch/brand/hero/build_cast.py -- --who sybil          # one → apps/wgp/public/models/cast-sybil{,-lo}.glb
+#   --preview out.png (flat-colour sheets: body, head, light body)   --no-export   --blend (keeps build/cast-<id>.blend)
+blender -b launch/brand/hero/build/hero-base.blend -P launch/brand/hero/retarget.py -- --cast   # → cast-anims.glb
+```
+
+**The table (`cast.py`).** Per character: MakeHuman macros (sex, age, muscle, weight, height,
+proportions, a race mix) and a few detail targets (a paunch, a V-taper), a palette of up to 16
+colours (index 0 is ink; some are flat or glossy), triangle budgets, and a build function.
+
+| Character | Body | Look |
+|---|---|---|
+| Aunt Mainnet | woman, 70, slight, 1.49 m (her bun adds a few cm) | grey hair cap and bun, round glasses, lilac dress with a flared skirt, pearls |
+| Uncle Gen | man, 70, average, paunch | bald with grey sides, rectangular glasses, brown cardigan over a blue shirt (V and collar) |
+| Mary JPEG | woman, 22, slim | red pixel hair (voxels in three reds), teal tee, jeans, white sneakers |
+| J. Jonah Bearson | man, 50, stocky | dark suit, white shirt and collar, red tie, fur-coloured hands; a sculpted bear head with a grey flat-top, mustache, nose and a cigar |
+| Gwei | woman, 22, athletic | white suit with black shoulders and sleeves, teal shoes; a sculpted hood with a pink lining, blonde fringe, the hero's web on her face (lilac) and his lens shells |
+| Doc Octochain | man, 50, paunch | brown bowl cut, round sunglasses, green coat with tails open at the front, dark shirt; a steel harness (pack, belt, four booms) whose ends are his chains' sockets |
+| Sandwich Man | man, 35, fit | black suit, white shirt, red tie; a burger head (bun with seeds, lettuce, tomato, cheese with drips, bread) |
+| Gas Goblin | man, 30, lean | purple suit, dark trousers and boots, gloves, a purple cowl; a sculpted goblin head (long nose, chin, pointed ears) under a hood with a curled tip; the glider on its own bone; a fuel nozzle in his fist |
+| The Sybil | man, 25, very muscular | all glossy black; copies in grey |
+
+**Steps (`build_cast.py`).**
+1. *Body:* `build.make_human` with the table's macros, the game_engine rig and MakeHuman's weights.
+2. *Clothed:* the toes become a shoe's toe box (`build.toe_boxes`); navel, nipples and the like
+   smoothed; each eye opening spanned by a membrane anchored on the lids and bulged a little,
+   so the painted eyes sit on a smooth closed lid.
+3. *Painted:* each face belongs to a region by its dominant bone (head, neck, torso, upper arm,
+   forearm, hand, thigh, shin, foot). A paint is a palette entry, the regions it may touch and
+   a set of half-spaces (a sleeve's end across the arm, a waistline, a round neckline, a V); the
+   faces are first cut along each plane (`bisect_plane`), so seams are clean lines.
+4. *Dressed:* `flare` (skirt, coat tails: rings wrapping the trunk-and-legs outline, never
+   narrowing, skinned from the pelvis to the thighs by side), `shell` (hair caps and cowls:
+   body faces above a hairline copied, pushed out, the rim smoothed along itself and walled down
+   to the scalp), `hood_mb` (a metaball hood open at the face, lined), `voxel_hair`, `glasses`,
+   `tie`, `pearls`, `cigar`; head pieces from metaballs (`Kit.metaball`, sizes are the surface's)
+   on the head bone, with the human head deleted under them.
+5. *Decimated* to the budget with colour-seam vertices locked (a collapse-decimate vertex group
+   at 0), so seams survive exactly; props are joined after. The light body ("BodyLo") is the
+   same, decimated further, with heavier props halved.
+6. *Exported* (`export_glb`): both bodies in `cast-<id>.glb`, the light one alone in
+   `cast-<id>-lo.glb`. Attributes: `_pal` (palette index per corner), `_face` (cm from between
+   the eyes on the face's plane, and a mask), `_ao` (`export.bake_ao`), and Gwei's `_web_*`
+   (resampled after decimation, as on the hero). The node extras (`wgp`) hold the palette, the
+   flat and glossy entries, the face decals and Doc's sockets (glTF axes, metres).
+
+**Faces.** Human faces keep their real nose, lips and ears; the eyes, brows, mouths, teeth,
+blush and freckles are decals the shader draws in cm on the face's plane, with ink rims a fixed
+number of pixels wide (the stickers' look). Shapes: ellipse, ring, lower and upper half, stroke,
+arc (a smile or a closed eye), jag (the Sybil's eyes) and teeth (two zigzag rows), each optionally
+clipped to the decal before it and mirrored.
+
+**In the game** (`apps/wgp/src/game3d/scene/characters/`): `cast-asset.ts` (loading, game units,
+the hull directions), `cast-model.ts` (`CastModel`; `CastCopies`, the Sybil's copies as one
+instanced draw that packs three poses into its bone texture), `cast-shaders.ts`,
+`anim/clip-layer.ts` (the clips over each animator's physics) and the cast animators. Clips play
+as moves from each body's own rest pose (`MotionLayer`'s retarget: bone rotation = own rest ·
+source rest⁻¹ · clip; the hips scaled by the hip-height ratio), so a differently curved spine
+isn't bent to the hero's shape.
+
+**Proof** (`game-shots/cast/`, git-ignored): `cast-shoot.mjs` drives `/lab/cast` for every
+character (an eight-angle turntable, two head close-ups, every animator state as a still and a
+burst); run it once with the cast's files hidden for `before/` (the procedural bodies) and once
+for `after/`. `cast-moments.mjs` records a full autopilot night's fights, catches, errands and
+Gwei's assist (`moments-a/`, `moments-b/`). `cast-sheet.py` lays them out in `compare/`.
