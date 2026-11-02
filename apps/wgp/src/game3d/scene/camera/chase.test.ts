@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { City } from "@wgp/game-core/sim3d/contract";
 
-import { CHASE_TUNING, ChaseCamera, chaseDistance, chaseFov, createChaseInput, type ChaseInput } from "./chase";
+import { CHASE_TUNING, ChaseCamera, chaseDistance, chaseFov, createChaseInput, steersByHand, type ChaseInput } from "./chase";
 import { citySolids, createCityRaycast, raycastSolids, surfaceBelow } from "./raycast";
 import { angleDelta, SmoothedAngle } from "./springs";
 
@@ -98,7 +98,7 @@ describe("chase camera", () => {
     expect(later.arm).toBeCloseTo(later.want, 0);
   });
 
-  it("frames both fighters from the side inside the arena", () => {
+  it("frames both fighters from the side, near the arena", () => {
     const cam = new ChaseCamera();
     const input = createChaseInput();
     input.hero = { x: -200, y: 300, z: 0 };
@@ -107,10 +107,9 @@ describe("chase camera", () => {
     input.arena = { x0: -600, z0: -600, x1: 600, z1: 600, h: 900 };
     const pose = run(cam, input, 4);
     const p = pose.position;
-    expect(p.x).toBeGreaterThanOrEqual(-600);
-    expect(p.x).toBeLessThanOrEqual(600);
-    expect(p.z).toBeGreaterThanOrEqual(-600);
-    expect(p.z).toBeLessThanOrEqual(600);
+    const reach = 600 + CHASE_TUNING.arenaSlack;
+    expect(Math.abs(p.x)).toBeLessThanOrEqual(reach);
+    expect(Math.abs(p.z)).toBeLessThanOrEqual(reach);
     // Looking at the midpoint, from well off the fighters' line.
     expect(Math.abs(pose.target.x)).toBeLessThan(5);
     const view = { x: pose.target.x - p.x, z: pose.target.z - p.z };
@@ -120,38 +119,118 @@ describe("chase camera", () => {
     for (const f of [input.hero, input.rival]) expect((f.x - p.x) * view.x + (f.z - p.z) * view.z).toBeGreaterThan(0);
   });
 
-  it("climbs rather than closing in when the arena is small", () => {
+  it("keeps a low angle on a narrow arena like the bridge, turning along it instead of climbing", () => {
     const cam = new ChaseCamera();
     const input = createChaseInput();
-    input.hero = { x: -150, y: 300, z: 0 };
-    input.rival = { x: 150, y: 300, z: 0 };
-    input.arena = { x0: -350, z0: -350, x1: 350, z1: 350, h: 900 };
-    const pose = run(cam, input, 4);
-    expect(Math.abs(pose.position.x)).toBeLessThanOrEqual(350);
-    expect(Math.abs(pose.position.z)).toBeLessThanOrEqual(350);
-    expect(pose.arm).toBeGreaterThan(pose.want * 0.95);
-    expect(pose.position.y).toBeGreaterThan(300 + 300);
+    // A deck along x, 600 across: side-on there is no room, so the shot swings toward the deck's line.
+    input.hero = { x: -150, y: 200, z: 0 };
+    input.rival = { x: 150, y: 200, z: 0 };
+    input.arena = { x0: -560, z0: -300, x1: 560, z1: 300, h: 1020 };
+    const pose = run(cam, input, 5);
+    const p = pose.position;
+    const flat = Math.hypot(p.x - pose.target.x, p.z - pose.target.z);
+    const down = Math.atan2(p.y - pose.target.y, flat);
+    expect(down).toBeLessThan(0.6);
+    expect(pose.arm).toBeGreaterThan(CHASE_TUNING.arenaMinDist * 0.75);
+    expect(Math.abs(p.z)).toBeLessThanOrEqual(300 + CHASE_TUNING.arenaSlack);
   });
 
-  it("orbits on input and recentres 1.5 s after it stops", () => {
+  it("ignores a pendulum's swing: the yaw holds through sideways and back-and-forth arcs", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 400, z: 0 };
+    let maxRate = 0;
+    let last = 0;
+    let worst = 0;
+    for (let i = 0; i < 6 * 60; i++) {
+      const t = i * DT;
+      // Travelling +x at 700 with a 1.2 s swing: ±650 sideways, ±400 along, ±350 vertical.
+      const w = (2 * Math.PI) / 1.2;
+      input.vel = { x: 700 + 400 * Math.cos(w * t), y: 350 * Math.sin(w * t), z: 650 * Math.sin(w * t) };
+      input.hero = { x: input.hero.x + input.vel.x * DT, y: 400 + (350 / w) * (1 - Math.cos(w * t)), z: input.hero.z + input.vel.z * DT };
+      const pose = cam.update(input, DT);
+      if (i > 0) maxRate = Math.max(maxRate, Math.abs(angleDelta(last, pose.yaw)) / DT);
+      last = pose.yaw;
+      if (t > 1) worst = Math.max(worst, Math.abs(angleDelta(Math.PI / 2, pose.yaw)));
+    }
+    expect(maxRate).toBeLessThan((25 * Math.PI) / 180);
+    expect(worst).toBeLessThan(CHASE_TUNING.followDeadZone + 0.05);
+  });
+
+  it("turns at most 90°/s with an eased start, and settles behind a new heading", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 300, z: 0 };
+    input.vel = { x: 800, y: 0, z: 0 };
+    run(cam, input, 2);
+    input.vel = { x: 0, y: 0, z: 800 };
+    let last = cam.pose.yaw;
+    const rates: number[] = [];
+    for (let i = 0; i < 4 * 60; i++) {
+      const pose = cam.update(input, DT);
+      rates.push(Math.abs(angleDelta(last, pose.yaw)) / DT);
+      last = pose.yaw;
+    }
+    expect(Math.max(...rates)).toBeLessThanOrEqual(CHASE_TUNING.followMaxRate + 1e-3);
+    // Eased in: the first frames of the turn are slow.
+    const firstMoving = rates.findIndex((r) => r > 1e-3);
+    expect(rates[firstMoving]).toBeLessThan(0.2);
+    expect(Math.abs(angleDelta(0, last))).toBeLessThan(CHASE_TUNING.followSettle + 0.05);
+  });
+
+  it("pauses auto-follow while the player steers sideways, and eases back in about 2 s after", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 300, z: 0 };
+    input.vel = { x: 0, y: 0, z: 800 };
+    const start = run(cam, input, 2).yaw;
+    // Holding right: the hero heads off at 90°, the camera stays put.
+    input.steer = { x: 1, y: 0 };
+    input.vel = { x: -800, y: 0, z: 0 };
+    const held = run(cam, input, 3).yaw;
+    expect(Math.abs(angleDelta(start, held))).toBeLessThan(0.01);
+    // Let go: nothing for ~2 s, then it turns behind the new heading.
+    input.steer = { x: 0, y: 0 };
+    const waiting = run(cam, input, 1.8).yaw;
+    expect(Math.abs(angleDelta(start, waiting))).toBeLessThan(0.02);
+    const after = run(cam, input, 4).yaw;
+    expect(Math.abs(angleDelta(-Math.PI / 2, after))).toBeLessThan(CHASE_TUNING.followSettle + 0.05);
+  });
+
+  it("follows the hero's height softly: a bob inside the dead band leaves the camera still", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 400, z: 0 };
+    input.vel = { x: 600, y: 0, z: 0 };
+    run(cam, input, 2);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < 4 * 60; i++) {
+      input.hero = { x: input.hero.x + 600 * DT, y: 400 + 40 * Math.sin(i * DT * 2 * Math.PI), z: 0 };
+      const y = cam.update(input, DT).position.y;
+      lo = Math.min(lo, y);
+      hi = Math.max(hi, y);
+    }
+    expect(hi - lo).toBeLessThan(12);
+  });
+
+  it("turns on manual look, holds it, then auto-follow brings it back behind the travel heading", () => {
     const cam = new ChaseCamera();
     const input = createChaseInput();
     input.hero = { x: 0, y: 300, z: 0 };
     input.vel = { x: 500, y: 0, z: 0 };
     const base = { ...run(cam, input, 2).position };
-    input.orbiting = true;
     input.orbitYaw = Math.PI / 2;
     cam.update(input, DT);
     input.orbitYaw = 0;
     const turned = { ...run(cam, input, 0.5).position };
     expect(horiz(turned, base)).toBeGreaterThan(300);
-    input.orbiting = false;
-    // Still held just before the idle delay…
+    // Held through the pause…
     const held = { ...run(cam, input, 1.3).position };
     expect(horiz(held, turned)).toBeLessThan(20);
-    // …and back behind the hero after it.
-    const back = run(cam, input, 3).position;
-    expect(horiz(back, base)).toBeLessThan(15);
+    // …and back behind the hero once auto-follow has eased in.
+    const back = run(cam, input, 5).position;
+    expect(horiz(back, base)).toBeLessThan(40);
   });
 
   it("never returns NaN, even with no motion and zero or bad dt", () => {
@@ -163,16 +242,20 @@ describe("chase camera", () => {
     }
   });
 
-  it("leans the look point toward the web anchor", () => {
+  it("leans the look point toward the web anchor without a jump when it attaches", () => {
     const a = new ChaseCamera();
     const b = new ChaseCamera();
     const input = createChaseInput();
     input.hero = { x: 0, y: 300, z: 0 };
     input.vel = { x: 600, y: 0, z: 0 };
-    const free = run(a, input, 1).target.y;
-    input.anchor = { x: 200, y: 800, z: 0 };
-    const tied = run(b, input, 1).target.y;
-    expect(tied).toBeGreaterThan(free + 50);
+    const free = run(a, input, 1.5).target.y;
+    run(b, input, 1.5);
+    const before = { ...b.pose.target };
+    input.anchor = { x: 200, y: 900, z: 0 };
+    const next = b.update(input, DT).target;
+    expect(Math.abs(next.y - before.y)).toBeLessThan(3);
+    const tied = run(b, input, 2).target.y;
+    expect(tied).toBeGreaterThan(free + 15);
   });
 
   it("keeps the camera above the street", () => {
@@ -184,6 +267,33 @@ describe("chase camera", () => {
     input.orbitPitch = -2;
     const pose = run(cam, input, 1);
     expect(pose.position.y).toBeGreaterThanOrEqual(CHASE_TUNING.minCameraY);
+  });
+
+  it("holds one FOV under reduced motion, at any speed and in a boxed-in two-shot", () => {
+    const cam = new ChaseCamera(createCityRaycast(wallCity()));
+    const input = createChaseInput();
+    input.reducedMotion = true;
+    input.hero = { x: 0, y: 300, z: 0 };
+    const fovs: number[] = [];
+    for (const v of [0, 600, 1600]) {
+      input.vel = { x: v, y: 0, z: 0 };
+      fovs.push(run(cam, input, 1).fov);
+    }
+    input.vel = { x: 0, y: 0, z: 0 };
+    input.hero = { x: -100, y: 300, z: 0 };
+    input.rival = { x: 100, y: 900, z: 0 };
+    input.arena = { x0: -180, z0: -400, x1: 400, z1: 400, h: 1020 };
+    fovs.push(run(cam, input, 2).fov);
+    for (const f of fovs) expect(f).toBeCloseTo(fovs[0], 6);
+  });
+
+  it("only counts a stick off straight ahead as steering by hand", () => {
+    expect(steersByHand(null)).toBe(false);
+    expect(steersByHand({ x: 0, y: 1 })).toBe(false);
+    expect(steersByHand({ x: 0.1, y: 0.05 })).toBe(false);
+    expect(steersByHand({ x: 1, y: 0 })).toBe(true);
+    expect(steersByHand({ x: 0, y: -1 })).toBe(true);
+    expect(steersByHand({ x: Math.SQRT1_2, y: Math.SQRT1_2 })).toBe(true);
   });
 });
 

@@ -232,13 +232,13 @@ export default function CityBench() {
           />
           <div className="flex flex-wrap gap-2">
             <ActionButton onClick={() => handle.current?.burst("POW!", script.frame.hero.pos, { size: 120 })}>Pop a burst</ActionButton>
-            <ActionButton onClick={() => handle.current?.flip()}>Flip the card</ActionButton>
+            <ActionButton onClick={() => handle.current?.flip()}>Do a flip</ActionButton>
             <ActionButton onClick={() => setPaused((p) => !p)} pressed={paused}>
               {paused ? "Resume" : "Pause"}
             </ActionButton>
           </div>
           <p className="text-xs text-game-muted">
-            Drag to orbit; the camera recentres after 1.5 s.{adaptive ? " Quality follows the frame rate until you pick a tier." : ""}
+            Drag to look around; the camera eases back behind the hero 2 s after you let go.{adaptive ? " Quality follows the frame rate until you pick a tier." : ""}
           </p>
         </div>
       </details>

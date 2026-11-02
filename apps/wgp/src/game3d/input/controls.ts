@@ -4,14 +4,17 @@
  *
  * - Keys: WASD or the arrows steer (camera-relative), Space holds the web, 1–4 and G latch
  *   a power or Gwei, Escape or P asks to pause (the page decides what that means).
- * - Mouse: the left button holds the web; a right-button drag orbits the camera.
+ * - Mouse: the left button holds the web, and the first click also locks the pointer to
+ *   the surface for mouse look (Escape releases it). Without pointer lock, a right-button
+ *   drag orbits the camera.
  * - Touch: the floating stick, hold-to-web and two-finger orbit (touch.ts).
+ * - `lookSensitivity` scales mouse look, drag orbit and two-finger orbit alike.
  *
  * While `enabled()` is false (paused, an errand sheet open) presses are ignored and keys
  * pass through to the page, so a sheet's own shortcuts (1–3 on an errand) still work.
- * Losing focus lets go of everything.
+ * Losing focus or letting go of everything also releases the pointer lock.
  */
-import { actionForKey, isDirection, ORBIT_PITCH_PER_PX, ORBIT_YAW_PER_PX, shotFor, type Direction } from "./bindings";
+import { actionForKey, isDirection, LOOK_PITCH_PER_PX, LOOK_YAW_PER_PX, ORBIT_PITCH_PER_PX, ORBIT_YAW_PER_PX, shotFor, type Direction } from "./bindings";
 import type { InputLatch } from "./latch";
 import { keysStick } from "./stick";
 import { TouchRouter, type StickVisual } from "./touch";
@@ -27,6 +30,10 @@ export interface ControlsOptions {
   enabled(): boolean;
   /** The floating touch stick moved, appeared or went away. */
   onStick?(visual: StickVisual): void;
+  /** Lock the pointer on the first click for mouse look (default true). */
+  pointerLock?: boolean;
+  /** Multiplies every look speed: mouse look, drag orbit, two-finger orbit (default 1). */
+  lookSensitivity?: number;
 }
 
 const isEditable = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT");
@@ -43,9 +50,13 @@ export function attachControls(opts: ControlsOptions): Controls {
   const held: Record<Direction, boolean> = { forward: false, back: false, left: false, right: false };
   let touchStick = false;
   let mouseOrbit: { id: number; x: number; y: number } | null = null;
+  const sens = opts.lookSensitivity ?? 1;
+  const orbit = (dYaw: number, dPitch: number, holding: boolean) => opts.orbit(dYaw * sens, dPitch * sens, holding);
+  const lockable = opts.pointerLock !== false && typeof surface.requestPointerLock === "function";
+  const locked = () => typeof document !== "undefined" && document.pointerLockElement === surface;
   const touch = new TouchRouter({
     latch,
-    orbit: opts.orbit,
+    orbit,
     stick: (v) => {
       touchStick = v.active;
       if (!v.active) latch.setStick(keysStick(held));
@@ -63,6 +74,7 @@ export function attachControls(opts: ControlsOptions): Controls {
     touchStick = false;
     if (mouseOrbit) opts.orbit(0, 0, false);
     mouseOrbit = null;
+    if (locked()) document.exitPointerLock();
     latch.clear();
   };
 
@@ -102,9 +114,17 @@ export function attachControls(opts: ControlsOptions): Controls {
       return;
     }
     if (e.button === 0) {
+      if (locked()) {
+        latch.setWeb("mouse", true);
+        return;
+      }
+      if (lockable) {
+        // A rejected lock (no gesture, an unsupported browser) leaves drag orbit as the fallback.
+        Promise.resolve(surface.requestPointerLock()).catch(() => {});
+      }
       surface.setPointerCapture(e.pointerId);
       latch.setWeb("mouse", true);
-    } else if (e.button === 2) {
+    } else if (e.button === 2 && !locked()) {
       surface.setPointerCapture(e.pointerId);
       mouseOrbit = { id: e.pointerId, x: e.clientX, y: e.clientY };
       opts.orbit(0, 0, true);
@@ -116,8 +136,12 @@ export function attachControls(opts: ControlsOptions): Controls {
       touch.move(e.pointerId, e.clientX, e.clientY);
       return;
     }
+    if (locked()) {
+      if (opts.enabled() && (e.movementX || e.movementY)) orbit(-e.movementX * LOOK_YAW_PER_PX, e.movementY * LOOK_PITCH_PER_PX, false);
+      return;
+    }
     if (mouseOrbit && mouseOrbit.id === e.pointerId) {
-      opts.orbit(-(e.clientX - mouseOrbit.x) * ORBIT_YAW_PER_PX, (e.clientY - mouseOrbit.y) * ORBIT_PITCH_PER_PX, true);
+      orbit(-(e.clientX - mouseOrbit.x) * ORBIT_YAW_PER_PX, (e.clientY - mouseOrbit.y) * ORBIT_PITCH_PER_PX, true);
       mouseOrbit.x = e.clientX;
       mouseOrbit.y = e.clientY;
     }

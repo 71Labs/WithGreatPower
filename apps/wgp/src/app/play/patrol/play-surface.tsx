@@ -319,7 +319,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const modal = paused;
   const hint = touch
     ? { title: "Hold the right side to web", body: "Let go while you’re rising for a perfect swing. You head for the next stop on your own; drag on the left to steer." }
-    : { title: "Hold Space or the mouse to web", body: "Let go while you’re rising for a perfect swing. WASD steers; drag with the right button to look around." };
+    : { title: "Hold Space or the mouse to web", body: "Let go while you’re rising for a perfect swing. WASD steers; click into the game to look around with the mouse, and press Esc to free the cursor." };
 
   return (
     <div className="absolute inset-0">

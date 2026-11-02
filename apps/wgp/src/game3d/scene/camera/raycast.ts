@@ -3,9 +3,10 @@
  * bridge deck and legs, water towers and billboards as AABBs; a ray cast against them, and
  * the surface height under a point.
  *
- * The camera uses game-core's `raycastCity` (the sim's own spatial hash) for the city, plus
- * these local boxes for the big rooftop props the sim doesn't collide with. Pure TS, no
- * allocation per call.
+ * The camera uses game-core's `raycastCity` (the sim's own spatial hash) for the city only:
+ * rooftop props no longer pull the camera in (that was a pop every time a water tower
+ * passed behind the hero); the city shader fades them instead. Pure TS, no allocation per
+ * call.
  */
 import { CityIndex, raycastCity } from "@wgp/game-core/sim3d";
 import type { City, Vec3 } from "@wgp/game-core/sim3d/contract";
@@ -124,13 +125,16 @@ export function raycastSolids(s: CitySolids, o: Vec3, dir: Vec3, maxDist: number
   return found ? best : null;
 }
 
-/** The camera's ray: game-core's raycastCity against the city, then the big rooftop props. */
-export function createCityRaycast(city: City): Raycast {
+/**
+ * The camera's ray: game-core's raycastCity against the buildings, setbacks and the bridge.
+ * `props: true` adds the big rooftop props (water towers, billboards) as solids too.
+ */
+export function createCityRaycast(city: City, opts: { props?: boolean } = {}): Raycast {
   const grid = new CityIndex(city);
-  const props = citySolids(city, { city: false });
+  const props = opts.props ? citySolids(city, { city: false }) : null;
   return (o, d, max) => {
     const hit = raycastCity(grid, o.x, o.y, o.z, d.x, d.y, d.z, max);
-    const prop = raycastSolids(props, o, d, hit ? hit.t : max);
+    const prop = props ? raycastSolids(props, o, d, hit ? hit.t : max) : null;
     return prop ?? (hit ? hit.t : null);
   };
 }

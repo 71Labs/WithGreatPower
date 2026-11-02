@@ -194,10 +194,10 @@ const SWINGING: Record<"2d" | "3d", string[]> = {
     "A and D (or the arrow keys) steer in the air.",
   ],
   "3d": [
-    "Hold Space, the left mouse button, or the right side of a touch screen to shoot a web at a roof edge ahead. Let go to fly.",
+    "Hold Space, the left mouse button, or the right side of a touch screen to shoot a web at a building ahead. Let go to fly.",
     "Let go while you’re rising fast and forward for a perfect swing: a boost and +1 combo.",
     "You head for the next stop on your own. To steer, use WASD or the arrow keys, or drag on the left side of a touch screen; directions follow the camera.",
-    "Drag with the right mouse button, or two fingers, to look around. The camera settles back behind you.",
+    "Click into the game to look around with the mouse (Esc frees the cursor), or drag with two fingers on a touch screen. The camera settles back behind you.",
     "Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.",
   ],
 };
