@@ -21,3 +21,7 @@ submission*.json
 
 # Commercial font (Pangram Pangram). Needs a webfont license before it is committed or served publicly.
 apps/*/public/fonts/NeueMontreal-*
+
+# Licensed music for the launch video stays local
+/video-music.mp3
+launch/audio/
