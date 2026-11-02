@@ -5,6 +5,7 @@
  */
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
+import { unstable_rethrow } from "next/navigation";
 import type { z } from "zod";
 
 export class HttpError extends Error {
@@ -58,12 +59,16 @@ export function errorResponse(error: unknown, route: string): Response {
   return json({ error: "internal", message: "Internal error", requestId }, { status: 500 });
 }
 
-/** Wraps a handler so every failure becomes a JSON error. */
+/**
+ * Wraps a handler so every failure becomes a JSON error. Next's own control-flow errors
+ * (a prerender bail-out from reading the request, redirect, notFound) pass through.
+ */
 export function handle<A extends unknown[]>(route: string, fn: (...args: A) => Promise<Response>) {
   return async (...args: A): Promise<Response> => {
     try {
       return await fn(...args);
     } catch (error) {
+      unstable_rethrow(error);
       return errorResponse(error, route);
     }
   };
