@@ -1,55 +1,55 @@
 {
-  "ruleset": 1,
+  "ruleset": 2,
   "cases": {
     "night-1-standard": {
       "ok": true,
-      "hash": "4f0d8b8c",
+      "hash": "462dc0c6",
       "checkpoints": [
-        "f86793b4",
-        "0dcf3455",
-        "9d9461ed",
-        "4f0d8b8c"
+        "4c6393b9",
+        "c5aeb9be",
+        "ff2710b3",
+        "462dc0c6"
       ],
-      "score": 7865,
-      "ticks": 7104,
-      "bytes": 1080
+      "score": 7960,
+      "ticks": 4996,
+      "bytes": 760
     },
     "night-4-heavy": {
       "ok": true,
-      "hash": "fb4574be",
+      "hash": "1cc4e543",
       "checkpoints": [
-        "b0d5e35c",
-        "51984506",
-        "8e4abed0",
-        "fb4574be"
+        "eb636728",
+        "ad813d6a",
+        "8019ab34",
+        "1cc4e543"
       ],
-      "score": 9410,
-      "ticks": 5638,
-      "bytes": 908
+      "score": 8270,
+      "ticks": 3972,
+      "bytes": 901
     },
     "night-9-mixed": {
       "ok": true,
-      "hash": "03cd6d8a",
+      "hash": "f8e88306",
       "checkpoints": [
-        "521e6049",
-        "d7454470",
-        "474d1d47",
-        "03cd6d8a"
+        "81d20bda",
+        "c9851655",
+        "573d0575",
+        "f8e88306"
       ],
-      "score": 9410,
-      "ticks": 7603,
-      "bytes": 1454
+      "score": 9865,
+      "ticks": 6032,
+      "bytes": 1422
     },
     "night-2-knockout": {
       "ok": true,
-      "hash": "5796b62c",
+      "hash": "ff1b8529",
       "checkpoints": [
-        "c81c6abf",
-        "5796b62c"
+        "e20b037b",
+        "ff1b8529"
       ],
-      "score": 4160,
-      "ticks": 3618,
-      "bytes": 189
+      "score": 3965,
+      "ticks": 2847,
+      "bytes": 102
     }
   }
 }

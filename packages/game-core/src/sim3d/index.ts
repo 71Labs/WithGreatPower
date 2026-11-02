@@ -18,6 +18,7 @@ export {
   overRiver,
   raycastCity,
   supportAt,
+  supported,
   type AnchorPick,
   type Box,
   type RayHit,
@@ -28,6 +29,7 @@ export { createSim, debugSetHp, debugWin, IDLE_FRAME, resolveErrand, simRunning,
 export { abilityBlocked, cooldownSeconds, gweiBlocked } from "./abilities";
 export { arenaZone, bestAnchor, heroHeading, inArena, stopTarget, travelBearing } from "./hero";
 export { docVulnerable, isVulnerable, nearestTarget, villainHits, villainTargets, type Target } from "./combat";
-export { armTip, villainLines } from "./villains";
+export { armShoulder, armTip, villainLines } from "./villains";
+export { inReleaseWindow, pickForecast } from "./swing";
 export { botFrame, newBotMemory, type BotMemory } from "./bot";
-export { fillRenderFrame, newRenderFrame } from "./render";
+export { fillRenderFrame, heroAction, newRenderFrame } from "./render";

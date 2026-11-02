@@ -116,6 +116,14 @@ export function hashState(s: SimState): string {
   f.num(h.hurtT);
   f.bool(h.holdPrev);
   f.bool(h.idle);
+  // Ruleset 2.
+  f.bool(h.climbing);
+  f.num(h.wallNx);
+  f.num(h.wallNz);
+  f.num(h.wallTop);
+  f.num(h.wallT);
+  f.num(h.side);
+  f.num(h.landT);
 
   const v = s.villain;
   f.bool(!!v);
@@ -148,6 +156,8 @@ export function hashState(s: SimState): string {
     for (const a of v.arms) {
       f.num(a.angle);
       f.num(a.len);
+      f.num(a.w);
+      f.num(a.lv);
     }
     f.num(v.bodies.length);
     for (const b of v.bodies) {
@@ -156,7 +166,18 @@ export function hashState(s: SimState): string {
       f.num(b.z);
       f.bool(b.alive);
       f.num(b.shootT);
+      f.num(b.vx);
+      f.num(b.vy);
+      f.num(b.vz);
     }
+    // Ruleset 2.
+    f.num(v.cvx);
+    f.num(v.cvy);
+    f.num(v.cvz);
+    f.num(v.diveX);
+    f.num(v.diveY);
+    f.num(v.diveZ);
+    f.num(v.bank);
   }
   f.num(s.hazards.length);
   for (const z of s.hazards) {

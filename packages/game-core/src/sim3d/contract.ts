@@ -197,6 +197,12 @@ export interface RenderFrame3D {
     stateTicks?: number;
     /** Doc's chain arms as shoulder → tip segments, in world space. Added in v1.2. */
     arms?: { from: Vec3; to: Vec3 }[];
+    /**
+     * Roll into a turn, radians (Gas Goblin's glider banks; 0 for the others): the body's up
+     * tilts toward the facing turned 90° from +x toward +z, i.e. (−facing.z, 0, facing.x), by
+     * this angle. Added in v1.2 (ruleset 2).
+     */
+    bank?: number;
   }[];
   /** Hazards and projectiles: fee bombs, bread traps, goo, chain arms (as segments). */
   hazards: { kind: string; pos: Vec3; to?: Vec3; r: number; armed: boolean }[];

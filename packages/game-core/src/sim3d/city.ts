@@ -6,10 +6,10 @@
  * over a river cut along a grid line, and errands are a rooftop with the ally. The hero
  * starts on a central roof.
  *
- * Buildings are solid boxes: land on a roof, slide along a wall. Webs stick to roof edges
- * (a cornice just outside each facade) and to prop anchors (antennas, water towers,
- * billboards, cranes, cables, flagpoles). CityIndex hashes all of it in 256-unit cells for
- * collision, anchor search and the camera's raycast.
+ * Buildings are solid boxes: land on a roof, slide along a wall. Webs stick to what you can
+ * see: a facade (its roof edge, or a point high on the wall face), and prop anchors
+ * (antenna tips, water-tower rims, billboards, cranes, cables). CityIndex hashes all of it in
+ * 256-unit cells for collision, anchor search and the camera's raycast.
  *
  * Deterministic: only the seeded Rng, + − × ÷ and Math.sqrt / Math.floor.
  */
@@ -24,11 +24,11 @@ import {
   BILLBOARD_LEGS,
   BLOCK,
   BRIDGE_ACROSS,
+  BRIDGE_DECK,
   BRIDGE_HALF,
+  BRIDGE_TOWER,
   CELL,
   COVERAGE_RISE,
-  EDGE_LIP,
-  EDGE_RISE,
   GRID,
   HERO_RADIUS,
   PITCH,
@@ -291,12 +291,23 @@ export function generateCity(seed: number, stops: Stop[]): City {
     }
   };
 
-  const antenna = (x: number, y: number, z: number, h: number, buildingId: number | null) =>
-    addProp({ kind: "antenna", at: { x, y, z }, facing: 0, w: 8, h, d: 8, buildingId });
-  const waterTower = (x: number, y: number, z: number, buildingId: number | null) =>
-    addProp({ kind: "water-tower", at: { x, y, z }, facing: 0, w: 70, h: WATER_TOWER_TOP, d: 70, buildingId });
-  const ac = (x: number, y: number, z: number, w: number, buildingId: number | null) =>
-    addProp({ kind: "ac", at: { x, y, z }, facing: 0, w, h: 24, d: w, buildingId });
+  /**
+   * Spots that stay clear of props: the hero's start, each zone's centre, and each ally with
+   * the ring the hero is stood on beside them (v2: an AC unit used to sit inside the hero).
+   */
+  const keepClear: { x: number; z: number; r: number }[] = [];
+  const clearOf = (x: number, z: number, half: number) => keepClear.every((k) => len2(x - k.x, z - k.z) >= k.r + half);
+
+  // v2: rooftop antennas read as antennas beside the ~88-tall hero (v1: 130–230 tall, 8 wide).
+  const antenna = (x: number, y: number, z: number, h: number, buildingId: number | null) => {
+    if (clearOf(x, z, 12)) addProp({ kind: "antenna", at: { x, y, z }, facing: 0, w: 4, h, d: 4, buildingId });
+  };
+  const waterTower = (x: number, y: number, z: number, buildingId: number | null) => {
+    if (clearOf(x, z, 40)) addProp({ kind: "water-tower", at: { x, y, z }, facing: 0, w: 70, h: WATER_TOWER_TOP, d: 70, buildingId });
+  };
+  const ac = (x: number, y: number, z: number, w: number, buildingId: number | null) => {
+    if (clearOf(x, z, w * 0.75)) addProp({ kind: "ac", at: { x, y, z }, facing: 0, w, h: 24, d: w, buildingId });
+  };
 
   /** Rooftop clutter and one tall thing a web can reach (the 2D decorate, in xz). */
   const decorate = (b: Building, d: (typeof DISTRICT_STYLE)[DistrictId], style: string) => {
@@ -308,7 +319,7 @@ export function generateCity(seed: number, stops: Stop[]): City {
     const tall = rng.next();
     if (style === "tower" || tall < 0.34) {
       const [x, z] = at(rng.range(0.3, 0.7), rng.range(0.3, 0.7));
-      antenna(x, roofY, z, rng.range(130, 230), b.id);
+      antenna(x, roofY, z, rng.range(70, 120), b.id);
     } else if (tall < 0.7) {
       const [x, z] = at(rng.range(0.3, 0.7), rng.range(0.3, 0.7));
       waterTower(x, roofY, z, b.id);
@@ -326,7 +337,7 @@ export function generateCity(seed: number, stops: Stop[]): City {
       addProp({ kind: "billboard", at: { x, y: roofY, z }, facing, text: rng.pick(BILLBOARDS), w, h: BILLBOARD_H, d: 8, buildingId: b.id });
     } else {
       const [x, z] = at(rng.range(0.25, 0.75), rng.range(0.25, 0.75));
-      antenna(x, roofY, z, rng.range(140, 220), b.id);
+      antenna(x, roofY, z, rng.range(70, 110), b.id);
     }
     // A lower roof gets clutter too.
     const acCount = rng.int(0, 2);
@@ -343,7 +354,7 @@ export function generateCity(seed: number, stops: Stop[]): City {
     if (rng.chance(0.4)) {
       const x = roof.x0 + 12 + rng.next() * Math.max(0, rw - 24);
       const z = roof.z0 + 12 + rng.next() * Math.max(0, rd - 24);
-      addProp({ kind: "vent", at: { x, y: roofY, z }, facing: 0, w: 16, h: 30, d: 16, buildingId: b.id });
+      if (clearOf(x, z, 12)) addProp({ kind: "vent", at: { x, y: roofY, z }, facing: 0, w: 16, h: 30, d: 16, buildingId: b.id });
     }
   };
 
@@ -431,12 +442,17 @@ export function generateCity(seed: number, stops: Stop[]): City {
   // The launch roof: a central building with a water tower, a plaza around it.
   const s0 = blockCenter(START_BLOCK);
   used.add(START_BLOCK * GRID + START_BLOCK);
+  keepClear.push({ x: s0 - 70, z: s0, r: 90 });
+  for (let k = 0; k < stops.length; k++) {
+    const p = plans[k];
+    keepClear.push({ x: p.cx, z: p.cz, r: 90 });
+  }
   {
     const district = districtAt(s0, s0);
     const b = addBuilding({ x0: s0 - 220, z0: s0 - 220, x1: s0 + 220, z1: s0 + 220 }, 300, district, { accent: false, block: START_BLOCK * GRID + START_BLOCK });
     waterTower(s0 + 110, 300, s0, b.id);
-    ac(s0 - 160, 300, s0 + 100, 38, b.id);
-    antenna(s0 - 120, 300, s0 - 150, 200, b.id);
+    ac(s0 - 160, 300, s0 + 120, 38, b.id);
+    antenna(s0 - 120, 300, s0 - 150, 110, b.id);
   }
 
   stops.forEach((stop, index) => {
@@ -451,17 +467,21 @@ export function generateCity(seed: number, stops: Stop[]): City {
       const allyId = ALLY_CAST[stop.ally];
       let allyAt: Vec3;
       if (allyId === "gwei") {
-        waterTower(p.cx + 40, roofH, p.cz, b.id);
+        // She stands on the tower, so it goes up whatever is kept clear.
+        addProp({ kind: "water-tower", at: { x: p.cx + 40, y: roofH, z: p.cz }, facing: 0, w: 70, h: WATER_TOWER_TOP, d: 70, buildingId: b.id });
         allyAt = { x: p.cx + 40, y: roofH + WATER_TOWER_TOP, z: p.cz };
-        antenna(p.cx - 120, roofH, p.cz, 190, b.id);
+        keepClear.push({ x: allyAt.x, z: allyAt.z, r: 120 + HERO_RADIUS + 24 });
+        antenna(p.cx - 160, roofH, p.cz - 40, 110, b.id);
       } else {
         allyAt = { x: p.cx + 30, y: roofH, z: p.cz };
-        antenna(p.cx - 110, roofH, p.cz - 60, 200, b.id);
-        ac(p.cx + 100, roofH, p.cz + 80, 36, b.id);
+        // The hero is stood 120 from the ally, on whichever side he came from.
+        keepClear.push({ x: allyAt.x, z: allyAt.z, r: 120 + HERO_RADIUS + 24 });
+        antenna(p.cx - 150, roofH, p.cz - 100, 110, b.id);
+        ac(p.cx + 200, roofH, p.cz + 170, 36, b.id);
       }
       // Corner masts so the roof can be reached from any side.
-      antenna(b.x0 + 30, roofH, b.z0 + 30, 160, b.id);
-      antenna(b.x1 - 30, roofH, b.z1 - 30, 160, b.id);
+      antenna(b.x0 + 30, roofH, b.z0 + 30, 120, b.id);
+      antenna(b.x1 - 30, roofH, b.z1 - 30, 120, b.id);
       zones.push({
         index,
         kind: "errand",
@@ -484,10 +504,13 @@ export function generateCity(seed: number, stops: Stop[]): City {
       const half = 25;
       const box = (u0: number, u1: number, v0: number, v1: number): Rect =>
         alongX ? { x0: c + u0, x1: c + u1, z0: across + v0, z1: across + v1 } : { x0: across + v0, x1: across + v1, z0: c + u0, z1: c + u1 };
-      const deck = box(-780, 780, -90, 90);
+      const D = BRIDGE_DECK;
+      const U = BRIDGE_TOWER;
+      const deck = box(-D, D, -90, 90);
       const towers: Vec3[] = [];
-      // Legs flush against the deck's sides, so nothing can wedge between them.
-      for (const u of [-470, 470]) {
+      // Legs flush against the deck's sides, so nothing can wedge between them; v2 stands
+      // them beyond the reach of Doc's arms, so the fight has room.
+      for (const u of [-U, U]) {
         for (const v of [-90 - half, 90 + half]) {
           const t = box(u - half, u + half, v - half, v + half);
           towers.push({ x: (t.x0 + t.x1) / 2, y: towerTop, z: (t.z0 + t.z1) / 2 });
@@ -497,9 +520,9 @@ export function generateCity(seed: number, stops: Stop[]): City {
       const pt = (u: number, y: number, v: number): Vec3 => (alongX ? { x: c + u, y, z: across + v } : { x: across + v, y, z: c + u });
       for (const v of [-90 - half, 90 + half]) {
         cables.push(
-          { a: pt(-760, deckY + 30, v), b: pt(-470, towerTop, v), sag: 40, kind: "bridge" },
-          { a: pt(-470, towerTop, v), b: pt(470, towerTop, v), sag: 390, kind: "bridge" },
-          { a: pt(470, towerTop, v), b: pt(760, deckY + 30, v), sag: 40, kind: "bridge" },
+          { a: pt(-(D - 20), deckY + 30, v), b: pt(-U, towerTop, v), sag: 40, kind: "bridge" },
+          { a: pt(-U, towerTop, v), b: pt(U, towerTop, v), sag: 390, kind: "bridge" },
+          { a: pt(U, towerTop, v), b: pt(D - 20, deckY + 30, v), sag: 40, kind: "bridge" },
         );
       }
       for (const t of towers) anchors.push({ at: { x: t.x, y: towerTop + 8, z: t.z }, kind: "tower" });
@@ -535,19 +558,11 @@ export function generateCity(seed: number, stops: Stop[]): City {
       const t = addBuilding({ x0, z0, x1: x0 + T, z1: z0 + T }, H, district, { accent: false, block: bi });
       const ox = x0 < cx ? 1 : -1;
       const oz = z0 < cz ? 1 : -1;
-      // Antenna at the outer corner; flagpoles on the two inner faces, so low roofs can reach a web.
-      antenna(x0 + T / 2 - ox * 30, H, z0 + T / 2 - oz * 30, 150, t.id);
+      // An antenna at the outer corner. The towers' faces take webs anywhere up their walls
+      // (v2; v1 hung invisible "flagpole" anchors 34 out from them).
+      antenna(x0 + T / 2 - ox * 30, H, z0 + T / 2 - oz * 30, 90, t.id);
       const fx = ox > 0 ? x0 + T : x0;
       const fz = oz > 0 ? z0 + T : z0;
-      for (const y of [440, 640]) {
-        anchors.push({ at: { x: fx + ox * 34, y, z: z0 + T / 2 }, kind: "ledge" }, { at: { x: x0 + T / 2, y, z: fz + oz * 34 }, kind: "ledge" });
-      }
-      // And on the two outer faces, lower down, so the streets around the arena can reach a web too.
-      const gx = ox > 0 ? x0 : x0 + T;
-      const gz = oz > 0 ? z0 : z0 + T;
-      for (const y of [340, 540]) {
-        anchors.push({ at: { x: gx - ox * 34, y, z: z0 + T / 2 }, kind: "ledge" }, { at: { x: x0 + T / 2, y, z: gz - oz * 34 }, kind: "ledge" });
-      }
       inner.push({ x: fx, y: 680, z: fz });
     }
     // Gaps of ALLEY_MIN or more between them, so a fall goes to the street, not into a crack.
@@ -561,10 +576,9 @@ export function generateCity(seed: number, stops: Stop[]): City {
     ];
     low.forEach(([lr, h], k) => {
       const b = addBuilding(lr, h, district, { block: bi });
-      if (k === 0) {
-        waterTower(cx + 30, h, cz + 20, b.id);
-        ac(cx - 50, h, cz - 40, 40, b.id);
-      } else ac(lr.x0 + 30 + rng.next() * (lr.x1 - lr.x0 - 60), h, lr.z0 + 30 + rng.next() * (lr.z1 - lr.z0 - 60), 34, b.id);
+      // The centre roof stays bare: the hero starts the next leg standing there.
+      if (k === 1) waterTower((lr.x0 + lr.x1) / 2, h, cz + 20, b.id);
+      else if (k > 1) ac(lr.x0 + 30 + rng.next() * (lr.x1 - lr.x0 - 60), h, lr.z0 + 30 + rng.next() * (lr.z1 - lr.z0 - 60), 34, b.id);
     });
     // Lines between the towers: the four sides and both diagonals.
     const [a, b, c2, d2] = inner;
@@ -686,15 +700,21 @@ export function generateCity(seed: number, stops: Stop[]): City {
         const dz = cz - pz;
         const d = len2(dx, dz) || 1;
         const k = Math.min(120, d);
-        const ax = Math.max(r.x0 + 14, Math.min(r.x1 - 14, px + (dx / d) * k));
-        const az = Math.max(r.z0 + 14, Math.min(r.z1 - 14, pz + (dz / d) * k));
-        antenna(ax, y, az, 200, b.id);
-        grid.addAnchor(anchors[anchors.length - 1]);
+        let ax = Math.max(r.x0 + 14, Math.min(r.x1 - 14, px + (dx / d) * k));
+        let az = Math.max(r.z0 + 14, Math.min(r.z1 - 14, pz + (dz / d) * k));
+        // Off a kept-clear spot: back toward the sample point.
+        if (!clearOf(ax, az, 12)) {
+          ax = Math.max(r.x0 + 14, Math.min(r.x1 - 14, px));
+          az = Math.max(r.z0 + 14, Math.min(r.z1 - 14, pz));
+        }
+        const n = props.length;
+        antenna(ax, y, az, 150, b.id);
+        if (props.length > n) grid.addAnchor(anchors[anchors.length - 1]);
       }
     }
   }
-  // Streets too: from the top of a miss's bounce there must be something to web. Where there
-  // isn't, put a flagpole on the nearest tall facade, or a mast on the corner.
+  // Streets too: from the top of a miss's bounce there must be something to web. Facades
+  // take webs up their walls, so this only adds a mast where no wall is tall enough nearby.
   const bounceY = STREET_BOUNCE_TOP;
   for (let line = 0; line <= GRID; line++) {
     const c = line === 0 ? -STREET / 2 : streetLine(line);
@@ -704,25 +724,8 @@ export function generateCity(seed: number, stops: Stop[]): City {
         const pz = alongX ? c : u;
         if (river && px >= river.x0 && px <= river.x1 && pz >= river.z0 && pz <= river.z1) continue;
         if (grid.hasAnchor(px, bounceY, pz)) continue;
-        // The nearest facade at least 300 tall within 220, facing the street.
-        let best: { x: number; z: number; y: number } | null = null;
-        let bestD = 220;
-        const ids: number[] = [];
-        const n = grid.queryBoxes(px - 220, pz - 220, px + 220, pz + 220, ids);
-        for (let k = 0; k < n; k++) {
-          const b = grid.boxes[ids[k]];
-          if (b.kind !== "main" || b.y1 < 300) continue;
-          const qx = Math.max(b.x0, Math.min(b.x1, px));
-          const qz = Math.max(b.z0, Math.min(b.z1, pz));
-          const d = len2(qx - px, qz - pz);
-          if (d <= 0 || d >= bestD) continue;
-          bestD = d;
-          const ox = (px - qx) / d;
-          const oz = (pz - qz) / d;
-          best = { x: qx + ox * 34, z: qz + oz * 34, y: Math.min(b.y1 - 20, 420) };
-        }
-        const a: PropAnchor = best ? { at: { x: best.x, y: best.y, z: best.z }, kind: "ledge" } : { at: { x: px, y: 380, z: pz }, kind: "antenna" };
-        if (!best) props.push({ kind: "antenna", at: { x: px, y: STREET_Y, z: pz }, facing: 0, w: 10, h: 380, d: 10, buildingId: null });
+        const a: PropAnchor = { at: { x: px, y: 330, z: pz }, kind: "antenna" };
+        props.push({ kind: "antenna", at: { x: px, y: STREET_Y, z: pz }, facing: 0, w: 6, h: 330, d: 6, buildingId: null });
         anchors.push(a);
         grid.addAnchor(a);
       }
@@ -747,19 +750,25 @@ export interface Box {
 }
 
 /**
- * A roof edge a web can stick to: a horizontal segment just outside a facade, at roof
- * height + EDGE_RISE. axis 0 runs along x at z = c; axis 1 runs along z at x = c. `n` is
- * the outward side (+1 or −1 along the other axis): only a hero beyond the facade on that
- * side may use it (so a hero pressed against a wall can web its top edge)
+ * A facade a web can stick to: the exposed part of one side of a box, from its roof edge at
+ * `y` down to `y0` (the street, or the top of a flush lower neighbour). Webs hit it exactly:
+ * on the roof edge, or a point on the wall face (v2; v1 floated the anchor on a cornice 30
+ * out and 10 up). axis 0 runs along x at z = c; axis 1 runs along z at x = c. `n` is the
+ * outward side (+1 or −1 along the other axis): only a hero beyond the facade on that side
+ * may use it (so a hero pressed against a wall can web its top edge).
  */
 export interface RoofEdge {
   axis: 0 | 1;
+  /** The facade plane. */
   c: number;
-  /** The facade itself (c minus the lip): a hero beyond this plane is on the outward side. */
+  /** The same plane (kept for v1 readers). */
   face: number;
   lo: number;
   hi: number;
+  /** The roof edge's height. */
   y: number;
+  /** The lowest exposed height of the wall face. */
+  y0: number;
   n: 1 | -1;
   building: number;
 }
@@ -802,27 +811,35 @@ export class CityIndex {
       const h = br.towerHalf ?? 25;
       for (const t of br.towers) this.addBox({ x0: t.x - h, y0: STREET_Y, z0: t.z - h, x1: t.x + h, y1: t.y, z1: t.z + h, building: -1, kind: "leg" });
     }
-    // Roof edges, minus any stretch buried in a neighbour.
+    // Facades: each side of each box, minus any stretch buried in a neighbour at roof height;
+    // the wall face below is exposed down to the street or the tallest flush lower neighbour.
     const scratch: number[] = [];
     const nb = this.boxes.length;
     for (let i = 0; i < nb; i++) {
       const b = this.boxes[i];
       if (b.kind !== "main" && b.kind !== "top") continue;
-      const y = b.y1 + EDGE_RISE;
+      const y = b.y1;
       const sides: [0 | 1, number, number, number, 1 | -1][] = [
-        [0, b.z0 - EDGE_LIP, b.x0, b.x1, -1],
-        [0, b.z1 + EDGE_LIP, b.x0, b.x1, 1],
-        [1, b.x0 - EDGE_LIP, b.z0, b.z1, -1],
-        [1, b.x1 + EDGE_LIP, b.z0, b.z1, 1],
+        [0, b.z0, b.x0, b.x1, -1],
+        [0, b.z1, b.x0, b.x1, 1],
+        [1, b.x0, b.z0, b.z1, -1],
+        [1, b.x1, b.z0, b.z1, 1],
       ];
       for (const [axis, c, lo, hi, n] of sides) {
         let spans: [number, number][] = [[lo, hi]];
-        const q = axis === 0 ? this.queryBoxes(lo, c - 1, hi, c + 1, scratch) : this.queryBoxes(c - 1, lo, c + 1, hi, scratch);
+        // A neighbour covers the facade where it fills the space just outside it.
+        const probe = c + n;
+        const q = axis === 0 ? this.queryBoxes(lo, probe - 1, hi, probe + 1, scratch) : this.queryBoxes(probe - 1, lo, probe + 1, hi, scratch);
+        const lower: Box[] = [];
         for (let k = 0; k < q; k++) {
           const o = this.boxes[scratch[k]];
-          if (scratch[k] === i || y < o.y0 || y > o.y1) continue;
-          const inPerp = axis === 0 ? c > o.z0 && c < o.z1 : c > o.x0 && c < o.x1;
+          if (scratch[k] === i) continue;
+          const inPerp = axis === 0 ? probe > o.z0 && probe < o.z1 : probe > o.x0 && probe < o.x1;
           if (!inPerp) continue;
+          if (y < o.y0 || y > o.y1) {
+            if (o.y1 < y) lower.push(o);
+            continue;
+          }
           const olo = axis === 0 ? o.x0 : o.z0;
           const ohi = axis === 0 ? o.x1 : o.z1;
           const next: [number, number][] = [];
@@ -835,7 +852,17 @@ export class CityIndex {
           }
           spans = next;
         }
-        for (const [s0, s1] of spans) if (s1 - s0 >= 40) this.addEdge({ axis, c, face: c - n * EDGE_LIP, lo: s0, hi: s1, y, n, building: b.building });
+        for (const [s0, s1] of spans) {
+          if (s1 - s0 < 40) continue;
+          // A tier's own wall starts at the roof it stands on (inside the main box, which the probe misses).
+          let y0 = b.kind === "top" ? b.y0 : STREET_Y;
+          for (const o of lower) {
+            const olo = axis === 0 ? o.x0 : o.z0;
+            const ohi = axis === 0 ? o.x1 : o.z1;
+            if (ohi > s0 && olo < s1 && o.y1 > y0) y0 = o.y1;
+          }
+          this.addEdge({ axis, c, face: c, lo: s0, hi: s1, y, y0, n, building: b.building });
+        }
       }
     }
     for (const a of city.anchors) this.addAnchor(a);
@@ -905,7 +932,7 @@ export class CityIndex {
     return this.query(this.anchorCells, this.anchorSeen, x0, z0, x1, z1, out);
   }
 
-  /** Whether a hero standing at (x, y, z) could web something at least `minRise` above (the coverage pass). */
+  /** Whether a hero at (x, y, z) could web something at least `minRise` above, in any direction (the coverage passes). */
   hasAnchor(x: number, y: number, z: number, minRise = 36): boolean {
     return findAnchor(this, x, y, z, x, y + 150, z, null, 420, 70, minRise) !== null;
   }
@@ -917,8 +944,8 @@ export interface AnchorPick {
   x: number;
   y: number;
   z: number;
-  /** "edge" for a roof edge, else the prop anchor's kind. */
-  kind: "edge" | PropAnchor["kind"];
+  /** "edge" for a roof edge, "wall" for a point on a wall face, else the prop anchor's kind. */
+  kind: "edge" | "wall" | PropAnchor["kind"];
 }
 
 interface Candidate {
@@ -940,6 +967,11 @@ const SAFE_BOTTOM = 90;
 
 /** Whether the straight line from a to b crosses no box (the web would pass through a building). */
 export function lineClear(grid: CityIndex, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+  return lineBlocker(grid, ax, ay, az, bx, by, bz) < 0;
+}
+
+/** The first box (index in grid.boxes) the line from a to b passes through, or −1. */
+export function lineBlocker(grid: CityIndex, ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
   const dx = bx - ax;
   const dy = by - ay;
   const dz = bz - az;
@@ -990,18 +1022,18 @@ export function lineClear(grid: CityIndex, ax: number, ay: number, az: number, b
       if (tb < t1) t1 = tb;
       if (t0 >= t1) continue;
     }
-    return false;
+    return losIds[k];
   }
-  return true;
+  return -1;
 }
 
 /**
  * The anchor nearest the desired point (dx, dy, dz) among everything a hero at (hx, hy, hz)
- * can web: within ANCHOR_MIN..ANCHOR_RANGE, at least ANCHOR_MIN_RISE above, roof edges only
- * from their outward side, inside `area` (an arena, plus a margin) when given, and in plain
- * sight (the web can't pass through a building). Swings that would bottom out near the
- * street are marked down. Ties go to roof edges before prop anchors, then to the lower id,
- * so the choice never depends on iteration order.
+ * can web, in any direction: within minRange..range, at least minRise above, facades only
+ * from their outward side (the nearest point of the wall face, roof edge included), inside
+ * `area` when given, and in plain sight. Swings that would bottom out near the street are
+ * marked down. The city's coverage passes use it; the hero's own choice (swing.ts) also
+ * predicts each swing. Ties go to facades before prop anchors, then to the lower id.
  */
 export function findAnchor(
   grid: CityIndex,
@@ -1038,8 +1070,11 @@ export function findAnchor(
   for (let k = 0; k < n; k++) {
     const id = ids[k];
     const e = grid.edges[id];
-    const rise = e.y - hy;
-    if (rise < minRise) continue;
+    // The wall point at the wanted height (clamped to the exposed face), or the roof edge.
+    const lowest = Math.max(e.y0, hy + minRise);
+    if (lowest > e.y) continue;
+    const y = dy < lowest ? lowest : dy > e.y ? e.y : dy;
+    const rise = y - hy;
     // Outward side only: the hero must be outside this facade.
     const perpH = e.axis === 0 ? hz : hx;
     if ((perpH - e.face) * e.n <= 0) continue;
@@ -1065,7 +1100,7 @@ export function findAnchor(
     const pz = e.axis === 0 ? e.c : t;
     const hd2 = (px - hx) * (px - hx) + rise * rise + (pz - hz) * (pz - hz);
     if (hd2 < min2) continue;
-    add(px, e.y, pz, hd2, id, "edge");
+    add(px, y, pz, hd2, id, y < e.y ? "wall" : "edge");
   }
   const m = grid.queryAnchors(hx - range, hz - range, hx + range, hz + range, ids);
   for (let k = 0; k < m; k++) {
@@ -1113,6 +1148,8 @@ export interface SphereHit {
 /**
  * Push a sphere out of every box it overlaps and drop its velocity into each surface.
  * Top faces (normal mostly up) report `top`, so the caller can land; anything else slides.
+ * v2: so does a V of contacts whose combined push is mostly up (resting on a ledge's edge
+ * against a wall), so nothing can hang wedged in a crack, never landing and never falling.
  */
 export function collideSphere(
   grid: CityIndex,
@@ -1129,6 +1166,9 @@ export function collideSphere(
   out.wallTop = 0;
   out.ceiling = false;
   const ids = scratchIds;
+  let sx = 0;
+  let sy = 0;
+  let sz = 0;
   for (let pass = 0; pass < 2; pass++) {
     const n = grid.queryBoxes(body.x - r, body.z - r, body.x + r, body.z + r, ids);
     let moved = false;
@@ -1163,6 +1203,9 @@ export function collideSphere(
       body.x += nx * push;
       body.y += ny * push;
       body.z += nz * push;
+      sx += nx * push;
+      sy += ny * push;
+      sz += nz * push;
       const vn = body.vx * nx + body.vy * ny + body.vz * nz;
       if (vn < 0) {
         body.vx -= vn * nx;
@@ -1185,7 +1228,32 @@ export function collideSphere(
     }
     if (!moved) break;
   }
+  if (out.hit && !out.top) {
+    const sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+    if (sl > 1e-9 && sy > 0.7 * sl) {
+      out.top = true;
+      out.topY = body.y - r;
+    }
+  }
   return out;
+}
+
+const probe = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
+const probeHit: SphereHit = { hit: false, top: false, topY: 0, wall: false, wallNx: 0, wallNz: 0, wallTop: 0, ceiling: false };
+
+/**
+ * Whether a sphere at (x, y, z) stands on something: lowered 2 units, it would be pushed back
+ * up by a top face or a V of contacts (v2; v1 asked only for a top face under the centre).
+ */
+export function supported(grid: CityIndex, x: number, y: number, z: number, r: number): boolean {
+  probe.x = x;
+  probe.y = y - 2;
+  probe.z = z;
+  probe.vx = 0;
+  probe.vy = 0;
+  probe.vz = 0;
+  collideSphere(grid, probe, r, probeHit);
+  return probeHit.top;
 }
 
 /** Whether something solid holds up a foot at (x, footY, z): a top face within 2 units under it. */

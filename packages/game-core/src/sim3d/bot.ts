@@ -11,6 +11,7 @@ import type { InputFrame } from "./contract";
 import { DIR64, dirIndex, len2, len3 } from "./dmath";
 import { raycastCity } from "./city";
 import { bestAnchor, heroHeading, stopTarget, travelBearing } from "./hero";
+import { pickForecast } from "./swing";
 import { IDLE_FRAME } from "./sim";
 import type { SimState } from "./types";
 
@@ -51,9 +52,9 @@ export const newBotMemory = (): BotMemory => ({
   lastZ: 0,
 });
 
-/** tan 20° and tan 68°: the bot aims inside the perfect window, with a margin. */
-const TAN20 = 0.36397023426620234;
-const TAN68 = 2.4750868534162964;
+/** tan 23° and tan 56°: the bot aims inside the perfect window (20–60°), with a margin. */
+const TAN_LO = 0.4244748162096047;
+const TAN_HI = 1.4825609685127403;
 
 /** The ability or Gwei to fire this tick, as an InputFrame one-shot (0 for none). */
 function pickShot(s: SimState, mem: BotMemory): InputFrame["shot"] {
@@ -198,7 +199,8 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
     if (!open && hd < 420) {
       dir = dirIndex(-dx, -dz);
       mag = 3;
-    } else if (hd > 160 && !h.grounded) {
+    } else if (hd > (h.grounded ? 200 : 160)) {
+      // Fly at him; on a roof (or Doc's deck), run at him to line up the next swing.
       dir = dirIndex(dx, dz);
       mag = 3;
     }
@@ -225,7 +227,7 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
   if (h.rope) {
     const speed = len3(h.vx, h.vy, h.vz);
     const hs = len2(h.vx, h.vz);
-    const perfect = h.vy > 150 && hs > 120 && speed > 570 && h.vy >= hs * TAN20 && h.vy <= hs * TAN68;
+    const perfect = h.vy > 140 && hs > 120 && speed > 540 && h.vy >= hs * TAN_LO && h.vy <= hs * TAN_HI;
     mem.hangT = Math.min(speed, moved) < 160 ? mem.hangT + dt : 0;
     mem.ropeT += dt;
     let letGo = perfect;
@@ -258,13 +260,13 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
     if (!hold) mem.ropeT = 0;
   } else if (fight && t && v) {
     mem.ropeT = 0;
-    // Aim a slam by timing the web: grab when the swing's sphere passes through him.
-    const a = bestAnchor(s, head.x, head.z);
+    // Aim a slam by timing the web: grab when the forecast swing carries you through him.
+    const a = pickForecast(s, head.x, head.z);
     mem.hangT += dt;
     if (a) {
       const rope = len3(a.x - h.x, a.y - h.y, a.z - h.z);
       const reach = len3(a.x - t.x, a.y - t.y, a.z - t.z);
-      const lined = open && Math.abs(rope - reach) < 70 && t.y < a.y;
+      const lined = open && (a.slam || (Math.abs(rope - reach) < 70 && t.y < a.y));
       hold = lined || h.y < 200 || (h.grounded && mem.hangT > 0.6) || (h.vy < -500 && mem.hangT > 1);
     } else hold = false;
     if (hold) mem.hangT = 0;

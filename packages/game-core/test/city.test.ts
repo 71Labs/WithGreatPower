@@ -116,6 +116,42 @@ describe("generateCity", () => {
     }
   });
 
+  it("keeps antennas rooftop-sized with their webs at the tip, the hero's spots clear of props, and Doc's bridge roomy", () => {
+    for (const seed of [3, 99, 2024, 77777]) {
+      const c = generateCity(seed, seed % 2 ? docStops : stopsFor(seed));
+      const tips = new Set(c.anchors.filter((a) => a.kind === "antenna").map((a) => `${a.at.x},${a.at.y},${a.at.z}`));
+      for (const p of c.props) {
+        if (p.kind !== "antenna") continue;
+        // Beside the 88-tall hero: rooftop antennas up to 150, a rare street mast 330; all thin.
+        expect(p.w).toBeLessThanOrEqual(6);
+        expect(p.h).toBeLessThanOrEqual(p.buildingId === null ? 330 : 150);
+        expect(tips.has(`${p.at.x},${p.at.y + p.h},${p.at.z}`)).toBe(true);
+      }
+      // Where the hero stands (the start, each zone's centre, beside each ally) stays clear.
+      const spots = [
+        { x: c.start.x, z: c.start.z, r: 90 },
+        ...c.zones.map((z) => ({ x: z.center.x, z: z.center.z, r: 90 })),
+        ...c.zones.flatMap((z) => (z.allyAt ? [{ x: z.allyAt.x, z: z.allyAt.z, r: 120 + 26 + 24 }] : [])),
+      ];
+      for (const p of c.props) {
+        if (p.kind === "crane" || p.buildingId === null) continue;
+        // Gwei stands on her water tower.
+        if (p.kind === "water-tower" && c.zones.some((z) => z.allyAt && z.allyAt.x === p.at.x && z.allyAt.z === p.at.z)) continue;
+        for (const k of spots) expect(Math.hypot(p.at.x - k.x, p.at.z - k.z), `${p.kind} near a hero spot`).toBeGreaterThanOrEqual(k.r);
+      }
+      // Doc's tower legs stand beyond his reach (sway 120, shoulder 28, arm 305) and inside the arena.
+      if (c.bridge) {
+        const doc = c.zones.find((z) => z.villain === "doc-octochain")!;
+        const half = c.bridge.towerHalf ?? 25;
+        for (const t of c.bridge.towers) {
+          const along = c.bridge.axis === "x" ? Math.abs(t.x - doc.center.x) : Math.abs(t.z - doc.center.z);
+          expect(along - half).toBeGreaterThan(120 + 28 + 305 + 26);
+          expect(along + half).toBeLessThan(c.bridge.axis === "x" ? doc.bounds.x1 - doc.center.x : doc.bounds.z1 - doc.center.z);
+        }
+      }
+    }
+  });
+
   it("finds anchors only in reach, above, in plain sight and facing the hero", () => {
     const c = generateCity(8, docStops);
     const grid = new CityIndex(c);

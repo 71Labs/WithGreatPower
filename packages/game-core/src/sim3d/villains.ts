@@ -2,7 +2,7 @@
  * The four villains as real-time encounters in 3D, plus their hazards. Every joke from 2D
  * survives:
  *
- * - Gas Goblin flies a looping figure-eight over the arena, dropping fee bombs (they hurt
+ * - Gas Goblin glides a looping figure-eight over the arena, dropping fee bombs (they hurt
  *   and burn fluid) and now and then diving at you.
  * - Sandwich Man runs the arena roofs, front-runs you by lunging at where you're about to
  *   be, hops over webs he sees coming, and drops bread-slab traps that clap shut.
@@ -10,15 +10,59 @@
  *   vertical plane. His body only takes a direct hit in the open window, arms pulled in.
  * - The Sybil hides among copies orbiting in xz that shoot goo. Every hit pops a copy; the
  *   real one is last.
+ *
+ * Ruleset v2 motion: nobody teleports or snaps. Flyers steer: a wanted velocity reached with
+ * at most an acceleration, under a top speed. Gas Goblin's glider thrusts along its path and
+ * turns with a sideways limit, banking into turns. Sandwich Man runs with acceleration and
+ * braking, and every jump (roof hops, the lunge, the dodge) is a true parabola under gravity.
+ * Doc's arms swing with angular speed and acceleration limits. Sybil's copies steer to their
+ * orbit slots. Hits, yanks and stuns are impulses that the villain's own steering (or
+ * drag) wears off.
  */
 import { VILLAINS } from "../rules/data";
 import type { Stop } from "../rules/types";
 
 import { collideSphere, groundBelow, type SphereHit } from "./city";
-import { HERO_RADIUS, SLAM_SPEED, SLOWMO_FACTOR, STREET_Y } from "./constants";
+import {
+  ARM_ACCEL,
+  ARM_EXTEND_ACCEL,
+  ARM_EXTEND_SPEED,
+  ARM_SLAM_ACCEL,
+  ARM_SLAM_SPEED,
+  ARM_SPEED,
+  DOC_ACCEL,
+  DOC_SPEED,
+  GOBLIN_CLIMB_ACCEL,
+  GOBLIN_DIVE_ACCEL,
+  GOBLIN_DIVE_SPEED,
+  GOBLIN_SPEED,
+  GOBLIN_THRUST,
+  GOBLIN_TURN_ACCEL,
+  GRAVITY,
+  HERO_RADIUS,
+  KNOCK_MAX,
+  KNOCK_TRANSFER,
+  LAND_FRICTION,
+  LUNGE_TIME_MAX,
+  LUNGE_TIME_MIN,
+  SANDWICH_ACCEL,
+  SANDWICH_APEX,
+  SANDWICH_BRAKE,
+  SANDWICH_GRAVITY,
+  SANDWICH_RUN,
+  SLAM_SPEED,
+  SLOWMO_FACTOR,
+  STREET_Y,
+  STUN_DRAG,
+  STUN_SINK,
+  SYBIL_BODY_ACCEL,
+  SYBIL_BODY_SPEED,
+  SYBIL_CENTER_ACCEL,
+  SYBIL_CENTER_SPEED,
+} from "./constants";
 import { docVulnerable, hitVillain, hurtHero, moveDamage, villainHits, villainTargets } from "./combat";
 import type { Zone } from "./contract";
-import { clamp, dcos, dsin, len2, len3, PI } from "./dmath";
+import { clamp, datan2, dcos, dsin, len2, len3, PI } from "./dmath";
 import { roll } from "./rng";
 import type { Hazard, SimState, Villain } from "./types";
 
@@ -65,12 +109,20 @@ export function spawnVillain(s: SimState, zone: Zone): Villain {
     az: 0,
     fleeT: 0,
     dodgeT: 0,
+    cvx: 0,
+    cvy: 0,
+    cvz: 0,
+    diveX: 0,
+    diveY: 0,
+    diveZ: 0,
+    bank: 0,
   };
   switch (v.kind) {
     case "gas-goblin":
-      // He swoops in from outside the arena.
+      // He swoops in from outside the arena, already flying.
       v.x = zone.bounds.x1 + 200;
       v.y = 900;
+      v.vx = -GOBLIN_SPEED;
       break;
     case "sandwich-man":
       v.radius = 44;
@@ -88,7 +140,7 @@ export function spawnVillain(s: SimState, zone: Zone): Villain {
         v.ax = 0;
         v.az = 1;
       }
-      v.arms = [-2.55, -1.95, -1.19, -0.59].map((base) => ({ base, angle: base, len: 40 }));
+      v.arms = [-2.55, -1.95, -1.19, -0.59].map((base) => ({ base, angle: base, len: 40, w: 0, lv: 0 }));
       break;
     case "sybil": {
       v.radius = 40;
@@ -97,7 +149,7 @@ export function spawnVillain(s: SimState, zone: Zone): Villain {
       v.cy = 1000;
       const copies = hits - 1;
       for (let i = 0; i <= copies; i++) {
-        v.bodies.push({ x: c.x, y: 1000, z: c.z, real: i === 0, alive: true, slot: i, shootT: 1.2 + i * 0.7 });
+        v.bodies.push({ x: c.x, y: 1000, z: c.z, real: i === 0, alive: true, slot: i, shootT: 1.2 + i * 0.7, vx: 0, vy: 0, vz: 0 });
       }
       break;
     }
@@ -123,37 +175,271 @@ const inside = (zone: Zone, inset: number) => ({
   z1: zone.bounds.z1 - inset,
 });
 
+/* ------------------------------------------------------------------ steering */
+
+export interface Mover {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
+/**
+ * Steer toward the wanted velocity (wx, wy, wz): the velocity changes by at most
+ * maxAccel·dt, then the mover moves. The new velocity lies between the old one and the
+ * wanted one, so with both under a top speed it stays under it. Returns the acceleration used.
+ */
+export function steer(m: Mover, wx: number, wy: number, wz: number, maxAccel: number, dt: number): number {
+  let ax = wx - m.vx;
+  let ay = wy - m.vy;
+  let az = wz - m.vz;
+  const dv = len3(ax, ay, az);
+  const max = maxAccel * dt;
+  if (dv > max) {
+    const k = max / dv;
+    ax *= k;
+    ay *= k;
+    az *= k;
+  }
+  m.vx += ax;
+  m.vy += ay;
+  m.vz += az;
+  m.x += m.vx * dt;
+  m.y += m.vy * dt;
+  m.z += m.vz * dt;
+  return dt > 0 ? len3(ax, ay, az) / dt : 0;
+}
+
+/**
+ * The velocity to want to arrive at (tx, ty, tz), which itself moves at (fx, fy, fz): that
+ * motion, plus a closing speed that can still brake to a stop in the distance left (at 80% of
+ * maxAccel), all under maxSpeed. Written into `out`.
+ */
+export function arrive(
+  m: Mover,
+  tx: number,
+  ty: number,
+  tz: number,
+  fx: number,
+  fy: number,
+  fz: number,
+  maxSpeed: number,
+  maxAccel: number,
+  out: { x: number; y: number; z: number },
+) {
+  const dx = tx - m.x;
+  const dy = ty - m.y;
+  const dz = tz - m.z;
+  const d = len3(dx, dy, dz);
+  const close = d > 1e-9 ? Math.min(maxSpeed, Math.sqrt(1.6 * maxAccel * d)) / d : 0;
+  let wx = fx + dx * close;
+  let wy = fy + dy * close;
+  let wz = fz + dz * close;
+  const w = len3(wx, wy, wz);
+  if (w > maxSpeed) {
+    const k = maxSpeed / w;
+    wx *= k;
+    wy *= k;
+    wz *= k;
+  }
+  out.x = wx;
+  out.y = wy;
+  out.z = wz;
+}
+
+const want = { x: 0, y: 0, z: 0 };
+
+/** Drag at `rate` (1/s): no steering, the velocity just dies away (stunned, webbed). */
+function drift(m: Mover, rate: number, dt: number) {
+  const k = 1 / (1 + rate * dt);
+  m.vx *= k;
+  m.vy *= k;
+  m.vz *= k;
+  m.x += m.vx * dt;
+  m.y += m.vy * dt;
+  m.z += m.vz * dt;
+}
+
+/** Hard arena walls for a steered body: stop the velocity into a wall instead of snapping back. */
+function keepIn(m: Mover, box: { x0: number; z0: number; x1: number; z1: number }, y0: number, y1: number) {
+  if (m.x < box.x0) {
+    m.x = box.x0;
+    if (m.vx < 0) m.vx = 0;
+  } else if (m.x > box.x1) {
+    m.x = box.x1;
+    if (m.vx > 0) m.vx = 0;
+  }
+  if (m.z < box.z0) {
+    m.z = box.z0;
+    if (m.vz < 0) m.vz = 0;
+  } else if (m.z > box.z1) {
+    m.z = box.z1;
+    if (m.vz > 0) m.vz = 0;
+  }
+  if (m.y < y0) {
+    m.y = y0;
+    if (m.vy < 0) m.vy = 0;
+  } else if (m.y > y1) {
+    m.y = y1;
+    if (m.vy > 0) m.vy = 0;
+  }
+}
+
+/** A wanted velocity that also leans back inside the box when near its walls. */
+function inward(box: { x0: number; z0: number; x1: number; z1: number }, x: number, z: number, out: { x: number; y: number; z: number }, margin: number, push: number) {
+  if (x < box.x0 + margin) out.x += push * (1 - (x - box.x0) / margin);
+  else if (x > box.x1 - margin) out.x -= push * (1 - (box.x1 - x) / margin);
+  if (z < box.z0 + margin) out.z += push * (1 - (z - box.z0) / margin);
+  else if (z > box.z1 - margin) out.z -= push * (1 - (box.z1 - z) / margin);
+}
+
+/**
+ * Hit by the hero: an impulse along (nx, ny, nz) of `speed`, capped at KNOCK_MAX, on the
+ * villain or one of Sybil's bodies. It wears off through their steering, drag or friction.
+ */
+export function knockVillain(v: Villain, body: number, nx: number, ny: number, nz: number, speed: number) {
+  const k = Math.min(KNOCK_MAX, speed) * (v.kind === "doc-octochain" ? 0.5 : 1);
+  if (k <= 0) return;
+  const m: Mover = body >= 0 && v.bodies[body] ? v.bodies[body] : v;
+  m.vx += nx * k;
+  m.vy += ny * k;
+  m.vz += nz * k;
+  if (v.kind === "sandwich-man") {
+    // Knocked off his feet: a little pop up, and he flies a parabola.
+    m.vy = Math.max(m.vy, 0) + 180;
+    v.grounded = false;
+  }
+  if (v.kind === "sybil" && v.bodies[body]?.real) {
+    v.cvx += nx * k * 0.5;
+    v.cvz += nz * k * 0.5;
+  }
+}
+
 /* ------------------------------------------------------------------ Gas Goblin */
+
+/**
+ * The glider: thrust along the flight path up to `thrust`, the sideways and up-down turn up
+ * to `turn` (and climbing within GOBLIN_CLIMB_ACCEL), toward the wanted velocity. Sets his bank:
+ * a coordinated turn rolls by tan⁻¹(sideways acceleration / g).
+ */
+function glide(v: Villain, wx: number, wy: number, wz: number, thrust: number, turn: number, dt: number) {
+  let ax = (wx - v.vx) / dt;
+  let ay = (wy - v.vy) / dt;
+  let az = (wz - v.vz) / dt;
+  const sp = len3(v.vx, v.vy, v.vz);
+  const al = len3(ax, ay, az);
+  let tx: number;
+  let ty: number;
+  let tz: number;
+  if (sp > 1) {
+    tx = v.vx / sp;
+    ty = v.vy / sp;
+    tz = v.vz / sp;
+  } else if (al > 1e-9) {
+    tx = ax / al;
+    ty = ay / al;
+    tz = az / al;
+  } else {
+    tx = 1;
+    ty = 0;
+    tz = 0;
+  }
+  const at = clamp(ax * tx + ay * ty + az * tz, -thrust, thrust);
+  let nx = ax - (ax * tx + ay * ty + az * tz) * tx;
+  let ny = ay - (ax * tx + ay * ty + az * tz) * ty;
+  let nz = az - (ax * tx + ay * ty + az * tz) * tz;
+  ny = clamp(ny, -GOBLIN_CLIMB_ACCEL, GOBLIN_CLIMB_ACCEL);
+  const nl = len3(nx, ny, nz);
+  if (nl > turn) {
+    const k = turn / nl;
+    nx *= k;
+    ny *= k;
+    nz *= k;
+  }
+  ax = tx * at + nx;
+  ay = ty * at + ny;
+  az = tz * at + nz;
+  v.vx += ax * dt;
+  v.vy += ay * dt;
+  v.vz += az * dt;
+  v.x += v.vx * dt;
+  v.y += v.vy * dt;
+  v.z += v.vz * dt;
+  // The bank: sideways acceleration relative to the horizontal heading (L = heading turned 90°, +x toward +z).
+  const hs = len2(v.vx, v.vz);
+  const lat = hs > 1 ? (ax * -v.vz + az * v.vx) / hs : 0;
+  v.bank = datan2(lat, GRAVITY);
+}
+
+/** The dive's push-off: a launch impulse along the dive line (the thrust takes it from there). */
+const DIVE_PUSH = 420;
 
 function stepGoblin(s: SimState, v: Villain, dt: number, zone: Zone) {
   // A looping figure-eight in xz, bobbing; hit, he climbs out of reach for a moment, cackling.
-  const pathX = v.home.x + 270 * dsin(0.55 * v.t);
-  const pathZ = v.home.z + 210 * dsin(1.1 * v.t);
-  const pathY = v.home.y + 80 * dsin(1.1 * v.t + 1.2) + 170 * Math.min(1, v.fleeT);
+  // The path point moves; he flies after it with its own velocity plus a correction.
+  const t = v.t;
+  const flee = Math.min(1, v.fleeT);
+  const pathX = v.home.x + 270 * dsin(0.55 * t);
+  const pathY = v.home.y + 80 * dsin(1.1 * t + 1.2) + 170 * flee;
+  const pathZ = v.home.z + 210 * dsin(1.1 * t);
+  const pvx = 270 * 0.55 * dcos(0.55 * t);
+  const pvy = 80 * 1.1 * dcos(1.1 * t + 1.2) - (v.fleeT > 0 && v.fleeT < 1 ? 170 : 0);
+  const pvz = 210 * 1.1 * dcos(1.1 * t);
+  const box = inside(zone, 40);
+  const cruise = (fast: number) => {
+    want.x = pvx + (pathX - v.x) * 1.4;
+    want.y = pvy + (pathY - v.y) * 1.4;
+    want.z = pvz + (pathZ - v.z) * 1.4;
+    if (v.phase !== "enter") inward(box, v.x, v.z, want, 120, 260);
+    const top = GOBLIN_SPEED * fast;
+    const w = len3(want.x, want.y, want.z);
+    if (w > top) {
+      want.x *= top / w;
+      want.y *= top / w;
+      want.z *= top / w;
+    }
+    glide(v, want.x, want.y, want.z, GOBLIN_THRUST, GOBLIN_TURN_ACCEL, dt);
+  };
   if (v.phase === "enter") {
-    const k = Math.min(1, dt * 2.2);
-    v.x += (pathX - v.x) * k;
-    v.y += (pathY - v.y) * k;
-    v.z += (pathZ - v.z) * k;
+    cruise(1.6);
     return;
   }
   if (v.stun > 0) {
-    v.vy = Math.max(-200, v.vy - 400 * dt);
-    v.y = Math.max(240, v.y + v.vy * dt);
+    // No lift: the glider coasts down, slowing.
+    const k = 1 / (1 + STUN_DRAG * dt);
+    v.vx *= k;
+    v.vz *= k;
+    v.vy = Math.max(-STUN_SINK, v.vy - 400 * dt);
+    v.x += v.vx * dt;
+    v.y += v.vy * dt;
+    v.z += v.vz * dt;
+    v.bank *= k;
+    keepIn(v, box, 240, 900);
     return;
   }
-  const box = inside(zone, 40);
   if (v.phase === "telegraph") {
+    // Wind-up: pull up and bleed speed.
     v.phaseT -= dt;
+    const sp = len2(v.vx, v.vz) || 1;
+    glide(v, (v.vx / sp) * 140, 120, (v.vz / sp) * 140, GOBLIN_THRUST, GOBLIN_TURN_ACCEL, dt);
+    keepIn(v, box, 150, 900);
     if (v.phaseT <= 0) {
-      const t = aim(s, 0.25);
-      const dx = t.x - v.x;
-      const dy = t.y - v.y;
-      const dz = t.z - v.z;
+      // Push off down the line to where you'll be when he gets there: a launch impulse, then thrust.
+      const h = s.hero;
+      const lead = clamp(len3(h.x - v.x, h.y - v.y, h.z - v.z) / GOBLIN_DIVE_SPEED, 0.2, 0.7);
+      const a = aim(s, lead);
+      const dx = a.x - v.x;
+      const dy = a.y - v.y;
+      const dz = a.z - v.z;
       const d = len3(dx, dy, dz) || 1;
-      v.vx = (dx / d) * 780;
-      v.vy = (dy / d) * 780;
-      v.vz = (dz / d) * 780;
+      v.diveX = dx / d;
+      v.diveY = dy / d;
+      v.diveZ = dz / d;
+      v.vx += v.diveX * DIVE_PUSH;
+      v.vy += v.diveY * DIVE_PUSH;
+      v.vz += v.diveZ * DIVE_PUSH;
       v.phase = "dash";
       v.phaseT = 0.85;
       v.dashHit = false;
@@ -161,10 +447,10 @@ function stepGoblin(s: SimState, v: Villain, dt: number, zone: Zone) {
     return;
   }
   if (v.phase === "dash") {
+    // The dive: hard thrust down the line fixed at push-off, turning only GOBLIN_TURN_ACCEL (so a sidestep dodges it).
     v.phaseT -= dt;
-    v.x = clamp(v.x + v.vx * dt, box.x0, box.x1);
-    v.y = clamp(v.y + v.vy * dt, 150, 900);
-    v.z = clamp(v.z + v.vz * dt, box.z0, box.z1);
+    glide(v, v.diveX * GOBLIN_DIVE_SPEED, v.diveY * GOBLIN_DIVE_SPEED, v.diveZ * GOBLIN_DIVE_SPEED, GOBLIN_DIVE_ACCEL, GOBLIN_TURN_ACCEL, dt);
+    keepIn(v, box, 150, 900);
     const h = s.hero;
     if (!v.dashHit && len3(h.x - v.x, h.y - v.y, h.z - v.z) < v.radius + HERO_RADIUS) {
       v.dashHit = hurtHero(s, moveDamage(v, "Glider dive"), "Glider dive", v.x, v.y, v.z);
@@ -175,17 +461,9 @@ function stepGoblin(s: SimState, v: Villain, dt: number, zone: Zone) {
     }
     return;
   }
-  // Glide the path (easing back to it after a dive).
-  const k = v.phase === "recover" ? Math.min(1, dt * 2.5) : 1;
-  const nx = v.x + (pathX - v.x) * k;
-  const ny = v.y + (pathY - v.y) * k;
-  const nz = v.z + (pathZ - v.z) * k;
-  v.vx = (nx - v.x) / dt;
-  v.vy = (ny - v.y) / dt;
-  v.vz = (nz - v.z) / dt;
-  v.x = nx;
-  v.y = ny;
-  v.z = nz;
+  // Glide the path (pulling out of a dive back onto it).
+  cruise(v.phase === "recover" ? 1.4 : 1.2);
+  keepIn(v, box, 150, 900);
   if (v.phase === "recover") {
     v.phaseT -= dt;
     if (v.phaseT <= 0) v.phase = "idle";
@@ -207,84 +485,166 @@ function stepGoblin(s: SimState, v: Villain, dt: number, zone: Zone) {
 
 /* ------------------------------------------------------------------ Sandwich Man */
 
-const SANDWICH_RUN = 250;
 const vhit: SphereHit = { hit: false, top: false, topY: 0, wall: false, wallNx: 0, wallNz: 0, wallTop: 0, ceiling: false };
+
+/** One step of free flight under gravity g, exact for the constant acceleration (no drag): a true parabola. */
+export function ballisticStep(m: Mover, g: number, dt: number) {
+  m.x += m.vx * dt;
+  m.y += m.vy * dt - 0.5 * g * dt * dt;
+  m.z += m.vz * dt;
+  m.vy -= g * dt;
+}
+
+/**
+ * The launch velocity for a jump from (x0, y0, z0) to (x1, y1, z1) that peaks at height
+ * `apex` (at least both ends), under gravity g, and its flight time.
+ */
+export function jumpVelocity(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, apex: number, g: number) {
+  const top = Math.max(apex, y0, y1);
+  const vy = Math.sqrt(2 * g * (top - y0));
+  const t = vy / g + Math.sqrt((2 * (top - y1)) / g);
+  return { vx: (x1 - x0) / t, vy, vz: (z1 - z0) / t, t };
+}
+
+/** The launch velocity that reaches (x1, y1, z1) from (x0, y0, z0) in exactly `t` seconds under gravity g. */
+export function leapVelocity(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, t: number, g: number) {
+  return { vx: (x1 - x0) / t, vy: (y1 - y0) / t + 0.5 * g * t, vz: (z1 - z0) / t };
+}
+
+/** The fastest a roof hop may cross the ground. */
+const HOP_MAX = 760;
+
+/**
+ * Plan a hop to a roof at (tx, tz): a parabola peaking SANDWICH_APEX over the higher end and
+ * every roof on the way, if that's a jump a person could make. Launches him and returns true.
+ */
+function hopTo(s: SimState, v: Villain, tx: number, tz: number): boolean {
+  const g = SANDWICH_GRAVITY;
+  const foot = v.y - v.radius;
+  const land = groundBelow(s.grid, tx, tz, foot + 360);
+  if (land <= STREET_Y + 1) return false;
+  let top = Math.max(foot, land);
+  for (let k = 1; k < 8; k++) {
+    const f = k / 8;
+    top = Math.max(top, groundBelow(s.grid, v.x + (tx - v.x) * f, v.z + (tz - v.z) * f, foot + 360));
+  }
+  if (top > foot + 340) return false;
+  const j = jumpVelocity(v.x, foot, v.z, tx, land, tz, top + SANDWICH_APEX, g);
+  if (len2(j.vx, j.vz) > HOP_MAX) return false;
+  v.vx = j.vx;
+  v.vy = j.vy;
+  v.vz = j.vz;
+  v.grounded = false;
+  return true;
+}
+
+/** A hop to some roof in the run box: the run target if it's on one, else a few seeded tries. */
+function hopSomewhere(s: SimState, v: Villain, run: { x0: number; z0: number; x1: number; z1: number }): boolean {
+  if (hopTo(s, v, v.dashToX, v.dashToZ)) return true;
+  for (let k = 0; k < 5; k++) {
+    const x = run.x0 + roll(s) * (run.x1 - run.x0);
+    const z = run.z0 + roll(s) * (run.z1 - run.z0);
+    if (hopTo(s, v, x, z)) {
+      v.dashToX = x;
+      v.dashToZ = z;
+      return true;
+    }
+  }
+  return false;
+}
 
 function stepSandwich(s: SimState, v: Villain, dt: number, zone: Zone) {
   const h = s.hero;
-  const prevY = v.y;
-  const gravity = 1700;
+  const g = SANDWICH_GRAVITY;
   const box = inside(zone, 40);
-  if (v.phase === "dash") {
-    v.phaseT -= dt;
-    v.x = clamp(v.x + v.vx * dt, box.x0, box.x1);
-    v.y = clamp(v.y + v.vy * dt, STREET_Y + v.radius, 900);
-    v.z = clamp(v.z + v.vz * dt, box.z0, box.z1);
-    if (!v.dashHit && len3(h.x - v.x, h.y - v.y, h.z - v.z) < v.radius + HERO_RADIUS + 6) {
-      v.dashHit = hurtHero(s, moveDamage(v, "Front-run"), "Front-run", v.x, v.y, v.z);
-    }
-    if (v.phaseT <= 0) {
-      v.phase = "recover";
-      v.phaseT = 0.5;
-      v.vx *= 0.3;
-      v.vz *= 0.3;
-      v.vy = 0;
-      v.grounded = false;
-    }
-    return;
-  }
-  // Gravity, the rooftops, and the walls between them.
+  const run = inside(zone, 90);
+  const prevFoot = v.y - v.radius;
   let blocked = false;
   if (!v.grounded) {
-    v.vy -= gravity * dt;
-    v.x = clamp(v.x + v.vx * dt, box.x0, box.x1);
-    v.y += v.vy * dt;
-    v.z = clamp(v.z + v.vz * dt, box.z0, box.z1);
-    const foot = v.y - v.radius;
-    const top = groundBelow(s.grid, v.x, v.z, prevY - v.radius + 0.5);
-    if (v.vy <= 0 && foot < top) {
-      v.y = top + v.radius;
+    // In the air: a true parabola, sliding off walls, landing on a roof (or the street).
+    const vyBefore = v.vy;
+    ballisticStep(v, g, dt);
+    keepIn(v, box, STREET_Y + v.radius, 2000);
+    collideSphere(s.grid, v, v.radius, vhit);
+    if (vhit.wall) blocked = true;
+    const top = groundBelow(s.grid, v.x, v.z, prevFoot + 0.5);
+    if (v.vy <= 0 && (v.y - v.radius <= top || (vhit.top && v.vy <= 0))) {
+      v.y = Math.max(top, vhit.top ? vhit.topY : top) + v.radius;
       v.vy = 0;
       v.grounded = true;
+      // The landing's friction takes speed off the run.
+      const impact = vyBefore < 0 ? -vyBefore : 0;
+      const hs = len2(v.vx, v.vz);
+      if (hs > 1e-9) {
+        const k = Math.max(0, hs - impact * LAND_FRICTION) / hs;
+        v.vx *= k;
+        v.vz *= k;
+      }
+      if (v.phase === "dash") {
+        v.phase = "recover";
+        v.phaseT = 0.5;
+      }
     }
   } else {
-    const below = groundBelow(s.grid, v.x, v.z, v.y - v.radius);
-    const gap = v.y - v.radius - below;
-    if (gap > 2 || gap < -2) v.grounded = false;
-  }
-  collideSphere(s.grid, v, v.radius, vhit);
-  if (vhit.wall) blocked = true;
-  if (vhit.top && v.vy <= 0) {
-    v.y = vhit.topY + v.radius;
-    v.vy = 0;
-    v.grounded = true;
+    const below = groundBelow(s.grid, v.x, v.z, v.y - v.radius + 1);
+    if (v.y - v.radius - below > 2) v.grounded = false;
   }
   if (v.phase === "enter") {
     if (v.grounded) v.phaseT = Math.min(v.phaseT, 0.2);
     return;
   }
+  if (v.phase === "dash") {
+    // The front-run lunge, in flight: it hurts on contact.
+    v.phaseT -= dt;
+    if (!v.dashHit && len3(h.x - v.x, h.y - v.y, h.z - v.z) < v.radius + HERO_RADIUS + 6) {
+      v.dashHit = hurtHero(s, moveDamage(v, "Front-run"), "Front-run", v.x, v.y, v.z);
+    }
+    if (v.phaseT <= -1.5) {
+      v.phase = "recover";
+      v.phaseT = 0.5;
+    }
+    return;
+  }
+  /** Run toward a wanted ground velocity: accelerate at SANDWICH_ACCEL, brake at SANDWICH_BRAKE. */
+  const runTo = (wx: number, wz: number) => {
+    const faster = len2(wx, wz) > len2(v.vx, v.vz);
+    let ax = wx - v.vx;
+    let az = wz - v.vz;
+    const dv = len2(ax, az);
+    const max = (faster ? SANDWICH_ACCEL : SANDWICH_BRAKE) * dt;
+    if (dv > max) {
+      ax *= max / dv;
+      az *= max / dv;
+    }
+    v.vx += ax;
+    v.vz += az;
+    v.x += v.vx * dt;
+    v.z += v.vz * dt;
+    keepIn(v, box, STREET_Y + v.radius, 2000);
+    collideSphere(s.grid, v, v.radius, vhit);
+    if (vhit.wall) blocked = true;
+  };
   if (v.stun > 0) {
-    v.vx *= 0.85;
-    v.vz *= 0.85;
+    if (v.grounded) runTo(0, 0);
     return;
   }
   if (v.phase === "telegraph") {
-    v.vx *= 0.7;
-    v.vz *= 0.7;
+    // Crouch for the lunge: brake to a stop.
+    if (v.grounded) runTo(0, 0);
     v.phaseT -= dt;
     if (v.phaseT <= 0) {
-      // Front-run: lunge at where you're about to be.
-      const t = aim(s, 0.45);
-      const dx = t.x - v.x;
-      const dy = t.y - v.y;
-      const dz = t.z - v.z;
-      const d = len3(dx, dy, dz) || 1;
-      const speed = 1150;
-      v.vx = (dx / d) * speed;
-      v.vy = (dy / d) * speed;
-      v.vz = (dz / d) * speed;
+      // Front-run: a ballistic leap that meets you where you're about to be.
+      const a = aim(s, 0.45);
+      const d = len3(a.x - v.x, a.y - v.y, a.z - v.z);
+      const t = clamp(d / 1150, LUNGE_TIME_MIN, LUNGE_TIME_MAX);
+      const l = leapVelocity(v.x, v.y, v.z, a.x, a.y, a.z, t, g);
+      const sp = len3(l.vx, l.vy, l.vz);
+      const k = sp > 1500 ? 1500 / sp : 1;
+      v.vx = l.vx * k;
+      v.vy = l.vy * k;
+      v.vz = l.vz * k;
       v.phase = "dash";
-      v.phaseT = Math.min(0.6, d / speed + 0.08);
+      v.phaseT = t + 0.1;
       v.dashHit = false;
       v.grounded = false;
     }
@@ -305,16 +665,15 @@ function stepSandwich(s: SimState, v: Villain, dt: number, zone: Zone) {
       if (roll(s) < 0.55) {
         const hs = len2(incoming.vx, incoming.vz) || 1;
         v.vy = 840;
-        v.vx = (-incoming.vz / hs) * 260;
-        v.vz = (incoming.vx / hs) * 260;
+        v.vx += (-incoming.vz / hs) * 260;
+        v.vz += (incoming.vx / hs) * 260;
         v.grounded = false;
         s.events.push({ type: "villain-attack", label: "Front-runs your web", x: v.x, y: v.y, z: v.z });
       }
     }
   }
-  // Run the rooftops toward a spot, jumping gaps and walls.
+  // Run the rooftops toward a spot, hopping gaps and walls on planned parabolas.
   if (v.grounded) {
-    const run = inside(zone, 90);
     if (v.fleeT > 1.7) {
       // Just hit: run for the far side from you.
       const c = zone.center;
@@ -332,20 +691,27 @@ function stepSandwich(s: SimState, v: Villain, dt: number, zone: Zone) {
     const d = len2(dx, dz) || 1;
     const ux = dx / d;
     const uz = dz / d;
-    const k = Math.min(1, dt * 6);
-    v.vx += (ux * SANDWICH_RUN * v.rate - v.vx) * k;
-    v.vz += (uz * SANDWICH_RUN * v.rate - v.vz) * k;
-    v.x = clamp(v.x + v.vx * dt, box.x0, box.x1);
-    v.z = clamp(v.z + v.vz * dt, box.z0, box.z1);
-    // About to run off a roof, up against a wall, or stuck in the street: jump.
+    // Arrive: full speed, easing to a stop he can brake into.
+    const speed = Math.min(SANDWICH_RUN * v.rate, Math.sqrt(1.6 * SANDWICH_BRAKE * d));
+    runTo(ux * speed, uz * speed);
+    // About to run off a roof, up against a wall, or down in the street: hop (or turn back).
     const foot = v.y - v.radius;
-    const ahead = groundBelow(s.grid, v.x + ux * 30, v.z + uz * 30, foot);
+    const ahead = groundBelow(s.grid, v.x + ux * 34, v.z + uz * 34, foot + 1);
     const street = foot <= STREET_Y + 1;
-    if (ahead < foot - 4 || street || blocked) {
-      v.vy = street ? 980 : 760;
-      v.vx = ux * 330;
-      v.vz = uz * 330;
-      v.grounded = false;
+    if (v.grounded && (ahead < foot - 4 || street || blocked)) {
+      if (!hopSomewhere(s, v, run)) {
+        if (!street) {
+          // No jump he can make: stop at the edge and pick somewhere else.
+          v.vx = 0;
+          v.vz = 0;
+          v.dashToX = v.x - ux * 120;
+          v.dashToZ = v.z - uz * 120;
+        } else {
+          // Stuck in the street: a straight-up spring, and try again from the top.
+          v.vy = 980;
+          v.grounded = false;
+        }
+      }
     }
   }
   v.attack2T -= dt;
@@ -357,7 +723,7 @@ function stepSandwich(s: SimState, v: Villain, dt: number, zone: Zone) {
     }
   }
   v.attackT -= dt;
-  if (v.attackT <= 0 && v.phase === "idle" && len3(h.x - v.x, h.y - v.y, h.z - v.z) < 700) {
+  if (v.attackT <= 0 && v.phase === "idle" && v.grounded && len3(h.x - v.x, h.y - v.y, h.z - v.z) < 700) {
     v.attackT = (3.8 + roll(s) * 1.5) / v.rate;
     v.phase = "telegraph";
     v.phaseT = 0.5;
@@ -367,11 +733,30 @@ function stepSandwich(s: SimState, v: Villain, dt: number, zone: Zone) {
 
 /* ------------------------------------------------------------------ Doc Octochain */
 
-/** Arm i's tip: in the vertical plane along the bridge axis (angle 0 along the axis, π/2 up). */
+/**
+ * Where arm i leaves Doc's body: two shoulders on each side along the bridge axis, the
+ * outer pair higher, as fractions of his radius (along the axis, then up).
+ */
+const SHOULDERS: readonly (readonly [number, number])[] = [
+  [-0.55, 0.12],
+  [-0.3, -0.32],
+  [0.3, -0.32],
+  [0.55, 0.12],
+];
+
+/** Arm i's shoulder, in world space: the root of the chain (the scene draws, and hits test, from here). */
+export function armShoulder(v: Villain, i: number): { x: number; y: number; z: number } {
+  const o = SHOULDERS[i % SHOULDERS.length];
+  const along = o[0] * v.radius;
+  return { x: v.x + v.ax * along, y: v.y + o[1] * v.radius, z: v.z + v.az * along };
+}
+
+/** Arm i's tip: from its shoulder, in the vertical plane along the bridge axis (angle 0 along the axis, π/2 up). */
 export function armTip(v: Villain, i: number): { x: number; y: number; z: number } {
   const a = v.arms[i];
+  const o = armShoulder(v, i);
   const along = dcos(a.angle) * a.len;
-  return { x: v.x + v.ax * along, y: v.y + dsin(a.angle) * a.len, z: v.z + v.az * along };
+  return { x: o.x + v.ax * along, y: o.y + dsin(a.angle) * a.len, z: o.z + v.az * along };
 }
 
 function segDist(px: number, py: number, pz: number, ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
@@ -383,25 +768,33 @@ function segDist(px: number, py: number, pz: number, ax: number, ay: number, az:
   return len3(px - (ax + dx * t), py - (ay + dy * t), pz - (az + dz * t));
 }
 
+/**
+ * Drive a joint toward `target` under a speed limit and an acceleration limit, braking in time
+ * to stop there: the wanted rate is the braking speed for the distance left.
+ */
+export function drive(pos: number, vel: number, target: number, maxV: number, maxA: number, dt: number): [number, number] {
+  const d = target - pos;
+  const ad = d < 0 ? -d : d;
+  const wantV = (d < 0 ? -1 : 1) * Math.min(maxV, Math.sqrt(2 * maxA * ad));
+  const nv = vel + clamp(wantV - vel, -maxA * dt, maxA * dt);
+  return [pos + nv * dt, nv];
+}
+
 function stepDoc(s: SimState, v: Villain, dt: number) {
-  const sway = 120 * dsin(0.35 * v.t);
-  const bodyX = v.home.x + v.ax * sway;
-  const bodyZ = v.home.z + v.az * sway;
+  const t = v.t;
+  const sway = 120 * dsin(0.35 * t);
+  const swayV = 120 * 0.35 * dcos(0.35 * t);
   // Arms in (or stunned), he sags toward the deck to catch his breath: that's your opening.
   const sag = v.phase === "retract" || v.stun > 0 ? 150 : 0;
-  const bodyY = v.home.y + 30 * dsin(1.3 * v.t) - sag;
+  const bodyX = v.home.x + v.ax * sway;
+  const bodyZ = v.home.z + v.az * sway;
+  const bodyY = v.home.y + 30 * dsin(1.3 * t) - sag;
+  arrive(v, bodyX, bodyY, bodyZ, v.ax * swayV, 39 * dcos(1.3 * t), v.az * swayV, DOC_SPEED, DOC_ACCEL, want);
+  steer(v, want.x, want.y, want.z, DOC_ACCEL, dt);
   if (v.phase === "enter") {
-    const k = Math.min(1, dt * 2.4);
-    v.x += (bodyX - v.x) * k;
-    v.y += (bodyY - v.y) * k;
-    v.z += (bodyZ - v.z) * k;
-    for (const a of v.arms) a.len += (60 - a.len) * Math.min(1, dt * 3);
+    for (const a of v.arms) [a.len, a.lv] = drive(a.len, a.lv, 60, ARM_EXTEND_SPEED * 0.5, ARM_EXTEND_ACCEL, dt);
     return;
   }
-  const k = Math.min(1, dt * 3);
-  v.x += (bodyX - v.x) * k;
-  v.y += (bodyY - v.y) * k;
-  v.z += (bodyZ - v.z) * k;
   const stunned = v.stun > 0;
   v.phaseT -= stunned ? 0 : dt;
   if (!stunned && v.phaseT <= 0) {
@@ -431,34 +824,39 @@ function stepDoc(s: SimState, v: Villain, dt: number) {
         s.events.push({ type: "villain-attack", label: "Eight-arm flurry", x: v.x, y: v.y, z: v.z });
     }
   }
-  const ease = (from: number, to: number, kk: number) => from + (to - from) * Math.min(1, dt * kk);
   const swing = 1.35 * Math.sqrt(v.rate);
   v.arms.forEach((a, i) => {
-    let len = a.len;
-    let angle = a.angle;
-    if (stunned || v.phase === "retract" || v.phase === "idle") {
-      len = ease(len, stunned ? 70 : 48, 6);
-      angle = ease(angle, a.base, 5);
+    let len = 48;
+    let angle = a.base;
+    let wMax = ARM_SPEED;
+    let aMax = ARM_ACCEL;
+    if (stunned) {
+      len = 70;
+      wMax = ARM_SPEED * 0.5;
     } else if (v.phase === "sweep") {
-      len = ease(len, 285, 4);
-      angle = a.base + dsin(v.t * swing + i * 1.4) * 0.95;
+      // v2 lengths are from the shoulder (v1 measured from his centre: 285, 250, 330).
+      len = 260;
+      angle = a.base + dsin(t * swing + i * 1.4) * 0.95;
     } else if (v.phase === "slam-wind") {
-      len = ease(len, 250, 6);
-      angle = ease(angle, PI / 2 + (i - 1.5) * 0.42, 7);
+      len = 225;
+      angle = PI / 2 + (i - 1.5) * 0.42;
     } else if (v.phase === "slam") {
-      len = ease(len, 330, 10);
-      angle = ease(angle, -PI / 2 + (i - 1.5) * 0.36, 9);
+      len = 305;
+      angle = -PI / 2 + (i - 1.5) * 0.36;
+      wMax = ARM_SLAM_SPEED;
+      aMax = ARM_SLAM_ACCEL;
     }
-    a.len = len;
-    a.angle = angle;
+    [a.angle, a.w] = drive(a.angle, a.w, angle, wMax, aMax, dt);
+    [a.len, a.lv] = drive(a.len, a.lv, len, ARM_EXTEND_SPEED, ARM_EXTEND_ACCEL, dt);
   });
-  // Chain contact.
+  // Chain contact, along each arm from its shoulder.
   const h = s.hero;
   if (v.phase === "sweep" || v.phase === "slam") {
     for (let i = 0; i < v.arms.length; i++) {
       if (v.arms[i].len < 110) continue;
+      const o = armShoulder(v, i);
       const tip = armTip(v, i);
-      if (segDist(h.x, h.y, h.z, v.x, v.y, v.z, tip.x, tip.y, tip.z) < 20 + HERO_RADIUS) {
+      if (segDist(h.x, h.y, h.z, o.x, o.y, o.z, tip.x, tip.y, tip.z) < 20 + HERO_RADIUS) {
         const slam = v.phase === "slam";
         hurtHero(s, moveDamage(v, slam ? "Cross-chain slam" : "Eight-arm flurry"), slam ? "Cross-chain slam" : "a chain arm", tip.x, tip.y, tip.z);
         break;
@@ -472,57 +870,78 @@ function stepDoc(s: SimState, v: Villain, dt: number) {
 function stepSybil(s: SimState, v: Villain, dt: number, zone: Zone) {
   const alive = v.bodies.filter((b) => b.alive);
   const copies = alive.filter((b) => !b.real).length;
+  const t = v.t;
   let cx: number;
   let cy: number;
   let cz: number;
+  let fx: number;
+  let fy: number;
+  let fz: number;
   if (copies > 0) {
-    cx = v.home.x + 180 * dsin(0.4 * v.t);
-    cz = v.home.z + 140 * dsin(0.8 * v.t);
-    cy = v.home.y + 110 * dsin(0.8 * v.t + 0.9);
+    cx = v.home.x + 180 * dsin(0.4 * t);
+    cz = v.home.z + 140 * dsin(0.8 * t);
+    cy = v.home.y + 110 * dsin(0.8 * t + 0.9);
+    fx = 72 * dcos(0.4 * t);
+    fz = 112 * dcos(0.8 * t);
+    fy = 88 * dcos(0.8 * t + 0.9);
   } else {
     // Alone, he runs a quicker figure eight.
-    cx = v.home.x + 260 * dsin(0.9 * v.t);
-    cz = v.home.z + 200 * dsin(1.8 * v.t);
-    cy = v.home.y + 150 * dsin(1.8 * v.t + 0.9);
+    cx = v.home.x + 260 * dsin(0.9 * t);
+    cz = v.home.z + 200 * dsin(1.8 * t);
+    cy = v.home.y + 150 * dsin(1.8 * t + 0.9);
+    fx = 234 * dcos(0.9 * t);
+    fz = 360 * dcos(1.8 * t);
+    fy = 270 * dcos(1.8 * t + 0.9);
   }
-  const follow = v.phase === "enter" ? 2 : 4;
-  if (v.stun <= 0 || v.phase === "enter") {
-    const k = Math.min(1, dt * follow);
-    v.cx += (cx - v.cx) * k;
-    v.cy += (cy - v.cy) * k;
-    v.cz += (cz - v.cz) * k;
-  }
+  // The swarm's centre steers after its path (and coasts while he's stunned).
+  const c: Mover = { x: v.cx, y: v.cy, z: v.cz, vx: v.cvx, vy: v.cvy, vz: v.cvz };
   const box = inside(zone, 60);
-  v.cx = clamp(v.cx, box.x0, box.x1);
-  v.cz = clamp(v.cz, box.z0, box.z1);
-  // The copies orbit him in xz, the ring tipped a little so they sit at different heights.
+  if (v.stun <= 0 || v.phase === "enter") {
+    arrive(c, cx, cy, cz, fx, fy, fz, SYBIL_CENTER_SPEED * (copies > 0 ? 1 : 1.6), SYBIL_CENTER_ACCEL, want);
+    inward(box, c.x, c.z, want, 80, 200);
+    steer(c, want.x, want.y, want.z, SYBIL_CENTER_ACCEL * (copies > 0 ? 1 : 1.8), dt);
+  } else drift(c, STUN_DRAG, dt);
+  keepIn(c, box, 150, 1100);
+  v.cx = c.x;
+  v.cy = c.y;
+  v.cz = c.z;
+  v.cvx = c.vx;
+  v.cvy = c.vy;
+  v.cvz = c.vz;
+  // The copies orbit him in xz, the ring tipped a little so they sit at different heights:
+  // each steers to its slot, which moves with the ring.
   const radius = copies > 0 ? (v.boss ? 175 : 155) : 0;
   const n = alive.length;
+  const spin = 1.2;
   alive.forEach((b, k) => {
-    const ang = v.t * 1.2 + (k * PI * 2) / n;
-    const c = dcos(ang);
+    const ang = t * spin + (k * PI * 2) / n;
+    const co = dcos(ang);
     const sn = dsin(ang);
-    const tx = v.cx + c * radius;
+    const tx = v.cx + co * radius;
     const ty = v.cy + sn * radius * 0.25;
     const tz = v.cz + sn * radius;
-    const f = Math.min(1, dt * 6);
-    b.x += (tx - b.x) * f;
-    b.y += (ty - b.y) * f;
-    b.z += (tz - b.z) * f;
+    const ox = v.cvx - sn * radius * spin;
+    const oy = v.cvy + co * radius * 0.25 * spin;
+    const oz = v.cvz + co * radius * spin;
+    arrive(b, tx, ty, tz, ox, oy, oz, SYBIL_BODY_SPEED, SYBIL_BODY_ACCEL, want);
+    steer(b, want.x, want.y, want.z, SYBIL_BODY_ACCEL, dt);
   });
   const real = v.bodies.find((b) => b.real)!;
   v.x = real.x;
   v.y = real.y;
   v.z = real.z;
+  v.vx = real.vx;
+  v.vy = real.vy;
+  v.vz = real.vz;
   if (v.phase === "enter" || v.stun > 0) return;
   for (const b of alive) {
     b.shootT -= dt;
     if (b.shootT > 0) continue;
     b.shootT = (1.5 * n + roll(s) * 0.8) / v.rate;
-    const t = aim(s, 0.35);
-    const dx = t.x - b.x;
-    const dy = t.y - b.y;
-    const dz = t.z - b.z;
+    const a = aim(s, 0.35);
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = a.z - b.z;
     const d = len3(dx, dy, dz) || 1;
     const big = b.real;
     const speed = big ? 360 : 440;
@@ -544,6 +963,53 @@ function stepSybil(s: SimState, v: Villain, dt: number, zone: Zone) {
 
 /* ------------------------------------------------------------------ shared */
 
+/** Webbed after a win: flyers lose their steering and sink to hang; Sandwich Man falls where he was hit. */
+function stepWebbed(s: SimState, v: Villain, dt: number) {
+  if (v.kind === "sandwich-man") {
+    if (!v.grounded) {
+      const prevFoot = v.y - v.radius;
+      ballisticStep(v, SANDWICH_GRAVITY, dt);
+      const top = groundBelow(s.grid, v.x, v.z, prevFoot + 0.5);
+      if (v.y - v.radius <= top) {
+        v.y = top + v.radius;
+        v.vy = 0;
+        v.grounded = true;
+      }
+    } else {
+      const hs = len2(v.vx, v.vz);
+      if (hs > 1e-9) {
+        const k = Math.max(0, hs - SANDWICH_BRAKE * dt) / hs;
+        v.vx *= k;
+        v.vz *= k;
+      }
+      v.x += v.vx * dt;
+      v.z += v.vz * dt;
+    }
+    return;
+  }
+  const m: Mover = v.kind === "sybil" ? (v.bodies.find((b) => b.real) ?? v) : v;
+  const k = 1 / (1 + STUN_DRAG * dt);
+  m.vx *= k;
+  m.vz *= k;
+  m.vy += clamp(-60 - m.vy, -300 * dt, 300 * dt);
+  m.x += m.vx * dt;
+  m.y += m.vy * dt;
+  m.z += m.vz * dt;
+  if (m.y < 260) {
+    m.y = 260;
+    if (m.vy < 0) m.vy = 0;
+  }
+  v.bank *= k;
+  if (m !== v) {
+    v.x = m.x;
+    v.y = m.y;
+    v.z = m.z;
+    v.vx = m.vx;
+    v.vy = m.vy;
+    v.vz = m.vz;
+  }
+}
+
 export function stepVillain(s: SimState, dt: number) {
   const v = s.villain;
   if (!v) return;
@@ -552,11 +1018,7 @@ export function stepVillain(s: SimState, dt: number) {
   const vdt = dt * slow;
   v.invuln = Math.max(0, v.invuln - dt);
   if (s.mode === "won") {
-    // Webbed villains drift down to hang (Sandwich Man stays where he fell).
-    v.vx = 0;
-    v.vz = 0;
-    if (v.kind === "sandwich-man") return;
-    v.y += (Math.max(260, v.y - 30) - v.y) * Math.min(1, dt * 2);
+    stepWebbed(s, v, dt);
     return;
   }
   if (s.mode !== "intro" && s.mode !== "fight") return;
@@ -586,7 +1048,7 @@ export function stepVillain(s: SimState, dt: number) {
   if (s.mode === "fight") heroContact(s, v);
 }
 
-/** Slamming into a villain: fast enough and it's a hit; slow and you bounce. */
+/** Slamming into a villain: fast enough and it's a hit (and knocks him back); slow and you bounce. */
 function heroContact(s: SimState, v: Villain) {
   const h = s.hero;
   for (const t of villainTargets(v)) {
@@ -599,15 +1061,19 @@ function heroContact(s: SimState, v: Villain) {
     const nx = d > 0 ? dx / d : 0;
     const ny = d > 0 ? dy / d : 1;
     const nz = d > 0 ? dz / d : 0;
-    const rel = len3(h.vx - v.vx * 0.3, h.vy - v.vy * 0.3, h.vz - v.vz * 0.3);
+    const body: { vx: number; vy: number; vz: number } = t.body >= 0 ? v.bodies[t.body] : v;
+    const rel = len3(h.vx - body.vx * 0.3, h.vy - body.vy * 0.3, h.vz - body.vz * 0.3);
     if (h.slam > 0) return; // the shockwave handles it on impact
     // Doc with his arms in is wide open: a lighter hit does it.
     const threshold = v.kind === "doc-octochain" && docVulnerable(v) ? SLAM_SPEED * 0.6 : SLAM_SPEED;
     const fast = rel >= threshold || (h.dashT > 0 && !h.dashHit);
+    // The closing speed along the line between you, before the bounce.
+    const closing = -(h.vx * nx + h.vy * ny + h.vz * nz);
     if (fast) {
       if (h.dashT > 0) h.dashHit = true;
       // Doc's arms and a villain's guard turn it into a clang (hitVillain says so).
-      hitVillain(s, t.body, 1, h.dashT > 0 ? "dash" : "slam");
+      const landed = hitVillain(s, t.body, 1, h.dashT > 0 ? "dash" : "slam");
+      if (s.villain === v && s.mode === "fight") knockVillain(v, t.body, -nx, -ny, -nz, KNOCK_TRANSFER * Math.max(0, closing) * (landed ? 1 : 0.4));
     }
     // Bounce off, either way.
     const vn = h.vx * nx + h.vy * ny + h.vz * nz;

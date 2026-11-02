@@ -46,6 +46,16 @@ export interface Hero {
   holdPrev: boolean;
   /** Standing still at a spawn until the first web or stick, so nobody runs off a roof unawares. */
   idle: boolean;
+  /** v2: climbing a wall on a web: the wall's outward normal (xz), its top, and seconds since last touching it. */
+  climbing: boolean;
+  wallNx: number;
+  wallNz: number;
+  wallTop: number;
+  wallT: number;
+  /** v2: which side of the heading the last web went (−1, 0, 1), so swings alternate. */
+  side: number;
+  /** v2: the crouch after a hard landing: no run push until it's over. */
+  landT: number;
 }
 
 /* ------------------------------------------------------------------ villains */
@@ -55,6 +65,9 @@ export interface Arm {
   base: number;
   angle: number;
   len: number;
+  /** v2: angular velocity (rad/s) and extension speed (u/s), both rate- and acceleration-limited. */
+  w: number;
+  lv: number;
 }
 
 export interface SybilBody {
@@ -67,6 +80,10 @@ export interface SybilBody {
   slot: number;
   /** Time until this one shoots. */
   shootT: number;
+  /** v2: velocity: each body steers to its orbit slot. */
+  vx: number;
+  vy: number;
+  vz: number;
 }
 
 export type VillainPhase = "enter" | "idle" | "telegraph" | "dash" | "sweep" | "slam-wind" | "slam" | "retract" | "recover";
@@ -118,6 +135,16 @@ export interface Villain {
   fleeT: number;
   /** Sandwich Man: time until he can hop over another web. */
   dodgeT: number;
+  /** v2: the Sybil swarm centre's velocity. */
+  cvx: number;
+  cvy: number;
+  cvz: number;
+  /** v2: Gas Goblin's dive heading (unit), fixed at push-off. */
+  diveX: number;
+  diveY: number;
+  diveZ: number;
+  /** v2: roll into turns, radians (the glider's bank; 0 for the others). */
+  bank: number;
 }
 
 export type HazardKind = "bomb" | "goo" | "trap" | "blast";
