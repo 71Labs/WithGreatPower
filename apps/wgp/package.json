@@ -9,7 +9,8 @@
     "lint": "eslint",
     "simulate": "tsx scripts/simulate.ts",
     "audio": "tsx --env-file=.env.local scripts/audio/generate.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fast-auth-near/browser-sdk": "^1.4.2",
@@ -42,7 +43,8 @@
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   },
   "packageManager": "pnpm@10.19.0"
 }
