@@ -37,7 +37,10 @@ export interface HeroClip {
   pelvis: Float32Array | null;
 }
 
-export type HeroClips = Map<string, HeroClip>;
+/** Clips by name, and the source skeleton's rest pose when known (its pelvis, local metres, and
+ *  each bone's local rest rotation): a body of other proportions plays the clips as moves from
+ *  its own rest pose (anim/motion.ts). */
+export type HeroClips = Map<string, HeroClip> & { pelvisRest?: [number, number, number]; restQ?: Map<string, [number, number, number, number]> };
 
 /** Web kinds past the cells. */
 export const KIND_LENS = 8;
@@ -91,7 +94,17 @@ export function loadHeroClips(url: string = HERO_ANIMS): Promise<HeroClips> {
   if (!p) {
     p = (async () => {
       const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-      return clipsFromGltf((await new GLTFLoader().loadAsync(url)).animations);
+      const gltf = await new GLTFLoader().loadAsync(url);
+      const clips = clipsFromGltf(gltf.animations);
+      const pelvis = gltf.scene.getObjectByName("pelvis");
+      if (pelvis) clips.pelvisRest = [pelvis.position.x, pelvis.position.y, pelvis.position.z];
+      // The armature's nodes at rest (the file has no skin, so they load as plain objects).
+      const rest = new Map<string, [number, number, number, number]>();
+      gltf.scene.traverse((o) => {
+        if (o.name) rest.set(o.name, [o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w]);
+      });
+      clips.restQ = rest;
+      return clips;
     })();
     clipsPending.set(url, p);
   }
@@ -129,14 +142,11 @@ async function fetchAsset(url: string): Promise<HeroAsset> {
   return assetFromScene(gltf.scene, url);
 }
 
-/** Pull the skinned body and its skeleton out of a loaded glTF scene. */
-export function assetFromScene(scene: Object3D, url: string): HeroAsset {
-  let mesh: SkinnedMesh | null = null;
-  scene.traverse((o) => {
-    if (!mesh && (o as SkinnedMesh).isSkinnedMesh) mesh = o as SkinnedMesh;
-  });
-  if (!mesh) throw new Error(`${url}: no skinned mesh`);
-  const skinned: SkinnedMesh = mesh;
+/**
+ * A skinned mesh's skeleton in the game's order (parents first, the root at 0) and the map
+ * from the file's joint indices to it.
+ */
+export function orderedBones(skinned: SkinnedMesh): { bones: HeroBone[]; remap: Map<number, number> } {
   const src = skinned.skeleton.bones;
   const at = new Map<Object3D, number>(src.map((b, i) => [b, i]));
   // Parents first, the root at 0: a depth-first walk from the root, and the skin remapped.
@@ -161,11 +171,28 @@ export function assetFromScene(scene: Object3D, url: string): HeroAsset {
       quaternion: [b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w],
     };
   });
-  const geometry = skinned.geometry;
+  return { bones, remap };
+}
+
+/** Rewrite a geometry's `skinIndex` through `remap` (file joint → game bone). */
+export function remapSkin(geometry: BufferGeometry, remap: Map<number, number>): void {
   const skin = geometry.getAttribute("skinIndex");
   const idx = new Uint16Array(skin.count * 4);
   for (let i = 0; i < skin.count; i++) for (let c = 0; c < 4; c++) idx[i * 4 + c] = remap.get(skin.getComponent(i, c)) ?? 0;
   geometry.setAttribute("skinIndex", new BufferAttribute(idx, 4));
+}
+
+/** Pull the skinned body and its skeleton out of a loaded glTF scene. */
+export function assetFromScene(scene: Object3D, url: string): HeroAsset {
+  let mesh: SkinnedMesh | null = null;
+  scene.traverse((o) => {
+    if (!mesh && (o as SkinnedMesh).isSkinnedMesh) mesh = o as SkinnedMesh;
+  });
+  if (!mesh) throw new Error(`${url}: no skinned mesh`);
+  const skinned: SkinnedMesh = mesh;
+  const { bones, remap } = orderedBones(skinned);
+  const geometry = skinned.geometry;
+  remapSkin(geometry, remap);
   for (const name of ["_web_p", "_web_q", "_web_r", "_ao", "normal"]) {
     if (!geometry.getAttribute(name)) throw new Error(`${url}: no ${name}`);
   }

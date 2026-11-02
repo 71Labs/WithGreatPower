@@ -185,9 +185,10 @@ export function applyPose(rig: Rig, group: Group, p: Pose, solved?: Solved): voi
   delta(rig, at("clavR"), p.clav[1]);
   const get = (n: string) => rig.get(n);
   for (const [name, x] of p.extra) {
-    const bone = get(name);
-    bone.quaternion.copy(x.rot);
-    bone.scale.setScalar(x.scale);
+    const i = rig.index.get(name);
+    if (i === undefined) continue;
+    setBoneDelta(rig, i, x.rot);
+    get(name).scale.setScalar(x.scale);
   }
   group.updateMatrixWorld(true);
 

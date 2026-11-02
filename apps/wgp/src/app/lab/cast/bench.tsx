@@ -31,6 +31,8 @@ interface LabApi {
   flip(): void;
   miss(): void;
   stats(): StageStats;
+  /** Which way the featured body faces (yaw), or null. */
+  facing(): number | null;
 }
 
 declare global {
@@ -177,6 +179,7 @@ export default function CastBench() {
       flip: () => actions.current?.flip(),
       miss: () => actions.current?.miss(),
       stats: () => stats.current,
+      facing: () => actions.current?.facing() ?? null,
     };
     return () => {
       delete window.__wgpCast;

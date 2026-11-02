@@ -34,6 +34,8 @@ import type { AnimContext } from "./anim/types";
 import { DocAnimator, GoblinAnimator, SandwichAnimator, SybilAnimator } from "./anim/villains";
 import { CAST_DEFS } from "./cast";
 import type { Lod } from "./cast/kit";
+import { CAST_ANIMS, castAssetNow, castModelUrl, loadCastAsset, UNITS_PER_METRE, type CastAsset, type CastBodyId } from "./cast-asset";
+import { CastCopies, CastModel } from "./cast-model";
 import { ARMS, DocChains } from "./chains";
 import { RigDebug } from "./debug";
 import { heroAssetNow, heroScale, HERO_ANIMS, HERO_MODEL, loadHeroAsset, loadHeroClips, type HeroAsset, type HeroClips } from "./hero-asset";
@@ -71,11 +73,19 @@ void main() { gl_FragColor = vec4(uInk, 0.34); }
 `;
 
 interface Actor {
-  model: CharacterModel;
+  model: BodyModel;
   anim: ActorAnimator;
   flash: number;
   hits: number;
 }
+
+/** The Sybil copies' colours on his body's palette (a grey crowd). */
+const COPY_GREY: Record<string, string> = { suit: "#A3A3A0", gloss: "#A3A3A0", eye: "#E4E4E1", white: "#E4E4E1", mouth: "#74746F", tooth: "#D6D6D2" };
+/** Poses the copies share among them. */
+const COPY_POSES = 3;
+
+/** The Sybil copies, either body. */
+type Copies = { kind: "proc"; batch: CopyBatch; anim: SybilAnimator } | { kind: "cast"; batch: CastCopies; anims: SybilAnimator[] };
 
 interface Ally extends Actor {
   zone: Zone;
@@ -104,10 +114,15 @@ export class CharacterSystem {
   private heroAsked: string | null = null;
   private disposed = false;
   private readonly villains = new Map<VillainKey, Actor>();
-  private copies: { batch: CopyBatch; anim: SybilAnimator } | null = null;
+  private copies: Copies | null = null;
+  /** The cast's clips (the hero's and the cast's files merged), once loaded. */
+  private castClips: HeroClips | null = null;
+  private castClipsAsked = false;
+  /** Cast body files asked for in this build. */
+  private readonly castAsked = new Set<string>();
   private readonly chains: DocChains;
   private readonly allies: Ally[] = [];
-  private gwei: { model: CharacterModel; anim: HeroAnimator; frame: RenderFrame3D; first: Vector3 | null; last: Vector3 } | null = null;
+  private gwei: { model: BodyModel; anim: HeroAnimator; frame: RenderFrame3D; first: Vector3 | null; last: Vector3 } | null = null;
   private readonly shadows: InstancedMesh;
   private readonly shadowMat: ShaderMaterial;
   private readonly shadowGeo: CircleGeometry;
@@ -190,12 +205,145 @@ export class CharacterSystem {
     for (const id of villainIds) this.villain(id);
     for (const z of this.city.zones) {
       if (!z.ally) continue;
-      const model = new CharacterModel(CAST_DEFS[z.ally], this.shared, lods.ally);
-      const anim = new AllyAnimator(model.rig, model.group, ALLY_STYLE[z.ally]);
+      const id = z.ally;
+      const asset = this.castNow(id);
+      const model: BodyModel = asset ? this.castModel(asset, "ally") : new CharacterModel(CAST_DEFS[id], this.shared, lods.ally);
       const at = z.allyAt ?? z.center;
-      this.allies.push({ model, anim, zone: z, at, flash: 0, hits: 0 });
+      const ally: Ally = { model, anim: this.allyAnimator(id, model), zone: z, at, flash: 0, hits: 0 };
+      this.allies.push(ally);
       this.root.add(model.group);
     }
+    for (const id of villainIds) this.askCast(id);
+    for (const a of this.allies) this.askCast(a.zone.ally!);
+  }
+
+  /* ---------------------------------------------------------------- the cast's bodies */
+
+  private castUrl(id: CastBodyId): string {
+    return castModelUrl(id, this.tier === "low");
+  }
+
+  /** A cast body that's ready now (file and clips), or null. */
+  private castNow(id: CastBodyId): CastAsset | null {
+    return this.castClips ? castAssetNow(this.castUrl(id)) : null;
+  }
+
+  private castModel(asset: CastAsset, role: "main" | "ally"): CastModel {
+    const lods: Lod[] = this.tier === "low" ? ["lo"] : ["hi", "lo"];
+    void role;
+    return new CastModel(asset, this.shared, lods);
+  }
+
+  private allyAnimator(id: AllyKey, model: BodyModel): AllyAnimator {
+    const anim = new AllyAnimator(model.rig, model.group, ALLY_STYLE[id]);
+    if (model instanceof CastModel && this.castClips) anim.setClips(this.castClips, model.k);
+    return anim;
+  }
+
+  private villainAnimator(id: VillainKey, model: BodyModel): ActorAnimator {
+    const anim =
+      id === "gas-goblin"
+        ? new GoblinAnimator(model.rig, model.group)
+        : id === "sandwich-man"
+          ? new SandwichAnimator(model.rig, model.group)
+          : id === "doc-octochain"
+            ? new DocAnimator(model.rig, model.group)
+            : new SybilAnimator(model.rig, model.group);
+    anim.strandAnchor = (p, out) => this.strandAnchor(p, out);
+    if (model instanceof CastModel && this.castClips) anim.setClips(this.castClips, model.k);
+    return anim;
+  }
+
+  /** Fetch a character's body file and the cast's clips (once each), then swap the body in. */
+  private askCast(id: CastBodyId): void {
+    const url = this.castUrl(id);
+    if (this.castAsked.has(url)) return;
+    this.castAsked.add(url);
+    if (!this.castClipsAsked) {
+      this.castClipsAsked = true;
+      Promise.all([loadHeroClips(HERO_ANIMS), loadHeroClips(CAST_ANIMS)]).then(
+        ([hero, extra]) => {
+          const merged: HeroClips = new Map([...hero, ...extra]);
+          merged.pelvisRest = hero.pelvisRest;
+          merged.restQ = hero.restQ;
+          this.castClips = merged;
+          // Bodies that arrived first can come in now.
+          for (const u of this.castAsked) {
+            const a = castAssetNow(u);
+            if (a) this.swapCast(a);
+          }
+        },
+        () => {
+          // No clips: the procedural cast carries on.
+        },
+      );
+    }
+    loadCastAsset(url).then(
+      (asset) => {
+        if (this.castClips) this.swapCast(asset);
+      },
+      () => {
+        // No file: the procedural body carries on.
+      },
+    );
+  }
+
+  /** Put a loaded MPFB body in place of a procedural one, wherever that character is. */
+  private swapCast(asset: CastAsset): void {
+    if (this.disposed || !this.built || !this.castAsked.has(asset.url) || asset.url !== this.castUrl(asset.meta.who as CastBodyId)) return;
+    const id = asset.meta.who as CastBodyId;
+    const villain = this.villains.get(id as VillainKey);
+    if (villain && !(villain.model instanceof CastModel)) {
+      const model = this.castModel(asset, "main");
+      model.visible = villain.model.visible;
+      this.root.remove(villain.model.group);
+      villain.model.dispose();
+      villain.model = model;
+      villain.anim = this.villainAnimator(id as VillainKey, model);
+      this.root.add(model.group);
+      if (id === "sybil") this.swapCopies(asset);
+    }
+    for (const a of this.allies) {
+      if (a.zone.ally !== id || a.model instanceof CastModel) continue;
+      const model = this.castModel(asset, "ally");
+      this.root.remove(a.model.group);
+      a.model.dispose();
+      a.model = model;
+      a.anim = this.allyAnimator(id as AllyKey, model);
+      this.root.add(model.group);
+    }
+    // Her body is ready before she's called, so the assist doesn't hitch building it.
+    if (id === "gwei" && !this.gwei) this.makeGwei();
+    else if (id === "gwei" && this.gwei && !(this.gwei.model instanceof CastModel)) {
+      const g = this.gwei;
+      const model = this.castModel(asset, "main");
+      model.visible = g.model.visible;
+      this.root.remove(g.model.group);
+      g.model.dispose();
+      g.model = model;
+      g.anim = new HeroAnimator(model.rig, model.group, this.ctx);
+      g.first = null;
+      this.root.add(model.group);
+    }
+  }
+
+  /** The copies as one instanced draw of the Sybil's own body, in grey. */
+  private swapCopies(asset: CastAsset): void {
+    if (this.copies?.kind === "cast") return;
+    if (this.copies) {
+      this.root.remove(this.copies.batch.group);
+      this.copies.batch.dispose();
+    }
+    const colors = asset.meta.names.map((n, i) => COPY_GREY[n] ?? (i === 0 ? asset.meta.palette[0] : "#A3A3A0"));
+    const batch = new CastCopies(asset, this.shared, colors, 12, COPY_POSES);
+    batch.fill.uniforms.uGlitch.value = 1;
+    const anims = batch.rigs.map((rig, i) => {
+      const a = new SybilAnimator(rig, batch.holders[i], i * 1.37);
+      if (this.castClips) a.setClips(this.castClips, UNITS_PER_METRE);
+      return a;
+    });
+    this.copies = { kind: "cast", batch, anims };
+    this.root.add(batch.group);
   }
 
   private heroUrl(): string {
@@ -239,26 +387,23 @@ export class CharacterSystem {
   private villain(id: VillainKey): Actor {
     const have = this.villains.get(id);
     if (have) return have;
-    const model = new CharacterModel(CAST_DEFS[id], this.shared, LODS[this.tier].main);
-    const anim =
-      id === "gas-goblin"
-        ? new GoblinAnimator(model.rig, model.group)
-        : id === "sandwich-man"
-          ? new SandwichAnimator(model.rig, model.group)
-          : id === "doc-octochain"
-            ? new DocAnimator(model.rig, model.group)
-            : new SybilAnimator(model.rig, model.group);
-    anim.strandAnchor = (p, out) => this.strandAnchor(p, out);
+    const asset = this.castNow(id);
+    const model: BodyModel = asset ? this.castModel(asset, "main") : new CharacterModel(CAST_DEFS[id], this.shared, LODS[this.tier].main);
+    const anim = this.villainAnimator(id, model);
     model.visible = false;
     this.root.add(model.group);
     const actor = { model, anim, flash: 0, hits: -1 };
     this.villains.set(id, actor);
     if (id === "sybil" && !this.copies) {
-      const batch = new CopyBatch(CAST_DEFS["sybil-copy"], this.shared, LODS[this.tier].copy, 12);
-      batch.fill.uniforms.uGlitch.value = 1;
-      this.copies = { batch, anim: new SybilAnimator(batch.rig, batch.holder) };
-      this.root.add(batch.group);
+      if (asset) this.swapCopies(asset);
+      else {
+        const batch = new CopyBatch(CAST_DEFS["sybil-copy"], this.shared, LODS[this.tier].copy, 12);
+        batch.fill.uniforms.uGlitch.value = 1;
+        this.copies = { kind: "proc", batch, anim: new SybilAnimator(batch.rig, batch.holder) };
+        this.root.add(batch.group);
+      }
     }
+    this.askCast(id);
     return actor;
   }
 
@@ -310,7 +455,33 @@ export class CharacterSystem {
     for (const v of this.villains.values()) add(v.model);
     for (const a of this.allies) add(a.model);
     if (this.gwei) add(this.gwei.model);
+    if (this.copies?.kind === "cast") n += this.copies.batch.body.count * ((this.copies.batch.body.geometry.getIndex()?.count ?? 0) / 3);
     return n;
+  }
+
+  /** A body's joint in the world (the hero, the real villain, an ally or Gwei), for the lab's close camera. */
+  jointOf(key: string, joint: string, out: Vector3): Vector3 | null {
+    let m: BodyModel | null = null;
+    if (key === "hero") m = this.hero?.model ?? null;
+    else if (this.villains.has(key as VillainKey)) m = this.villains.get(key as VillainKey)!.model;
+    else m = this.allies.find((a) => a.zone.ally === key)?.model ?? (key === "gwei" ? (this.gwei?.model ?? null) : null);
+    if (!m || !m.visible) return null;
+    return out.setFromMatrixPosition(m.rig.get(joint).matrixWorld);
+  }
+
+  /** Which way a body faces (yaw, radians; 0 is +z), for the lab's camera. */
+  facingOf(key: string): number | null {
+    const at = this.jointOf(key, "hips", _a);
+    if (!at) return null;
+    let m: BodyModel | null = null;
+    if (key === "hero") m = this.hero?.model ?? null;
+    else if (this.villains.has(key as VillainKey)) m = this.villains.get(key as VillainKey)!.model;
+    else m = this.allies.find((a) => a.zone.ally === key)?.model ?? null;
+    if (!m) return null;
+    // The root bone carries the body's turn: its forward (+z in the model's frame at rest).
+    const root = m.rig.bones[0];
+    const f = _b.set(0, 0, 1).applyQuaternion(_q.setFromRotationMatrix(_m.extractRotation(root.matrixWorld)).multiply(m.rig.restWorld[0].clone().invert()));
+    return Math.atan2(f.x, f.z);
   }
 
   /** The body animators, for the lab. */
@@ -326,8 +497,8 @@ export class CharacterSystem {
     return FOG.amount[band] * 0.5;
   }
 
-  private lodFor(model: BodyModel, p: Vec3, camera: Vector3): void {
-    const near = LODS[this.tier].near;
+  private lodFor(model: BodyModel, p: Vec3, camera: Vector3, nearScale = 1): void {
+    const near = LODS[this.tier].near * nearScale;
     const d = Math.hypot(camera.x - p.x, camera.y - p.y, camera.z - p.z);
     model.setLod(d < near && model.hasLod("hi") ? "hi" : model.hasLod("lo") ? "lo" : "min");
     model.fill.uniforms.uFogMix.value = this.fogMix(p, camera);
@@ -356,6 +527,8 @@ export class CharacterSystem {
 
   update(frame: RenderFrame3D, camera: PerspectiveCamera, size: { width: number; height: number }, dt: number, time: number): void {
     if (this.hero) this.askHero();
+    // Gwei swings in to assist in fights: her body comes once the first fight starts.
+    if (this.built && (frame.mode === "fight" || frame.hazards.some((h) => h.kind === "gwei"))) this.askCast("gwei");
     const hero = this.hero;
     if (!hero) return;
     const cam = camera.position;
@@ -418,6 +591,7 @@ export class CharacterSystem {
       model.visible = true;
       if (actor.hits >= 0 && v.hits < actor.hits) {
         actor.flash = 0.3;
+        anim.struck();
         // A blow in reach: the hero throws a punch with it.
         if (Math.hypot(v.pos.x - this.heroPos.x, v.pos.y - this.heroPos.y, v.pos.z - this.heroPos.z) < 170) ha.punch();
       }
@@ -454,8 +628,9 @@ export class CharacterSystem {
       ctx.secondary = allyCtx;
       const near = Math.hypot(this.heroPos.x - a.at.x, this.heroPos.z - a.at.z) < 520;
       const open = frame.mode === "errand" && frame.stop === a.zone.index;
-      a.anim.update({ pos: a.at, state: open || near ? "wave" : "idle" }, dt, ctx);
-      this.lodFor(a.model, a.at, cam);
+      a.anim.update({ pos: a.at, state: open ? "talk" : near ? "wave" : "idle" }, dt, ctx);
+      // Allies take their full body only up close (an errand), villains from further out.
+      this.lodFor(a.model, a.at, cam, 0.6);
       shadow(a.at, 34);
       if (debug) this.debugActor(a.model, a.anim.targets, null);
     }
@@ -495,9 +670,11 @@ export class CharacterSystem {
       }
     }
     if (!fromSim) {
-      // The boom ends on his harness, from the rig.
+      // The boom ends on his harness, from the rig (the MPFB body's file lists its own).
+      const own = model instanceof CastModel ? model.asset.meta.sockets : null;
       for (let i = 0; i < ARMS; i++) {
-        const s = sockets[names[i]];
+        const o = own?.[names[i]];
+        const s = o ? { bone: o.bone, at: [o.at[0] * UNITS_PER_METRE, o.at[1] * UNITS_PER_METRE, o.at[2] * UNITS_PER_METRE] } : sockets[names[i]];
         const bone = model.rig.get(s.bone);
         roots[i].set(s.at[0], s.at[1], s.at[2]).sub(model.rig.joints.get(s.bone)!).applyMatrix4(bone.matrixWorld);
       }
@@ -514,12 +691,14 @@ export class CharacterSystem {
     if (!c) return;
     c.batch.setCount(count);
     if (count === 0) return;
-    // One shared pose, posed at the origin facing +z…
+    // Shared poses, posed at the origin facing +z (the hero far off down +z)…
     const ctx = this.ctx;
     const saved = this.saved.copy(this.heroPos);
     this.heroPos.set(0, 0, 1000);
     const state = frame.villains.find((v) => v.copy)?.state ?? "idle";
-    c.anim.update({ pos: { x: 0, y: 0, z: 0 }, state }, dt, ctx);
+    const origin = { x: 0, y: 0, z: 0 };
+    if (c.kind === "proc") c.anim.update({ pos: origin, state }, dt, ctx);
+    else for (const a of c.anims) a.update({ pos: origin, state }, dt, ctx);
     this.heroPos.copy(saved);
     c.batch.commitPose();
     // …then each copy placed and turned toward the hero.
@@ -528,10 +707,31 @@ export class CharacterSystem {
       if (!v.copy) continue;
       const yaw = yawOf(this.heroPos.x - v.pos.x, this.heroPos.z - v.pos.z);
       _m.compose(_b.set(v.pos.x, v.pos.y, v.pos.z), _q.setFromAxisAngle(_up, yaw), _s.set(1, 1, 1));
-      c.batch.setInstance(i++, _m);
+      if (c.kind === "proc") c.batch.setInstance(i, _m);
+      else c.batch.setInstance(i, _m, i);
+      i++;
     }
     c.batch.commitInstances();
     c.batch.fill.uniforms.uFogMix.value = this.fogMix(frame.villains.find((v) => v.copy)!.pos, cam);
+  }
+
+  /** Gwei's body and animator for her assist (hidden until she swings in). */
+  private makeGwei(): void {
+    const asset = this.castNow("gwei");
+    const model: BodyModel = asset ? this.castModel(asset, "main") : new CharacterModel(CAST_DEFS.gwei, this.shared, LODS[this.tier].main);
+    model.visible = false;
+    this.root.add(model.group);
+    const f: RenderFrame3D = {
+      tick: 0,
+      alpha: 1,
+      hero: { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, anchor: null, grounded: false, hp: 1, maxHp: 1, fluid: 0, hurtFlash: 0, shield: false },
+      villains: [],
+      hazards: [],
+      stop: 0,
+      mode: "fight",
+      timeScale: 1,
+    };
+    this.gwei = { model, anim: new HeroAnimator(model.rig, model.group, this.ctx), frame: f, first: null, last: new Vector3() };
   }
 
   /** Gwei's assist: she swings through on her own web (the hazard named "gwei"). */
@@ -545,22 +745,8 @@ export class CharacterSystem {
       this.gweiWeb.mesh.visible = false;
       return;
     }
-    if (!this.gwei) {
-      const model = new CharacterModel(CAST_DEFS.gwei, this.shared, LODS[this.tier].main);
-      this.root.add(model.group);
-      const f: RenderFrame3D = {
-        tick: 0,
-        alpha: 1,
-        hero: { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, anchor: null, grounded: false, hp: 1, maxHp: 1, fluid: 0, hurtFlash: 0, shield: false },
-        villains: [],
-        hazards: [],
-        stop: 0,
-        mode: "fight",
-        timeScale: 1,
-      };
-      this.gwei = { model, anim: new HeroAnimator(model.rig, model.group, this.ctx), frame: f, first: null, last: new Vector3() };
-    }
-    const g = this.gwei;
+    if (!this.gwei) this.makeGwei();
+    const g = this.gwei!;
     const p = hz.pos;
     if (!g.first) {
       g.first = new Vector3(p.x, p.y, p.z);
@@ -583,7 +769,8 @@ export class CharacterSystem {
     h.anchor.z = anchor.z;
     g.model.visible = true;
     g.anim.update(g.frame, dt, this.ctx);
-    this.lodFor(g.model, p, cam);
+    // She swings through fast: her full body only when she passes close.
+    this.lodFor(g.model, p, cam, 0.5);
     this.gweiShot.update(g.anim.grip, h.anchor, _a.set(h.vel.x, h.vel.y, h.vel.z), dt, this.reducedMotion);
     this.gweiWeb.setPoints(this.gweiShot.points, this.gweiShot.count, size.width, size.height, this.gweiShot.widthScale);
   }
@@ -608,6 +795,7 @@ export class CharacterSystem {
     this.allies.length = 0;
     this.gwei = null;
     this.copies = null;
+    this.castAsked.clear();
     this.built = false;
   }
 

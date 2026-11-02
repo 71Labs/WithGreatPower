@@ -59,18 +59,55 @@ export class MotionLayer {
   readonly strides = new Map<string, Stride>();
   private readonly pelvisIndex: number;
 
+  /**
+   * `retarget`: play the clips on a body of other proportions than the one they were made
+   * for (the hero's). Each bone then turns from its own rest rotation by as much as the
+   * clip's bone turns from the source's (the same move in the bone's own frame, so a spine
+   * curved differently at rest isn't bent to the hero's shape), and the hips move about this
+   * rig's resting pelvis, scaled by the ratio of the two hip heights.
+   */
   constructor(
     clips: HeroClips,
     private readonly rig: Rig,
     k: number,
     loops: string[],
+    retarget = false,
   ) {
     this.q = rig.bones.map(() => new Quaternion());
     this.w = new Float32Array(rig.bones.length);
     this.pelvisIndex = rig.index.get("pelvis") ?? rig.index.get("hips")!;
+    const rest = rig.rest[this.pelvisIndex];
+    const from = retarget && clips.pelvisRest ? new Vector3(...clips.pelvisRest).multiplyScalar(k) : null;
+    const hipK = from ? rest.length() / Math.max(1e-6, from.length()) : 1;
+    // Per bone: this rig's rest · the source's rest⁻¹, laid in front of every clip rotation.
+    const fix = rig.bones.map((b, i) => {
+      const src = retarget ? clips.restQ?.get(b.name) : undefined;
+      return src ? rig.restQ[i].clone().multiply(new Quaternion(...src).invert()) : null;
+    });
+    const cache = new Map<Float32Array, Float32Array>();
     for (const clip of clips.values()) {
-      const rot = rig.bones.map((b) => clip.rot.get(b.name) ?? null);
-      const pelvis = clip.pelvis ? clip.pelvis.map((x) => x * k) : null;
+      const rot = rig.bones.map((b, i) => {
+        const data = clip.rot.get(b.name) ?? null;
+        const f = fix[i];
+        if (!data || !f) return data;
+        let out = cache.get(data);
+        if (!out) {
+          out = new Float32Array(data.length);
+          for (let j = 0; j < data.length; j += 4) _q.fromArray(data, j).premultiply(f).toArray(out, j);
+          cache.set(data, out);
+        }
+        return out;
+      });
+      let pelvis = clip.pelvis ? clip.pelvis.map((x) => x * k) : null;
+      if (pelvis && from) {
+        const p = pelvis;
+        for (let i = 0; i < p.length; i += 3) {
+          p[i] = rest.x + (p[i] - from.x) * hipK;
+          p[i + 1] = rest.y + (p[i + 1] - from.y) * hipK;
+          p[i + 2] = rest.z + (p[i + 2] - from.z) * hipK;
+        }
+        pelvis = p;
+      }
       const loop = loops.includes(clip.name);
       const base = new Vector3();
       if (pelvis) {

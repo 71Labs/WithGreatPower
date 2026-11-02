@@ -18,8 +18,10 @@ export type LabCharacter = Exclude<CharacterKey, "sybil-copy">;
 
 /** The hero's actions, plus two lab-only moves: `stride` (stand, walk, run, stop) and `land` (a drop onto the roof). */
 export const HERO_STATES: string[] = ["idle", "stride", "run", "swing", "air", "land", "climb", "dash", "slam", "held", "hurt", "ko"];
-export const VILLAIN_STATES = ["idle", "windup", "attack", "stunned", "guard", "open", "webbed"] as const;
-export const ALLY_STATES = ["idle", "wave"] as const;
+/** The sim's villain states, plus `hit` (idle, taking a blow every 1.4 s). */
+export const VILLAIN_STATES = ["idle", "windup", "attack", "hit", "stunned", "guard", "open", "webbed"] as const;
+/** Waiting, `wave` (the hero swings close) and `talk` (the errand is open). */
+export const ALLY_STATES = ["idle", "wave", "talk"] as const;
 
 export const ALLIES: LabCharacter[] = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei"];
 export const VILLAINS: LabCharacter[] = ["gas-goblin", "sandwich-man", "doc-octochain", "sybil"];
@@ -142,18 +144,19 @@ export class CastScript {
     } else if (VILLAINS.includes(this.character)) {
       f.mode = this.state === "webbed" ? "won" : "fight";
       // The hero stands out of frame, so the villain is the only body on stage.
-      this.park();
+      this.park(560);
       this.villain();
     } else {
-      f.mode = this.state === "wave" ? "errand" : "travel";
+      f.mode = this.state === "talk" ? "errand" : "travel";
       f.villains.length = 0;
-      this.park();
+      this.park(this.state === "wave" ? 330 : 560);
     }
   }
 
-  private park(): void {
+  /** The hero stands out of frame, `d` from the ally's spot. */
+  private park(d: number): void {
     const h = this.frame.hero;
-    Object.assign(h.pos, v(-360, ROOF + 26, 380));
+    Object.assign(h.pos, v(-150 - d * 0.45, ROOF + 26, -120 + d * 0.89));
     Object.assign(h.vel, v());
     h.grounded = true;
     h.anchor = null;
@@ -306,9 +309,11 @@ export class CastScript {
     const f = this.frame;
     const id = this.character as "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
     const t = this.t;
-    const state = this.state;
+    const state = this.state === "hit" ? "idle" : this.state;
     f.villains.length = 0;
-    const push = (pos: Vec3, vel: Vec3, copy = false) => f.villains.push({ id, copy, pos, vel, hits: 3, hitsMax: 5, state, stateTicks: Math.floor(t * 60) });
+    // `hit`: a blow lands every 1.4 s (the hits count drops, then resets).
+    const hits = this.state === "hit" ? 5 - (Math.floor(t / 1.4) % 5) : 3;
+    const push = (pos: Vec3, vel: Vec3, copy = false) => f.villains.push({ id, copy, pos, vel, hits, hitsMax: 5, state, stateTicks: Math.floor(t * 60) });
     if (id === "gas-goblin") {
       // A lazy figure-eight over the roof.
       const a = t * 0.55;
