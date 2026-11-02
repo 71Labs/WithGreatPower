@@ -24,6 +24,8 @@ interface LabApi {
   set(character: LabCharacter, state: string): void;
   scrub(v: number | null): void;
   angle(a: number | null): void;
+  /** Camera distance multiplier (1 = the state's framing; under 0.7 it follows the hero). */
+  zoom(z: number): void;
   debug(on: boolean): void;
   tier(t: QualityTier): void;
   flip(): void;
@@ -163,6 +165,9 @@ export default function CastBench() {
         setState(s);
       },
       scrub: (v) => setScrub(v === null || !Number.isFinite(v) ? null : Math.min(1, Math.max(0, v))),
+      zoom: (z) => {
+        if (actions.current && Number.isFinite(z)) actions.current.zoom = Math.min(4, Math.max(0.1, z));
+      },
       angle: (a) => {
         setTurntable(a === null || !Number.isFinite(a));
         if (a !== null && Number.isFinite(a)) setAngle(a);

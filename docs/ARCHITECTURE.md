@@ -70,7 +70,16 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 - **Outlines:** an inverted-hull instanced pass, 3 px near down to 1.5 px far, with the `LINE` widths from `src/game/style.ts`.
 - **Props and sky:** instanced props (water towers, antennas, billboards from a canvas text atlas using `BILLBOARDS`), plus a vertex-colour sky with stars.
 - **Characters** (`src/game3d/scene/characters/`; the sticker cards were replaced in November):
-  - Each character is one procedurally built `SkinnedMesh`: tubes swept along the bones with blended weights, a lathed head, and rigid extras (glider, goggles, cigar, sandwich stack). There are no model files.
+  - **The hero** is a real human body: an MPFB (MakeHuman, CC0) model in `public/models/hero.glb`, with 16k triangles, a 53-bone skeleton and fingers. The low tier gets `hero-lo.glb` (5k).
+    - Both come from `launch/brand/hero/export.py --game`. GLTFLoader loads them once, on the first 3D frame; until then the procedural hero stands in.
+    - The suit's web is drawn from the model's own web coordinates, with baked per-limb AO in the cel bands.
+    - Elbows and knees bend on hinges, and the fingers close from open to a fist.
+    - **Motion capture:** Quaternius' Universal Animation Library (CC0), retargeted by `launch/brand/hero/retarget.py` into `public/models/hero-anims.glb`.
+      - On the roof he stands on the mocap idle over planted, hip-width feet with his weight on one leg.
+      - He walks, jogs and sprints on phase-locked cycles blended by speed. The phase advances by distance, so the feet don't slide.
+      - He lands, flinches, punches (when a villain in reach is hit) and falls into the ragdoll with clips.
+      - The swing, climb, dash and slam stay physics poses. The web hand, the planted feet and the head's glances are re-solved on top of the clips.
+  - **The rest of the cast** is one procedurally built `SkinnedMesh` each: tubes swept along the bones with blended weights, a lathed head, and rigid extras (glider, goggles, cigar, sandwich stack).
   - Cel shading with three hard bands from one fixed light and the city's dot pattern in the shadow band. The ink outline is the same mesh skinned inside-out, with the city's width rule. The hero's web pattern is drawn in the shader.
   - Two draw calls per body; the Sybil's copies share one skeleton.
   - **Animation is driven by the sim's motion, never canned alone.** The sim's v1.2 render fields (action, facing, rope length, villain velocity, bank and Doc's arms) feed a presentation-only physics kit on a fixed 120 Hz step: critically damped springs, Verlet chains and a light ragdoll, two-bone IK and FABRIK. Nothing in it is read back by the sim, so ranked replays are unaffected.

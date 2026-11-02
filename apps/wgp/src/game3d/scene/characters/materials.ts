@@ -150,6 +150,7 @@ export function hullMaterial(shared: SharedUniforms, body: ShaderMaterial, skin?
       uInk: { value: v3(C.ink) },
       uFog: shared.uFog,
       uHullScale: { value: 1 },
+      uHullBack: { value: 0 },
       // Shared with the fill, so a fade or a glitch moves both.
       uFade: u.uFade,
       uFogMix: u.uFogMix,
