@@ -6,7 +6,7 @@ import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "r
 
 import { setSoundEnabled, soundEnabled, subscribeSound } from "@/audio/player";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { ArrowUpRight, City, HelpCircle, Medal, Newspaper, Settings, Shirt, TriangleAlert, Vote, Zap } from "@/components/icons";
+import { ArrowUpRight, City, HelpCircle, Medal, Newspaper, Settings, Shirt, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
 import type { CastId } from "@wgp/game-core/cast";
 import { XP_TO_NEXT } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
@@ -22,6 +22,7 @@ export const GAME_NAV = [
   { href: "/play/suits", label: "Suits", icon: Shirt },
   { href: "/play/album", label: "Album", icon: Medal },
   { href: "/play/rug", label: "Daily Rug", icon: Newspaper },
+  { href: "/play/leaderboard", label: "Ranks", icon: Award },
 ] as const;
 
 const isActive = (pathname: string | null, href: string) =>
@@ -380,7 +381,7 @@ function Dock({ pathname, save }: { pathname: string | null; save: Save | null }
       className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-2 sm:px-6"
     >
       <ul
-        className={`pointer-events-auto grid w-full max-w-[620px] grid-cols-5 sm:max-w-[700px] gap-1 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 ${ON_PAPER}`}
+        className={`pointer-events-auto grid w-full max-w-[620px] grid-cols-6 sm:max-w-[700px] gap-1 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 ${ON_PAPER}`}
       >
         {GAME_NAV.map((item) => {
           const active = isActive(pathname, item.href);

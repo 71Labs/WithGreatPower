@@ -10,7 +10,10 @@
     "simulate": "tsx scripts/simulate.ts",
     "audio": "tsx --env-file=.env.local scripts/audio/generate.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed-dev": "tsx src/server/db/seed-dev.ts"
   },
   "dependencies": {
     "@fast-auth-near/browser-sdk": "^1.4.2",
