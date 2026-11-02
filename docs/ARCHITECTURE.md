@@ -37,8 +37,8 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
     - `world.ts` → `city.ts`: an AABB grid, 9×9 blocks, a spatial hash, sphere collision and a raycast shared with the camera.
     - `villains.ts` keeps each joke: Goblin flies a looping path, Sandwich runs the arena roofs, Doc sweeps the bridge plane, Sybil's copies orbit in xz.
 - **Rope in 3D:** gravity → air steer → pump → reel → integrate → project onto the rope sphere and drop outward speed → collide with boxes (land on roofs, slide on walls) → the street or river is a miss. Two substeps above 1,200 u/s.
-- **Release grading uses no trig:** constant tan16 and tan74 bounds replace `atan2`.
-- **Anchor choice ignores the camera.** Heading comes from the stick (one of 64 literal directions), else the bearing to the next stop (one-thumb play), else the villain, else velocity. It picks the nearest roof-edge point to a desired spot ahead and above. Ties break deterministically.
+- **Release grading uses no trig:** constant tangent bounds replace `atan2`. Since ruleset 2 the perfect window is 20–60° above horizontal, where a swing naturally releases.
+- **Anchor choice ignores the camera.** Heading comes from the stick (one of 64 literal directions), else the bearing to the next stop (one-thumb play), else the villain, else velocity. Since ruleset 2 (`sim3d/swing.ts`) it picks among roof-edge and facade points ahead and up on the buildings flanking the travel line, scored by a short forecast of forward progress and clearance; it never webs behind or straight overhead. Ties break deterministically.
 - **Determinism rules:**
   - Banned in the core, enforced by ESLint: `Math.sin/cos/atan2/hypot/pow/random`, `**`, `Date` and `performance`.
   - `dmath.ts` provides polynomial sin, cos and atan2 using only + − × ÷ and `sqrt`.
@@ -69,17 +69,26 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Flat banded fog. No shadows, dither or post-processing by default.
 - **Outlines:** an inverted-hull instanced pass, 3 px near down to 1.5 px far, with the `LINE` widths from `src/game/style.ts`.
 - **Props and sky:** instanced props (water towers, antennas, billboards from a canvas text atlas using `BILLBOARDS`), plus a vertex-colour sky with stars.
-- **Sticker cards:**
-  - One atlas built with `cut()` from `src/sim/render/sprites.tsx`.
-  - Each card is the silhouette extruded about 4 units, with paper-white sides and a "WGP" stamp on the back.
-  - Yaw-only billboarding with a lagging spring, so the edge shows when the camera swings.
-  - Cards roll toward the rope and flip on a perfect release, with an ink blob shadow underneath.
-- **Web:** two drei `<Line>`s, ink under white. Effects ("POW!", "THWIP!") are pooled quads built with `starburst` from `src/sim/render/draw.ts`.
-- **Camera:** a spring chase behind the velocity heading that looks ahead and toward the anchor. Distance and FOV grow with speed. It pulls in on collision, frames both fighters in arenas, and offers manual orbit that recentres. Ported from blastoff's chase-camera.
+- **Characters** (`src/game3d/scene/characters/`; the sticker cards were replaced in November):
+  - Each character is one procedurally built `SkinnedMesh`: tubes swept along the bones with blended weights, a lathed head, and rigid extras (glider, goggles, cigar, sandwich stack). There are no model files.
+  - Cel shading with three hard bands from one fixed light and the city's dot pattern in the shadow band. The ink outline is the same mesh skinned inside-out, with the city's width rule. The hero's web pattern is drawn in the shader.
+  - Two draw calls per body; the Sybil's copies share one skeleton.
+  - **Animation is driven by the sim's motion, never canned alone.** The sim's v1.2 render fields (action, facing, rope length, villain velocity, bank and Doc's arms) feed a presentation-only physics kit on a fixed 120 Hz step: critically damped springs, Verlet chains and a light ragdoll, two-bone IK and FABRIK. Nothing in it is read back by the sim, so ranked replays are unaffected.
+  - **Swing:** the hips sit on the sim position, the body aligns with the rope, the web fist is pinned to the line by IK, and limbs trail from the arc's acceleration. **Run:** the stride advances by distance travelled, with foot IK to the roof. Doc's chain arms are Verlet chains pulled to the sim's arm tips. Caught villains dangle in a web.
+  - `/lab/cast` shows every character in every state, with a physics debug overlay.
+- **Web:** a strand from the hero's fist to the exact anchor. It shoots out over about 100 ms, goes taut, and falls slack on release or a miss. Effects ("POW!", "THWIP!") are pooled quads built with `starburst` from `src/sim/render/draw.ts`.
+- **Camera** (`scene/camera/chase.ts`, reworked in November after playtesting):
+  - Yaw follows a travel heading, the horizontal velocity through two 0.6 s low-pass stages, so a swing's back-and-forth cancels out. It turns only past a 20° dead zone, at most 90°/s.
+  - Mouse look (pointer lock on the first click; Esc frees it), drag or two-finger orbit take over the camera, and so does holding the stick off-forward. That breaks the loop between camera-relative steering and the camera. Auto-follow eases back 2 s after the last input.
+  - Height follows through a dead band and a soft spring, so the pendulum doesn't pump the view. Look-ahead and the pull toward a new web anchor are smoothed.
+  - Arenas: a two-shot side chosen from 12 by available room, with pitch capped at 23°.
+  - Buildings and props between the camera and the hero, or the fight two-shot, fade to a dot-screen ghost (`city/occlusion.ts`). Collision pull-in eases instead of snapping.
+  - Reduced motion: fixed field of view, no speed lines and no shake.
 - **Controls:**
   - **Touch:** left 40% is an optional floating stick (the default steers you to the next stop); right 60% is hold to web; ability buttons sit in a right-thumb arc; two fingers orbit the camera.
   - **Keyboard:** WASD, Space or mouse to web, 1–4, G, Esc.
-- **Quality tiers:** low, medium (the phone default, DPR 1.5) and high, with adaptive DPR and an FPS probe. Ported from blastoff `session/quality.ts`, `gpu.ts` and `camera-fx.ts`, with a context-loss guard. The budget is under 100 draw calls and about 30k triangles.
+- **City life and comic finish:** instanced, GPU-driven traffic on street loops, street lamps and signals, crosswalks, parapets, cornices, fire escapes and varied roofs; halftone dots on shadow faces and distant fog bands; speed lines at high speed; ink outlines thicker near the camera.
+- **Quality tiers:** low, medium (the phone default, DPR 1.5) and high, with adaptive DPR and an FPS probe. Ported from blastoff `session/quality.ts`, `gpu.ts` and `camera-fx.ts`, with a context-loss guard. Low drops cars, halftone, speed lines and small details first. The budget is under 100 draw calls (about 50 at most in play today) and about 80k triangles on high, characters included.
 - **Reused as-is:**
   - HUD, sheets and results (`src/sim/ui/*`), `src/audio/*`, the screen-reader live region and the reduced-motion choice.
   - `src/sim/loop.ts` becomes `src/game3d/session/loop3d.ts`, plus a recorder that writes to IndexedDB.

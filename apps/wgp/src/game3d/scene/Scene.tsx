@@ -3,14 +3,14 @@
 /**
  * The 3D city scene for React Three Fiber.
  *
- * - `<SceneCanvas>` is the whole thing: a Canvas set up for the sticker look (flat, linear,
+ * - `<SceneCanvas>` is the whole thing: a Canvas set up for the comic look (flat, linear,
  *   no shadows), the tier's DPR with adaptive resolution, an FPS probe, a context-loss guard
  *   and `<Scene>` inside. Lazy-load it (next/dynamic, ssr: false).
  * - `<Scene>` alone goes inside a Canvas you own.
  *
  * Per-frame data is read from `frame.current` inside `useFrame`; nothing per frame touches
- * React state. Imperative extras (bursts, the flip, orbit input, camera cuts) go through
- * the `handle` ref.
+ * React state. Imperative extras (bursts, the flip, a missed web, orbit input, camera cuts)
+ * go through the `handle` ref.
  */
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
@@ -30,8 +30,10 @@ import { FpsMeter, FpsProbe, FrameBudget, MIN_FRAME_SCALE, sceneDpr, type Qualit
 export interface SceneHandle {
   /** Pop a comic burst ("THWIP!", "POW!", "WHAM!", "ZAP!", "PERFECT!", "OOF!", "SPLASH!") at a world point. */
   burst(word: string, at: Vec3, opts?: BurstOptions): void;
-  /** Spin the hero card a full turn (a perfect release). */
+  /** Somersault the hero (a perfect release), at a spin rate fitted to the release speed. */
   flip(): void;
+  /** A web that found nothing: the strand flies out from the hand and drops slack. */
+  fizzle?(): void;
   /** Manual camera orbit: radians to add this frame, and whether a pointer holds the camera. */
   orbit(dYaw: number, dPitch: number, holding: boolean): void;
   /** Cut the camera to its wanted pose (a teleport, a new stop). */
@@ -59,7 +61,7 @@ export interface SceneProps {
   frame: RefObject<RenderFrame3D | null>;
   quality: QualityPreset;
   heroColors?: SuitColors;
-  /** Cast members to put in the card atlas (all of them by default). */
+  /** Cast members to build bodies for (all of them by default). */
   cast?: CastId[];
   reducedMotion?: boolean;
   /** Camera collision. Defaults to a local raycast over the city's boxes. */
@@ -78,9 +80,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
 
   useEffect(() => () => engine.dispose(), [engine]);
   useEffect(() => {
-    engine.loadCards(heroColors, cast).catch(() => {
-      // Cards failing to build (a decode error) leaves the city drawable.
-    });
+    engine.setCast(heroColors, cast);
   }, [engine, heroColors, cast]);
   useEffect(() => engine.setQuality(quality), [engine, quality]);
   useEffect(() => engine.setReducedMotion(reducedMotion), [engine, reducedMotion]);
@@ -90,6 +90,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
     () => ({
       burst: (word, at, opts) => engine.burst(word, at, opts),
       flip: () => engine.flip(),
+      fizzle: () => engine.fizzle(),
       orbit: (dy, dp, holding) => engine.orbit(dy, dp, holding),
       cut: () => engine.cut(),
       pose: () => lastPose.current,

@@ -1,5 +1,5 @@
 /**
- * Hazards and projectiles from the frame (fee bombs, bread traps, goo, chain arms), pooled:
+ * Hazards and projectiles from the frame (fee bombs, bread traps, goo, slings), pooled:
  * points draw as flat-filled blobs with an ink rim, segments (`to`) as ink-rimmed rods.
  * The rim comes from the view angle, so there is no extra outline pass. Two draw calls at
  * most, none when the frame has no hazards.
@@ -104,6 +104,8 @@ export class Hazards {
     let nb = 0;
     let nr = 0;
     for (const h of frame.hazards) {
+      // Doc's arms are chains and Gwei is a body now (characters/): not blobs or rods.
+      if (h.kind === "arm" || h.kind === "gwei") continue;
       const color = hazardColor(h.kind);
       const c: RGB = h.armed ? color : [color[0] * 0.6, color[1] * 0.6, color[2] * 0.6];
       if (h.to && nr < MAX) {
