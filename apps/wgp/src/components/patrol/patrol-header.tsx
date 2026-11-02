@@ -3,8 +3,8 @@
 import { Check, Handshake, Swords, Zap } from "@/components/icons";
 import { HeroTile, Meter, type HeroSave } from "@/components/game/ui";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { MAX_FLUID } from "@/game/data";
-import type { Patrol, Stop } from "@/game/types";
+import { MAX_FLUID } from "@wgp/game-core/data";
+import type { Patrol, Stop } from "@wgp/game-core/types";
 
 import { districtName, stopName, stopWho } from "./shared";
 

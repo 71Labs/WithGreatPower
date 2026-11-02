@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 import { CalendarClock, Check, Target, X } from "@/components/icons";
-import { activeQuest } from "@/game/engine";
-import type { Quest, Save } from "@/game/types";
+import { activeQuest } from "@wgp/game-core/engine";
+import type { Quest, Save } from "@wgp/game-core/types";
 
 /** Deks are stored without a closing stop; errand lines already have one. */
 export function sentence(text: string) {

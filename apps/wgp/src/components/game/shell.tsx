@@ -7,10 +7,10 @@ import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "r
 import { setSoundEnabled, soundEnabled, subscribeSound } from "@/audio/player";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ArrowUpRight, City, HelpCircle, Medal, Newspaper, Settings, Shirt, TriangleAlert, Vote, Zap } from "@/components/icons";
-import type { CastId } from "@/content/cast";
-import { XP_TO_NEXT } from "@/game/data";
+import type { CastId } from "@wgp/game-core/cast";
+import { XP_TO_NEXT } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
-import type { Hero, Save } from "@/game/types";
+import type { Hero, Save } from "@wgp/game-core/types";
 
 import { GameBackdrop, type BackdropVariant } from "./backdrop";
 import { KitStyles, ON_PAPER, StickerBadge, StickerButton, StickerIconButton, StickerLink } from "./kit";

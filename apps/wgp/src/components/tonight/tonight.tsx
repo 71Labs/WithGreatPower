@@ -9,12 +9,12 @@ import { useUnreadEdition } from "@/components/game/shell";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight, Check, Heart, Moon, Swords, Target } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { castById, type CastId } from "@/content/cast";
-import { ALLY_CAST, DISTRICTS, ERRANDS, SUITS, VILLAINS, villainLevel } from "@/game/data";
-import { activeQuest, generatePatrol } from "@/game/engine";
+import { castById, type CastId } from "@wgp/game-core/cast";
+import { ALLY_CAST, DISTRICTS, ERRANDS, SUITS, VILLAINS, villainLevel } from "@wgp/game-core/data";
+import { activeQuest, generatePatrol } from "@wgp/game-core/engine";
 import { CITY, INK, LINE } from "@/game/style";
 import { useGame } from "@/game/store";
-import type { Stop } from "@/game/types";
+import type { Stop } from "@wgp/game-core/types";
 
 /** Who's at a stop, for stickers and copy. */
 function stopWho(stop: Stop): CastId {

@@ -2,10 +2,9 @@
  * Game content: powers, villains, loot, suits, districts and errands. Readable on
  * purpose, since every number here is a rule players feel.
  */
-import type { SuitColors } from "@/components/cast";
-import type { CastId } from "@/content/cast";
+import type { CastId } from "./cast";
 
-import type { AllyId, DistrictId, Intent, ItemId, PowerId, Rarity, SuitId, VillainId } from "./types";
+import type { AllyId, DistrictId, Intent, ItemId, PowerId, Rarity, SuitColors, SuitId, VillainId } from "./types";
 
 export interface Power {
   id: PowerId;

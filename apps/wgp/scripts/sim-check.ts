@@ -5,9 +5,9 @@
  *
  * Run: pnpm exec tsx --tsconfig tsconfig.json scripts/sim-check.ts
  */
-import { ERRANDS, VILLAINS } from "../src/game/data";
-import { newSave, reduce } from "../src/game/engine";
-import type { PowerId, Save, Stop, VillainId } from "../src/game/types";
+import { ERRANDS, VILLAINS } from "@wgp/game-core/data";
+import { newSave, reduce } from "@wgp/game-core/engine";
+import type { PowerId, Save, Stop, VillainId } from "@wgp/game-core/types";
 import { actionFor, sessionStart } from "../src/sim/bridge";
 import { botInput, createSim, debugSetHp, DT, newBotMemory, resolveErrand, stepSim, type SimState } from "../src/sim/core";
 

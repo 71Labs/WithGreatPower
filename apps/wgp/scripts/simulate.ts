@@ -2,9 +2,9 @@
  * A bot plays N nights through the real reducer and prints what happened, so balance
  * changes can be checked without clicking through the game. Run: pnpm simulate [nights]
  */
-import { moveBlocked, newSave, reduce, craftShortfall } from "../src/game/engine";
-import { ERRANDS, POWERS, SUITS } from "../src/game/data";
-import type { MoveId, PowerId, Save, SuitId } from "../src/game/types";
+import { moveBlocked, newSave, reduce, craftShortfall } from "@wgp/game-core/engine";
+import { ERRANDS, POWERS, SUITS } from "@wgp/game-core/data";
+import type { MoveId, PowerId, Save, SuitId } from "@wgp/game-core/types";
 
 const nights = Number(process.argv[2] ?? 12);
 let save: Save = reduce(newSave(), { type: "create-hero", name: "Test Hero", suit: "classic", powers: ["web-sling", "web-shield", "node-sense"] });

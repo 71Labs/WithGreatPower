@@ -1,7 +1,7 @@
 import { HeroArt } from "@/components/cast";
 import { StickerChip, StickerFrame, StickerMeter } from "@/components/game/kit";
-import { HERO_BASE_HP, MAX_FLUID, POWERS, SUITS, XP_TO_NEXT } from "@/game/data";
-import type { PowerId, SuitId } from "@/game/types";
+import { HERO_BASE_HP, MAX_FLUID, POWERS, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
+import type { PowerId, SuitId } from "@wgp/game-core/types";
 
 /**
  * The player's hero card as a sticker-kit panel: the sticker, the name, four stats and

@@ -2,8 +2,8 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 
-import { newSave, reduce, type Action } from "./engine";
-import type { Save } from "./types";
+import { newSave, reduce, type Action } from "@wgp/game-core/engine";
+import type { Save } from "@wgp/game-core/types";
 
 /**
  * The save lives in this browser (localStorage) until NEAR sign-in is wired up. One

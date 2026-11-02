@@ -2,8 +2,8 @@
  * Powers as real-time abilities. Each costs fluid (POWERS.cost) and has a cooldown of
  * about turns × 2 + 1.5 seconds; effects scale with powerScale(mastery).
  */
-import { MAX_FLUID, POWERS } from "@/game/data";
-import type { PowerId } from "@/game/types";
+import { MAX_FLUID, POWERS } from "@wgp/game-core/data";
+import type { PowerId } from "@wgp/game-core/types";
 
 import { FLUID_REGEN, HERO_RADIUS } from "./constants";
 import { blast, hitVillain, nearestTarget } from "./combat";

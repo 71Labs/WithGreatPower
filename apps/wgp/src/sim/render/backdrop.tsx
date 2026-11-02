@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef } from "react";
 
-import { SUITS } from "@/game/data";
+import { SUITS } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
 
 import { BackdropEngine } from "./backdrop-engine";

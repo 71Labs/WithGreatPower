@@ -6,7 +6,7 @@ import { StickerButton } from "@/components/game/kit";
 import { GameSheet } from "@/components/game/ui";
 import { ChevronDown, History } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import type { Edition, Save } from "@/game/types";
+import type { Edition, Save } from "@wgp/game-core/types";
 
 import { QuestPill, questStatus, sentence } from "./shared";
 

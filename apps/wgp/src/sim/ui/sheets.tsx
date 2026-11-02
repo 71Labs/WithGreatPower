@@ -8,8 +8,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { StickerButton, StickerEyebrow, StickerLink, StickerPanel } from "@/components/game/kit";
 import { Award, Heart, Link2, Megaphone, ShieldCheck } from "@/components/icons";
-import { DISTRICTS, ERRANDS, VILLAINS, type ErrandChoice } from "@/game/data";
-import type { PowerId, Stop, VillainId } from "@/game/types";
+import { DISTRICTS, ERRANDS, VILLAINS, type ErrandChoice } from "@wgp/game-core/data";
+import type { PowerId, Stop, VillainId } from "@wgp/game-core/types";
 
 import { Chip, Face, Kbd, POWER_HELP, POWER_ICONS } from "./bits";
 import { stopCast } from "./hud";

@@ -7,9 +7,9 @@ import { ArrowRight, MapPin, Newspaper, UsersRound } from "@/components/icons";
 import { type HeroSave } from "@/components/game/ui";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { Button } from "@/components/ui";
-import { castById } from "@/content/cast";
-import { ALLY_CAST, DISTRICTS, ERRANDS, type ErrandChoice } from "@/game/data";
-import type { DistrictId } from "@/game/types";
+import { castById } from "@wgp/game-core/cast";
+import { ALLY_CAST, DISTRICTS, ERRANDS, type ErrandChoice } from "@wgp/game-core/data";
+import type { DistrictId } from "@wgp/game-core/types";
 
 import { EFFECT_ICONS, Effect, LootChips, SpeechBubble } from "./shared";
 import { SceneMedia } from "./scene-media";

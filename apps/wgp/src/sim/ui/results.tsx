@@ -9,9 +9,9 @@ import { useState } from "react";
 
 import { StickerButton, StickerEyebrow, StickerLink, StickerPanel } from "@/components/game/kit";
 import { Check, Sparkles, Target } from "@/components/icons";
-import { castById } from "@/content/cast";
-import { DISTRICTS, ERRANDS, ITEMS, RARITY_LABEL, SUITS, XP_TO_NEXT } from "@/game/data";
-import type { ItemId, Patrol, Quest, Save, Stop, StopResult } from "@/game/types";
+import { castById } from "@wgp/game-core/cast";
+import { DISTRICTS, ERRANDS, ITEMS, RARITY_LABEL, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
+import type { ItemId, Patrol, Quest, Save, Stop, StopResult } from "@wgp/game-core/types";
 
 import { Chip, Face, HeroFace } from "./bits";
 import type { HeroSave } from "./hooks";

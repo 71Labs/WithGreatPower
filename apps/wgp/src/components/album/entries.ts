@@ -1,6 +1,6 @@
-import type { CastId, Role } from "@/content/cast";
-import { DISTRICTS, ERRANDS, VILLAINS } from "@/game/data";
-import type { VillainId } from "@/game/types";
+import type { CastId, Role } from "@wgp/game-core/cast";
+import { DISTRICTS, ERRANDS, VILLAINS } from "@wgp/game-core/data";
+import type { VillainId } from "@wgp/game-core/types";
 
 /** The album's pages, in the order they're shown. */
 export const GROUPS: { role: Role; title: string; blurb: string }[] = [

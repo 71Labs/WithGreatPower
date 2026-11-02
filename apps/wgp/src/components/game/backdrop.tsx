@@ -1,6 +1,6 @@
 "use client";
 
-import type { SuitId } from "@/game/types";
+import type { SuitId } from "@wgp/game-core/types";
 import { CityBackdrop } from "@/sim/render/backdrop";
 
 /**

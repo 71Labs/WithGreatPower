@@ -10,11 +10,11 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Po
 import { stopMusic } from "@/audio/player";
 import { simAudio } from "@/audio/sim-audio";
 import { StickerLink, StickerPanel } from "@/components/game/kit";
-import { castById, type CastId } from "@/content/cast";
-import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@/game/data";
-import { reduce, type Action } from "@/game/engine";
+import { castById, type CastId } from "@wgp/game-core/cast";
+import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
+import { reduce, type Action } from "@wgp/game-core/engine";
 import { useGame } from "@/game/store";
-import type { Save, Stop } from "@/game/types";
+import type { Save, Stop } from "@wgp/game-core/types";
 
 import { actionFor, sessionStart } from "../bridge";
 import { botInput, createSim, debugSetHp, debugTeleport, debugWin, DT, newBotMemory, resolveErrand, type SimState } from "../core";

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { castById, type CastId } from "@/content/cast";
+import { castById, type CastId } from "@wgp/game-core/cast";
 
 import { AVATARS } from "./avatars";
 

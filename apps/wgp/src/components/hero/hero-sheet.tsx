@@ -7,9 +7,9 @@ import { HeroArt } from "@/components/cast";
 import { StickerButton, StickerChip, StickerFrame, StickerMeter, StickerPanel } from "@/components/game/kit";
 import { GameLoading, GameSheet, StickerTabs, tabPanelProps, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { Check, Lock, Sparkles } from "@/components/icons";
-import { MAX_LOADOUT, POWERS, SUITS, XP_TO_NEXT } from "@/game/data";
+import { MAX_LOADOUT, POWERS, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
-import type { PowerId, Stats } from "@/game/types";
+import type { PowerId, Stats } from "@wgp/game-core/types";
 
 import { MAX_POWER_LEVEL, POWER_ICONS, PowerFacts, USES_PER_LEVEL, costLabel, masteryProgress } from "./powers";
 

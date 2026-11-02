@@ -6,10 +6,10 @@ import { COLUMN, IconTile } from "@/components/frame";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { AlertTriangle, BadgeCheck, Check, City, Sparkles } from "@/components/icons";
 import { Button, LinkButton } from "@/components/ui";
-import { SWING } from "@/game/data";
-import { reduce } from "@/game/engine";
+import { SWING } from "@wgp/game-core/data";
+import { reduce } from "@wgp/game-core/engine";
 import { useGame } from "@/game/store";
-import type { MoveId, SwingGrade } from "@/game/types";
+import type { MoveId, SwingGrade } from "@wgp/game-core/types";
 
 import { ErrandStop } from "./errand";
 import { FightStop } from "./fight";

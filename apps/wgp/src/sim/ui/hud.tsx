@@ -10,9 +10,9 @@ import { useSyncExternalStore } from "react";
 import type { SuitColors } from "@/components/cast";
 import { StickerMeter, StickerPanel } from "@/components/game/kit";
 import { Check, ShieldCheck, X, Zap } from "@/components/icons";
-import type { CastId } from "@/content/cast";
-import { ALLY_CAST, VILLAINS } from "@/game/data";
-import type { Stop, StopResult } from "@/game/types";
+import type { CastId } from "@wgp/game-core/cast";
+import { ALLY_CAST, VILLAINS } from "@wgp/game-core/data";
+import type { Stop, StopResult } from "@wgp/game-core/types";
 
 import type { AbilityHud, HudSnapshot, HudStore } from "../loop";
 import { Chip, Face, HeroFace, Kbd, POWER_HELP, POWER_ICONS } from "./bits";

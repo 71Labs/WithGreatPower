@@ -2,7 +2,7 @@
  * The game's state model. Everything here is plain data so a save is JSON and every
  * rule in engine.ts is a pure function of (state, action).
  */
-import type { CastId } from "@/content/cast";
+import type { CastId } from "./cast";
 
 export type PowerId =
   | "web-sling"
@@ -38,6 +38,13 @@ export type ItemId =
 export type Rarity = "common" | "uncommon" | "rare";
 
 export type SuitId = "classic" | "midnight" | "mint" | "snow" | "stealth" | "glider" | "octo" | "sesame";
+
+/** Colors of a masked hero's suit; the art recolors the hero sticker with these. */
+export interface SuitColors {
+  suit: string;
+  web: string;
+  lens: string;
+}
 
 export type SwingGrade = "perfect" | "good" | "miss";
 

@@ -7,9 +7,9 @@
  * Anchors are the things a web can stick to: roof corners, water towers, antennas,
  * billboards, cranes and cables.
  */
-import { BILLBOARDS } from "@/game/style";
-import { ALLY_CAST } from "@/game/data";
-import type { DistrictId, Stop } from "@/game/types";
+import { BILLBOARDS } from "@wgp/game-core/content";
+import { ALLY_CAST } from "@wgp/game-core/data";
+import type { DistrictId, Stop } from "@wgp/game-core/types";
 
 import { ARENA_HALF, START_X, ZONE_SPACING } from "./constants";
 import { mix, Rng } from "./rng";

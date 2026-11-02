@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 
 import { useGame } from "@/game/store";
-import type { Hero, Save } from "@/game/types";
+import type { Hero, Save } from "@wgp/game-core/types";
 
 export type HeroSave = Save & { hero: Hero };
 

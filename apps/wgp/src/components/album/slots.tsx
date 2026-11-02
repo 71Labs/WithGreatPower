@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { AVATARS } from "@/components/cast";
 import { StickerFrame } from "@/components/game/kit";
-import type { CastId } from "@/content/cast";
+import type { CastId } from "@wgp/game-core/cast";
 
 /** Sticker size in the grid: tight on phones, roomier from 640 up. */
 export const GRID_SIZE = "[--s:76px] sm:[--s:92px]";

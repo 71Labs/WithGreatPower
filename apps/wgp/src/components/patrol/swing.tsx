@@ -8,9 +8,9 @@ import { AlertTriangle, Check, MapPin, Sparkles } from "@/components/icons";
 import { HeroTile, type HeroSave } from "@/components/game/ui";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { Button } from "@/components/ui";
-import { DISTRICTS, SWING } from "@/game/data";
-import { rand } from "@/game/engine";
-import type { SwingGrade } from "@/game/types";
+import { DISTRICTS, SWING } from "@wgp/game-core/data";
+import { rand } from "@wgp/game-core/engine";
+import type { SwingGrade } from "@wgp/game-core/types";
 
 import { districtName, stopName, stopWhat, stopWho, useMotionOk } from "./shared";
 import { SceneMedia } from "./scene-media";

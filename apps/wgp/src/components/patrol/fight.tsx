@@ -24,9 +24,9 @@ import {
 } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { Button } from "@/components/ui";
-import { DISTRICTS, GWEI_ASSIST, MAX_FLUID, POWERS, PUNCH, VILLAINS, powerLevel, powerScale } from "@/game/data";
-import { moveBlocked, moveCost, reduce } from "@/game/engine";
-import type { Fight, FightLine, Hero, Intent, MoveId, Patrol, PowerId, VillainId } from "@/game/types";
+import { DISTRICTS, GWEI_ASSIST, MAX_FLUID, POWERS, PUNCH, VILLAINS, powerLevel, powerScale } from "@wgp/game-core/data";
+import { moveBlocked, moveCost, reduce } from "@wgp/game-core/engine";
+import type { Fight, FightLine, Hero, Intent, MoveId, Patrol, PowerId, VillainId } from "@wgp/game-core/types";
 
 import { EFFECT_ICONS, Effect, LootChips, MOVE_ICONS, SpeechBubble, Tag } from "./shared";
 import { SceneMedia } from "./scene-media";

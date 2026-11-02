@@ -3,7 +3,7 @@
 import { Check } from "@/components/icons";
 import { StickerButton, StickerMeter } from "@/components/game/kit";
 import { useGame } from "@/game/store";
-import type { Edition } from "@/game/types";
+import type { Edition } from "@wgp/game-core/types";
 
 import { SectionHead } from "./shared";
 
