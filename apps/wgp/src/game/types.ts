@@ -149,6 +149,8 @@ export interface Patrol {
   /** What Bearson was told, if he was met. */
   quote: string | null;
   knockedOut: boolean;
+  /** Played in the real-time city rather than the classic turn-based screens. */
+  realtime?: boolean;
 }
 
 export interface Quest {
