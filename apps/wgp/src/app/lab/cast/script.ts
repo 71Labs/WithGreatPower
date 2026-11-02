@@ -2,7 +2,8 @@
  * Synthetic motion for the cast lab: a small stage city (a roof with a raised step, a tall
  * wall beside it) and a `RenderFrame3D` written every frame for one character in one state,
  * from closed-form motion: a pendulum swing (scrubbable), a run around the roof, a jump arc
- * with a landing, a climb up the wall, a dash, a slam, Doc's arm sweeps, Sybil's orbit.
+ * with a landing, a climb up the wall, a dash, a slam, Doc's arm sweeps, Sybil's orbit, a
+ * stride from standing to a walk, a run and back to a stop, and a plain drop onto the roof.
  * Never the game's physics; never used outside /lab.
  */
 import type { City, HeroAction, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
@@ -15,7 +16,8 @@ const WALL_X = 430;
 
 export type LabCharacter = Exclude<CharacterKey, "sybil-copy">;
 
-export const HERO_STATES: HeroAction[] = ["idle", "run", "swing", "air", "climb", "dash", "slam", "held", "hurt", "ko"];
+/** The hero's actions, plus two lab-only moves: `stride` (stand, walk, run, stop) and `land` (a drop onto the roof). */
+export const HERO_STATES: string[] = ["idle", "stride", "run", "swing", "air", "land", "climb", "dash", "slam", "held", "hurt", "ko"];
 export const VILLAIN_STATES = ["idle", "windup", "attack", "stunned", "guard", "open", "webbed"] as const;
 export const ALLY_STATES = ["idle", "wave"] as const;
 
@@ -90,6 +92,8 @@ export class CastScript {
   onFlip: (() => void) | null = null;
   private t = 0;
   private lastCycle = -1;
+  /** Distance round the stride's circle. */
+  private dist = 0;
 
   constructor() {
     this.frame = {
@@ -177,6 +181,25 @@ export class CastScript {
       case "idle":
         set(v(0, ROOF + 26, 0), v(), true, "idle");
         break;
+      case "stride": {
+        // Stand, start into a walk, speed up to a run, pull up to a stop, stand: round a
+        // circle on the low roof, so the camera can stay on him.
+        const u = t % 8.4;
+        const sp = u < 1 ? 0 : u < 1.6 ? (75 * (u - 1)) / 0.6 : u < 3.4 ? 75 : u < 4.4 ? 75 + 315 * (u - 3.4) : u < 6 ? 390 : u < 6.5 ? 390 * (1 - (u - 6) / 0.5) : 0;
+        this.dist += sp * dt;
+        const R = 170;
+        const a = this.dist / R;
+        set(v(-120 + Math.cos(a) * R, ROOF + 26, Math.sin(a) * R), v(-Math.sin(a) * sp, 0, Math.cos(a) * sp), true, sp > 1 ? "run" : "idle");
+        break;
+      }
+      case "land": {
+        // Dropped from 230 up onto the roof, then standing.
+        const u = t % 2.6;
+        const fall = Math.sqrt((2 * 230) / 1750);
+        if (u < fall) set(v(-60, ROOF + 26 + 230 - 0.5 * 1750 * u * u, 40), v(0, -1750 * u, 0), false, "air");
+        else set(v(-60, ROOF + 26, 40), v(), true, "idle");
+        break;
+      }
       case "run": {
         // A lap of the roof, over the step.
         const R = 190;
@@ -233,7 +256,8 @@ export class CastScript {
         const u = (t % cycle) / cycle;
         const y = ROOF + 60 + u * 280;
         set(v(WALL_X - 26, y, 0), v(0, 360 * (280 / (cycle * 280)) * 1.4, 0), false, "climb");
-        h.anchor = v(WALL_X - 30, 680 + 10, 0);
+        // The web stuck on the wall's top edge, straight up the face from the hero.
+        h.anchor = v(WALL_X, 680 + 10, 0);
         h.ropeLen = 680 - y;
         h.facing = v(1, 0, 0);
         break;

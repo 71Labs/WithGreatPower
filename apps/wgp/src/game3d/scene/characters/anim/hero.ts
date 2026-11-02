@@ -14,6 +14,14 @@
  * - Climb: hands and feet planted on the wall in alternation, the web hand on the line.
  * - Dash, slam (a dive, then the impact crouch), held (struggling), hurt (a kick into the
  *   spine and head springs) and KO (a Verlet ragdoll).
+ * - Hands with fingers (the MPFB hero) close into a fist on the web, in a slam or a
+ *   struggle, and open when reaching, running or diving.
+ *
+ * Works on any humanoid rig: the procedural cast's (Gwei) or the hero's MPFB skeleton, whose
+ * longer legs scale the feet's body-frame targets (they were tuned on the procedural body).
+ * Given motion-capture clips (setClips), the MPFB hero stands, walks, runs, lands, flinches,
+ * punches and falls with them (anim/mocap.ts); the physics poses stay for the swing, the
+ * climb, the dash and the slam, and the procedural layer stays on top of the clips.
  *
  * Everything stateful steps on the kit's fixed 120 Hz sub-step and is drawn interpolated,
  * so nothing shakes with the sim's 60 Hz ticks or the display's rate.
@@ -24,8 +32,11 @@ import type { HeroAction, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contr
 
 import { Spring, Spring3 } from "../physics/spring";
 import { FixedStepper } from "../physics/stepper";
-import { worldPos, worldQuat, type Rig } from "../rig";
+import { type Rig } from "../rig";
 import { angleTo, bodyPoint, clamp, frameQuat, lerp, Orient, Plant, smoothstep, Turn, UP, yawOf, yawQuat } from "./common";
+import type { HeroClips } from "../hero-asset";
+import { worldPos } from "../rig";
+import { Mocap } from "./mocap";
 import { applyPose, newPose, newSolved, type Pose, type Solved } from "./pose";
 import { Ragdoll } from "./ragdoll";
 import type { AnimContext } from "./types";
@@ -41,8 +52,8 @@ const _b = new Vector3();
 const _c = new Vector3();
 const _d = new Vector3();
 
-/** Where the web leaves the fist, past the wrist along the hand. */
-const GRIP = 3.4;
+/** Hip joint to ankle on the procedural hero, which the feet's targets were tuned on. */
+const TUNED_LEG = 39.5;
 
 export class HeroAnimator {
   readonly pose: Pose = newPose();
@@ -70,6 +81,18 @@ export class HeroAnimator {
   private readonly feet = [new Spring3(13, 0.6), new Spring3(13, 0.6)];
   private readonly groundW = new Spring(16, 1);
   private readonly gripW = new Spring(34, 1);
+  /** Motion capture (the MPFB hero), once its clips have loaded. */
+  private mocap: Mocap | null = null;
+  private ragdolled = false;
+  /** How far the body still has to turn (rad), for the head to lead with. */
+  private lead = 0;
+  /** Fingers per hand: 0 open … 1 a fist. */
+  private readonly fists = [new Spring(22, 1), new Spring(22, 1)];
+  /** The feet's body-frame targets, stretched to this rig's legs. */
+  private readonly legK: number;
+  /** The left shoulder relative to the hips (body frame), and an arm's reach. */
+  private readonly shoulder: Vector3;
+  private readonly reach: number;
   private readonly plants = [new Plant(), new Plant()];
   private readonly wall = [new Plant(), new Plant(), new Plant()];
   private readonly ragdoll: Ragdoll;
@@ -107,6 +130,26 @@ export class HeroAnimator {
   ) {
     this.ragdoll = new Ragdoll(ctx.ground);
     for (let i = 0; i < 8; i++) this.targets.push(new Vector3());
+    this.legK = (rig.legs[0].l1 + rig.legs[0].l2) / TUNED_LEG;
+    this.shoulder = rig.joints.get("armL")!.clone().sub(rig.joints.get("hips")!);
+    this.reach = rig.arms[0].l1 + rig.arms[0].l2;
+  }
+
+  /** A hand target off shoulder `s` (±1), in arm lengths (x out, y up, z forward). */
+  private fromShoulder(s: number, x: number, y: number, z: number, out: Vector3): Vector3 {
+    const r = this.reach;
+    const sh = this.shoulder;
+    return out.set(s * (sh.x + x * r), sh.y + y * r, sh.z + z * r);
+  }
+
+  /** Drive the body with motion-capture clips (the MPFB rig, `k` metres to units). */
+  setClips(clips: HeroClips, k: number): void {
+    this.mocap = new Mocap(this.rig, clips, k);
+  }
+
+  /** A blow landed on a villain in reach: a jab or a cross, when on his feet. */
+  punch(): void {
+    if (this.base === "ground") this.mocap?.punch();
   }
 
   /** A perfect release: somersault at a rate fitted to the release speed. */
@@ -177,17 +220,28 @@ export class HeroAnimator {
     // Events read off the motion: a landing, a hit, the end of a slam.
     if (grounded && !this.wasGrounded) {
       const impact = Math.max(-this.lastVy, 0) + Math.hypot(h.vel.x, h.vel.z) * 0.15;
-      this.squash.impulse(-clamp(impact * 0.2, 40, 330));
       const ground = ctx.ground(P.x, P.z, P.y + 4);
+      if (this.mocap) this.mocap.land(impact, _a.set(P.x, ground + this.rig.spec.ankle, P.z), this.turn.value);
+      else this.squash.impulse(-clamp(impact * 0.2, 40, 330));
       for (let i = 0; i < 2; i++) this.plants[i].plantAt(_a.set(P.x + (i === 0 ? 5 : -5), ground + this.rig.spec.ankle, P.z));
       if (this.wasBase === "slam") this.impactT = 0.55;
     }
     const flash = h.hurtFlash;
-    if ((this.act === "hurt" && this.action !== this.lastAction) || flash > this.lastFlash + 0.3) this.hurt();
+    if ((this.act === "hurt" && this.action !== this.lastAction) || flash > this.lastFlash + 0.3) {
+      this.hurt();
+      if (grounded) this.mocap?.hurt();
+    }
     this.lastAction = this.action;
     this.lastFlash = flash;
     if (base === "ko" && this.wasBase !== "ko") {
-      this.ragdoll.start(this.rig, this.solved, _a.set(this.vel.x, this.vel.y, this.vel.z), this.clock.h, 2.5 + Math.random());
+      // Knocked down on a roof: the fall first (mocap), then the ragdoll; in the air, at once.
+      if (this.mocap && this.wasGrounded) this.mocap.knockout();
+      else this.startRagdoll();
+    }
+    if (base === "ko" && !this.ragdolled && this.mocap?.fallen) this.startRagdoll(true);
+    if (base !== "ko") {
+      this.ragdolled = false;
+      if (this.mocap && this.mocap.dying >= 0) this.mocap.recover();
     }
     if (base === "climb") {
       const dx = this.anchor.x - P.x;
@@ -211,7 +265,8 @@ export class HeroAnimator {
 
     const ground = ctx.ground(P.x, P.z, P.y + 4);
     const rig = this.rig;
-    const runW = grounded ? smoothstep(25, 140, hs) : 0;
+    this.lead = clamp(angleTo(this.turn.value, yaw), -1.1, 1.1);
+    const runW = grounded && !this.mocap ? smoothstep(25, 140, hs) : 0;
     const L = 64 + hs * 0.1;
 
     // Gait and wall-climb phases advance by distance, measured from the drawn position.
@@ -230,19 +285,44 @@ export class HeroAnimator {
     if (this.hurtT > 0) this.hurtT = Math.max(0, this.hurtT - dt);
 
     const held = this.act === "held";
-    this.clock.advance(dt, (step) => this.substep(step, f, base, yaw, ground, runW, held));
+    // Falling to a knockout (before the ragdoll) is posed like standing, under the clip.
+    const pb: Base = base === "ko" && !this.ragdolled ? "ground" : base;
+    const mc = this.mocap;
+    if (mc) {
+      const wasMoving = mc.isMoving;
+      const air = base === "air" && this.flipT < 0 && h.vel.y > -250;
+      mc.step(dt, { ground: grounded && this.impactT <= 0 && !held, air, speed: grounded ? Math.hypot(this.vel.x, this.vel.z) : 0, moved: grounded ? moved : 0 });
+      // A stride's end: the feet stay where it left them, then square up.
+      if (wasMoving && !mc.isMoving) mc.plantWhereTheyAre(ground, rig.spec.ankle, this.turn.value);
+      if (grounded) mc.stand.update(dt, _c.set(P.x, ground + rig.spec.ankle, P.z), this.turn.value, (p) => ((p.y = ctx.ground(p.x, p.z, ground + 20) + rig.spec.ankle), p));
+    }
+    this.clock.advance(dt, (step) => this.substep(step, f, pb, yaw, ground, runW, held));
     if (this.flipT >= 0) {
       // Caught by the next web, a wall or the roof mid-somersault: finish the turn quickly.
       this.flipT += dt * (base === "air" || base === "dash" ? 1 : 3.5);
       if (this.flipT >= this.flipDur) this.flipT = -1;
     }
-    this.compose(f, base, ground, runW, L, ctx);
+    this.compose(f, pb, ground, runW, L, ctx);
     applyPose(rig, this.group, this.pose, this.solved);
-    // The fist: past the wrist along the hand's axis.
-    const hand = rig.arms[1].end;
-    worldPos(hand, this.grip);
-    _a.copy(rig.arms[1].axis2).applyQuaternion(worldQuat(hand, _q));
-    this.grip.addScaledVector(_a, GRIP);
+    if (mc && !this.ragdolled) mc.layer(this.pose, this.gripW.lerp(this.clock.alpha), this.headY.lerp(this.clock.alpha) + this.lead * 0.6, 0, ctx.ground, ground);
+    // The fist: the rig's grip point in the right hand.
+    this.grip.copy(rig.grip).applyMatrix4(rig.arms[1].end.matrixWorld);
+  }
+
+  /** Hand the body to the ragdoll from the pose it's in (its joints read off the bones). */
+  private startRagdoll(fromBones = false): void {
+    this.ragdolled = true;
+    const r = this.rig;
+    const s = this.solved;
+    if (fromBones) {
+      for (let i = 0; i < 2; i++) {
+        worldPos(r.arms[i].lower, s.elbow[i]);
+        worldPos(r.arms[i].end, s.wrist[i]);
+        worldPos(r.legs[i].lower, s.knee[i]);
+        worldPos(r.legs[i].end, s.ankle[i]);
+      }
+    }
+    this.ragdoll.start(r, s, _a.set(this.vel.x, this.vel.y, this.vel.z), this.clock.h, fromBones ? 0.6 : 2.5 + Math.random());
   }
 
   private lastAction: HeroAction = "idle";
@@ -323,7 +403,8 @@ export class HeroAnimator {
         return frameQuat(_b.copy(this.fwd).multiplyScalar(0.35).addScaledVector(UP, -1).normalize(), this.fwd, out);
       case "ground": {
         if (this.impactT > 0) return out.multiply(_q2.setFromAxisAngle(X, 0.12));
-        return out.multiply(_q2.setFromAxisAngle(X, this.lean.value));
+        // The clips lean on their own.
+        return out.multiply(_q2.setFromAxisAngle(X, this.lean.value * (1 - 0.85 * (this.mocap?.clipW.value ?? 0))));
       }
       default:
         return out;
@@ -351,6 +432,7 @@ export class HeroAnimator {
     this.spineR.step(held ? Math.sin(this.time * 23) * 0.12 : 0, step);
     this.headP.step(0, step);
     this.headY.step(this.lookYaw(), step);
+    for (let i = 0; i < 2; i++) this.fists[i].step(this.fistTarget(i, base, h.anchor !== null, runW, held), step);
 
     // Limb springs ride the body: targets in the body frame, offsets kept relative to the
     // hips, pulled by gravity and pushed by the body's own acceleration (the arc's load).
@@ -366,7 +448,27 @@ export class HeroAnimator {
       _c.applyQuaternion(Q);
       this.feet[i].step(_c.x, _c.y, _c.z, step, g.x * 0.8, g.y * 0.8, g.z * 0.8);
     }
-    if (base === "ko") this.ragdoll.step(step, this.P);
+    if (base === "ko" && this.ragdolled) this.ragdoll.step(step, this.P);
+  }
+
+  /** How closed a hand is: a fist on the web, in a slam or a struggle; open reaching or running. */
+  private fistTarget(i: number, base: Base, anchored: boolean, runW: number, held: boolean): number {
+    if (held || base === "slam") return 1;
+    if (this.tuck() > 0.05) return 0.85;
+    if (this.impactT > 0) return i === 1 ? 1 : 0.15;
+    if (i === 1 && anchored && (base === "swing" || base === "climb" || base === "ground")) return 1;
+    switch (base) {
+      case "ground":
+        return lerp(0.3, 0.06, runW);
+      case "dash":
+        return i === 1 ? 1 : 0.25;
+      case "climb":
+        return 0.12;
+      case "ko":
+        return 0.4;
+      default:
+        return 0.04;
+    }
   }
 
   private accFwd(): number {
@@ -401,14 +503,17 @@ export class HeroAnimator {
     const t = this.time;
     const tuck = this.tuck();
     if (hand) {
-      if (tuck > 0.05) return out.set(s * 7, lerp(4, -6, tuck), lerp(6, 11, tuck));
+      // Tucked for a somersault: hands to the shins.
+      if (tuck > 0.05) return out.set(s * 7, lerp(4, -6, tuck), lerp(6, 17, tuck));
       if (held) return out.set(s * 10.5, 1, 2.5);
       switch (base) {
         case "ground": {
           if (this.impactT > 0 && i === 0) return out.set(16, 14, -14);
+          // Running arms: elbows bent and close in, the hand pumping from behind the hip
+          // up to the chest.
           const sw = Math.sin(this.phase * Math.PI * 2) * s;
           const idle = out.set(s * 12, -3 + Math.sin(t * 1.7 + i) * 0.5, 2.5);
-          return idle.lerp(_d.set(s * 10.5, 6 + Math.abs(sw) * 4, sw * 13), runW);
+          return idle.lerp(this.fromShoulder(s, -0.12, -0.64 + 0.3 * Math.max(sw, 0), 0.1 + 0.42 * sw, _d), runW);
         }
         case "swing": {
           const [rise, bottom] = this.swingPhase();
@@ -424,15 +529,20 @@ export class HeroAnimator {
         case "slam":
           return out.set(s * 7, 41, 5);
         default: {
+          // Falling: arms out and down for balance. Rising: the web hand reaches up ahead.
           const rise = smoothstep(80, 600, vy);
           const fall = 1 - rise;
-          out.set(s * 20, 15, 2).multiplyScalar(fall);
+          this.fromShoulder(s, 0.58, -0.5, 0.18, out).multiplyScalar(fall);
           if (i === 1) out.add(_d.set(-6, 35, 13).multiplyScalar(rise));
           else out.add(_d.set(13, 1, -9).multiplyScalar(rise));
           return out;
         }
       }
     }
+    return this.footTarget(i, s, base, vy, tuck, out).multiply(_d.set(1, this.legK, this.legK));
+  }
+
+  private footTarget(i: number, s: number, base: Base, vy: number, tuck: number, out: Vector3): Vector3 {
     if (tuck > 0.05) return out.set(s * 5, lerp(-30, -17, tuck), lerp(4, 9, tuck));
     switch (base) {
       case "swing": {
@@ -476,7 +586,8 @@ export class HeroAnimator {
     const a = this.clock.alpha;
     const rig = this.rig;
     const spec = rig.spec;
-    if (base === "ko") {
+    for (let i = 0; i < 2; i++) pose.grip[i] = this.fists[i].lerp(a);
+    if (base === "ko" && this.ragdolled) {
       this.ragdoll.toPose(rig, pose, a);
       this.H.copy(pose.root).add(_a.set(0, rig.hipHeight, 0).applyQuaternion(pose.rot));
       this.collectTargets();
@@ -489,11 +600,24 @@ export class HeroAnimator {
     const bob = runW * 2.2 * (0.5 + 0.5 * Math.cos(this.phase * Math.PI * 4));
     H.y -= bob;
     if (this.impactT > 0) H.y -= 15 * smoothstep(0, 0.12, 0.55 - this.impactT) * smoothstep(0, 0.25, this.impactT);
+    // Under the clips: the hips at standing height over the planted feet (knees all but
+    // straight, the weight on one leg), or where the moving clips carry them.
+    const mc = base === "ground" ? this.mocap : null;
+    const cw = mc ? mc.clipW.value : 0;
+    const standing = mc ? mc.standing : 0;
+    const weight = mc ? mc.stand.weight.value : 0;
+    if (mc && cw > 0.001) {
+      const standY = ground + rig.hipHeight - 0.5 - 0.4 * Math.abs(weight);
+      const moveY = ground + rig.hipHeight - mc.floor;
+      H.y = lerp(H.y, lerp(standY, moveY, mc.moveW.value), cw);
+      const yawD = this.turn.lerp(a);
+      H.addScaledVector(_b.set(Math.cos(yawD), 0, -Math.sin(yawD)), weight * 1.2 * standing);
+    }
     pose.rot.copy(Q);
     pose.root.copy(H).sub(_a.set(0, rig.hipHeight, 0).applyQuaternion(Q));
     pose.hips.set(0, 0, 0);
     const sw = Math.sin(this.phase * Math.PI * 2);
-    pose.hipsRot.set(0, -sw * 0.14 * runW, 0);
+    pose.hipsRot.set(0, -sw * 0.14 * runW, weight * 0.07 * standing);
     pose.spine.set(this.spineP.lerp(a) + runW * 0.06, sw * 0.12 * runW, this.spineR.lerp(a));
     pose.chest.set(base === "ground" ? -this.squash.lerp(a) * 0.012 : 0, sw * 0.16 * runW, 0);
     pose.neck.set(-pose.spine.x * 0.5, this.headY.lerp(a) * 0.4, 0);
@@ -511,9 +635,10 @@ export class HeroAnimator {
       const len = dir.length();
       dir.divideScalar(len || 1);
       // The fist sits on the H → anchor line; the wrist just below it.
-      const reach = base === "climb" ? 30 + 5 * Math.sin(this.climb * Math.PI * 2) : 42;
+      // Hanging: the arm all but straight from the shoulder; climbing: the fist near the face.
+      const reach = base === "climb" ? 30 + 5 * Math.sin(this.climb * Math.PI * 2) : this.shoulder.y + this.reach * 0.85;
       const fist = _c.copy(H).addScaledVector(dir, Math.min(reach, len - 2));
-      fist.addScaledVector(dir, -GRIP);
+      fist.addScaledVector(dir, -rig.gripReach);
       pose.hand[1].lerp(fist, gw);
       if (gw > 0.5) pose.handAim[1] = this.aim.copy(dir);
     }
@@ -533,7 +658,8 @@ export class HeroAnimator {
         const s = i === 0 ? 1 : -1;
         const off = _b.set(s * 5.2, 0, 0).applyQuaternion(yawQ);
         const stance = 0.5 - runW * 0.08;
-        const target = this.plants[i].update(this.phase + i * 0.5, stance, body, fwd, L * Math.max(0.15, runW), off, 4 + 5 * runW, UP, project);
+        // The MPFB hero stands on his planted feet (anim/stand.ts); the clips do the walking.
+        const target = mc ? _d.copy(mc.stand.foot[i]) : this.plants[i].update(this.phase + i * 0.5, stance, body, fwd, L * Math.max(0.15, runW), off, 4 + 5 * runW, UP, project);
         if (this.impactT > 0) {
           // The superhero landing: left foot forward, right knee down.
           bodyPoint(body, yawQ, i === 0 ? 5 : -5, 0, i === 0 ? 9 : -11, target);
@@ -572,16 +698,18 @@ export class HeroAnimator {
       }
     }
 
-    // Poles: elbows back and down (out to the side on the web arm), knees forward.
+    // Poles: elbows back and down (tucked in for a run, out to the side on the web arm),
+    // knees forward.
     for (let i = 0; i < 2; i++) {
       const s = i === 0 ? 1 : -1;
-      pose.elbow[i].set(s * 0.45, -0.5, -1).applyQuaternion(Q);
+      pose.elbow[i].set(s * lerp(0.45, 0.12, runW), -0.5, -1).applyQuaternion(Q);
       if (i === 1 && gw > 0.5) pose.elbow[i].set(-1, -0.2, 0.2).applyQuaternion(Q);
       pose.knee[i].set(s * 0.15, 0, 1).applyQuaternion(Q);
       pose.handRot[i].set(0, 0, 0);
-      if (gwt > 0.5) pose.footRot[i].copy(yawQ);
+      if (gwt > 0.5 && mc && this.impactT <= 0) pose.footRot[i].setFromAxisAngle(UP, mc.stand.yaw[i]).multiply(_q2.setFromAxisAngle(X, mc.stand.lift[i] * 0.35));
+      else if (gwt > 0.5) pose.footRot[i].copy(yawQ);
       else pose.footRot[i].copy(Q).multiply(_q2.setFromAxisAngle(X, 0.55));
-      if (gwt > 0.5 && this.plants[i].lift > 0) pose.footRot[i].multiply(_q2.setFromAxisAngle(X, this.plants[i].lift * 0.5));
+      if (gwt > 0.5 && !mc && this.plants[i].lift > 0) pose.footRot[i].multiply(_q2.setFromAxisAngle(X, this.plants[i].lift * 0.5));
     }
     this.collectTargets();
   }

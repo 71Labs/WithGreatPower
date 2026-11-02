@@ -33,6 +33,8 @@ export class LabStage {
   readonly script = new CastScript();
   turntable = true;
   angle = 0.6;
+  /** Camera distance multiplier; under 0.7 the camera follows the hero's body, under 0.35 his head and shoulders. */
+  zoom = 1;
   private turn = 0;
   private readonly focus = { x: 0, y: 330, z: 0 };
   private readonly frames: number[] = [];
@@ -72,16 +74,18 @@ export class LabStage {
     const dt = Math.min(delta, 0.1);
     const s = this.script;
     s.step(dt);
-    const f = s.focus({ x: 0, y: 0, z: 0 });
+    const p = s.frame.hero.pos;
+    const close = this.zoom < 0.7 && s.character === "hero";
+    const f = close && this.zoom < 0.35 ? { x: p.x, y: p.y + 44, z: p.z } : close && !s.frame.hero.grounded ? { x: p.x, y: p.y + 6, z: p.z } : s.focus({ x: 0, y: 0, z: 0 });
     const fc = this.focus;
-    const k = 1 - Math.exp(-dt * 6);
+    const k = 1 - Math.exp(-dt * (this.zoom < 1.2 ? 12 : 6));
     fc.x += (f.x - fc.x) * k;
     fc.y += (f.y - fc.y) * k;
     fc.z += (f.z - fc.z) * k;
     if (this.turntable) this.turn += dt * 0.45;
     const a = this.turntable ? this.turn : this.angle;
     const c = s.character;
-    const far = c === "hero" ? (WIDE[s.state] ?? CAST_DEFS[c].height * 2.4) : c === "doc-octochain" || c === "sybil" ? 480 : CAST_DEFS[c].height * 2.6;
+    const far = (c === "hero" ? (WIDE[s.state] ?? CAST_DEFS[c].height * 2.4) : c === "doc-octochain" || c === "sybil" ? 480 : CAST_DEFS[c].height * 2.6) * this.zoom;
     camera.position.set(fc.x + Math.sin(a) * far, fc.y + far * 0.18 + 12, fc.z + Math.cos(a) * far);
     camera.lookAt(fc.x, fc.y, fc.z);
     camera.updateMatrixWorld();
