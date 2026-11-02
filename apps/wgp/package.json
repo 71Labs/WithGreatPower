@@ -9,7 +9,7 @@
     "lint": "eslint",
     "simulate": "tsx scripts/simulate.ts",
     "audio": "tsx --env-file=.env.local scripts/audio/generate.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
