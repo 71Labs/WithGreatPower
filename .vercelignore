@@ -1,0 +1,10 @@
+# What `vercel deploy` from the repo root leaves out. The app builds in apps/wgp (the
+# project's root directory) and needs only apps/ and packages/ from the workspace.
+contracts/
+launch/
+**/node_modules
+**/.next
+apps/wgp/.data
+# Licensed fonts kept on the owner's machine only; never served publicly.
+apps/wgp/public/fonts/NeueMontreal-*
+video-music.mp3
