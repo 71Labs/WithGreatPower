@@ -14,7 +14,7 @@ import { StickerButton, StickerMeter, stickerButtonClass } from "@/components/ga
 import { GameSheet } from "@/components/game/ui";
 import { refreshAccount, showToast, useAccount, useGame } from "@/game/store";
 import { devSignIn, devSignInAvailable, signOut, type Me } from "@/lib/api/client";
-import { EXPLORER_URL, PLAYER_PARENT_ID } from "@/lib/near/config";
+import { EXPLORER_URL, NETWORK, PLAYER_PARENT_ID } from "@/lib/near/config";
 import { HANDLE_RE, RESERVED_HANDLES } from "@/lib/near/policy";
 
 import { googleProblem, walletProblem, type SignInProblem } from "./errors";
@@ -73,7 +73,7 @@ function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
               rel="noreferrer"
               className="-ml-1 mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-full px-1 text-[14px] font-semibold text-game-ink underline decoration-game-ink/40 underline-offset-4 pointer-fine:hover:decoration-game-ink"
             >
-              View on NEAR testnet explorer
+              {NETWORK === "mainnet" ? "View on NEAR explorer" : "View on NEAR testnet explorer"}
               <ExternalLink aria-hidden className="size-4" strokeWidth={2} />
               <span className="sr-only">(opens in a new tab)</span>
             </a>

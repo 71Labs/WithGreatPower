@@ -16,7 +16,9 @@
 #   (and relayer.wgp.testnet, operator.wgp.testnet the same way; see the Chain report)
 #
 # Needs cargo-near 0.22, near-cli-rs, jq and pnpm, with CONTRACT_ID's key (and, for an
-# upgrade, OWNER_ID's key) in your keychain.
+# upgrade, OWNER_ID's key) in your keychain. KEYCHAIN=legacy signs with the key files in
+# ~/.near-credentials instead (as scripts/near/setup-testnet.sh saves them), and
+# CONFIRM=<contract id> answers the confirmation prompt up front.
 set -euo pipefail
 
 NETWORK=testnet
@@ -24,6 +26,10 @@ MODE="${MODE:-deploy}"
 CONTRACT_ID="${CONTRACT_ID:-game.wgp.testnet}"
 OWNER_ID="${OWNER_ID:-wgp.testnet}"
 OPERATOR_ID="${OPERATOR_ID:-operator.wgp.testnet}"
+case "${KEYCHAIN:-}" in
+  legacy) SIGN=sign-with-legacy-keychain ;;
+  *) SIGN=sign-with-keychain ;;
+esac
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WASM="$ROOT/contracts/wgp/target/near/wgp.wasm"
 
@@ -55,20 +61,20 @@ echo "  operator    $OPERATOR_ID"
 echo "  wasm        $WASM ($SIZE bytes, sha256 $SHA)"
 echo "  suits       $(echo "$INIT_ARGS" | jq -r '[.suits[].id] | join(", ")')"
 echo
-read -r -p "Type the contract id to continue: " CONFIRM
+if [[ -z "${CONFIRM:-}" ]]; then read -r -p "Type the contract id to continue: " CONFIRM; fi
 [[ "$CONFIRM" == "$CONTRACT_ID" ]] || { echo "Aborted."; exit 1; }
 
 if [[ "$MODE" == "deploy" ]]; then
   near contract deploy "$CONTRACT_ID" use-file "$WASM" \
     with-init-call new json-args "$INIT_ARGS" \
     prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
-    network-config "$NETWORK" sign-with-keychain send
+    network-config "$NETWORK" "$SIGN" send
 else
   # The owner calls upgrade with the raw wasm as input (1 yoctoNEAR, owner only); the
   # contract deploys it to itself and runs migrate.
   near contract call-function as-transaction "$CONTRACT_ID" upgrade file-args "$WASM" \
     prepaid-gas '300.0 Tgas' attached-deposit '1 yoctoNEAR' \
-    sign-as "$OWNER_ID" network-config "$NETWORK" sign-with-keychain send
+    sign-as "$OWNER_ID" network-config "$NETWORK" "$SIGN" send
 fi
 
 echo
