@@ -30,6 +30,8 @@ import { keyedAccount, provider, freshKeyedAccount } from "./rpc";
 export interface NearAuthIdentity {
   sub: string;
   email?: string;
+  /** The OIDC nonce the sign-in asked for; must be one we issued (login-nonce.ts). */
+  nonce?: string;
 }
 
 /** Checks a NEAR Auth (Auth0) ID token. Tokens older than an hour are refused. */
@@ -46,7 +48,11 @@ export async function verifyNearAuthIdToken(idToken: string, opts: { env?: NearA
   const sub = claims.sub!;
   // NEAR Auth builds the MPC path from `sub` and refuses '#' and anything over 256 chars.
   if (sub.includes("#") || sub.length > 256) throw new Error("Unsupported subject");
-  return { sub, email: typeof claims.email === "string" ? claims.email : undefined };
+  return {
+    sub,
+    email: typeof claims.email === "string" ? claims.email : undefined,
+    ...(typeof claims.nonce === "string" ? { nonce: claims.nonce } : {}),
+  };
 }
 
 /** The user's NEAR Auth public key ("ed25519:…"), from the MPC contract. */

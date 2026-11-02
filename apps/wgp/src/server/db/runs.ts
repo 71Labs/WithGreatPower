@@ -21,7 +21,7 @@ import { getVerifier, verifyRun, type Verifier } from "@/server/verify";
 
 import type { Db } from "./client";
 import { recordScore } from "./leaderboard";
-import { enqueueChainOp, lootDiff } from "./outbox";
+import { enqueueRewardMint, lootDiff } from "./outbox";
 import { ensureSave, getPlayer, writeSave } from "./players";
 import { players, runs, type Run } from "./schema";
 
@@ -257,15 +257,19 @@ export async function submitRun(
 
       const tags = assist ? [] : await recordScore(tx, { playerId, runId: run.id, score: result.score, ticks: result.ticks, issuedAt: run.issuedAt, now });
 
+      // Loot, or a level-up the contract needs for crafting checks, is minted with the
+      // player's next reward nonce, taken in this transaction.
       const items = lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {});
-      if (items.length > 0) {
-        await enqueueChainOp(
+      const level = result.save.hero?.level;
+      const levelledUp = !!level && level > (startSave.hero?.level ?? 0);
+      if (items.length > 0 || levelledUp) {
+        await enqueueRewardMint(
           tx,
           {
             kind: "mint_reward",
             dedupeKey: `mint_reward:${run.id}`,
             playerId,
-            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, digest },
+            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), digest },
           },
           now,
         );

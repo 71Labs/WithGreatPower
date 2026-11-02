@@ -1,10 +1,11 @@
 /**
  * Housekeeping for GET /api/cron/sweep: expire abandoned runs, put failed or stuck
- * outbox rows back in the queue (sending them is Chain's job), and prune old sessions
- * and budget counters.
+ * outbox rows back in the queue (sending them is Chain's job), and prune old sessions,
+ * sign-in nonces and budget counters.
  */
 import { and, eq, lt, lte, sql } from "drizzle-orm";
 
+import { pruneNonces } from "@/server/auth/nonces";
 import { pruneBudgets } from "@/server/rate-limit";
 
 import type { Db } from "./client";
@@ -22,6 +23,7 @@ export interface SweepReport {
   unstuckOps: number;
   deadOps: number;
   prunedSessions: number;
+  prunedNonces: number;
   prunedBudgets: number;
 }
 
@@ -51,6 +53,7 @@ export async function sweep(db: Db, now = new Date()): Promise<SweepReport> {
     .returning({ id: chainOps.id });
 
   const prunedSessions = await db.delete(authSessions).where(lt(authSessions.expiresAt, now)).returning({ id: authSessions.idHash });
+  const prunedNonces = await pruneNonces(db, now);
   const prunedBudgets = await pruneBudgets(db, new Date(now.getTime() - BUDGET_KEEP_MS));
 
   return {
@@ -59,6 +62,7 @@ export async function sweep(db: Db, now = new Date()): Promise<SweepReport> {
     unstuckOps: unstuckOps.length,
     deadOps: deadOps.length,
     prunedSessions: prunedSessions.length,
+    prunedNonces,
     prunedBudgets,
   };
 }

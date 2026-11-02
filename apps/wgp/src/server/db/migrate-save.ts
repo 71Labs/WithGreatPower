@@ -11,21 +11,15 @@ import { HERO_BASE_HP, HP_PER_LEVEL, ITEMS, MAX_LOADOUT, POWERS, STARTER_POWERS,
 import { newSave } from "@wgp/game-core/engine";
 import type { Hero, ItemId, PowerId, Save, SuitId } from "@wgp/game-core/types";
 
+import { IMPORT_CAPS } from "@/game/import-caps";
 import { HttpError, conflict, notFound } from "@/server/http";
 
 import type { Db } from "./client";
-import { enqueueChainOp, itemTokenId, type MintItem } from "./outbox";
+import { enqueueRewardMint, itemTokenId, sha256Hex, type MintItem } from "./outbox";
 import { ensureSave, getPlayer, writeSave } from "./players";
 import { players } from "./schema";
 
-export const IMPORT_CAPS = {
-  level: 3,
-  night: 3,
-  perItem: 3,
-  totalItems: 10,
-  albumEach: 10,
-  stat: 1000,
-} as const;
+export { IMPORT_CAPS };
 
 export const DAY_ONE_TROPHY = "trophy:day-one";
 
@@ -167,13 +161,21 @@ export async function importLocalSave(db: Db, input: { playerId: string; local: 
       if (marked.length === 0) throw new AlreadyMigrated();
       const next = await writeSave(tx, player.id, save, current.rev, now);
       if (next === null) throw conflict("rev_conflict", "Your save changed elsewhere");
-      await enqueueChainOp(
+      await enqueueRewardMint(
         tx,
         {
           kind: "mint_import",
           dedupeKey: `mint_import:${player.id}`,
           playerId: player.id,
-          payload: { playerId: player.id, accountId: player.nearAccountId, items, trophy: DAY_ONE_TROPHY },
+          payload: {
+            playerId: player.id,
+            accountId: player.nearAccountId,
+            items,
+            trophy: DAY_ONE_TROPHY,
+            level: save.hero!.level,
+            // What the mint logs on chain: binds the import to the player and what was kept.
+            digest: sha256Hex(["wgp-import-v1", player.id, JSON.stringify(save)].join("|")),
+          },
         },
         now,
       );

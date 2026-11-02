@@ -66,6 +66,15 @@ export const signOut = () => call<{ signedIn: false }>("/api/me", { method: "DEL
 /** Local development only (ALLOW_DEV_AUTH=1): signs in as a throwaway test player. */
 export const devSignIn = (handle?: string) => call<{ player: { id: string; handle: string } }>("/api/auth/dev", { method: "POST", json: handle ? { handle } : {} });
 
+/** Whether dev sign-in is switched on here: ok only with ALLOW_DEV_AUTH=1 outside production, 404 otherwise. */
+export const devSignInAvailable = (signal?: AbortSignal) => call<{ enabled: true }>("/api/auth/dev", { signal });
+
+/**
+ * Starts a Google sign-in: a single-use nonce (also set as an HttpOnly cookie) that the
+ * ID token must carry. 503 near_not_configured when NEAR Auth isn't set up on this server.
+ */
+export const getNearAuthNonce = () => call<{ nonce: string; expiresAt: string }>("/api/auth/near-auth/nonce", { method: "POST" });
+
 /** 409 run_active (body.runId) when a run is in flight; pass `abandon` to drop it. 429 daily_cap. */
 export const startRankedRun = (opts: { assist?: boolean; abandon?: boolean } = {}) => call<StartedRun>("/api/runs/start", { method: "POST", json: opts });
 

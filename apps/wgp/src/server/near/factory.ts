@@ -41,6 +41,24 @@ export function playerAccountId(handle: string, parentId: string): string {
   return id;
 }
 
+/** A handle to offer a new player, from their email's local part ("peter.parker@…" → "peterparker"). Pure. */
+export function suggestHandle(email: string | undefined): string | undefined {
+  const local = email?.split("@")[0]?.toLowerCase() ?? "";
+  const cleaned = local.replace(/[^a-z0-9_-]/g, "").replace(/^[-_]+|[-_]+$/g, "").slice(0, 24).replace(/[-_]+$/, "");
+  if (!HANDLE_RE.test(cleaned) || RESERVED_HANDLES.has(cleaned)) return undefined;
+  return cleaned;
+}
+
+/**
+ * Checks, read-only, that `<handle>.<factory>` is free. Run it before anything single-use
+ * (a sign-in nonce) is spent, so a taken handle costs the player a retype, not a new login.
+ */
+export async function assertHandleAvailable(raw: string): Promise<string> {
+  const accountId = playerAccountId(normalizeHandle(raw), factoryEnv().accountId);
+  if (await accountExists(provider(), accountId)) throw new HandleError("handle_taken", "That handle is taken");
+  return accountId;
+}
+
 /** The four actions of the create-account transaction. Pure. */
 export function createAccountActions(input: {
   userPublicKey: string;

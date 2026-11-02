@@ -6,7 +6,7 @@ import { GAME_CONTRACT_ID } from "@/lib/near/config";
 import { SESSION_KEY_ALLOWANCE } from "@/lib/near/policy";
 
 import { chainEnv, factoryEnv, NearConfigError, operatorEnv, relayerEnv } from "./env";
-import { createAccountActions, HandleError, normalizeHandle, playerAccountId } from "./factory";
+import { createAccountActions, HandleError, normalizeHandle, playerAccountId, suggestHandle } from "./factory";
 import { itemsFromTokens, planBatches, toRewardMint, type Reward } from "./operator";
 import { commitSeason, leafHash, merkleProof, merkleRoot, verifyProof } from "./season";
 import { handleFromAccount, issueChallenge, redeemChallenge, signatureBytes, SIGN_IN_MESSAGE } from "./wallet-auth";
@@ -45,6 +45,17 @@ describe("factory", () => {
     }
     expect(() => normalizeHandle("relayer")).toThrow(/reserved/);
     expect(playerAccountId("peter", "wgp.testnet")).toBe("peter.wgp.testnet");
+  });
+
+  it("suggests a handle from an email, or none it couldn't use", () => {
+    expect(suggestHandle("Peter.Parker+web@gmail.com")).toBe("peterparkerweb");
+    expect(suggestHandle("miles_morales@example.com")).toBe("miles_morales");
+    expect(suggestHandle("-gwen-@example.com")).toBe("gwen");
+    expect(suggestHandle("relayer@example.com")).toBeUndefined();
+    expect(suggestHandle("x@example.com")).toBeUndefined();
+    expect(suggestHandle("ïñ@example.com")).toBeUndefined();
+    expect(suggestHandle(undefined)).toBeUndefined();
+    expect(suggestHandle(`${"a".repeat(40)}@example.com`)).toBe("a".repeat(24));
   });
 
   it("creates the account with the user's key and a game-only session key, in one transaction", () => {
