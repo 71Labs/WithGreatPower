@@ -54,7 +54,8 @@ import type {
 
 export type Action =
   | { type: "create-hero"; name: string; suit: SuitId; powers: PowerId[] }
-  | { type: "start-patrol" }
+  /** `seed`, when given (the server issues one per ranked run), replaces seedOf(night, name) for this patrol. */
+  | { type: "start-patrol"; seed?: number }
   | { type: "swing"; grade: SwingGrade }
   | { type: "move"; move: MoveId }
   | { type: "errand"; choice: string }
@@ -169,11 +170,11 @@ export function moveBlocked(save: Save, move: MoveId): string | null {
 
 /* ------------------------------------------------------------------ patrols */
 
-export function generatePatrol(save: Save, hero: Hero): Patrol {
+export function generatePatrol(save: Save, hero: Hero, seed?: number): Patrol {
   const level = villainLevel(save.night);
   const quest = activeQuest(save);
 
-  const [order, s1] = shuffle(Object.keys(VILLAINS) as VillainId[], seedOf(save.night, hero.name));
+  const [order, s1] = shuffle(Object.keys(VILLAINS) as VillainId[], seed ?? seedOf(save.night, hero.name));
   // The boss is the quest villain when there is one; the warm-up fight is someone else.
   const boss = quest ? quest.villain : order[0];
   const warmup = order.find((v) => v !== boss)!;
@@ -675,7 +676,7 @@ export function reduce(save: Save, action: Action): Save {
 
     case "start-patrol": {
       if (!save.hero || save.nightDone) return save;
-      const patrol = save.patrol ?? generatePatrol(save, save.hero);
+      const patrol = save.patrol ?? generatePatrol(save, save.hero, action.seed === undefined ? undefined : action.seed >>> 0);
       return { ...save, patrol: patrol.phase === "briefing" ? { ...patrol, phase: "swing" } : patrol };
     }
 

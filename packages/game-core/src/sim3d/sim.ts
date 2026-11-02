@@ -1,0 +1,310 @@
+/**
+ * The 3D swing sim: createSim builds a night from the patrol; stepSim advances it one
+ * fixed step (1/60 s) from one InputFrame. Pure and deterministic: no DOM, no clocks,
+ * randomness only from the seed, trig only from dmath. The driver (replay.ts) drains
+ * `state.events` after each step and turns them into engine actions through bridge3d.
+ *
+ * Errands pause the sim: in "errand" (and "done") stepSim consumes no frame and no tick,
+ * so an input log only holds ticks that moved the world, and the errand's choice is an
+ * event logged at the tick it applies.
+ */
+import { DT, ERRAND_REACH, ERRAND_TOUCH, HERO_RADIUS, INTRO_SECONDS } from "./constants";
+import { callGwei, fireAbility, makeSlots, stepAbilities } from "./abilities";
+import { CityIndex, generateCity, groundBelow } from "./city";
+import { knockOut, winFight } from "./combat";
+import type { InputFrame, Zone } from "./contract";
+import { len2, len3 } from "./dmath";
+import { newHero, stepHero, stopTarget, travelBearing } from "./hero";
+import { mix } from "./rng";
+import type { SimConfig, SimState } from "./types";
+import { spawnVillain, stepHazards, stepVillain } from "./villains";
+
+/** The frame that does nothing. */
+export const IDLE_FRAME: InputFrame = Object.freeze({ dir: 0, mag: 0, web: false, shot: 0 }) as InputFrame;
+
+/** Where to stand at the start of the swing to stop `index`: the start roof, or the last stop. */
+function spawnPoint(s: Pick<SimState, "city" | "grid">, index: number): { x: number; y: number; z: number; grounded: boolean } {
+  const { city, grid } = s;
+  if (index <= 0 || !city.zones[index - 1]) return { ...city.start, grounded: true };
+  const c = city.zones[index - 1].center;
+  const top = groundBelow(grid, c.x, c.z, 5000);
+  if (top > 0) return { x: c.x, y: top, z: c.z, grounded: true };
+  return { x: c.x, y: 520, z: c.z, grounded: false };
+}
+
+export function createSim(config: SimConfig): SimState {
+  const city = generateCity(config.seed, config.stops);
+  const grid = new CityIndex(city);
+  const sp = spawnPoint({ city, grid }, config.index);
+  const s: SimState = {
+    config,
+    city,
+    grid,
+    tick: 0,
+    time: 0,
+    rng: mix(config.seed, 0x5e17 + config.index * 977),
+    mode: "travel",
+    modeT: 0,
+    index: config.index,
+    hero: newHero(sp.x, sp.y, sp.z, sp.grounded),
+    hp: Math.max(1, Math.round(config.hp)),
+    maxHp: config.maxHp,
+    fluid: Math.max(0, Math.round(config.fluid)),
+    fluidAcc: 0,
+    combo: config.combo,
+    maxCombo: config.combo,
+    tally: { perfect: 0, good: 0, miss: 0 },
+    total: { perfect: 0, good: 0, miss: 0 },
+    uses: {},
+    powers: makeSlots(config.loadout),
+    villain: null,
+    hazards: [],
+    shots: [],
+    gwei: null,
+    gweiLeft: config.gweiCalls,
+    gweiUsed: 0,
+    slowmo: 0,
+    input: IDLE_FRAME,
+    events: [],
+  };
+  // Face the first stop.
+  const b = travelBearing(s);
+  if (b) {
+    s.hero.fx = b.x;
+    s.hero.fz = b.z;
+  }
+  if (config.index >= city.zones.length) {
+    s.mode = "done";
+  } else if (config.entry === "zone") {
+    // Resumed mid-stop: already there, so no arrival to report.
+    const z = city.zones[config.index];
+    placeInZone(s, z);
+    enterZone(s, z);
+  }
+  return s;
+}
+
+/** Stand the hero on something solid at (x, z), or in the air above the street. */
+function standAt(s: SimState, x: number, z: number, below: number) {
+  const h = s.hero;
+  const top = groundBelow(s.grid, x, z, below);
+  h.x = x;
+  h.z = z;
+  h.y = top + HERO_RADIUS;
+  h.vx = 0;
+  h.vy = 0;
+  h.vz = 0;
+  h.grounded = top > 0;
+  h.rope = null;
+}
+
+/** Stand the hero somewhere sensible inside a zone (used when resuming there). */
+function placeInZone(s: SimState, z: Zone) {
+  if (z.kind === "errand") return; // enterZone puts you beside the ally
+  const b = z.bounds;
+  const c = z.center;
+  if (s.city.bridge && z.villain === "doc-octochain") {
+    // On the deck, near one end.
+    const alongX = s.city.bridge.axis !== "z";
+    standAt(s, alongX ? b.x0 + 150 : c.x, alongX ? c.z : b.z0 + 150, 400);
+  } else standAt(s, b.x0 + 150, c.z, 400);
+}
+
+function enterZone(s: SimState, z: Zone) {
+  s.hazards = [];
+  s.shots = [];
+  s.gwei = null;
+  s.gweiUsed = 0;
+  if (z.kind === "fight") {
+    s.mode = "intro";
+    s.modeT = INTRO_SECONDS;
+    s.villain = spawnVillain(s, z);
+    s.events.push({ type: "encounter", index: z.index, villain: s.villain.kind });
+  } else {
+    s.mode = "errand";
+    // Land beside the ally for the chat, on the side you came from.
+    const h = s.hero;
+    const a = z.allyAt ?? z.center;
+    let dx = h.x - a.x;
+    let dz = h.z - a.z;
+    const d = len2(dx, dz);
+    if (d > 1) {
+      dx /= d;
+      dz /= d;
+    } else {
+      dx = -1;
+      dz = 0;
+    }
+    const b = z.bounds;
+    const x = Math.max(b.x0 + 30, Math.min(b.x1 - 30, a.x + dx * 120));
+    const zz = Math.max(b.z0 + 30, Math.min(b.z1 - 30, a.z + dz * 120));
+    standAt(s, x, zz, a.y);
+    const fx = a.x - x;
+    const fz = a.z - zz;
+    const f = len2(fx, fz);
+    if (f > 1) {
+      h.fx = fx / f;
+      h.fz = fz / f;
+    }
+    s.events.push({ type: "errand", index: z.index });
+  }
+}
+
+function arrive(s: SimState, z: Zone) {
+  const uses = { ...s.uses };
+  s.uses = {};
+  s.events.push({
+    type: "arrive",
+    index: z.index,
+    kind: z.kind,
+    hp: s.hp,
+    fluid: s.fluid,
+    combo: s.combo,
+    perfect: s.tally.perfect,
+    good: s.tally.good,
+    miss: s.tally.miss,
+    uses,
+  });
+  s.tally = { perfect: 0, good: 0, miss: 0 };
+  enterZone(s, z);
+}
+
+function nextStop(s: SimState) {
+  s.index += 1;
+  s.villain = null;
+  s.hazards = [];
+  s.shots = [];
+  s.gwei = null;
+  s.slowmo = 0;
+  if (s.index >= s.city.zones.length) {
+    s.mode = "done";
+    s.events.push({ type: "night-over", reason: "route" });
+  } else {
+    s.mode = "travel";
+  }
+}
+
+function checkArrival(s: SimState) {
+  const z = s.city.zones[s.index];
+  if (!z) return;
+  const h = s.hero;
+  const b = z.bounds;
+  if (z.kind === "fight") {
+    if (h.x > b.x0 + 70 && h.x < b.x1 - 70 && h.z > b.z0 + 70 && h.z < b.z1 - 70) arrive(s, z);
+    return;
+  }
+  const a = stopTarget(s)!;
+  const near = len3(h.x - a.x, h.y - a.y, h.z - a.z) < ERRAND_REACH;
+  // Reaching the ally's building counts too (on its roof, low over it, or against its walls),
+  // like passing the ally in 2D; the errand then stands you beside them.
+  const m = ERRAND_TOUCH;
+  const touch = h.x > b.x0 - m && h.x < b.x1 + m && h.z > b.z0 - m && h.z < b.z1 + m && h.y < b.h + 500;
+  if (near || touch) arrive(s, z);
+}
+
+/** A frame with every field in range (the decoder guarantees this; live input may not). */
+function sane(f: InputFrame): InputFrame {
+  const mag = f.mag === 1 || f.mag === 2 || f.mag === 3 ? f.mag : 0;
+  const dir = mag > 0 && Number.isInteger(f.dir) && f.dir >= 0 && f.dir < 64 ? f.dir : 0;
+  const shot = (Number.isInteger(f.shot) && f.shot >= 0 && f.shot <= 5 ? f.shot : 0) as InputFrame["shot"];
+  // Always a fresh object: callers may reuse one mutable frame between ticks.
+  return { dir, mag, web: f.web === true, shot };
+}
+
+/** Whether stepSim would move the world (false while an errand is open or the night is over). */
+export const simRunning = (s: SimState) => s.mode !== "errand" && s.mode !== "done";
+
+/**
+ * One fixed step from one frame. The frame's one-shot (ability 1–4, Gwei 5) applies first.
+ * Returns false, consuming nothing, while an errand is open or the night is over.
+ */
+export function stepSim(s: SimState, frame: InputFrame): boolean {
+  if (!simRunning(s)) return false;
+  const input = sane(frame);
+  s.tick += 1;
+  s.time += DT;
+  s.input = input;
+  if (input.shot >= 1 && input.shot <= 4) fireAbility(s, input.shot - 1);
+  else if (input.shot === 5) callGwei(s);
+
+  switch (s.mode) {
+    case "travel":
+      stepHero(s, input, DT);
+      stepAbilities(s, DT);
+      checkArrival(s);
+      break;
+    case "intro":
+      stepHero(s, input, DT);
+      stepVillain(s, DT);
+      stepAbilities(s, DT);
+      s.modeT -= DT;
+      if (s.modeT <= 0) {
+        s.mode = "fight";
+        s.events.push({ type: "fight-live", index: s.index });
+      }
+      break;
+    case "fight":
+      stepHero(s, input, DT);
+      stepVillain(s, DT);
+      stepHazards(s, DT);
+      stepAbilities(s, DT);
+      break;
+    case "won":
+      stepHero(s, input, DT);
+      stepVillain(s, DT);
+      stepAbilities(s, DT);
+      s.modeT -= DT;
+      if (s.modeT <= 0) {
+        s.events.push({ type: "stop-done", index: s.index });
+        nextStop(s);
+      }
+      break;
+    case "ko":
+      stepHero(s, input, DT);
+      s.modeT -= DT;
+      if (s.modeT <= 0) {
+        s.mode = "done";
+        s.events.push({ type: "night-over", reason: "ko" });
+      }
+      break;
+  }
+  return true;
+}
+
+/** After the errand sheet: take the engine's vitals (a choice may heal) and swing on. */
+export function resolveErrand(s: SimState, vitals: { hp: number; fluid: number }) {
+  if (s.mode !== "errand") return;
+  s.hp = Math.max(1, Math.min(s.maxHp, Math.round(vitals.hp)));
+  s.fluid = Math.max(0, Math.round(vitals.fluid));
+  nextStop(s);
+  // A little push off the ally's roof toward the next stop, so the swing starts with momentum.
+  const h = s.hero;
+  const b = travelBearing(s);
+  if (h.grounded && b) {
+    const along = h.vx * b.x + h.vz * b.z;
+    if (along < 200) {
+      h.vx += b.x * (200 - along);
+      h.vz += b.z * (200 - along);
+    }
+    h.idle = false;
+  }
+}
+
+/* ------------------------------------------------------------------ test hooks */
+
+/** Debug: set health. Zero in a fight is a knockout; elsewhere health stays at 1 or more. */
+export function debugSetHp(s: SimState, hp: number) {
+  if (hp <= 0 && s.mode === "fight") {
+    s.hp = 0;
+    knockOut(s);
+    return;
+  }
+  s.hp = Math.max(1, Math.min(s.maxHp, Math.round(hp)));
+}
+
+export function debugWin(s: SimState) {
+  if (s.mode !== "fight" || !s.villain) return false;
+  s.villain.hits = 0;
+  winFight(s);
+  return true;
+}

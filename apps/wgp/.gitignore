@@ -42,3 +42,6 @@ next-env.d.ts
 
 # The example env file documents configuration and holds no secrets.
 !.env.example
+
+# Local PGlite database (src/server/db/client.ts)
+/.data/
