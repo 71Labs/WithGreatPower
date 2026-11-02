@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { createElement, type ReactNode } from "react";
 
 import { AVATARS } from "@/components/cast";
 import { StickerFrame } from "@/components/game/kit";
@@ -18,7 +18,7 @@ export function LockedFrame({ id, className = GRID_SIZE }: { id: CastId; classNa
       className={`relative grid size-[var(--s,76px)] shrink-0 place-items-center rounded-[calc(var(--s,76px)*0.28)] border-2 border-dashed border-game-ink/45 bg-game-paper-2 ${className}`}
     >
       <span className="absolute inset-[12%] overflow-hidden rounded-[calc(var(--s,76px)*0.2)] opacity-[0.12] brightness-0 [&>svg]:size-full">
-        {AVATARS[id]()}
+        {createElement(AVATARS[id])}
       </span>
       <span className="relative font-display text-[calc(var(--s,76px)*0.4)] font-semibold leading-none text-game-muted">?</span>
     </span>
@@ -29,7 +29,7 @@ export function LockedFrame({ id, className = GRID_SIZE }: { id: CastId; classNa
 export function CastFrame({ id, className = GRID_SIZE }: { id: CastId; className?: string }) {
   return (
     <StickerFrame drop="sm" className={className}>
-      {AVATARS[id]()}
+      {createElement(AVATARS[id])}
     </StickerFrame>
   );
 }

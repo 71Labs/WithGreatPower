@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { createElement, type ReactNode } from "react";
 
 import { castById, type CastId } from "@wgp/game-core/cast";
 
@@ -45,7 +45,7 @@ export function Sticker({
   const name = customName ?? (id ? castById(id).name : "");
   const s = SIZES[size];
   const frameClass = `shrink-0 bg-white shadow-[var(--shadow-chip)] ${s.frame} ${PICK_UP}`;
-  const art = <div className={`size-full overflow-hidden bg-sticker ${s.inner}`}>{customArt ?? (id ? AVATARS[id]() : null)}</div>;
+  const art = <div className={`size-full overflow-hidden bg-sticker ${s.inner}`}>{customArt ?? (id ? createElement(AVATARS[id]) : null)}</div>;
 
   if (!label) {
     return (

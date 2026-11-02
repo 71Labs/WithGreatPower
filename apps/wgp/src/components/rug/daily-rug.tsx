@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { createElement, useEffect } from "react";
 
 import { StickerFrame, StickerLink, ON_PAPER } from "@/components/game/kit";
 import { markEditionRead } from "@/components/game/shell";
@@ -50,7 +50,7 @@ function LeadStory({ edition }: { edition: Edition }) {
       <div className="flex items-start gap-4">
         <figure className="flex shrink-0 flex-col items-center gap-1.5">
           <StickerFrame drop="sm" label={`Pictured: ${castById(edition.who).name}`} className="[--s:88px] sm:[--s:120px]">
-            {AVATARS[edition.who]()}
+            {createElement(AVATARS[edition.who])}
           </StickerFrame>
           <figcaption className="max-w-[88px] text-center text-[11px] leading-[14px] text-game-muted sm:max-w-[120px]">
             {castById(edition.who).name}
