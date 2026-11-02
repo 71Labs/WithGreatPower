@@ -12,7 +12,7 @@
  *       stats sampled every second, console errors, a frame every --every ms tagged with the
  *       sim's mode, bursts of frames on the first fight and errand, and summary.json.
  *
- * Common: [--base http://localhost:3530] [--w 1280] [--h 800] [--dpr 1] [--save launch/out/saves/night-a.json]
+ * Common: [--base http://localhost:3530] [--w 1280] [--h 800] [--dpr 1] [--save launch/out/saves/night-a.json] [--uncapped]
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -44,7 +44,9 @@ const HIDE_PANEL = `
 
 mkdirSync(out, { recursive: true });
 const port = 9640 + Math.floor(Math.random() * 50);
-const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-hero/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+// --uncapped: no vsync or frame-rate limit, so fps reads the renderer's headroom rather than the display's rate.
+const uncapped = flag("uncapped") ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : [];
+const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-hero/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", ...uncapped] });
 
 const shot = async (file) => {
   const { data } = await send("Page.captureScreenshot", { format: "png" });

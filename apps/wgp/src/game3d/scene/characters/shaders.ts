@@ -18,7 +18,7 @@
 export const MAX_DECALS = 24;
 export const PALETTE_SIZE = 16;
 
-const GLITCH = /* glsl */ `
+export const GLITCH = /* glsl */ `
 uniform float uGlitch;
 uniform float uTime;
 float gHash(float n) { return fract(sin(n * 91.3458) * 47453.5453); }

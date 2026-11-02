@@ -5,17 +5,23 @@
  * frame, wobbles when stunned, and, once a villain is caught, hangs the body webbed up on
  * a Verlet strand (`Dangle`). Subclasses say where the hips go, how the body tilts and
  * where the limbs reach.
+ *
+ * On an MPFB body with motion capture (`setClips`), subclasses lay clips over that pose in
+ * `layerClips` (anim/clip-layer.ts) and put the physics back on top: planted feet, a hand
+ * on its target, the cocoon's pinned arms. `struck` flinches the body when it takes a hit.
  */
 import { Quaternion, Vector3, type Group } from "three";
 
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
+import type { HeroClips } from "../hero-asset";
 import { Spring, Spring3 } from "../physics/spring";
 import { FixedStepper } from "../physics/stepper";
 import { Verlet } from "../physics/verlet";
-import type { Rig } from "../rig";
-import { angleTo, clamp, frameQuat, Orient, Turn, yawOf } from "./common";
-import { applyPose, newPose, newSolved, type Pose, type Solved } from "./pose";
+import { worldPos, worldQuat, type Rig } from "../rig";
+import { ClipLayer } from "./clip-layer";
+import { angleTo, clamp, frameQuat, Orient, smoothstep, Turn, yawOf } from "./common";
+import { addBoneDelta, applyPose, newPose, newSolved, reachLimb, type Pose, type Solved } from "./pose";
 import type { AnimContext } from "./types";
 
 export interface ActorInput {
@@ -29,10 +35,14 @@ export interface ActorInput {
 }
 
 const _q = new Quaternion();
+const _q2 = new Quaternion();
+const _q3 = new Quaternion();
 const _a = new Vector3();
 const _b = new Vector3();
 const _c = new Vector3();
 const X = new Vector3(1, 0, 0);
+const _X = X;
+const _Y = new Vector3(0, 1, 0);
 
 /** A caught villain's web: a Verlet strand from a roof edge to the top of the cocoon. */
 export class Dangle {
@@ -110,6 +120,10 @@ export abstract class ActorAnimator {
   protected bankIn: number | undefined;
   /** Where a webbed villain's strand goes, set by the scene. */
   strandAnchor: ((p: Vector3, out: Vector3) => Vector3) | null = null;
+  /** Motion capture, on an MPFB body once its clips have loaded. */
+  protected clips: ClipLayer | null = null;
+  /** Seconds since the state turned "webbed" (a fall plays first), else −1. */
+  protected caughtT = -1;
 
   constructor(
     protected readonly rig: Rig,
@@ -135,6 +149,8 @@ export abstract class ActorAnimator {
   protected extras?(pose: Pose): void;
   /** Per-frame bookkeeping before the sub-steps. */
   protected beforeSteps?(dt: number, ctx: AnimContext): void;
+  /** Lay clips over the pose applyPose wrote (MPFB bodies with clips), then re-solve. */
+  protected layerClips?(ctx: AnimContext, dt: number): void;
   /** Hips height above the soles for this body when standing (rest, minus a soft knee). */
   protected get standHips(): number {
     return this.rig.hipHeight - 1;
@@ -195,10 +211,88 @@ export abstract class ActorAnimator {
     });
     this.compose(this.clock.alpha, ctx);
     applyPose(this.rig, this.group, this.pose, this.solved);
+    if (this.clips) {
+      this.clips.step(dt);
+      if (this.caughtT >= 0) this.caughtT += dt;
+      this.layerClips?.(ctx, dt);
+    }
+  }
+
+  /** Drive this body with motion capture (an MPFB rig; `k` metres to units). */
+  setClips(clips: HeroClips, k: number): void {
+    this.clips = new ClipLayer(this.rig, clips, k, this.clipNames());
+  }
+
+  /** The clips this animator plays. */
+  protected clipNames(): string[] {
+    return ["idle", "hit-chest", "hit-head", "death"];
+  }
+
+  get hasClips(): boolean {
+    return this.clips !== null;
+  }
+
+  /**
+   * Caught: in the air, the fall's first moments flail over the cocoon and then it holds
+   * still (returns true: nothing else to lay). On a roof the subclass plays the fall itself.
+   */
+  protected cocoonClips(): boolean {
+    if (!this.dangle.active) return false;
+    const fade = 1 - smoothstep(0.15, 0.85, this.caughtT);
+    if (fade > 0.001) this.clips!.over(fade * 0.85, this.clips!.upper);
+    return true;
+  }
+
+  /**
+   * The head after the clips: lifted by `lift` (the UAL's idles look at the floor a little)
+   * and turned toward the hero the way the procedural pose would.
+   */
+  protected lookAfterClips(lift: number, a = this.clock.alpha): void {
+    const rig = this.rig;
+    const yaw = this.headY.lerp(a);
+    addBoneDelta(rig, rig.index.get("neck")!, _q2.setFromAxisAngle(_Y, yaw * 0.4).multiply(_q3.setFromAxisAngle(_X, -lift * 0.4)));
+    addBoneDelta(rig, rig.index.get("head")!, _q2.setFromAxisAngle(_Y, yaw * 0.6).multiply(_q3.setFromAxisAngle(_X, -lift * 0.6)));
+    rig.bones[0].updateMatrixWorld(true);
+  }
+
+  /** Took a hit: a flinch. */
+  struck(): void {
+    if (!this.clips || this.dangle.active || this.state === "webbed") return;
+    this.clips.play(Math.random() < 0.5 ? "hit-chest" : "hit-head", { weight: 0.85, rate: 1.1 });
+  }
+
+  /** The feet back on the pose's targets (after a clip moved the hips), by `w`. */
+  protected plantLegs(w = 1): void {
+    if (w <= 1e-3) return;
+    const rig = this.rig;
+    rig.bones[0].updateMatrixWorld(true);
+    for (let i = 0; i < 2; i++) {
+      const leg = rig.legs[i];
+      const ankle = worldPos(leg.end, _a);
+      const target = _b.copy(ankle).lerp(this.pose.foot[i], w);
+      const foot = worldQuat(leg.end, _q2).slerp(_q3.copy(this.pose.footRot[i]).multiply(rig.restWorld[rig.index.get(leg.end.name)!]), w);
+      reachLimb(rig, leg, target, this.pose.knee[i], foot);
+    }
+  }
+
+  /** Hands toward the pose's targets by `w` (per hand), after a clip moved the arms. */
+  protected reachHands(w0: number, w1: number): void {
+    const rig = this.rig;
+    rig.bones[0].updateMatrixWorld(true);
+    const ws = [w0, w1];
+    for (let i = 0; i < 2; i++) {
+      if (ws[i] <= 1e-3) continue;
+      const arm = rig.arms[i];
+      const wrist = worldPos(arm.end, _a);
+      reachLimb(rig, arm, _b.copy(wrist).lerp(this.pose.hand[i], ws[i]), this.pose.elbow[i]);
+    }
   }
 
   /** A state change: start the dangle when caught. */
   protected onState(next: string, ctx: AnimContext): void {
+    this.caughtT = next === "webbed" ? 0 : -1;
+    if (next === "webbed") this.clips?.play("death", { weight: 1, hold: true, full: true });
+    else if (this.clips?.playing("death")) this.clips.stop();
     if (next === "webbed" && this.strandAnchor && (this.canDangle?.(ctx) ?? true)) {
       const top = _c.copy(this.P).add(_a.set(0, this.rig.height * 0.5, 0));
       const anchor = this.strandAnchor(this.P, new Vector3());
@@ -262,6 +356,8 @@ export abstract class ActorAnimator {
     pose.head.set(this.headP.lerp(a) + (stun ? Math.sin(this.time * 5) * 0.2 : 0), this.headY.lerp(a) * 0.6, stun ? Math.cos(this.time * 5) * 0.25 : 0);
     pose.clav[0].set(0, 0, 0);
     pose.clav[1].set(0, 0, 0);
+    // Hands with fingers rest half-curled, like a person's.
+    pose.grip[0] = pose.grip[1] = 0.3;
     for (let i = 0; i < 2; i++) {
       if (this.secondary) {
         this.hands[i].lerp(a, pose.hand[i]).add(H);

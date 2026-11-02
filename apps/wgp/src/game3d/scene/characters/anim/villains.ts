@@ -10,19 +10,30 @@
  * - Doc Octochain hovers, legs dangling on springs, swaying; he winds up with his arms
  *   raised, leans into an attack and slumps, panting, when his chains retract (his chain
  *   arms themselves are chains.ts).
- * - The Sybil floats on a gooey tail, undulating, and points to shoot.
+ * - The Sybil floats, undulating, and points to shoot.
+ *
+ * On their MPFB bodies motion capture rides on top (anim/clip-layer.ts): Goblin's upper body
+ * holds a throwing stance over his crouch on the deck and throws with the UAL's spell cast;
+ * Sandwich Man jogs and sprints on clips phase-locked to the ground he covers, takes off,
+ * tucks and lands with the jump clips, squares up in a fighting stance, and falls flat when
+ * webbed on a roof; Doc treads the air with his arms spread and swings punches as his chains
+ * strike; the Sybil hovers in the same treading float and casts to shoot. Every one flinches
+ * with the hit clips when struck and flails into the cocoon when caught in the air.
  */
 import { Quaternion, Vector3, type Group } from "three";
 
 import { Spring } from "../physics/spring";
 import type { Rig } from "../rig";
 import { ActorAnimator } from "./actor";
+import type { AnimContext as Ctx } from "./types";
 import { bodyPoint, clamp, frameQuat, Plant, smoothstep, UP, yawQuat } from "./common";
 import type { Pose } from "./pose";
 import type { AnimContext } from "./types";
 
 const X = new Vector3(1, 0, 0);
 const Z = new Vector3(0, 0, 1);
+/** Seconds of Sandwich Man's fall before he lies webbed on the roof. */
+const SANDWICH_FALL = 1.7;
 const _q = new Quaternion();
 const _a = new Vector3();
 const _b = new Vector3();
@@ -87,12 +98,45 @@ export class GoblinAnimator extends ActorAnimator {
   }
 
   protected finish(pose: Pose): void {
+    // His right fist round the fuel nozzle.
+    pose.grip[1] = 1;
     // Feet stand on the deck (the glider is part of the root's frame).
     for (let i = 0; i < 2; i++) {
       const s = i === 0 ? 1 : -1;
       bodyPoint(pose.root, pose.rot, s * 5.5, this.rig.spec.ankle, s * 3, pose.foot[i]);
       pose.footRot[i].copy(pose.rot);
     }
+  }
+
+  protected onState(next: string, ctx: Ctx): void {
+    super.onState(next, ctx);
+    if (next === "attack") this.clips?.play("spell-shoot", { rate: 0.8, weight: 0.95 });
+  }
+
+  protected clipNames(): string[] {
+    return ["spell-idle", "crouch-idle", "spell-shoot", "hit-chest", "hit-head", "death"];
+  }
+
+  protected layerClips(): void {
+    const c = this.clips!;
+    if (this.cocoonClips()) return;
+    const st = this.state;
+    const amount = st === "windup" ? 0.35 : st === "stunned" ? 0.55 : 0.9;
+    // A thrower's stance, hunched into the ride.
+    c.loops(
+      [
+        ["spell-idle", this.time, 0.65],
+        ["crouch-idle", this.time, 0.35],
+      ],
+      amount,
+      c.upper,
+      0,
+    );
+    c.over(1);
+    this.lookAfterClips(0.15);
+    // The free arm out for balance; the wound-up arm back for the throw.
+    this.reachHands(st === "windup" ? 0.8 : 0.4, st === "windup" ? 0.85 : 0);
+    this.plantLegs(1);
   }
 
   protected extras(pose: Pose): void {
@@ -118,6 +162,9 @@ export class SandwichAnimator extends ActorAnimator {
   private readonly squash = new Spring(14, 0.45);
   private readonly gw = new Spring(14, 1);
   private lying = false;
+  /** Clips: the run cycle's phase, seconds airborne. */
+  private runPhase = 0;
+  private airT = 0;
 
   constructor(rig: Rig, group: Group) {
     super(rig, group, 7);
@@ -129,11 +176,20 @@ export class SandwichAnimator extends ActorAnimator {
     this.grounded = Math.abs(this.vel.y) < 90 && P.y - this.ground < 50 && this.state !== "attack";
     if (this.grounded && !this.wasGrounded) {
       this.squash.impulse(-clamp(Math.abs(this.V.y) * 0.18, 30, 220));
+      this.clips?.play("land", { t: 0.1, rate: 1.6, weight: 0.7 });
       for (let i = 0; i < 2; i++) this.plants[i].plantAt(_a.set(P.x + (i === 0 ? 6 : -6), this.ground + this.rig.spec.ankle, P.z));
     }
+    if (!this.grounded && this.wasGrounded && this.vel.y > 150) this.clips?.play("jump-start", { t: 0.45, rate: 1.8, weight: 0.6 });
     this.wasGrounded = this.grounded;
     const hs = Math.hypot(this.V.x, this.V.z);
     if (this.grounded) this.phase += (hs * dt) / (70 + hs * 0.1);
+    this.airT = this.grounded ? 0 : this.airT + dt;
+    const c = this.clips;
+    if (c && this.grounded) {
+      const w = this.runBlend(hs);
+      const stride = (1 - w) * (c.stride("jog")?.stride ?? 100) + w * (c.stride("sprint")?.stride ?? 120);
+      this.runPhase = (this.runPhase + (hs * dt) / Math.max(20, stride)) % 1;
+    }
     const crouch = this.state === "windup" ? 10 : 0;
     this.lift.step(this.grounded ? this.ground + this.standHips - crouch - P.y : 0, dt);
     this.squash.step(0, dt);
@@ -145,16 +201,71 @@ export class SandwichAnimator extends ActorAnimator {
     return !this.grounded;
   }
 
-  protected hips(out: Vector3, alpha: number): Vector3 {
-    if (this.lying && this.state === "webbed") return out.set(this.P.x, this.ground + 8, this.P.z);
+  /** Sprint's share of the run blend at a ground speed. */
+  private runBlend(hs: number): number {
+    return smoothstep(260, 480, hs);
+  }
+
+  /** Falling flat (a clip) before he lies webbed on the roof. */
+  private get falling(): boolean {
+    return !!this.clips && this.lying && this.state === "webbed" && this.caughtT < SANDWICH_FALL;
+  }
+
+  protected onState(next: string, ctx: Ctx): void {
+    super.onState(next, ctx);
+    if (next === "attack") this.clips?.play("cross", { rate: 1.2, weight: 0.8 });
+  }
+
+  protected clipNames(): string[] {
+    return ["sword-idle", "jog", "sprint", "jump-start", "jump-loop", "land", "cross", "hit-chest", "hit-head", "death"];
+  }
+
+  protected layerClips(): void {
+    const c = this.clips!;
+    if (this.lying && this.state === "webbed") {
+      if (this.falling) c.over(1);
+      return;
+    }
+    if (this.cocoonClips()) return;
+    const st = this.state;
+    const t = this.time;
     const hs = Math.hypot(this.V.x, this.V.z);
-    const runW = this.grounded ? smoothstep(25, 160, hs) : 0;
+    if (this.grounded && st !== "attack") {
+      const runW = smoothstep(40, 140, hs);
+      if (runW < 0.999) c.loops([["sword-idle", t, 1]], (1 - runW) * (st === "windup" ? 0.5 : 0.9), c.upper, 0);
+      if (runW > 0.001) {
+        const w = this.runBlend(hs);
+        const loop: [string, number, number][] = [];
+        for (const [name, share] of [
+          ["jog", 1 - w],
+          ["sprint", w],
+        ] as const) {
+          const sd = c.stride(name);
+          if (sd && share > 0) loop.push([name, ((this.runPhase + sd.strike) % 1) * c.duration(name), share]);
+        }
+        c.loops(loop, runW, c.full, 1);
+        this.group.position.y -= c.floor * runW;
+        this.group.updateMatrixWorld(true);
+      }
+      c.over(1);
+      this.lookAfterClips(0.15 * (1 - runW));
+      this.plantLegs(1 - runW);
+    } else {
+      c.loops([["jump-loop", this.airT, 1]], st === "attack" ? 0.3 : 0.85, c.full, 0);
+      c.over(1);
+    }
+  }
+
+  protected hips(out: Vector3, alpha: number): Vector3 {
+    if (this.lying && this.state === "webbed" && !this.falling) return out.set(this.P.x, this.ground + 8, this.P.z);
+    const hs = Math.hypot(this.V.x, this.V.z);
+    const runW = this.grounded && !this.clips ? smoothstep(25, 160, hs) : 0;
     const bob = runW * 2.6 * (0.5 + 0.5 * Math.cos(this.phase * Math.PI * 4));
     return out.set(this.P.x, this.P.y + this.lift.lerp(alpha) + this.squash.lerp(alpha) - bob, this.P.z);
   }
 
   protected body(out: Quaternion): Quaternion {
-    if (this.lying && this.state === "webbed") {
+    if (this.lying && this.state === "webbed" && !this.falling) {
       // Toppled on the roof, wriggling.
       yawQuat(this.turn.value, out);
       return out.multiply(_q.setFromAxisAngle(X, -1.45 + Math.sin(this.time * 4) * 0.05));
@@ -166,7 +277,10 @@ export class SandwichAnimator extends ActorAnimator {
     }
     yawQuat(this.turn.value, out);
     const hs = Math.hypot(this.vel.x, this.vel.z);
-    const lean = this.grounded ? clamp(hs / 300, 0, 1) * 0.22 + (this.state === "windup" ? 0.35 : 0) : clamp(-this.vel.y / 1400, -0.25, 0.35);
+    if (this.falling) return out;
+    // The clips lean into the run on their own.
+    const runLean = clamp(hs / 300, 0, 1) * 0.22 * (this.clips ? 0.25 : 1);
+    const lean = this.grounded ? runLean + (this.state === "windup" ? 0.35 : 0) : clamp(-this.vel.y / 1400, -0.25, 0.35);
     return out.multiply(_q.setFromAxisAngle(X, lean));
   }
 
@@ -201,7 +315,7 @@ export class SandwichAnimator extends ActorAnimator {
   }
 
   protected finish(pose: Pose, alpha: number, ctx: AnimContext): void {
-    if (this.lying && this.state === "webbed") return;
+    if (this.lying && this.state === "webbed" && !this.falling) return;
     const w = this.gw.lerp(alpha);
     if (w < 0.001) return;
     const hs = Math.hypot(this.V.x, this.V.z);
@@ -227,6 +341,32 @@ export class SandwichAnimator extends ActorAnimator {
 /* ------------------------------------------------------------------ Doc Octochain */
 
 export class DocAnimator extends ActorAnimator {
+  private punches = 0;
+
+  protected onState(next: string, ctx: Ctx): void {
+    super.onState(next, ctx);
+    if (next === "attack") this.clips?.play(this.punches++ % 2 === 0 ? "cross" : "jab", { rate: 0.8, weight: 0.85 });
+  }
+
+  protected clipNames(): string[] {
+    return ["swim-idle", "cross", "jab", "hit-chest", "hit-head", "death"];
+  }
+
+  protected layerClips(): void {
+    const c = this.clips!;
+    if (this.cocoonClips()) return;
+    const st = this.state;
+    const t = this.time;
+    // Treading the air, arms spread over his chains; the legs tread too, over their springs.
+    c.loops([["swim-idle", t, 1]], st === "windup" ? 0.3 : st === "attack" ? 0.6 : 0.85, c.upper, 0);
+    c.loops([["swim-idle", t, 1]], 0.55, c.legs, 0);
+    c.over(1);
+    // Chin up at the hero (the treading clip looks down at the water).
+    this.lookAfterClips(0.45);
+    if (st === "windup") this.reachHands(0.75, 0.75);
+    else if (st === "open") this.reachHands(0.5, 0.5);
+  }
+
   protected hips(out: Vector3): Vector3 {
     return out.set(this.P.x, this.P.y - 4, this.P.z);
   }
@@ -272,6 +412,41 @@ export class DocAnimator extends ActorAnimator {
 /* ------------------------------------------------------------------ The Sybil */
 
 export class SybilAnimator extends ActorAnimator {
+  /** `phase`: seconds ahead in his loops (the copies don't move as one). */
+  constructor(rig: Rig, group: Group, phase = 0) {
+    super(rig, group);
+    this.time = phase;
+  }
+
+  protected onState(next: string, ctx: Ctx): void {
+    super.onState(next, ctx);
+    if (next === "attack") this.clips?.play("spell-shoot", { rate: 0.9, weight: 0.95 });
+  }
+
+  protected clipNames(): string[] {
+    return ["sword-idle", "spell-idle", "swim-idle", "spell-shoot", "hit-chest", "hit-head", "death"];
+  }
+
+  protected layerClips(): void {
+    const c = this.clips!;
+    if (this.cocoonClips()) return;
+    const st = this.state;
+    const t = this.time;
+    const cast = st === "windup" || st === "attack" ? 1 : 0;
+    c.loops(
+      [
+        ["sword-idle", t, 1 - cast],
+        ["spell-idle", t, cast],
+      ],
+      0.85,
+      c.upper,
+      0,
+    );
+    c.loops([["swim-idle", t * 0.8, 1]], 0.5, c.legs, 0);
+    c.over(1);
+    this.lookAfterClips(0.4);
+  }
+
   protected hips(out: Vector3): Vector3 {
     return out.set(this.P.x, this.P.y - 6 + Math.sin(this.time * 1.8) * 4, this.P.z);
   }

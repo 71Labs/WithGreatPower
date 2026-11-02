@@ -3,7 +3,7 @@
  * synthetic motion script and the turntable camera, advanced once per frame. The bench
  * component only calls its methods, so per-frame work never touches React state.
  */
-import type { PerspectiveCamera } from "three";
+import { Vector3, type PerspectiveCamera } from "three";
 
 import { NODE_COLORS } from "@/components/cast";
 import { citySolids } from "@/game3d/scene/camera/raycast";
@@ -37,6 +37,7 @@ export class LabStage {
   zoom = 1;
   private turn = 0;
   private readonly focus = { x: 0, y: 330, z: 0 };
+  private readonly joint = new Vector3();
   private readonly frames: number[] = [];
   private readonly costs: number[] = [];
   private statsAt = 0;
@@ -76,7 +77,12 @@ export class LabStage {
     s.step(dt);
     const p = s.frame.hero.pos;
     const close = this.zoom < 0.7 && s.character === "hero";
-    const f = close && this.zoom < 0.35 ? { x: p.x, y: p.y + 44, z: p.z } : close && !s.frame.hero.grounded ? { x: p.x, y: p.y + 6, z: p.z } : s.focus({ x: 0, y: 0, z: 0 });
+    let f = close && this.zoom < 0.35 ? { x: p.x, y: p.y + 44, z: p.z } : close && !s.frame.hero.grounded ? { x: p.x, y: p.y + 6, z: p.z } : s.focus({ x: 0, y: 0, z: 0 });
+    if (this.zoom < 0.7 && s.character !== "hero") {
+      // Close on the featured body itself: its head, or its chest.
+      const j = this.system.jointOf(s.character, this.zoom < 0.35 ? "head" : "chest", this.joint);
+      if (j) f = { x: j.x, y: j.y + (this.zoom < 0.35 ? 6.5 : 0), z: j.z };
+    }
     const fc = this.focus;
     const k = 1 - Math.exp(-dt * (this.zoom < 1.2 ? 12 : 6));
     fc.x += (f.x - fc.x) * k;
@@ -86,7 +92,7 @@ export class LabStage {
     const a = this.turntable ? this.turn : this.angle;
     const c = s.character;
     const far = (c === "hero" ? (WIDE[s.state] ?? CAST_DEFS[c].height * 2.4) : c === "doc-octochain" || c === "sybil" ? 480 : CAST_DEFS[c].height * 2.6) * this.zoom;
-    camera.position.set(fc.x + Math.sin(a) * far, fc.y + far * 0.18 + 12, fc.z + Math.cos(a) * far);
+    camera.position.set(fc.x + Math.sin(a) * far, fc.y + (this.zoom < 0.35 ? 1 : far * 0.18 + 12), fc.z + Math.cos(a) * far);
     camera.lookAt(fc.x, fc.y, fc.z);
     camera.updateMatrixWorld();
     const u = this.uniforms;
@@ -122,6 +128,10 @@ export class LabStage {
 
   miss(): void {
     this.system.fizzle();
+  }
+
+  facing(): number | null {
+    return this.system.facingOf(this.script.character);
   }
 
   dispose(): void {
