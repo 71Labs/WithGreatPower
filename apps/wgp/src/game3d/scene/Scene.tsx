@@ -53,6 +53,9 @@ export interface SceneStats {
   fps: number;
   dpr: number;
   tier: QualityTier;
+  /** The cast's CPU time per frame (animators, springs, IK, ragdoll, posing), mean and worst of the last 60, ms. */
+  castMs: number;
+  castMaxMs: number;
 }
 
 export interface SceneProps {
@@ -105,6 +108,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
     if (onStats && state.clock.elapsedTime - statsAt.current > 0.25) {
       statsAt.current = state.clock.elapsedTime;
       const info = gl.info;
+      const cast = engine.castMs();
       onStats({
         calls: info.render.calls,
         triangles: info.render.triangles,
@@ -116,6 +120,8 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
         fps: meter.fps,
         dpr: state.viewport.dpr,
         tier: quality.tier,
+        castMs: cast.mean,
+        castMaxMs: cast.max,
       });
     }
   });

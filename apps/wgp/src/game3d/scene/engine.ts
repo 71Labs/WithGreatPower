@@ -55,6 +55,9 @@ export class SceneEngine {
   private lastFov = 0;
   private idleAngle = 0;
   private speedLinesTier = true;
+  /** The cast's per-frame cost (animators, physics, posing), ms, over the last 60 frames. */
+  private readonly castCost = new Float32Array(60);
+  private castAt = 0;
 
   constructor(
     private readonly cityData: City,
@@ -184,13 +187,27 @@ export class SceneEngine {
 
     this.sky.update(camera, time, dpr, size.height * dpr);
     if (frame) {
+      const t0 = performance.now();
       this.characters.update(frame, camera, size, dt, time);
+      this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
       this.hazards.update(frame);
       // The sparkle shows once the web's shot has reached the anchor.
       this.bursts.setAnchor(this.characters.stuck);
     }
     this.bursts.update(dt, time);
     return pose;
+  }
+
+  /** The cast's mean and worst per-frame cost over the last 60 frames, ms. */
+  castMs(): { mean: number; max: number } {
+    const n = Math.min(this.castAt, this.castCost.length);
+    let sum = 0;
+    let max = 0;
+    for (let i = 0; i < n; i++) {
+      sum += this.castCost[i];
+      max = Math.max(max, this.castCost[i]);
+    }
+    return { mean: n ? sum / n : 0, max };
   }
 
   /** Whether a point is over the bridge deck. */

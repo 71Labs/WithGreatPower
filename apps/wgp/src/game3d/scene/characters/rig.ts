@@ -5,6 +5,12 @@
  * parent, so a bone's own axis is the direction to its child and posing is "swing this bone
  * from its rest axis to that direction".
  *
+ * A loaded body (the hero's MPFB model, hero-rig.ts) fills the same `Rig` from its own
+ * skeleton, whose bones rest with real rotations. The writes below are rest-relative, so
+ * animators pose both kinds alike: a delta is "pitch forward / yaw left / roll" in the
+ * model's axes at rest, whatever the bone's own frame, and limbs on such a rig bend on their
+ * elbow and knee hinges.
+ *
  * The bind pose is an A-pose: arms angled down and out, legs straight. Units are world
  * units (the hero is ~88 tall), +Y up, the character faces +Z, its left hand is on +X.
  */
@@ -106,6 +112,21 @@ export interface Limb {
   /** Rest axes (unit, in each bone's own frame). */
   axis1: Vector3;
   axis2: Vector3;
+  /** The end bone's own axis (wrist → middle knuckle), in its frame. */
+  endAxis: Vector3;
+  /**
+   * Rigs with rest rotations: the upper bone's frame as (hinge, axis1, hinge × axis1), where
+   * the hinge is the elbow or knee axis. The limb then bends only about it. Null for the
+   * procedural cast, whose limbs swing freely.
+   */
+  hinge: Quaternion | null;
+}
+
+/** One finger joint, posed from open to a fist (local rotations, rest included). */
+export interface FingerJoint {
+  bone: Bone;
+  open: Quaternion;
+  fist: Quaternion;
 }
 
 export interface Rig {
@@ -124,7 +145,23 @@ export interface Rig {
   hipHeight: number;
   /** Top of the head above the soles (filled by the mesh builder from the head shape). */
   height: number;
+  /** Bones sharing the pose's "spine" rotation (two on an MPFB spine). */
+  spine: number[];
+  /** Every rest rotation is the identity (the procedural cast): pose writes go straight in. */
+  identityRest: boolean;
+  /** Per bone: rest local rotation, its rest rotation in the model frame, and its parent's. */
+  restQ: Quaternion[];
+  restWorld: Quaternion[];
+  parentRest: Quaternion[];
+  /** The web fist, in the right hand's frame, and its distance from the wrist. */
+  grip: Vector3;
+  gripReach: number;
+  /** Finger joints per hand (left, right), or null for mitten hands. */
+  fingers: [FingerJoint[], FingerJoint[]] | null;
 }
+
+/** Where the web leaves a mitten fist, past the wrist along the hand. */
+export const MITTEN_GRIP = 3.4;
 
 export function createRig(spec: BodySpec, extras: ExtraBone[] = [], height = 88): Rig {
   const bones: Bone[] = [];
@@ -188,6 +225,7 @@ export function createRig(spec: BodySpec, extras: ExtraBone[] = [], height = 88)
     const u = get(upper);
     const l = get(lower);
     const e = get(end);
+    const axis2 = e.position.clone().normalize();
     return {
       upper: u,
       lower: l,
@@ -196,9 +234,13 @@ export function createRig(spec: BodySpec, extras: ExtraBone[] = [], height = 88)
       l1: l.position.length(),
       l2: e.position.length(),
       axis1: l.position.clone().normalize(),
-      axis2: e.position.clone().normalize(),
+      axis2,
+      endAxis: axis2.clone(),
+      hinge: null,
     };
   };
+  const arms: [Limb, Limb] = [limb("armL", "foreL", "handL", "clavL"), limb("armR", "foreR", "handR", "clavR")];
+  const ident = () => bones.map(() => new Quaternion());
   return {
     spec,
     bones,
@@ -207,10 +249,18 @@ export function createRig(spec: BodySpec, extras: ExtraBone[] = [], height = 88)
     skeleton,
     joints,
     rest: bones.map((b) => b.position.clone()),
-    arms: [limb("armL", "foreL", "handL", "clavL"), limb("armR", "foreR", "handR", "clavR")],
+    arms,
     legs: [limb("thighL", "shinL", "footL", "hips"), limb("thighR", "shinR", "footR", "hips")],
     hipHeight,
     height,
+    spine: [index.get("spine")!],
+    identityRest: true,
+    restQ: ident(),
+    restWorld: ident(),
+    parentRest: ident(),
+    grip: arms[1].axis2.clone().multiplyScalar(MITTEN_GRIP),
+    gripReach: MITTEN_GRIP,
+    fingers: null,
   };
 }
 
@@ -251,6 +301,9 @@ const _m = new Matrix4();
 const _q = new Quaternion();
 const _qi = new Quaternion();
 const _v = new Vector3();
+const _a = new Vector3();
+const _x = new Vector3();
+const _z = new Vector3();
 
 /** A bone's world rotation, read from its world matrix (bones carry no scale). */
 export function worldQuat(bone: Bone, out: Quaternion): Quaternion {
@@ -265,15 +318,48 @@ export function worldPos(bone: Bone, out: Vector3): Vector3 {
 /**
  * Swing `bone` (whose parent's world rotation is `parentWorld`) so its rest axis points
  * along the world direction `dir`. Writes the bone's new world rotation to `outWorld`.
- * A pure swing, so a limb never twists against its parent.
+ * A pure swing from the rest rotation `rest` (identity when omitted), so a limb never
+ * twists against its parent.
  */
-export function aimBone(bone: Bone, axis: Vector3, parentWorld: Quaternion, dir: Vector3, outWorld: Quaternion): Quaternion {
+export function aimBone(bone: Bone, axis: Vector3, parentWorld: Quaternion, dir: Vector3, outWorld: Quaternion, rest?: Quaternion): Quaternion {
   _qi.copy(parentWorld).invert();
   _v.copy(dir).applyQuaternion(_qi);
   const len = _v.length();
-  if (len < 1e-6) bone.quaternion.identity();
-  else bone.quaternion.setFromUnitVectors(axis, _v.multiplyScalar(1 / len));
+  if (!rest) {
+    if (len < 1e-6) bone.quaternion.identity();
+    else bone.quaternion.setFromUnitVectors(axis, _v.multiplyScalar(1 / len));
+  } else if (len < 1e-6) bone.quaternion.copy(rest);
+  else bone.quaternion.setFromUnitVectors(_a.copy(axis).applyQuaternion(rest), _v.multiplyScalar(1 / len)).multiply(rest);
   return outWorld.copy(parentWorld).multiply(bone.quaternion);
+}
+
+/**
+ * Turn a limb's upper bone (a rig with rest rotations) so its axis runs along `dir` and its
+ * hinge along `normal` (both world, perpendicular): the elbow or knee then bends in the
+ * plane the IK solved, as a real joint does. `frame` is the limb's `hinge`.
+ */
+export function aimHinge(bone: Bone, frame: Quaternion, parentWorld: Quaternion, dir: Vector3, normal: Vector3, outWorld: Quaternion): Quaternion {
+  _v.copy(dir).normalize();
+  _x.copy(normal).addScaledVector(_v, -normal.dot(_v)).normalize();
+  _z.crossVectors(_x, _v);
+  outWorld.setFromRotationMatrix(_m.makeBasis(_x, _v, _z)).multiply(_q.copy(frame).invert());
+  bone.quaternion.copy(parentWorld).invert().multiply(outWorld);
+  return outWorld;
+}
+
+/**
+ * Write a pose rotation `d` onto bone `i`: in the model's axes at rest (x pitch forward, y yaw
+ * left, z roll), on top of the bone's rest rotation. On the procedural cast that is `d` itself.
+ */
+export function setBoneDelta(rig: Rig, i: number, d: Quaternion): void {
+  const bone = rig.bones[i];
+  if (rig.identityRest) {
+    bone.quaternion.copy(d);
+    return;
+  }
+  // local = P0⁻¹ · d · P0 · R0, with P0 the parent's rest rotation in the model frame.
+  const p0 = rig.parentRest[i];
+  bone.quaternion.copy(p0).invert().multiply(d).multiply(p0).multiply(rig.restQ[i]);
 }
 
 /** Give `bone` the world rotation `world` under a parent with world rotation `parentWorld`. */

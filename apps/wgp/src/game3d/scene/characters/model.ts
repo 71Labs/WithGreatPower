@@ -63,7 +63,22 @@ export function decalsFor(def: CastDef, palette: Palette): Decal[] {
   return def.decals.map((d) => ({ ...d, fill: d.fill === null ? -1 : palette.i(d.fill) }));
 }
 
-export class CharacterModel {
+/** What the scene needs from a drawn body: a procedural cast member, or the hero's loaded model. */
+export interface BodyModel {
+  readonly group: Group;
+  readonly rig: Rig;
+  readonly fill: ShaderMaterial;
+  readonly ink: ShaderMaterial;
+  /** Triangles in the current level of detail (fill only; the hull draws as many again). */
+  readonly triangles: number;
+  visible: boolean;
+  hasLod(l: Lod): boolean;
+  setLod(l: Lod): void;
+  setColors(colors: Record<string, string>): void;
+  dispose(): void;
+}
+
+export class CharacterModel implements BodyModel {
   readonly group = new Group();
   readonly rig: Rig;
   readonly fill: ShaderMaterial;

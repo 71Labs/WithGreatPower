@@ -8,7 +8,8 @@
  *   mask and chest, ringed lines down the limbs), and sticker-style face decals (lenses,
  *   eyes, brows, mouths, teeth) with ink rims a fixed number of pixels wide.
  * - HULL: the inverted-hull ink outline, skinned with the mesh, pushed out by a CSS-px
- *   width that thins with depth exactly like the city's hulls (3 px near, 1.5 px far).
+ *   width that thins with depth exactly like the city's hulls (3 px near, 1.5 px far), and
+ *   optionally back along the view ray so it can't surface in a body's shallow creases.
  *
  * Both skin through three's skinning chunks, so they run on a SkinnedMesh, or on an
  * InstancedMesh that shares one skeleton (The Sybil's copies). Colours are display sRGB.
@@ -29,6 +30,27 @@ vec3 glitchOffset(vec3 rest, float seed) {
   float on = step(0.8, gHash(band * 13.1 + tick * 7.7 + seed * 31.0));
   vec3 side = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   return side * (gHash(band + tick * 3.1 + seed * 5.0) - 0.5) * 10.0 * on * uGlitch;
+}
+`;
+
+/** Screen-space patterns: the cloak's ordered dither and the Ben-Day dots (needs uDpr, uHalftoneCell). */
+export const SCREEN = /* glsl */ `
+float bayer4(vec2 p) {
+  ivec2 i = ivec2(mod(p, 4.0));
+  int k = i.x + i.y * 4;
+  int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+  return (float(m[k]) + 0.5) / 16.0;
+}
+
+// Ben-Day dots on a 45° screen grid; k = 0 none … 1 cells fully covered.
+float halftone(float k) {
+  vec2 p = gl_FragCoord.xy / (uDpr * uHalftoneCell);
+  p = vec2(p.x + p.y, p.y - p.x) * 0.70710678;
+  vec2 c = fract(p) - 0.5;
+  float d = length(c);
+  float r = sqrt(clamp(k, 0.0, 1.0)) * 0.72;
+  float aa = 0.12;
+  return 1.0 - smoothstep(r - aa, r + aa, d);
 }
 `;
 
@@ -99,23 +121,7 @@ varying vec4 vDetail;
 flat varying vec4 vPal;
 flat varying float vSeed;
 
-float bayer4(vec2 p) {
-  ivec2 i = ivec2(mod(p, 4.0));
-  int k = i.x + i.y * 4;
-  int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
-  return (float(m[k]) + 0.5) / 16.0;
-}
-
-// Ben-Day dots on a 45° screen grid; k = 0 none … 1 cells fully covered.
-float halftone(float k) {
-  vec2 p = gl_FragCoord.xy / (uDpr * uHalftoneCell);
-  p = vec2(p.x + p.y, p.y - p.x) * 0.70710678;
-  vec2 c = fract(p) - 0.5;
-  float d = length(c);
-  float r = sqrt(clamp(k, 0.0, 1.0)) * 0.72;
-  float aa = 0.12;
-  return 1.0 - smoothstep(r - aa, r + aa, d);
-}
+${SCREEN}
 
 // Signed distance (approx) to an ellipse with radii r, in its own frame.
 float ellipseD(vec2 q, vec2 r) {
@@ -245,6 +251,7 @@ attribute vec4 aHull;     // push direction (bind space), width multiplier
 uniform float uPxScale;   // world units per CSS px at view depth 1
 uniform vec4 uHullPx;     // near px, far px, near depth, far depth
 uniform float uHullScale;
+uniform float uHullBack;  // pushed this far away from the camera (hides it in shallow creases)
 void main() {
   vec3 objectNormal = aHull.xyz;
   #include <skinbase_vertex>
@@ -263,6 +270,8 @@ void main() {
   float depth = max(1.0, -(viewMatrix * world).z);
   float px = mix(uHullPx.x, uHullPx.y, smoothstep(uHullPx.z, uHullPx.w, depth)) * aHull.w * uHullScale;
   world.xyz += dir * px * depth * uPxScale;
+  // Along the view ray, so the line keeps its place and width on screen.
+  world.xyz += normalize(world.xyz - cameraPosition) * uHullBack;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;

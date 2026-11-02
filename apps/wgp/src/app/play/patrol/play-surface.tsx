@@ -300,6 +300,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       `calls     ${s.calls}`,
       `triangles ${s.triangles.toLocaleString("en-US")}`,
       `programs  ${s.programs}`,
+      `cast ms   ${s.castMs.toFixed(2)} (max ${s.castMaxMs.toFixed(2)})`,
     ].join("\n");
   }, []);
 

@@ -5,6 +5,12 @@
  * missed), a caught villain's dangling strand, Doc's chain arms, the blob shadows and the
  * physics debug overlay.
  *
+ * The hero is a real human body: the MPFB model in public/models (hero-model.ts), fetched
+ * on the first frame (the tier is settled by then: the low tier takes the lighter file),
+ * moving with motion-capture clips (hero-anims.glb) where it stands, runs, lands, gets hit,
+ * punches (when a villain within reach takes a hit) and falls. Until the files arrive, or
+ * if they can't load, the procedural hero stands in.
+ *
  * Draw calls: two per visible body (fill and hull), two for all of Sybil's copies, two for
  * Doc's chains, one per visible strand, one for all the shadows.
  */
@@ -30,7 +36,9 @@ import { CAST_DEFS } from "./cast";
 import type { Lod } from "./cast/kit";
 import { ARMS, DocChains } from "./chains";
 import { RigDebug } from "./debug";
-import { CharacterModel, CopyBatch } from "./model";
+import { heroAssetNow, heroScale, HERO_ANIMS, HERO_MODEL, loadHeroAsset, loadHeroClips, type HeroAsset, type HeroClips } from "./hero-asset";
+import { HeroModel } from "./hero-model";
+import { CharacterModel, CopyBatch, type BodyModel } from "./model";
 import { WebShot } from "./web-shot";
 
 type VillainKey = "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
@@ -90,7 +98,11 @@ export class CharacterSystem {
   private readonly gweiWeb = new WebLine();
   private readonly shot = new WebShot();
   private readonly gweiShot = new WebShot();
-  private hero: { model: CharacterModel; anim: HeroAnimator } | null = null;
+  private hero: { model: BodyModel; anim: HeroAnimator } | null = null;
+  private heroClips: HeroClips | null = null;
+  /** The body file asked for in this build, once requested. */
+  private heroAsked: string | null = null;
+  private disposed = false;
   private readonly villains = new Map<VillainKey, Actor>();
   private copies: { batch: CopyBatch; anim: SybilAnimator } | null = null;
   private readonly chains: DocChains;
@@ -168,8 +180,10 @@ export class CharacterSystem {
   private build(): void {
     this.built = true;
     const lods = LODS[this.tier];
-    const heroModel = new CharacterModel(CAST_DEFS.hero, this.shared, lods.main, this.colors);
-    this.hero = { model: heroModel, anim: new HeroAnimator(heroModel.rig, heroModel.group, this.ctx) };
+    const asset = heroAssetNow(this.heroUrl());
+    const heroModel: BodyModel = asset && this.heroClips ? this.heroModel(asset) : new CharacterModel(CAST_DEFS.hero, this.shared, lods.main, this.colors);
+    this.heroAsked = asset && this.heroClips ? asset.url : null;
+    this.hero = { model: heroModel, anim: this.animateHero(heroModel) };
     this.root.add(heroModel.group);
     const villainIds = new Set<VillainKey>(["gas-goblin", "sandwich-man", "doc-octochain", "sybil"].filter((id) => this.cast.includes(id as CastId)) as VillainKey[]);
     for (const z of this.city.zones) if (z.villain) villainIds.add(z.villain);
@@ -182,6 +196,44 @@ export class CharacterSystem {
       this.allies.push({ model, anim, zone: z, at, flash: 0, hits: 0 });
       this.root.add(model.group);
     }
+  }
+
+  private heroUrl(): string {
+    return this.tier === "low" ? HERO_MODEL.lo : HERO_MODEL.hi;
+  }
+
+  private heroModel(asset: HeroAsset): HeroModel {
+    return new HeroModel(asset, this.shared, CAST_DEFS.hero.colors(this.colors), CAST_DEFS.hero.height);
+  }
+
+  /** The hero's animator, on the clips when the body is the MPFB one. */
+  private animateHero(model: BodyModel): HeroAnimator {
+    const anim = new HeroAnimator(model.rig, model.group, this.ctx);
+    if (model instanceof HeroModel && this.heroClips) anim.setClips(this.heroClips, heroScale(model.asset, CAST_DEFS.hero.height));
+    return anim;
+  }
+
+  /** Fetch this tier's body file and the clips (once), and put the hero in them when they arrive. */
+  private askHero(): void {
+    const url = this.heroUrl();
+    if (this.heroAsked === url) return;
+    this.heroAsked = url;
+    Promise.all([loadHeroAsset(url), loadHeroClips(HERO_ANIMS)]).then(
+      ([asset, clips]) => {
+        this.heroClips = clips;
+        const hero = this.hero;
+        if (this.disposed || !hero || this.heroUrl() !== url || hero.model instanceof HeroModel) return;
+        const model = this.heroModel(asset);
+        model.visible = hero.model.visible;
+        this.root.remove(hero.model.group);
+        hero.model.dispose();
+        this.hero = { model, anim: this.animateHero(model) };
+        this.root.add(model.group);
+      },
+      () => {
+        // No file (offline, a bad deploy): the procedural hero carries on.
+      },
+    );
   }
 
   private villain(id: VillainKey): Actor {
@@ -251,7 +303,7 @@ export class CharacterSystem {
   /** Triangles drawn by the cast this frame (fills; hulls double it), for budgets. */
   triangles(): number {
     let n = 0;
-    const add = (m: CharacterModel) => {
+    const add = (m: BodyModel) => {
       if (m.visible) n += m.triangles;
     };
     if (this.hero) add(this.hero.model);
@@ -274,7 +326,7 @@ export class CharacterSystem {
     return FOG.amount[band] * 0.5;
   }
 
-  private lodFor(model: CharacterModel, p: Vec3, camera: Vector3): void {
+  private lodFor(model: BodyModel, p: Vec3, camera: Vector3): void {
     const near = LODS[this.tier].near;
     const d = Math.hypot(camera.x - p.x, camera.y - p.y, camera.z - p.z);
     model.setLod(d < near && model.hasLod("hi") ? "hi" : model.hasLod("lo") ? "lo" : "min");
@@ -303,6 +355,7 @@ export class CharacterSystem {
   }
 
   update(frame: RenderFrame3D, camera: PerspectiveCamera, size: { width: number; height: number }, dt: number, time: number): void {
+    if (this.hero) this.askHero();
     const hero = this.hero;
     if (!hero) return;
     const cam = camera.position;
@@ -363,7 +416,11 @@ export class CharacterSystem {
       const actor = this.villain(v.id);
       const { model, anim } = actor;
       model.visible = true;
-      if (actor.hits >= 0 && v.hits < actor.hits) actor.flash = 0.3;
+      if (actor.hits >= 0 && v.hits < actor.hits) {
+        actor.flash = 0.3;
+        // A blow in reach: the hero throws a punch with it.
+        if (Math.hypot(v.pos.x - this.heroPos.x, v.pos.y - this.heroPos.y, v.pos.z - this.heroPos.z) < 170) ha.punch();
+      }
       actor.hits = v.hits;
       actor.flash = Math.max(0, actor.flash - dt);
       anim.update({ pos: v.pos, vel: v.vel, facing: v.facing, state: v.state, stateTicks: v.stateTicks, bank: v.bank }, dt, ctx);
@@ -410,14 +467,14 @@ export class CharacterSystem {
     if (debug) this.debug.end();
   }
 
-  private debugActor(model: CharacterModel, targets: Vector3[], points: Float32Array | null): void {
+  private debugActor(model: BodyModel, targets: Vector3[], points: Float32Array | null): void {
     if (!model.visible) return;
     this.debug.rig(model.rig);
     for (const t of targets) this.debug.target(t);
     if (points) this.debug.particles(points);
   }
 
-  private updateChains(frame: RenderFrame3D, v: RenderFrame3D["villains"][number], model: CharacterModel, dt: number): void {
+  private updateChains(frame: RenderFrame3D, v: RenderFrame3D["villains"][number], model: BodyModel, dt: number): void {
     const sockets = CAST_DEFS["doc-octochain"].sockets!;
     const names = ["armUL", "armUR", "armLL", "armLR"];
     const roots = this.sockets;
@@ -532,7 +589,7 @@ export class CharacterSystem {
   }
 
   private teardown(): void {
-    const all: CharacterModel[] = [];
+    const all: BodyModel[] = [];
     if (this.hero) all.push(this.hero.model);
     for (const v of this.villains.values()) all.push(v.model);
     for (const a of this.allies) all.push(a.model);
@@ -546,6 +603,7 @@ export class CharacterSystem {
       this.copies.batch.dispose();
     }
     this.hero = null;
+    this.heroAsked = null;
     this.villains.clear();
     this.allies.length = 0;
     this.gwei = null;
@@ -554,6 +612,7 @@ export class CharacterSystem {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.teardown();
     this.chains.dispose();
     this.web.dispose();
