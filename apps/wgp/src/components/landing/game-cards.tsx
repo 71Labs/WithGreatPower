@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { Clock, Layers, Sparkles, Store, Timer } from "@/components/icons";
 
 import { IconTile } from "@/components/frame";
-import type { CastId } from "@/content/cast";
+import type { CastId } from "@wgp/game-core/cast";
 
 import { MiniAvatar } from "./mini-avatar";
 

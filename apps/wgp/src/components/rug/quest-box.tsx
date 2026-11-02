@@ -1,8 +1,8 @@
 import { StickerLink } from "@/components/game/kit";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { MapPin } from "@/components/icons";
-import { DISTRICTS, ITEMS, RARITY_LABEL, VILLAINS } from "@/game/data";
-import type { Quest, Save } from "@/game/types";
+import { DISTRICTS, ITEMS, RARITY_LABEL, VILLAINS } from "@wgp/game-core/data";
+import type { Quest, Save } from "@wgp/game-core/types";
 
 import { QuestPill, SectionHead, questStatus, sentence } from "./shared";
 

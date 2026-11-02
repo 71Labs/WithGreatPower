@@ -12,7 +12,7 @@ import { HeroCard } from "@/components/landing/hero-card";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { LinkButton } from "@/components/ui";
-import type { CastId } from "@/content/cast";
+import type { CastId } from "@wgp/game-core/cast";
 import { PLAY_URL } from "@/lib/site";
 
 /** What's happening in the city right now, pinned around the hero card. Illustrative. */

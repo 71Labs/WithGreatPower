@@ -4,9 +4,9 @@
  * event means. Used by the browser loop and by scripts/sim-check.ts, so the check plays
  * the exact flow the game does.
  */
-import { powerScale } from "@/game/data";
-import type { Action } from "@/game/engine";
-import type { Save } from "@/game/types";
+import { powerScale } from "@wgp/game-core/data";
+import type { Action } from "@wgp/game-core/engine";
+import type { Save } from "@wgp/game-core/types";
 
 import type { SimConfig, SimEvent } from "./core";
 

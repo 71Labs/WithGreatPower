@@ -6,9 +6,9 @@ import { AlertTriangle, Check, Handshake, Sparkles, Target } from "@/components/
 import { HeroSticker, Meter, type HeroSave } from "@/components/game/ui";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { Button, LinkButton } from "@/components/ui";
-import { castById } from "@/content/cast";
-import { DISTRICTS, ITEMS, XP_TO_NEXT } from "@/game/data";
-import type { ItemId, Patrol, Quest, Save, StopResult } from "@/game/types";
+import { castById } from "@wgp/game-core/cast";
+import { DISTRICTS, ITEMS, XP_TO_NEXT } from "@wgp/game-core/data";
+import type { ItemId, Patrol, Quest, Save, StopResult } from "@wgp/game-core/types";
 
 import { LootChips, Tag, districtName, stopName, stopWho, stopWhat } from "./shared";
 

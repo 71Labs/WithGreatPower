@@ -3,7 +3,7 @@
  * No randomness without a seed, no clocks, no I/O, so a save replays the same way and
  * every rule can be tested on its own.
  */
-import { castById } from "@/content/cast";
+import { castById } from "./cast";
 
 import {
   ALLY_CAST,

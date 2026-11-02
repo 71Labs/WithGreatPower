@@ -9,9 +9,9 @@ import { HeroArt } from "@/components/cast";
 import { ON_PAPER, StickerButton, StickerFrame, StickerIconButton, StickerPanel } from "@/components/game/kit";
 import { GameLoading } from "@/components/game/ui";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, City, Heart, Swords, Zap } from "@/components/icons";
-import { POWERS, STARTER_POWERS, SUITS } from "@/game/data";
+import { POWERS, STARTER_POWERS, SUITS } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
-import type { PowerId, SuitId } from "@/game/types";
+import type { PowerId, SuitId } from "@wgp/game-core/types";
 
 import { Mark, SELECT_CARD, SELECT_CARD_OFF, SELECT_CARD_ON } from "./controls";
 import { HeroCardPreview } from "./hero-card";

@@ -2,8 +2,8 @@
  * The rules of contact: villains hurting the hero, the hero landing hits, and how an
  * encounter ends. Villain HP is counted in hits; the engine decides loot and XP.
  */
-import { VILLAINS, damageScale } from "@/game/data";
-import type { VillainId } from "@/game/types";
+import { VILLAINS, damageScale } from "@wgp/game-core/data";
+import type { VillainId } from "@wgp/game-core/types";
 
 import { HURT_INVULN, KO_SECONDS, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
 import type { HitSource, SimState, Villain } from "./types";

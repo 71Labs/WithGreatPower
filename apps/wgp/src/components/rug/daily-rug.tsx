@@ -8,8 +8,8 @@ import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight } from "@/components/icons";
 import { AVATARS } from "@/components/cast";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { castById } from "@/content/cast";
-import type { Edition } from "@/game/types";
+import { castById } from "@wgp/game-core/cast";
+import type { Edition } from "@wgp/game-core/types";
 
 import { BackIssues } from "./back-issues";
 import { ReaderPoll } from "./poll";

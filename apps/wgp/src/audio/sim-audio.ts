@@ -2,7 +2,7 @@
  * Sound for the real-time city: turns the sim's event stream into effects, voice lines
  * and music. Listens on the loop's bus next to the renderer; never touches game state.
  */
-import type { Stop, VillainId } from "@/game/types";
+import type { Stop, VillainId } from "@wgp/game-core/types";
 import type { LoopEvent } from "@/sim/loop";
 
 import type { VoiceId } from "./manifest";

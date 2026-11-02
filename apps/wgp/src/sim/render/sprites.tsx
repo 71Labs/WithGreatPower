@@ -7,7 +7,7 @@
 import type { ReactElement } from "react";
 
 import { AVATARS, HeroArt, type SuitColors } from "@/components/cast";
-import type { CastId } from "@/content/cast";
+import type { CastId } from "@wgp/game-core/cast";
 import { INK } from "@/game/style";
 
 import { makeCanvas } from "./draw";

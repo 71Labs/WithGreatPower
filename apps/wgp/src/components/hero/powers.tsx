@@ -19,8 +19,8 @@ import {
   Zap,
   type Icon,
 } from "@/components/icons";
-import { powerLevel, powerScale, type Power } from "@/game/data";
-import type { PowerId } from "@/game/types";
+import { powerLevel, powerScale, type Power } from "@wgp/game-core/data";
+import type { PowerId } from "@wgp/game-core/types";
 
 export const POWER_ICONS: Record<PowerId, Icon> = {
   "web-sling": Target,

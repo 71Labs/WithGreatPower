@@ -7,11 +7,11 @@ import { StickerButton, StickerFrame, StickerLink, StickerPanel, stickerTileClas
 import { GameLoading, GameSheet, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight, Check, Lock, Shirt, Sparkles, X, type Icon } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import type { CastId } from "@/content/cast";
-import { ITEMS, RARITY_LABEL, STARTER_UNLOCK_LEVEL, SUITS } from "@/game/data";
-import { craftShortfall } from "@/game/engine";
+import type { CastId } from "@wgp/game-core/cast";
+import { ITEMS, RARITY_LABEL, STARTER_UNLOCK_LEVEL, SUITS } from "@wgp/game-core/data";
+import { craftShortfall } from "@wgp/game-core/engine";
 import { useGame } from "@/game/store";
-import type { ItemId, SuitId } from "@/game/types";
+import type { ItemId, SuitId } from "@wgp/game-core/types";
 
 const ALL_SUITS = Object.keys(SUITS) as SuitId[];
 const ALL_ITEMS = Object.keys(ITEMS) as ItemId[];

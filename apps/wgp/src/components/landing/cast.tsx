@@ -1,7 +1,7 @@
 import { Sticker } from "@/components/cast";
 import { Chip, InlineTwoTone, Section } from "@/components/frame";
 import { WebMark } from "@/components/site-header";
-import { CAST, type Role } from "@/content/cast";
+import { CAST, type Role } from "@wgp/game-core/cast";
 
 import { MiniAvatar } from "./mini-avatar";
 

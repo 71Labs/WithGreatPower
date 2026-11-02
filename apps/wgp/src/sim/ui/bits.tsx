@@ -20,8 +20,8 @@ import {
   Zap,
   type Icon,
 } from "@/components/icons";
-import type { CastId } from "@/content/cast";
-import type { PowerId } from "@/game/types";
+import type { CastId } from "@wgp/game-core/cast";
+import type { PowerId } from "@wgp/game-core/types";
 
 export const POWER_ICONS: Record<PowerId, Icon> = {
   "web-sling": Target,

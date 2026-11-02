@@ -2,8 +2,8 @@
  * The swing sim's state model. Plain data, mutated in place by stepSim at a fixed rate.
  * World y points up and the street is y = 0; the renderer flips it.
  */
-import type { CastId } from "@/content/cast";
-import type { DistrictId, PowerId, Stop, VillainId } from "@/game/types";
+import type { CastId } from "@wgp/game-core/cast";
+import type { DistrictId, PowerId, Stop, VillainId } from "@wgp/game-core/types";
 
 export interface Vec {
   x: number;

@@ -1,0 +1,21 @@
+{
+  "name": "@wgp/game-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "With Great Power's deterministic rules: the progression reducer, content data and (soon) the 3D sim, shared by the browser and the server verifier.",
+  "exports": {
+    "./types": "./src/rules/types.ts",
+    "./data": "./src/rules/data.ts",
+    "./engine": "./src/rules/engine.ts",
+    "./cast": "./src/rules/cast.ts",
+    "./content": "./src/rules/content.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}

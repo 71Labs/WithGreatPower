@@ -10,8 +10,8 @@
  * - The Sybil hides among orbiting copies that shoot goo. Every hit pops a copy; the real
  *   one is last.
  */
-import { VILLAINS } from "@/game/data";
-import type { Stop } from "@/game/types";
+import { VILLAINS } from "@wgp/game-core/data";
+import type { Stop } from "@wgp/game-core/types";
 
 import { HERO_RADIUS, SLAM_SPEED, SLOWMO_FACTOR, STREET_Y } from "./constants";
 import { docVulnerable, hitVillain, hurtHero, moveDamage, villainHits, villainTargets } from "./combat";

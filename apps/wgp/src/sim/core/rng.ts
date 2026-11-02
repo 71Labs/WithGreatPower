@@ -2,7 +2,7 @@
  * Seeded randomness for the sim, built on the engine's mulberry32 step so a night's city
  * and every fight replay the same way from `patrol.seed`.
  */
-import { rand } from "@/game/engine";
+import { rand } from "@wgp/game-core/engine";
 
 import type { SimState } from "./types";
 

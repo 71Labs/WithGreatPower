@@ -12,8 +12,8 @@
  *   once when something important happens.
  * - Lifecycle: loading → intro (3, 2, 1, THWIP) → live ⇄ paused → outro → done.
  */
-import { MAX_FLUID, POWERS, VILLAINS } from "@/game/data";
-import type { PowerId, VillainId } from "@/game/types";
+import { MAX_FLUID, POWERS, VILLAINS } from "@wgp/game-core/data";
+import type { PowerId, VillainId } from "@wgp/game-core/types";
 
 import {
   abilityBlocked,

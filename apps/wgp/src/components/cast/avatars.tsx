@@ -8,7 +8,9 @@
  */
 import type { JSX, ReactNode } from "react";
 
-import type { CastId } from "@/content/cast";
+import type { SuitColors } from "@wgp/game-core/types";
+
+import type { CastId } from "@wgp/game-core/cast";
 
 import {
   along,
@@ -83,11 +85,7 @@ const NODE_SUIT_WEB = webIn(BUST, {
 const NODE_LENS = "M31 33C40 33 51 37.5 55.5 45C58.5 51.5 56.5 59 50.5 60.5C43.5 62 36.5 57.5 34.2 50C33 45.5 31.8 39.5 31 33Z";
 
 /** Colors of a masked hero's suit: the player's hero and every suit in the game recolor The Node. */
-export interface SuitColors {
-  suit: string;
-  web: string;
-  lens: string;
-}
+export type { SuitColors };
 
 export const NODE_COLORS: SuitColors = { suit: NODE_RED, web: INK, lens: WHITE };
 

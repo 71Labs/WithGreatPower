@@ -21,9 +21,9 @@ import {
   Zap,
   type Icon,
 } from "@/components/icons";
-import { castById, type CastId } from "@/content/cast";
-import { ALLY_CAST, DISTRICTS, ERRANDS, ITEMS, RARITY_LABEL, VILLAINS } from "@/game/data";
-import type { ItemId, MoveId, Rarity, Stop } from "@/game/types";
+import { castById, type CastId } from "@wgp/game-core/cast";
+import { ALLY_CAST, DISTRICTS, ERRANDS, ITEMS, RARITY_LABEL, VILLAINS } from "@wgp/game-core/data";
+import type { ItemId, MoveId, Rarity, Stop } from "@wgp/game-core/types";
 
 /* ------------------------------------------------------------------ stops */
 

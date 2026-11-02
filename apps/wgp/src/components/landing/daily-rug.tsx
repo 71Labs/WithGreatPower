@@ -1,5 +1,5 @@
 import { Chip, InlineTwoTone, Section } from "@/components/frame";
-import type { CastId } from "@/content/cast";
+import type { CastId } from "@wgp/game-core/cast";
 
 import { MiniAvatar } from "./mini-avatar";
 

@@ -5,9 +5,9 @@ import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "re
 
 import { HeroArt, Sticker, type StickerSize } from "@/components/cast";
 import { X } from "@/components/icons";
-import { SUITS } from "@/game/data";
+import { SUITS } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
-import type { Hero, Save, SuitId } from "@/game/types";
+import type { Hero, Save, SuitId } from "@wgp/game-core/types";
 
 import { ON_PAPER, StickerIconButton } from "./kit";
 

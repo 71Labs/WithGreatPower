@@ -6,8 +6,8 @@ import { HeroArt } from "@/components/cast";
 import { StickerBadge, StickerFrame, StickerMeter, StickerPanel } from "@/components/game/kit";
 import { GameLoading, GameSheet, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { Check, Lock, MapPin } from "@/components/icons";
-import { CAST, castById, type CastId } from "@/content/cast";
-import { DISTRICTS, SUITS, VILLAINS } from "@/game/data";
+import { CAST, castById, type CastId } from "@wgp/game-core/cast";
+import { DISTRICTS, SUITS, VILLAINS } from "@wgp/game-core/data";
 
 import { ALWAYS, GROUPS, countLabel, howToGet, isVillain } from "./entries";
 import { CastFrame, LockedFrame, Slot, GRID_SIZE } from "./slots";

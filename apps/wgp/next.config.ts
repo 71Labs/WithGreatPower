@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@wgp/game-core"],
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
