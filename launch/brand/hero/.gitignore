@@ -1,0 +1,13 @@
+# Only the pipeline's sources are tracked; everything it produces is rebuilt by make.sh.
+__pycache__/
+build/
+drafts/
+game-shots/
+*.png
+*.json
+*.glb
+*.blend
+*.blend1
+# The motion library is fetched separately (see mocap/SOURCE.md), not committed.
+mocap/*
+!mocap/SOURCE.md
