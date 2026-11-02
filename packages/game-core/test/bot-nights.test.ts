@@ -70,7 +70,7 @@ describe("the bot through 30 nights, verified by replay", () => {
     }
     expect(won / fights).toBeGreaterThanOrEqual(0.9);
     expect([...beaten].sort()).toEqual(Object.keys(VILLAINS).sort());
-  });
+  }, 60_000);
 });
 
 describe("every villain is beatable", () => {

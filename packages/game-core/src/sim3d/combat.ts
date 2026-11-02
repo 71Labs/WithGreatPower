@@ -100,6 +100,8 @@ export function hurtHero(s: SimState, damage: number, source: string, fromX: num
   s.fluid = Math.max(0, s.fluid - burn);
   h.invuln = HURT_INVULN;
   h.hurtT = 0.35;
+  // Knocked off a wall too.
+  h.climbing = false;
   // Knocked away from the source.
   const dx = h.x - fromX;
   const dy = h.y - fromY;

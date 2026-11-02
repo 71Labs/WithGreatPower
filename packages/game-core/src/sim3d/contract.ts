@@ -144,6 +144,15 @@ export interface InputEvent {
 
 /* ------------------------------------------------------------------ render frame */
 
+/**
+ * The hero's body state, for animation only (never read back by the sim). Added in v1.2.
+ * - idle / run: on a roof or the street, standing or running.
+ * - swing: on a rope. air: falling or flying free. climb: on a wall.
+ * - dash, slam: the matching powers. held: stuck in a bread trap.
+ * - hurt: the moment after a hit. ko: out of health.
+ */
+export type HeroAction = "idle" | "run" | "swing" | "air" | "climb" | "dash" | "slam" | "held" | "hurt" | "ko";
+
 /** What the scene reads every frame. Mutated in place by the loop; never stored in React state. */
 export interface RenderFrame3D {
   tick: number;
@@ -161,6 +170,16 @@ export interface RenderFrame3D {
     /** Brief invulnerability after a hit, for flashing. */
     hurtFlash: number;
     shield: boolean;
+    /** Facing, a unit xz vector (y = 0). Added in v1.2. */
+    facing?: Vec3;
+    /** What the body is doing, for the character animator. Added in v1.2. */
+    action?: HeroAction;
+    /** Sim ticks since `action` began. Added in v1.2. */
+    actionTicks?: number;
+    /** Rope length while swinging, else 0. Added in v1.2. */
+    ropeLen?: number;
+    /** Cloaked (Node sense): drawn faded. Added in v1.2. */
+    cloak?: boolean;
   };
   villains: {
     id: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
@@ -170,6 +189,20 @@ export interface RenderFrame3D {
     hitsMax: number;
     /** A short state word for animation ("idle", "windup", "attack", "stunned", "guard", "open"). */
     state: string;
+    /** Velocity, units per second. Added in v1.2. */
+    vel?: Vec3;
+    /** Facing, a unit xz vector (y = 0). Added in v1.2. */
+    facing?: Vec3;
+    /** Ticks since `state` began. Added in v1.2. */
+    stateTicks?: number;
+    /** Doc's chain arms as shoulder → tip segments, in world space. Added in v1.2. */
+    arms?: { from: Vec3; to: Vec3 }[];
+    /**
+     * Roll into a turn, radians (Gas Goblin's glider banks; 0 for the others): the body's up
+     * tilts toward the facing turned 90° from +x toward +z, i.e. (−facing.z, 0, facing.x), by
+     * this angle. Added in v1.2 (ruleset 2).
+     */
+    bank?: number;
   }[];
   /** Hazards and projectiles: fee bombs, bread traps, goo, chain arms (as segments). */
   hazards: { kind: string; pos: Vec3; to?: Vec3; r: number; armed: boolean }[];

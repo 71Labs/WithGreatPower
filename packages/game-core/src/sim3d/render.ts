@@ -3,10 +3,17 @@
  * session loop allocates nothing per frame (apart from growing the villain and hazard
  * lists the first time they're needed). Interpolation between ticks is the loop's job;
  * this writes the current tick.
+ *
+ * Presentation only: nothing here is read back by the sim or hashed. The v1.2 animation
+ * fields that need history (how long an action or state has lasted, a villain's velocity
+ * and smoothed facing) are tracked per run, keyed on the SimState, because the loop fills
+ * two frame objects in turn and a counter kept on the frame would only see every other tick.
  */
-import type { RenderFrame3D, Vec3 } from "./contract";
-import { armTip } from "./villains";
-import type { SimState } from "./types";
+import { DT } from "./constants";
+import type { HeroAction, RenderFrame3D, Vec3 } from "./contract";
+import { datan2, dcos, dsin, len2 } from "./dmath";
+import { armShoulder, armTip } from "./villains";
+import type { SimState, Villain } from "./types";
 
 const v3 = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 
@@ -14,7 +21,22 @@ export function newRenderFrame(): RenderFrame3D {
   return {
     tick: 0,
     alpha: 1,
-    hero: { pos: v3(), vel: v3(), anchor: null, grounded: false, hp: 0, maxHp: 0, fluid: 0, hurtFlash: 0, shield: false },
+    hero: {
+      pos: v3(),
+      vel: v3(),
+      anchor: null,
+      grounded: false,
+      hp: 0,
+      maxHp: 0,
+      fluid: 0,
+      hurtFlash: 0,
+      shield: false,
+      facing: { x: 1, y: 0, z: 0 },
+      action: "idle",
+      actionTicks: 0,
+      ropeLen: 0,
+      cloak: false,
+    },
     villains: [],
     hazards: [],
     stop: 0,
@@ -28,6 +50,97 @@ const set = (o: Vec3, x: number, y: number, z: number) => {
   o.y = y;
   o.z = z;
 };
+
+/* ------------------------------------------------------------------ history, per run */
+
+interface BodyTrack {
+  /** Sybil's body index, or −1 for the villain himself. */
+  key: number;
+  state: string;
+  stateStart: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  fx: number;
+  fz: number;
+  tick: number;
+}
+
+interface Track {
+  action: HeroAction;
+  actionStart: number;
+  /** The fight these bodies belong to (a new villain resets them). */
+  villain: Villain | null;
+  bodies: BodyTrack[];
+}
+
+const tracks = new WeakMap<SimState, Track>();
+
+function trackOf(s: SimState): Track {
+  let t = tracks.get(s);
+  if (!t) {
+    t = { action: heroAction(s), actionStart: s.tick, villain: null, bodies: [] };
+    tracks.set(s, t);
+  }
+  return t;
+}
+
+/** A villain turns at most this fast in the frame (radians a second), so facing never flips in one tick. */
+const VILLAIN_TURN = 9;
+/** Above this horizontal speed a villain faces where it's going; slower, it faces the hero. */
+const FACE_MOVING = 60;
+
+function bodyTrack(t: Track, key: number, x: number, y: number, z: number, tick: number, fx: number, fz: number): BodyTrack {
+  for (const b of t.bodies) if (b.key === key) return b;
+  const l = len2(fx, fz);
+  const b: BodyTrack = { key, state: "", stateStart: tick, x, y, z, vx: 0, vy: 0, vz: 0, fx: l > 1e-9 ? fx / l : 1, fz: l > 1e-9 ? fz / l : 0, tick };
+  t.bodies.push(b);
+  return b;
+}
+
+/** Turn the unit xz vector (b.fx, b.fz) toward (wx, wz) by at most `max` radians. */
+function turnToward(b: BodyTrack, wx: number, wz: number, max: number) {
+  const wl = len2(wx, wz);
+  if (wl < 1e-9) return;
+  const ux = wx / wl;
+  const uz = wz / wl;
+  const cross = b.fx * uz - b.fz * ux;
+  const dot = b.fx * ux + b.fz * uz;
+  const angle = datan2(cross, dot);
+  if (angle <= max && angle >= -max) {
+    b.fx = ux;
+    b.fz = uz;
+    return;
+  }
+  const step = angle > 0 ? max : -max;
+  const c = dcos(step);
+  const sn = dsin(step);
+  const nx = b.fx * c - b.fz * sn;
+  const nz = b.fx * sn + b.fz * c;
+  const l = len2(nx, nz) || 1;
+  b.fx = nx / l;
+  b.fz = nz / l;
+}
+
+/* ------------------------------------------------------------------ the hero's action */
+
+/** What the hero's body is doing, most specific first. */
+export function heroAction(s: SimState): HeroAction {
+  const h = s.hero;
+  if (s.mode === "ko" || s.hp <= 0) return "ko";
+  if (h.heldT > 0) return "held";
+  if (h.hurtT > 0) return "hurt";
+  if (h.slam > 0) return "slam";
+  if (h.dashT > 0) return "dash";
+  if (h.rope) return h.climbing ? "climb" : "swing";
+  if (h.grounded) return len2(h.vx, h.vz) > 30 ? "run" : "idle";
+  return "air";
+}
+
+/* ------------------------------------------------------------------ villains */
 
 /** A short state word for a villain, for animation. */
 function villainState(s: SimState): string {
@@ -49,9 +162,73 @@ function villainState(s: SimState): string {
   }
 }
 
+type VillainSlot = RenderFrame3D["villains"][number];
+
+/** Fill one villain body's motion fields from its history: velocity, facing and state age. */
+function motion(s: SimState, t: Track, slot: VillainSlot, key: number, state: string) {
+  const v = s.villain!;
+  const h = s.hero;
+  const p = slot.pos;
+  const b = bodyTrack(t, key, p.x, p.y, p.z, s.tick, h.x - p.x, h.z - p.z);
+  if (b.state !== state) {
+    b.state = state;
+    b.stateStart = s.tick;
+  }
+  const gap = s.tick - b.tick;
+  if (gap > 0 && gap <= 10) {
+    const k = 1 / (gap * DT);
+    b.vx = (p.x - b.x) * k;
+    b.vy = (p.y - b.y) * k;
+    b.vz = (p.z - b.z) * k;
+  } else if (gap !== 0) {
+    b.vx = 0;
+    b.vy = 0;
+    b.vz = 0;
+  }
+  // Where it wants to face: along its flight or run, else at the hero; Doc squares up across his bridge.
+  let wx: number;
+  let wz: number;
+  if (v.kind === "doc-octochain") {
+    const side = (h.x - p.x) * -v.az + (h.z - p.z) * v.ax >= 0 ? 1 : -1;
+    wx = -v.az * side;
+    wz = v.ax * side;
+  } else if (len2(b.vx, b.vz) > FACE_MOVING) {
+    wx = b.vx;
+    wz = b.vz;
+  } else {
+    wx = h.x - p.x;
+    wz = h.z - p.z;
+  }
+  if (gap > 0) turnToward(b, wx, wz, VILLAIN_TURN * DT * gap);
+  b.x = p.x;
+  b.y = p.y;
+  b.z = p.z;
+  b.tick = s.tick;
+  slot.vel = slot.vel ?? v3();
+  set(slot.vel, b.vx, b.vy, b.vz);
+  slot.facing = slot.facing ?? v3();
+  set(slot.facing, b.fx, 0, b.fz);
+  slot.stateTicks = s.tick - b.stateStart;
+}
+
+function fillArms(v: Villain, slot: VillainSlot) {
+  const arms = slot.arms ?? (slot.arms = []);
+  for (let i = 0; i < v.arms.length; i++) {
+    const seg = arms[i] ?? (arms[i] = { from: v3(), to: v3() });
+    const a = armShoulder(v, i);
+    const b = armTip(v, i);
+    set(seg.from, a.x, a.y, a.z);
+    set(seg.to, b.x, b.y, b.z);
+  }
+  arms.length = v.arms.length;
+}
+
+/* ------------------------------------------------------------------ the frame */
+
 /** Write the state into `out` (tick, hero, villains, hazards, stop, mode). */
 export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, timeScale = 1): RenderFrame3D {
   const h = s.hero;
+  const t = trackOf(s);
   out.tick = s.tick;
   out.alpha = alpha;
   out.timeScale = timeScale;
@@ -70,12 +247,30 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   out.hero.hurtFlash = h.invuln;
   out.hero.shield = h.shieldT > 0;
 
+  // v1.2: the body for the animator.
+  const fl = len2(h.fx, h.fz) || 1;
+  out.hero.facing = out.hero.facing ?? v3();
+  set(out.hero.facing, h.fx / fl, 0, h.fz / fl);
+  const action = heroAction(s);
+  if (action !== t.action) {
+    t.action = action;
+    t.actionStart = s.tick;
+  }
+  out.hero.action = action;
+  out.hero.actionTicks = s.tick - t.actionStart;
+  out.hero.ropeLen = h.rope ? h.rope.len : 0;
+  out.hero.cloak = h.cloakT > 0;
+
   const vs = out.villains;
   let n = 0;
   const v = s.villain;
+  if (v !== t.villain) {
+    t.villain = v;
+    t.bodies.length = 0;
+  }
   if (v) {
     const state = villainState(s);
-    const push = (pos: Vec3, copy: boolean) => {
+    const push = (pos: Vec3, copy: boolean, key: number) => {
       const slot = vs[n] ?? { id: v.kind, copy, pos: v3(), hits: 0, hitsMax: 0, state };
       slot.id = v.kind;
       slot.copy = copy;
@@ -83,10 +278,14 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
       slot.hits = v.hits;
       slot.hitsMax = v.hitsMax;
       slot.state = state;
+      motion(s, t, slot, key, state);
+      slot.bank = v.kind === "gas-goblin" ? v.bank : 0;
+      if (v.kind === "doc-octochain") fillArms(v, slot);
+      else delete slot.arms;
       vs[n++] = slot;
     };
-    if (v.kind === "sybil") for (const b of v.bodies) if (b.alive) push(b, !b.real);
-    if (v.kind !== "sybil") push(v, false);
+    if (v.kind === "sybil") v.bodies.forEach((b, i) => b.alive && push(b, !b.real, i));
+    else push(v, false, -1);
   }
   vs.length = n;
 
@@ -108,9 +307,13 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   for (const x of s.shots) put(x.kind === "sling" ? "sling" : "web-bomb", x.x, x.y, x.z, 14, true);
   if (v && v.kind === "doc-octochain") {
     const armed = v.phase === "sweep" || v.phase === "slam";
-    for (let i = 0; i < v.arms.length; i++) put("arm", v.x, v.y, v.z, 20, armed && v.arms[i].len >= 110, armTip(v, i));
+    for (let i = 0; i < v.arms.length; i++) {
+      const o = armShoulder(v, i);
+      put("arm", o.x, o.y, o.z, 20, armed && v.arms[i].len >= 110, armTip(v, i));
+    }
   }
-  if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck);
+  // Gwei swings in on her own web: `to` is the anchor she hangs from.
+  if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck, s.gwei.anchor);
   hz.length = m;
   return out;
 }

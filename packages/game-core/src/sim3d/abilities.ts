@@ -6,7 +6,7 @@
 import { MAX_FLUID, POWERS } from "../rules/data";
 import type { PowerId } from "../rules/types";
 
-import { FLUID_REGEN_DEN, FLUID_REGEN_NUM, HERO_RADIUS } from "./constants";
+import { FLUID_REGEN_DEN, FLUID_REGEN_NUM, HERO_RADIUS, YANK_SPEED } from "./constants";
 import { blast, hitVillain, nearestTarget } from "./combat";
 import { datan2, dcos, dsin, len3 } from "./dmath";
 import { release } from "./hero";
@@ -111,15 +111,18 @@ function apply(s: SimState, id: PowerId, scale: number, k: number) {
       const dy = h.y - t.y;
       const dz = h.z - t.z;
       const d = len3(dx, dy, dz) || 1;
-      const pull = Math.min(d - 90, 220);
+      // v2: a pull, not a teleport: an impulse toward you that drag wears off over about the
+      // 220 units v1 moved him in one tick (none closer than 90).
+      const pull = Math.max(0, Math.min(1, (d - 90) / 220)) * YANK_SPEED;
       if (v.kind === "sybil") {
-        v.cx += (dx / d) * pull;
-        v.cy += (dy / d) * pull;
-        v.cz += (dz / d) * pull;
+        v.cvx += (dx / d) * pull;
+        v.cvy += (dy / d) * pull;
+        v.cvz += (dz / d) * pull;
       } else if (v.kind !== "doc-octochain") {
-        v.x += (dx / d) * pull;
-        v.y += (dy / d) * pull;
-        v.z += (dz / d) * pull;
+        v.vx += (dx / d) * pull;
+        v.vy += (dy / d) * pull;
+        v.vz += (dz / d) * pull;
+        if (v.kind === "sandwich-man") v.grounded = false;
       }
       v.stun = Math.max(v.stun, 1 * scale);
       break;

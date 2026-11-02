@@ -20,6 +20,14 @@ export type Shot = InputFrame["shot"];
 
 const finite = (n: number) => (Number.isFinite(n) ? n : 0);
 
+/**
+ * The stick the player holds right now (camera-relative), for the chase camera: steering
+ * anything but forward pauses its auto-follow, so the camera never turns the steering under
+ * the player's thumb. Only a latch writes it, and the autopilot never feeds one, so it stays
+ * centred then. One play surface at a time, so one shared value.
+ */
+export const heldStick: Stick = { x: 0, y: 0 };
+
 export class InputLatch {
   private stick: Stick = { x: 0, y: 0 };
   private readonly webs = new Set<string>();
@@ -31,6 +39,8 @@ export class InputLatch {
     const y = finite(stick.y);
     const d = Math.sqrt(x * x + y * y);
     this.stick = d > 1 ? { x: x / d, y: y / d } : { x, y };
+    heldStick.x = this.stick.x;
+    heldStick.y = this.stick.y;
   }
 
   /** One source (a key, the mouse, a thumb) holding or letting go of the web. */
@@ -64,6 +74,8 @@ export class InputLatch {
   /** Let go of everything (pause, an errand sheet, a lost focus). */
   clear(): void {
     this.stick = { x: 0, y: 0 };
+    heldStick.x = 0;
+    heldStick.y = 0;
     this.webs.clear();
     this.shot = 0;
   }

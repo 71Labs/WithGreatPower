@@ -1,8 +1,9 @@
 /**
- * The city as instance lists: every building, setback, rooftop prop, crane and bridge part
- * becomes a box (one unit-box geometry, instanced) or a water-tower tank (one lathe,
- * instanced). Pure data, no three.js: the mesh builder turns it into instance attributes,
- * and tests can count it.
+ * The city as instance lists: every building, setback, rooftop prop, crane and bridge part,
+ * plus the presentation detail from details.ts (ledges, roof doors, fire escapes, lamps,
+ * signals), becomes a box (one unit-box geometry, instanced) or a water-tower tank (one
+ * lathe, instanced). Pure data, no three.js: the mesh builder turns it into instance
+ * attributes, and tests can count it.
  *
  * Boxes are grouped into 4×4 city sectors so each sector's instanced mesh has a tight
  * bounding sphere and three.js can frustum-cull it.
@@ -10,52 +11,12 @@
 import type { Building, Cable, City, Prop, Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { C, buildingFill, mixRgb, type RGB } from "../palette";
+import { addDetails } from "./details";
+import { KIND, WINDOW_STYLE, windowStyle, type BoxSpec, type PushBox } from "./kinds";
 
-/** What the toon shader draws on a box (aInfo.x). Keep in sync with shaders.ts. */
-export const KIND = {
-  building: 0,
-  top: 1,
-  solid: 2,
-  ac: 3,
-  light: 4,
-  billboard: 5,
-  lattice: 6,
-  truss: 7,
-  tank: 8,
-} as const;
-
-/** Window layouts from render/city.ts windowGrid. */
-export const WINDOW_STYLE = { plain: 0, strip: 1, brown: 2, wide: 3 } as const;
+export { KIND, WINDOW_STYLE, windowStyle, type BoxSpec } from "./kinds";
 
 export const SECTORS = 4;
-
-export interface BoxSpec {
-  /** Base centre (the bottom face's centre). */
-  x: number;
-  y: number;
-  z: number;
-  /** Size along the box's own x, y and z. */
-  w: number;
-  h: number;
-  d: number;
-  /** Turn about +y, radians. */
-  yaw: number;
-  /** A segment box instead: its local +y runs from (x, y, z) to `to`, `w` thick. */
-  to?: Vec3;
-  color: RGB;
-  kind: number;
-  seed: number;
-  style: number;
-  /** Outline (inverted hull) scale: 0 none, 1 full width. */
-  hull: number;
-  /** The point banded fog measures from, so a building and its props share a band. */
-  ref: { x: number; z: number };
-  /** Billboards: index into `CityLayout.texts`. */
-  atlas: number;
-  sector: number;
-  /** 0: always drawn. 1: small rooftop clutter, dropped in far sectors. */
-  lod: number;
-}
 
 export interface TankSpec {
   /** Base of the tank (top of the legs). */
@@ -89,27 +50,9 @@ export function topRoof(b: Building): number {
   return b.top ? b.top.h : b.h;
 }
 
-function hash01(n: number): number {
-  let h = (n | 0) ^ 0x9e3779b9;
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-
-/** The 2D renderer picks a window style per building style; the 3D city infers it from shape. */
-export function windowStyle(b: Building): number {
-  const w = b.x1 - b.x0;
-  const d = b.z1 - b.z0;
-  if (b.h > 520 || (Math.min(w, d) < 160 && b.h > 380)) return WINDOW_STYLE.strip;
-  if (b.district === "queens-block" && b.h < 300) return WINDOW_STYLE.brown;
-  return hash01(b.seed + 3) < 0.25 ? WINDOW_STYLE.wide : WINDOW_STYLE.plain;
-}
-
 const QUARTER = Math.PI / 2;
 
-type BoxInput = Omit<BoxSpec, "sector" | "atlas" | "style" | "yaw" | "seed" | "lod"> & Partial<Pick<BoxSpec, "atlas" | "style" | "yaw" | "seed" | "lod">>;
-type Push = (spec: BoxInput) => void;
+type Push = PushBox;
 
 /** Rotate a local (x, z) offset by a prop's quarter-turn facing (0 → +z front). */
 function turn(facing: number, lx: number, lz: number): { x: number; z: number } {
@@ -125,7 +68,7 @@ function turn(facing: number, lx: number, lz: number): { x: number; z: number } 
   }
 }
 
-export function buildCityLayout(city: City): CityLayout {
+export function buildCityLayout(city: City, opts: { details?: boolean } = {}): CityLayout {
   const boxes: BoxSpec[] = [];
   const tanks: TankSpec[] = [];
   const texts: string[] = [];
@@ -194,6 +137,7 @@ export function buildCityLayout(city: City): CityLayout {
 
   if (city.bridge) addBridge(city, push);
   for (const c of city.cables ?? []) addCable(c, city, push);
+  if (opts.details !== false) addDetails(city, push);
 
   return { boxes, tanks, sectors, texts };
 }

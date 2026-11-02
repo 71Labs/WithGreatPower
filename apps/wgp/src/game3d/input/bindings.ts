@@ -1,7 +1,8 @@
 /**
  * What every key and mouse button means, by KeyboardEvent.code (the physical key, so WASD
  * stays put on any layout). WASD or the arrows steer relative to the camera, Space holds
- * the web, 1–4 fire powers, G calls Gwei, Escape or P pauses. Pure, no DOM.
+ * the web, 1–4 fire powers, G calls Gwei, Escape or P pauses; plus the look speeds for drag
+ * orbit and mouse look. Pure, no DOM.
  */
 import type { Shot } from "./latch";
 
@@ -63,3 +64,6 @@ export const STICK_RADIUS = 56;
 /** Drag to orbit: radians per CSS px, yaw and pitch. */
 export const ORBIT_YAW_PER_PX = 0.006;
 export const ORBIT_PITCH_PER_PX = 0.004;
+/** Mouse look (pointer lock): radians per px of mouse movement, yaw and pitch. */
+export const LOOK_YAW_PER_PX = 0.0024;
+export const LOOK_PITCH_PER_PX = 0.0018;

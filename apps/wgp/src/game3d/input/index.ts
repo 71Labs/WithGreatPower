@@ -5,6 +5,6 @@
  */
 export { actionForKey, KEY_BINDINGS, shotFor, STICK_RADIUS, STICK_ZONE, type ControlAction } from "./bindings";
 export { attachControls, type Controls, type ControlsOptions } from "./controls";
-export { InputLatch, type Shot } from "./latch";
+export { heldStick, InputLatch, type Shot } from "./latch";
 export { DEFAULT_VIEW, dragStick, keysStick, stickInput, viewFromPose, worldStick, type Stick, type View } from "./stick";
 export { TouchRouter, type StickVisual, type TouchSink } from "./touch";

@@ -1,9 +1,9 @@
 /**
  * The night sky in the 2D renderer's style: three flat bands (CITY.skyTop / skyMid /
- * skyLow, no gradient), square and sparkle stars, the moon sticker and outlined clouds,
- * plus a ring of far skyline at the horizon (the 2D "far" parallax layer, wrapped around
- * the city). The dome, stars and sprites ride with the camera; the skyline ring is fixed
- * around the city so it parallaxes.
+ * skyLow, no gradient), square and sparkle stars, the ink-ringed moon sticker and a ring of
+ * outlined clouds at a few heights, plus a ring of far skyline at the horizon (the 2D "far"
+ * parallax layer, wrapped around the city). The dome, stars and sprites ride with the
+ * camera; the skyline ring is fixed around the city so it parallaxes.
  *
  * Draw calls: dome, stars, sprites, skyline ring.
  */
@@ -174,7 +174,7 @@ function drawMoon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   const drop = r * 0.08;
   const k = r / 50;
   circle(ctx, cx, cy + drop, r + border, INK, 0);
-  circle(ctx, cx, cy, r + border, "#FFFFFF", 0);
+  circle(ctx, cx, cy, r + border, "#FFFFFF", 2.5 * k);
   circle(ctx, cx, cy, r, CITY.moon, 2.5 * k);
   const crater = mix(CITY.moon, "#C9A64B", 0.35);
   circle(ctx, cx - r * 0.32, cy + r * 0.18, r * 0.2, crater, 1.75 * k);
@@ -257,7 +257,7 @@ function skyAtlas(): SkyAtlas {
   const rects: SkyAtlas["rects"] = [];
   const add = (x: number, y: number, w: number, h: number) => rects.push({ rect: [x / W, 1 - (y + h) / H, w / W, h / H], aspect: h / w });
   // The moon, centred in a 320 cell.
-  drawMoon(ctx, 160, 154, 120);
+  drawMoon(ctx, 160, 152, 116);
   add(0, 0, 320, 320);
   const clouds = [
     [330, 10, 680, 290],
@@ -416,27 +416,31 @@ export function buildSky(center: { x: number; z: number }, horizon: number, far:
   dome.add(stars);
   materials.push(starMaterial);
 
-  // The moon and three clouds, as camera-facing stickers on the dome.
+  // The moon and seven clouds (three drawings), as camera-facing stickers on the dome.
   const atlas = skyAtlas();
   const quad = new PlaneGeometry(1, 1);
   const spriteGeo = new BufferGeometry();
   spriteGeo.setAttribute("position", quad.getAttribute("position"));
   spriteGeo.setIndex(quad.getIndex());
   const sprites = [
-    // azimuth, elevation, drift, width (radians)
-    [2.3, 0.3, 0, 0.17],
-    [2.0, 0.2, 0.004, 0.3],
-    [-0.4, 0.26, 0.003, 0.27],
-    [0.9, 0.16, 0.0025, 0.34],
+    // azimuth, elevation, drift, width (radians), atlas cell (0 the moon, 1–3 clouds)
+    [2.3, 0.3, 0, 0.17, 0],
+    [2.0, 0.2, 0.004, 0.3, 1],
+    [-0.4, 0.26, 0.003, 0.27, 2],
+    [0.9, 0.16, 0.0025, 0.34, 3],
+    [3.4, 0.13, 0.0035, 0.24, 2],
+    [-1.6, 0.21, 0.002, 0.29, 1],
+    [-2.6, 0.12, 0.003, 0.32, 3],
+    [0.2, 0.32, 0.0015, 0.2, 1],
   ];
   const n = sprites.length;
   const sky = new Float32Array(n * 4);
   const rect = new Float32Array(n * 4);
   const aspect = new Float32Array(n);
-  sprites.forEach((s, i) => {
-    sky.set(s, i * 4);
-    rect.set(atlas.rects[i].rect, i * 4);
-    aspect[i] = atlas.rects[i].aspect;
+  sprites.forEach(([az, el, drift, width, cell], i) => {
+    sky.set([az, el, drift, width], i * 4);
+    rect.set(atlas.rects[cell].rect, i * 4);
+    aspect[i] = atlas.rects[cell].aspect;
   });
   spriteGeo.setAttribute("aSky", new InstancedBufferAttribute(sky, 4));
   spriteGeo.setAttribute("aRect", new InstancedBufferAttribute(rect, 4));

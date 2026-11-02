@@ -26,6 +26,12 @@ export const WATER = "#2E3A8C";
 export const STREET_CURB = "#2A2E62";
 export const STEEL = "#AEB4BD";
 export const CRANE_YELLOW = CITY.windowLit;
+/** 3D-only street and roof colours, picked to sit inside the night palette. */
+export const SIDEWALK = "#353A78";
+export const CURB_EDGE = "#4A509A";
+export const LAMP_POOL = "#4C4C8E";
+export const TAR = "#24285C";
+export const GRAVEL = "#3F4488";
 
 export const C = {
   ink: rgb(INK),
@@ -51,7 +57,15 @@ export const C = {
   waterTowerBand: rgb(CITY.waterTowerBand),
   steel: rgb(STEEL),
   crane: rgb(CRANE_YELLOW),
+  sidewalk: rgb(SIDEWALK),
+  curbEdge: rgb(CURB_EDGE),
+  lampPool: rgb(LAMP_POOL),
+  tar: rgb(TAR),
+  gravel: rgb(GRAVEL),
 } as const;
+
+/** Car bodies: taxis most often, then the 2D palette's warm and neon fills. */
+export const CAR_COLORS: readonly RGB[] = [CITY.windowLit, CITY.windowLit, CITY.windowLit, CITY.neonRed, PAPER, CITY.neonMint, ...CITY.accentBuildings, STEEL].map(rgb);
 
 /** Building fill for a contract `Building`: night blues by tone, or a warm accent. */
 export function buildingFill(tone: number, accent: boolean): RGB {
@@ -71,12 +85,28 @@ export const FOG = {
   color: C.skyLow,
 };
 
-/** Ink widths in CSS px: silhouettes thin with depth (LINE.near → LINE.far), creases stay detail-thin. */
+/**
+ * Ink widths in CSS px. Silhouettes thin with depth, a touch past LINE.near → LINE.far so the
+ * near city reads bolder; creases stay detail-thin and thin again in the far bands.
+ */
 export const INK_PX = {
-  hullNear: 3,
-  hullFar: 1.5,
+  hullNear: 3.25,
+  hullFar: 1.25,
   /** View depths (world units) over which the hull thins. */
-  hullDepthNear: 350,
-  hullDepthFar: 2600,
+  hullDepthNear: 300,
+  hullDepthFar: 3000,
   crease: 1.5,
+} as const;
+
+/**
+ * Comic print: Ben-Day dots on the shadow faces and over the far fog bands, on a 45° screen
+ * `cell` CSS px apart. Dot radii are shares of the cell (0.71 covers it).
+ */
+export const HALFTONE = {
+  cell: 5,
+  /** The −x face (tint 0.76) and the ±z faces (0.84). */
+  shadow: 0.34,
+  side: 0.2,
+  /** Fog bands 2 and 3. */
+  far: [0.2, 0.3] as const,
 } as const;
