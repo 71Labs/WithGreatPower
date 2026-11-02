@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createElement } from "react";
 
 import { AVATARS, HeroArt } from "@/components/cast";
 import { stickerTileClass, StickerBadge, StickerButton, StickerChip, StickerFrame, StickerLink } from "@/components/game/kit";
@@ -79,7 +80,7 @@ function RouteRow({ save, stops }: { save: HeroSave; stops: Stop[] }) {
           <li key={i} className="relative flex min-w-0 flex-col items-center gap-1.5">
             <span className={`relative rounded-[16px] ${current ? "wgp-pulse" : ""}`}>
               <StickerFrame drop="sm" className={`[--s:56px] ${done ? "opacity-60 grayscale-[0.4]" : ""}`}>
-                {AVATARS[stopWho(stop)]()}
+                {createElement(AVATARS[stopWho(stop)])}
               </StickerFrame>
               {done ? (
                 <span aria-hidden className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full border-2 border-game-ink bg-game-mint text-game-paper">

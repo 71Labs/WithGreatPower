@@ -85,6 +85,10 @@ import {
   Moon02Icon,
   HelpCircleIcon,
   Settings02Icon,
+  GoogleIcon,
+  Login03Icon,
+  UserCircleIcon,
+  TestTube01Icon,
 } from "@hugeicons/core-free-icons";
 
 export type IconProps = Omit<ComponentProps<"svg">, "ref"> & { strokeWidth?: number; size?: number | string };
@@ -178,6 +182,10 @@ export const UsersRound = make(UserMultipleIcon, "UsersRound");
 export const Moon = make(Moon02Icon, "Moon");
 export const HelpCircle = make(HelpCircleIcon, "HelpCircle");
 export const Settings = make(Settings02Icon, "Settings");
+export const Google = make(GoogleIcon, "Google");
+export const LogIn = make(Login03Icon, "LogIn");
+export const UserCircle = make(UserCircleIcon, "UserCircle");
+export const TestTube = make(TestTube01Icon, "TestTube");
 
 /** Lucide's `LucideIcon` type, for components that take an icon as a prop. */
 export type LucideIcon = Icon;

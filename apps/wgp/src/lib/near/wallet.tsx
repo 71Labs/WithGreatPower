@@ -34,8 +34,8 @@ interface WalletContextValue {
   ready: boolean;
   connect: () => Promise<string | null>;
   disconnect: () => Promise<void>;
-  /** NEP-413 sign-in. Resolves with the account once the session cookie is set. */
-  signIn: () => Promise<string>;
+  /** NEP-413 sign-in as `account` (default: the connected one, else pick one). Resolves once the session cookie is set. */
+  signIn: (account?: string) => Promise<string>;
   /** Adds this browser's session key to the account (one wallet approval). */
   enableQuickPlay: () => Promise<{ publicKey: string }>;
   call: (options: CallOptions) => Promise<unknown>;
@@ -103,8 +103,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setAccountId(null);
   }, []);
 
-  const signIn = useCallback(async () => {
-    const id = accountId ?? (await connect());
+  const signIn = useCallback(async (account?: string) => {
+    const id = account ?? accountId ?? (await connect());
     if (!id) throw new Error("No wallet account connected");
     const challenge = await postWallet<{ nonce: string; message: string; recipient: string; token: string }>({ action: "nonce", accountId: id });
     const wallet = await connector().wallet();

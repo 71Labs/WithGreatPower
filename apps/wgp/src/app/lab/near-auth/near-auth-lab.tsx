@@ -21,6 +21,7 @@ import {
 } from "near-api-js";
 
 import { Chip, Panel } from "@/components/frame";
+import { getNearAuthNonce } from "@/lib/api/client";
 import { Badge, Button, CopyButton, Field } from "@/components/ui";
 import { GAME_CONTRACT_ID, NEAR_AUTH, NETWORK, RPC_URLS } from "@/lib/near/config";
 import { decodeSignableDelegate } from "@/lib/near/delegate-codec";
@@ -215,12 +216,16 @@ export function NearAuthLab() {
       "login",
       async (auth) => {
         const startedAt = performance.now();
+        // Step 3 checks the token on the server, which only accepts logins that carry a nonce it issued.
+        const issued = await getNearAuthNonce();
+        if (!issued.ok) throw new Error(issued.message ?? `Couldn’t get a sign-in nonce (${issued.status})`);
+        const nonce = issued.data.nonce;
         if (mode === "redirect") {
           update({ mode, pending: { step: "login", startedAt: Date.now() } });
-          await auth.login({ redirectUri: window.location.href.split("?")[0] });
+          await auth.login({ redirectUri: window.location.href.split("?")[0], nonce });
           return;
         }
-        await auth.login();
+        await auth.login({ nonce });
         await finishLogin(auth, startedAt, "popup");
       },
       (error) => update({ login: { ok: false, mode, error } }),

@@ -59,6 +59,12 @@ export const players = pgTable(
     bannedAt: at("banned_at"),
     /** Set once, when a guest's local save was imported. */
     migratedLocalAt: at("migrated_local_at"),
+    /**
+     * The reward nonce the next queued mint takes. The contract applies a mint only when
+     * its nonce is exactly the account's last one + 1, so nonces are handed out here, one
+     * by one, inside the transaction that queues the mint (src/server/db/outbox.ts).
+     */
+    nextRewardNonce: integer("next_reward_nonce").notNull().default(1),
   },
   (t) => [uniqueIndex("players_near_account_id_key").on(t.nearAccountId), uniqueIndex("players_auth_sub_key").on(t.authSub)],
 );
@@ -78,6 +84,22 @@ export const authSessions = pgTable(
     ipHash: text("ip_hash"),
   },
   (t) => [index("auth_sessions_player_idx").on(t.playerId), index("auth_sessions_expires_idx").on(t.expiresAt)],
+);
+
+/**
+ * Single-use, short-lived values the server hands out and later takes back once, e.g.
+ * the OIDC nonce a NEAR Auth sign-in must carry. Only a SHA-256 of the value is stored.
+ */
+export const authNonces = pgTable(
+  "auth_nonces",
+  {
+    idHash: text("id_hash").primaryKey(),
+    /** What the value may be redeemed for ("near-auth"), so one kind never stands in for another. */
+    purpose: text("purpose").notNull(),
+    createdAt: at("created_at").notNull().defaultNow(),
+    expiresAt: at("expires_at").notNull(),
+  },
+  (t) => [index("auth_nonces_expires_idx").on(t.expiresAt)],
 );
 
 /** Function-call access keys on a player's NEAR account, limited to the game contract. Chain owns the flow. */
@@ -220,6 +242,12 @@ export const chainOps = pgTable(
     dedupeKey: text("dedupe_key").notNull(),
     playerId: uuid("player_id").references(() => players.id, { onDelete: "set null" }),
     payload: jsonb("payload").notNull(),
+    /**
+     * Mints only: the player's reward nonce for this mint, fixed when it was queued. A
+     * resend always carries the same nonce, so the contract answers "duplicate" instead
+     * of minting twice.
+     */
+    rewardNonce: integer("reward_nonce"),
     status: chainOpStatus("status").notNull().default("pending"),
     txHash: text("tx_hash"),
     attempts: integer("attempts").notNull().default(0),
@@ -228,7 +256,12 @@ export const chainOps = pgTable(
     createdAt: at("created_at").notNull().defaultNow(),
     updatedAt: at("updated_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("chain_ops_dedupe_key").on(t.dedupeKey), index("chain_ops_status_next_idx").on(t.status, t.nextAttemptAt)],
+  (t) => [
+    uniqueIndex("chain_ops_dedupe_key").on(t.dedupeKey),
+    index("chain_ops_status_next_idx").on(t.status, t.nextAttemptAt),
+    // One mint per nonce per player, enforced by the database.
+    uniqueIndex("chain_ops_player_reward_nonce").on(t.playerId, t.rewardNonce).where(sql`reward_nonce IS NOT NULL`),
+  ],
 );
 
 /** Durable counters for anything that costs money or CPU (ranked runs a day, mints, gas). */

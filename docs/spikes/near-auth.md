@@ -16,6 +16,24 @@
 - **Every signature is an Auth0 popup or redirect.** The provider mints a JWT whose `fatxn` claim is the exact payload, so one JWT can only ever sign one payload. Someone then calls `sign` on `fast-auth.testnet` with 1 yoctoNEAR (refunded). Our relayer does that (`/api/relay/fast-auth`).
 - **SDK compatibility:** the SDKs bundle near-api-js 5.1.1. Its `encodeDelegateAction` produces the same bytes as near-api-js 7.4 for a v7 `DelegateAction` (AddKey + FunctionCall, checked in Node). So our delegates go through the SDK unchanged.
 
+## Binding the ID token to our server (Nov 2)
+**Why:** on testnet every NEAR Auth app shares one Auth0 client, so `aud` alone can't tell our sign-ins from another app's. Without a binding, any app that gets a user's ID token could replay it to `POST /api/auth/near-auth` and sign in as them.
+
+**The SDKs can't pass a nonce:**
+- `javascript-provider` replaces `authorizationParams` on every login (it only sets `prompt` and `redirect_uri`).
+- `auth0-spa-js` 2.30 creates its own `state` and `nonce` in `_prepareAuthorizeUrl`, after the caller's params, so a caller's `nonce` is overwritten.
+
+**What we do instead:**
+1. `POST /api/auth/near-auth/nonce` issues 32 random bytes. The value goes back in the body and in an HttpOnly cookie; only its SHA-256 is stored, in `auth_nonces`, for 10 minutes.
+2. `NearAuth.login({ nonce })` wraps the Auth0 client's `_prepareAuthorizeUrl` for that one login. It swaps our nonce into the `/authorize` URL and into what `auth0-spa-js` checks the returned token against. Every other parameter is untouched, and the wrapper is removed afterwards.
+3. The server checks that the verified token's `nonce` claim equals this browser's cookie and is still live. Signing in, creating an account or the lab's verify spends it, in one `DELETE … RETURNING`. A new player who still has to pick a handle has the nonce checked but not spent, so they get no second popup.
+4. Rejected with 401: no nonce (`nonce_missing`), another tab's or browser's (`nonce_mismatch`), and one never issued, expired or already used (`nonce_spent`). Tests: `src/server/near/login-nonce.test.ts` and `src/lib/near/near-auth.test.ts`.
+
+**Residual risk:**
+- **Private API:** the binding relies on `auth0-spa-js`'s private `_prepareAuthorizeUrl` (2.30, pinned by the lockfile). If an upgrade drops it, Google sign-in fails closed with `NONCE_UNSUPPORTED`; it never falls back to unbound tokens. Re-check this file on every upgrade of `@fast-auth-near/*` or `@auth0/auth0-spa-js`.
+- **Stolen token and cookie:** someone holding both the user's token and their HttpOnly nonce cookie inside the 10-minute window could still race the user. That takes the same access as stealing the session cookie.
+- **Signing JWTs:** these (`fatxn`) are not affected; the on-chain guard checks them, and each one can only sign its own payload.
+
 ## The plans (ARCHITECTURE.md §5) and what picks each
 | Plan | What happens | Needs from the lab |
 |---|---|---|
@@ -31,7 +49,7 @@
 3. Click through steps 1–5:
    1. **Sign in with Google.**
    2. **Resolve account.** Optionally type a named account to check.
-   3. **Verify on the server.**
+   3. **Verify on the server.** This works once per Google login, because the sign-in nonce is single-use; sign in again to repeat it.
    4. **Prepare delegate**, then **Approve in NEAR Auth.**
    5. **Relay sign.**
 4. Repeat steps 1 and 4 with **Redirect** selected if popups misbehave on your phone.

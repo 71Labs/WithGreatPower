@@ -2,9 +2,10 @@
 
 /**
  * Paper sheets over the game: the encounter banner, the errand sheet, the pause menu
- * (with How to play), and the reduced-motion choice.
+ * (with How to play), and the reduced-motion choice. The 2D and 3D games share them; the
+ * 3D night passes `mode="3d"` for its controls and its settings into the pause menu.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { StickerButton, StickerEyebrow, StickerLink, StickerPanel } from "@/components/game/kit";
 import { Award, Heart, Link2, Megaphone, ShieldCheck } from "@/components/icons";
@@ -185,16 +186,31 @@ const VILLAIN_TIPS = [
   { id: "sybil" as const, tip: "Copies orbit and shoot goo. Every hit pops a copy; the real one is last." },
 ];
 
-export function HowToPlay({ loadout }: { loadout: PowerId[] }) {
+const SWINGING: Record<"2d" | "3d", string[]> = {
+  "2d": [
+    "Hold Space, the mouse, or the left two-thirds of a touch screen to shoot a web at the ringed anchor above you. Let go to fly.",
+    "Let go while you’re rising fast and forward for a perfect swing: a boost and +1 combo.",
+    "Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.",
+    "A and D (or the arrow keys) steer in the air.",
+  ],
+  "3d": [
+    "Hold Space, the left mouse button, or the right side of a touch screen to shoot a web at a roof edge ahead. Let go to fly.",
+    "Let go while you’re rising fast and forward for a perfect swing: a boost and +1 combo.",
+    "You head for the next stop on your own. To steer, use WASD or the arrow keys, or drag on the left side of a touch screen; directions follow the camera.",
+    "Drag with the right mouse button, or two fingers, to look around. The camera settles back behind you.",
+    "Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.",
+  ],
+};
+
+export function HowToPlay({ loadout, mode = "2d" }: { loadout: PowerId[]; mode?: "2d" | "3d" }) {
   return (
     <div className="flex flex-col gap-5 text-[14px] leading-5">
       <section className="flex flex-col gap-2">
         <h3 className="text-[15px] font-bold">Swinging</h3>
         <ul className="flex list-disc flex-col gap-1.5 pl-5">
-          <li>Hold Space, the mouse, or the left two-thirds of a touch screen to shoot a web at the ringed anchor above you. Let go to fly.</li>
-          <li>Let go while you’re rising fast and forward for a perfect swing: a boost and +1 combo.</li>
-          <li>Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.</li>
-          <li>A and D (or the arrow keys) steer in the air.</li>
+          {SWINGING[mode].map((line) => (
+            <li key={line}>{line}</li>
+          ))}
         </ul>
       </section>
       <section className="flex flex-col gap-2">
@@ -238,7 +254,18 @@ export function HowToPlay({ loadout }: { loadout: PowerId[] }) {
   );
 }
 
-export function PauseMenu({ loadout, onResume }: { loadout: PowerId[]; onResume: () => void }) {
+export function PauseMenu({
+  loadout,
+  onResume,
+  mode = "2d",
+  settings,
+}: {
+  loadout: PowerId[];
+  onResume: () => void;
+  mode?: "2d" | "3d";
+  /** Extra controls under the note (the 3D night's quality and comfort settings). */
+  settings?: ReactNode;
+}) {
   const [help, setHelp] = useState(false);
   const resume = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -258,10 +285,11 @@ export function PauseMenu({ loadout, onResume }: { loadout: PowerId[]; onResume:
           ) : null}
         </div>
         {help ? (
-          <HowToPlay loadout={loadout} />
+          <HowToPlay loadout={loadout} mode={mode} />
         ) : (
           <>
             <p className="text-[14px] leading-5 text-game-muted">Your progress is kept. Come back any time and you’ll pick up at this stop.</p>
+            {settings}
             <div className="flex flex-col gap-2.5">
               <StickerButton ref={resume} variant="hero" size="lg" onClick={onResume} className="w-full">
                 Resume

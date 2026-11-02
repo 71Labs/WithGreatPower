@@ -3,7 +3,8 @@
 /**
  * The HUD over the canvas, in the sticker kit. It reads a snapshot the loop publishes
  * about 10 times a second (never per-frame state) and sends abilities, Gwei and pause
- * back through callbacks.
+ * back through callbacks. The 2D and 3D games share it: the 3D night passes its own hint
+ * copy and, on touch, lays the powers out in a right-thumb arc.
  */
 import { useSyncExternalStore } from "react";
 
@@ -123,7 +124,7 @@ function VillainBar({ hud }: { hud: HudSnapshot }) {
   );
 }
 
-function AbilityButton({ a, onUse }: { a: AbilityHud; onUse: () => void }) {
+function AbilityButton({ a, onUse, compact = false }: { a: AbilityHud; onUse: () => void; compact?: boolean }) {
   const Icon = POWER_ICONS[a.id];
   const cooling = a.cd > 0;
   const pct = cooling ? a.cd / a.cdMax : 0;
@@ -137,7 +138,7 @@ function AbilityButton({ a, onUse }: { a: AbilityHud; onUse: () => void }) {
         aria-disabled={!a.ready || undefined}
         onPointerDown={(e) => e.preventDefault()}
         onClick={onUse}
-        className={`relative grid size-14 place-items-center rounded-full border-[2.5px] border-game-ink shadow-[var(--game-shadow)] focus-visible:outline-offset-4 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 active:translate-y-[2px] active:shadow-[var(--game-shadow-sm)] sm:size-16 ${
+        className={`relative grid size-14 place-items-center rounded-full border-[2.5px] border-game-ink shadow-[var(--game-shadow)] focus-visible:outline-offset-4 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 active:translate-y-[2px] active:shadow-[var(--game-shadow-sm)] ${compact ? "" : "sm:size-16"} ${
           a.ready ? "bg-game-paper text-game-ink" : "bg-game-paper-2 text-game-muted"
         }`}
       >
@@ -160,9 +161,63 @@ function AbilityButton({ a, onUse }: { a: AbilityHud; onUse: () => void }) {
         ) : null}
         <Kbd className="absolute -left-1.5 -top-1.5">{a.key}</Kbd>
       </button>
-      <span aria-hidden className="hidden max-w-[76px] truncate text-[11px] font-semibold leading-4 text-game-paper [text-shadow:0_1px_0_var(--game-ink),0_-1px_0_var(--game-ink),1px_0_0_var(--game-ink),-1px_0_0_var(--game-ink)] pointer-fine:block">
-        {a.name}
+      {compact ? null : (
+        <span aria-hidden className="hidden max-w-[76px] truncate text-[11px] font-semibold leading-4 text-game-paper [text-shadow:0_1px_0_var(--game-ink),0_-1px_0_var(--game-ink),1px_0_0_var(--game-ink),-1px_0_0_var(--game-ink)] pointer-fine:block">
+          {a.name}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The arc's centre (the thumb pad), CSS px from the bottom-right corner; buttons are 56px. */
+const ARC_CORNER = 48;
+const ARC_BUTTON = 56;
+
+/** The arc's radius for `n` buttons: neighbours keep a 6px gap, and never closer than 104px to the pad. */
+const arcRadius = (n: number) => (n < 2 ? 104 : Math.max(104, (ARC_BUTTON / 2 + 3) / Math.sin(Math.PI / (4 * (n - 1)))));
+
+/**
+ * Touch: the powers (and Gwei, in fights) on a quarter circle around a thumb pad in the
+ * bottom-right corner, from left of the thumb to above it. The pad is only a picture of
+ * where to hold: touches pass through it to the play surface, where the right side holds
+ * the web.
+ */
+function AbilityArc({ hud, fight, onAbility, onGwei }: { hud: HudSnapshot; fight: boolean; onAbility: (slot: number) => void; onGwei: () => void }) {
+  const gwei = fight && hud.gwei.left > 0;
+  const n = hud.abilities.length + (gwei ? 1 : 0);
+  const r = arcRadius(n);
+  const at = (i: number) => {
+    const angle = Math.PI * (1 + 0.5 * (n === 1 ? 0.5 : i / (n - 1)));
+    return { right: ARC_CORNER - Math.cos(angle) * r - ARC_BUTTON / 2, bottom: ARC_CORNER - Math.sin(angle) * r - ARC_BUTTON / 2 };
+  };
+  return (
+    <div className="absolute bottom-[env(safe-area-inset-bottom)] right-[env(safe-area-inset-right)] size-0">
+      <span
+        aria-hidden
+        className="absolute grid size-[68px] place-items-center rounded-full border-[2.5px] border-dashed border-game-paper/80 bg-game-ink/30 text-[11px] font-bold uppercase leading-none tracking-[0.06em] text-game-paper"
+        style={{ right: ARC_CORNER - 34, bottom: ARC_CORNER - 34 }}
+      >
+        Web
       </span>
+      {hud.abilities.map((a, i) => (
+        <div key={a.id} className="pointer-events-auto absolute" style={at(i)}>
+          <AbilityButton a={a} onUse={() => onAbility(i)} compact />
+        </div>
+      ))}
+      {gwei ? (
+        <button
+          type="button"
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={onGwei}
+          aria-disabled={!hud.gwei.ready || undefined}
+          aria-label="Call Gwei Stacy. She swings in for two hits."
+          className="pointer-events-auto absolute grid size-14 place-items-center rounded-full border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow)] focus-visible:outline-offset-4 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 active:translate-y-[2px] active:shadow-[var(--game-shadow-sm)] aria-disabled:opacity-50"
+          style={at(n - 1)}
+        >
+          <Face id="gwei" className="size-10 rounded-full" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -177,6 +232,8 @@ export function Hud({
   onGwei,
   onPause,
   touch,
+  hint,
+  arc = false,
 }: {
   store: HudStore;
   stops: Stop[];
@@ -187,6 +244,10 @@ export function Hud({
   onGwei: () => void;
   onPause: () => void;
   touch: boolean;
+  /** The first-stop hint, if not the 2D game's (hold to swing, A and D steer). */
+  hint?: { title: string; body: string };
+  /** On touch, put the powers in a right-thumb arc (the 3D night, where the right side holds the web). */
+  arc?: boolean;
 }) {
   const hud = useHud(store);
   if (!hud || hud.status === "loading") return null;
@@ -220,7 +281,8 @@ export function Hud({
         <VillainBar hud={hud} />
       </div>
 
-      {playing ? (
+      {playing && arc && touch ? <AbilityArc hud={hud} fight={fight} onAbility={onAbility} onGwei={onGwei} /> : null}
+      {playing && !(arc && touch) ? (
         <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3 p-3 pb-[max(16px,env(safe-area-inset-bottom))] sm:p-5">
           {fight && hud.gwei.left > 0 ? (
             <button
@@ -245,11 +307,17 @@ export function Hud({
       ) : null}
 
       {hud.hint && playing ? (
-        <div className="absolute bottom-[calc(84px+env(safe-area-inset-bottom))] left-0 p-3 sm:bottom-0 sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]">
+        <div
+          className={
+            arc && touch
+              ? "absolute left-0 top-[184px] p-3 sm:top-[194px] md:top-[112px]"
+              : "absolute bottom-[calc(84px+env(safe-area-inset-bottom))] left-0 p-3 sm:bottom-0 sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]"
+          }
+        >
           <StickerPanel className="flex max-w-[260px] flex-col gap-1 rounded-[16px] px-3.5 py-2.5 sm:max-w-[300px]">
-            <p className="text-[14px] font-bold leading-5">{touch ? "Hold the left side to swing" : "Hold to swing"}</p>
+            <p className="text-[14px] font-bold leading-5">{hint ? hint.title : touch ? "Hold the left side to swing" : "Hold to swing"}</p>
             <p className="text-[13px] leading-[18px] text-game-muted">
-              {touch ? "Let go while you’re rising for a perfect swing." : "Space, or hold the mouse. Let go while you’re rising for a perfect swing. A and D steer."}
+              {hint ? hint.body : touch ? "Let go while you’re rising for a perfect swing." : "Space, or hold the mouse. Let go while you’re rising for a perfect swing. A and D steer."}
             </p>
           </StickerPanel>
         </div>
