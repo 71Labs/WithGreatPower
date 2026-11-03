@@ -2,6 +2,8 @@
 
 The build plan for the 3D game, its leaderboard, NEAR contracts and Google sign-in. Milestone PRs implement it in order; when code and this document disagree, fix one of them in the same PR.
 
+**Status (Nov 3, 2026):** M0–M3 have shipped and run on NEAR mainnet (`game.wgpnear.near`; the README lists the transactions). Google sign-in goes through Privy while NEAR Auth waits for its mainnet client (§5). The sections below describe what's built; §7 keeps the original plan and dates.
+
 ## Architecture
 A pnpm workspace at the repo root. Only the deterministic core becomes a package.
 
@@ -9,8 +11,8 @@ A pnpm workspace at the repo root. Only the deterministic core becomes a package
 packages/game-core/   @wgp/game-core: pure TS (rules + 3D sim + input log + replay), vitest
 apps/wgp/             Next.js: 3D client (R3F), API routes, DB, NEAR wiring
 contracts/wgp/        Rust, near-sdk 5.30 (Vessel conventions)
-scripts/near/         testnet deploy, chain e2e, season recording
-docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
+scripts/near/         mainnet and testnet setup, chain e2e, season recording
+docs/                 ARCHITECTURE.md, spikes/, screenshots/
 ```
 
 **How the pieces fit:**
@@ -48,7 +50,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 - **Pickups and the combo (ruleset 3, `sim3d/pickups.ts`):** each leg's swing line runs along the street grid in a Z (down the street by the leg's start, along the cross street halfway, down the street by the stop), and gets a Bits token every 210 units at swing height (from the facades either side), clear of arenas, the river and buildings, with a boost ring in the middle of each long stretch: about 50 tokens and 6 rings a night, placed from the city alone. A token or ring is taken in reach (80 and 110 units, 1.5× that up and down); a ring boosts you to at least 1,000 u/s. The combo counts perfect releases (+1), tokens (+1) and rings (+2), refills a 6 s timer with each, drains 4× faster standing on a roof and ends on the street; its multiplier (×1, then +1 every 4, at most ×4) multiplies what pickups are worth (10 and 50 points).
 - **Render frame v1.3** (additive): `pickups` (id, kind, position, taken), `combo` (count, multiplier, ticks left), `route` (the remaining stop centres, for the map) and the hero's `controlled` (the player is giving input this tick).
 - **Determinism rules:**
-  - Banned in the core, enforced by ESLint: `Math.sin/cos/atan2/hypot/pow/random`, `**`, `Date` and `performance`.
+  - Banned in the core, enforced by a source scan in the tests (`test/determinism-scan.test.ts`; game-core has no ESLint): `Math.sin/cos/atan2/hypot/pow/random`, `**`, `Date` and `performance`.
   - `dmath.ts` provides polynomial sin, cos and atan2 using only + − × ÷ and `sqrt`.
   - Integers for HP, fluid, XP, score, loot and ticks.
   - Presentation (spin, squash) moves out of the sim.
@@ -67,12 +69,12 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Pickups (ruleset 3): each token's 10 and ring's 50 × the combo multiplier when taken, at most 2,000. Stats carry `bits`, `rings` and `pickupsPlaced`.
   - Ties go to the faster run.
 - **Gate:**
-  - Golden logs give identical hashes in Node and in Chromium, WebKit and Firefox (dev page `/lab/determinism`). Regenerate after an intended change with `UPDATE_GOLDEN=1 pnpm --filter @wgp/game-core test golden`.
+  - Golden logs give identical hashes in Node and in the browser (`/lab/determinism`; checked by hand in Chromium and WebKit, not yet in Firefox). Regenerate after an intended change with `UPDATE_GOLDEN=1 pnpm --filter @wgp/game-core test golden`.
   - A bot clears 30 nights with no NaN. It steers explicitly since ruleset 3 (at the next pickup when one is close and on the way, else the stop).
   - `test/feel.test.ts` pins the controls and runs scripted players (holding the web, tapping it, letting go when rising; the stick held toward the stop) over 24 routes each; `FEEL_REPORT=1 pnpm --filter @wgp/game-core test feel-report` prints the numbers (`test/feel-metrics.ts`).
 
 ## 2. 3D client (React Three Fiber, lazy-loaded on `/play/patrol` only)
-- **Stack:** three 0.186, @react-three/fiber 9.8 and drei 10.7 (blastoff's proven versions).
+- **Stack:** three 0.187, @react-three/fiber 9.8 and drei 10.7 (blastoff's versions, three one minor newer).
 - **Buildings:**
   - Instanced unit boxes in 4×4 sectors for culling.
   - An unlit toon shader: flat face tints and procedural lit or dark windows mirroring `src/sim/render/city.ts`.
@@ -107,7 +109,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Reduced motion: fixed field of view, no speed lines and no shake.
 - **Controls:**
   - **Touch:** left 40% is a floating stick (the hero only runs on it; without it, webs still aim for the next stop, so one thumb holding the web travels); right 60% is hold to web; ability buttons sit in a right-thumb arc; two fingers orbit the camera.
-  - **Keyboard:** WASD, Space or mouse to web, 1–4, G, Esc.
+  - **Keyboard:** WASD or the arrows, Space or the mouse to web, 1–4 powers, G for Gwei, M for the map, Esc or P to pause.
 - **City life and comic finish:** instanced, GPU-driven traffic on street loops, street lamps and signals, crosswalks, parapets, cornices, fire escapes and varied roofs; halftone dots on shadow faces and distant fog bands; speed lines at high speed; ink outlines thicker near the camera.
 - **Quality tiers:** low, medium (the phone default, DPR 1.5) and high, with adaptive DPR and an FPS probe. Ported from blastoff `session/quality.ts`, `gpu.ts` and `camera-fx.ts`, with a context-loss guard. Low drops cars, halftone, speed lines and small details first. The budget is under 100 draw calls (about 50 at most in play today) and about 80k triangles on high, characters included.
 - **Reused as-is:**
@@ -124,7 +126,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   | Route | What it does |
   |---|---|
   | `POST /api/runs/start` | Issues an HMAC seed and the save revision; at most 1 active run and 20 ranked runs a day |
-  | `POST /api/runs/:id/submit` | Idempotent. Decodes and replays the log, then checks the ruleset, that game time ≤ wall time + 60 s, and the checkpoints. On accept, one batch updates the save, upserts the boards and queues mints, then refreshes the leaderboard cache. |
+  | `POST /api/runs/:id/submit` | Idempotent. Decodes and replays the log, then checks the ruleset, at least 20 s of game time, game time ≤ wall time + 60 s, and the client's final state hash. On accept, one batch updates the save, upserts the boards and queues mints, then refreshes the leaderboard cache. |
   | `GET /api/leaderboard?board&period&around=me` | Leaderboard query, cached about 15 s |
   | `GET /api/runs/:id/replay` | Log and seed, so anyone can re-verify a run |
   | `POST /api/actions` | Menu actions (create-hero, pick-power, set-loadout, vote, sleep…) reduced on the server |
@@ -132,6 +134,8 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   | `GET /api/market`, `/api/market/listings`, `/api/market/me` · `POST /api/market/trade` · `GET /api/cron/market-snapshot` | The Mempool Market: cached prices and listings, the player's wallet, simulated trades before the contract's market is live, price snapshots |
   | `GET /api/cron/mint` | The mint worker: claims up to 20 queued mints in per-account nonce order, sends them with the operator key, records each outcome (applied, duplicate, out of order, full). 503 before claiming anything without NEAR settings |
   | `GET /api/chain/status` | The signed-in player's chain view: quick play (live session keys), the hero's registration, the contract's `get_player` |
+  | `GET /api/seasons`, `GET /api/seasons/:id/results` | The seasons and their status; a closed season's results file with every leaf's Merkle proof |
+  | `POST /api/auth/{wallet,privy,near-auth}` (+ `/api/auth/privy/claim`, `/api/auth/dev` locally) · `POST /api/relay/meta`, `/api/relay/fast-auth` | Sign-in (§5) and the relayer (§5, Relayer and wallets) |
 
 - **No cron jobs** (they bill whether or not anyone plays). Background work runs after player requests with Next's `after()`, only when due (`src/server/background.ts`, windows kept in `budget_counters` across instances): reward mints and season records after every verified run and on chain-status reads (at most every 15 s), the sweep at most every 10 minutes, market snapshots on market reads at most every 30 minutes, and the season pass (mark a started season live; close an ended one once, freezing its standings and queuing `record_season`) on any of those triggers or a leaderboard read, at most once a minute and only when a start or a freeze is due. The `/api/cron/*` routes remain as manual triggers behind `CRON_SECRET`.
 - **On-chain player actions:** a new or imported hero queues a `register_hero` outbox row that waits for the player's session key. With quick play on, the browser signs `register_hero`, `craft_suit` and `equip_suit` with the session key, the relayer lands them, and the relay route mirrors the result into the database (the hero row marked sent; the save crafted or re-suited by the same reducer). Without quick play, craft and equip only change the save, and the UI says "saved, not yet on chain".
@@ -157,19 +161,19 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 - **Storage:** sponsored by the contract and bounded per player (64 token kinds max, 3 open listings). That's about 1 KB (plus ~750 bytes for an active trader), or roughly 0.01 NEAR on mainnet; nothing is stored per run or per trade. The code itself is ~360 KB, ~3.6 NEAR of storage.
 - **Tests:**
   - `cargo test` unit tests: nonces, recipes, 1-yocto rule, soulbound, operator auth, season immutability, event JSON.
-  - A near-workspaces sandbox if the S5 spike passes.
+  - near-workspaces sandbox tests of the built wasm in `contracts/wgp/sandbox` (S5 passed: `docs/spikes/near-workspaces.md`).
   - `scripts/near/e2e-chain.ts` on testnet or mainnet (`NEAR_NETWORK`), with tiny amounts and an in-memory database.
 
 ## 5. NEAR SDKs and Google sign-in
 - **Packages:**
   - `@privy-io/react-auth` 3.51 (browser) + `@privy-io/node` 0.37 (server): Google sign-in today, with a Privy NEAR embedded wallet.
   - `@fast-auth-near/browser-sdk` + `javascript-provider` (NEAR Auth): Google sign-in once NEAR approves our mainnet client.
-  - `@hot-labs/near-connect` for existing NEAR wallets (port Vessel's `lib/wallet.tsx` from the archive).
+  - `@hot-labs/near-connect` for existing NEAR wallets (`src/lib/near/wallet.tsx`, ported from Vessel).
   - One `near-api-js` ≥7.4 on client and server for meta-transactions.
 - **Server accounts** (keys in Vercel env only; mainnet names, testnet uses `wgp.testnet` and so on):
   - `wgpnear.near`, the factory, creates `<handle>.wgpnear.near` (made by `scripts/near/setup-mainnet.sh`).
-  - The relayer pays gas, using 4–8 keys.
-  - The operator mints.
+  - The relayer, `relayer.wgpnear.near`, pays gas. `RELAYER_PRIVATE_KEYS` takes one or more keys (mainnet runs one today).
+  - The operator, `operator.wgpnear.near`, mints and records seasons; the contract lists it in `get_config().operators`.
 - **Which Google service:** `NEXT_PUBLIC_GOOGLE_SIGN_IN=privy|near-auth`, defaulting to `privy` when `NEXT_PUBLIC_PRIVY_APP_ID` is set (`src/lib/privy/config.ts`). NEAR wallet sign-in is always offered.
 
 ### Google through Privy (live now)
@@ -223,7 +227,7 @@ NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes
 ## The Mempool Market (the economy)
 - **Bits** (`item:bits`) are the currency: every verified night mints `floor(score / 100) + 5` (+25 on a level-up, +1 per Bits token collected up to 25 since ruleset 3, at most 1,000) with its loot, through `mint_rewards` (`src/lib/market/rewards.ts`, `runs.ts`). The tokens come from the verified replay's stats; the results screen shows the server's number.
 - **The vendor, Gwei Stacy,** is an NPC whose stock and till the contract holds. Each item has a virtual-reserve constant-product curve: `x = virtual_items + stock`, `y = virtual_bits + bits`, spot `y / x`. Buying `n` costs `ceil(y·n / (x − n))` (only from stock), selling pays `floor(y·n / (x + n))` (only from the till). Defaults: commons start at 12 Bits, uncommons 40, rares 150, half of each curve's Bits real.
-- **Sinks:** a 2% gas fee on every trade and fill is burned; crafting can burn Bits too (`craft_bits`, off by default until the Suit lab shows it).
+- **Sinks:** a 2% gas fee on every trade and fill is burned, and crafting burns its recipe's items. Crafting can burn Bits too (`craft_bits`): it's 0 on mainnet until the Suit lab shows it, and `/lab/economy` turns on a 25-Bit burn by default to show the sink.
 - **Listings** escrow items in the contract; a buyer pays the seller the price less the fee.
 - **Abuse guards** (a stolen session key): listing prices within 50%–400% of the vendor's spot price, daily caps per account (40 vendor trades, 10 listings, 10 fills, 3,000 Bits of fills), 3 open listings each, 300 overall, 20 items a call. Transfers still need 1 yocto.
 - **Storage:** one small market entry per trader plus its open listings (a trader with 3 listings: ~750 bytes). The contract's own `mt_balance_of` includes the vendor's stock, till and escrow, matching the transfer events.
@@ -244,6 +248,8 @@ NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes
 - **S5:** near-workspaces with near-sdk 5.30.
 
 ## 7. Milestones (parallel agents with file ownership; one PR per milestone)
+
+The original plan. M0–M3 landed by Nov 3, ahead of these dates, with Privy standing in for NEAR Auth; M4 is under way.
 
 | Milestone | Dates | Work | Gate |
 |---|---|---|---|
@@ -281,8 +287,8 @@ NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes
 ## Risks
 - **Mobile 3D performance:** instancing, unlit shaders, DPR ≤ 1.5, adaptive tiers, lazy-loaded; fallback to 2D or classic.
 - **Determinism drift:** dmath plus the lint ban, raw-bit hashes, the cross-engine gate, pinned ruleset, checkpoint hashes to locate a desync.
-- **Good bots:** replay stops forged scores, not skilled bots. Sign-in required for the board, daily caps, wall-time ≥ game-time, and a review flag on top runs.
-- **NEAR Auth:** mainnet approval may be late, so judging happens on testnet. Its unknowns are covered by Plans A/B/C, and Plan C works with any signer.
+- **Good bots:** replay stops forged scores, not skilled bots. Sign-in required for the board, daily caps, wall-time ≥ game-time, and the built-in autopilot (`?autopilot=1`) never plays a ranked night in production. A review flag on top runs isn't built.
+- **NEAR Auth:** its mainnet approval is still pending, so Google sign-in runs through Privy on mainnet (§5) and switches later without losing players. Its unknowns are covered by Plans A/B/C, and Plan C works with any signer.
 - **Relayer abuse:** strict decoding, allowlist, budgets and separate keys.
 - **Costs:** bounded storage per player; digests live in logs, not state.
 - **Motion sickness:** reduced motion (fixed FOV, no roll or shake), a comfort menu, the slow-motion assist, one-thumb auto-heading, and classic mode.
@@ -292,9 +298,9 @@ NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes
   - `pnpm -r typecheck` and `pnpm -r lint`;
   - `pnpm --filter @wgp/game-core test` (unit tests, golden replays, bot over 30 nights);
   - `pnpm --filter wgp build` and `cargo test`.
-- **Determinism:** Playwright runs `/lab/determinism` on Chromium, WebKit and Firefox, and the hashes must match Node.
+- **Determinism:** `/lab/determinism` in Chromium, WebKit and Firefox must match Node. There's no Playwright harness in the repo yet: Chromium and WebKit were checked by hand against the live site on Nov 3.
 - **Gameplay:** headless screenshots and autopilot runs at 390×844 and 1440×900 (the existing CDP scripts), plus a phone FPS probe through `?debug=1`.
-- **End to end on testnet:** `scripts/near/e2e-chain.ts` runs sign-up → a bot-played run → submit → verified score on the board → reward mint visible with `mt_balance_of` → a craft through the session key and relayer. A session-key attempt at `mt_transfer` must fail.
+- **End to end on testnet or mainnet** (`NEAR_NETWORK`): `scripts/near/e2e-chain.ts` runs sign-up → a bot-played run → submit → verified score on the board → reward mint visible with `mt_balance_of` → a craft through the session key and relayer. A session-key attempt at `mt_transfer` must fail.
 - **Security:**
   - The relayer abuse suite: wrong receiver, a deposit, two actions, an unknown sender and rate limits are all rejected.
   - A load test of 50 concurrent run submits.
