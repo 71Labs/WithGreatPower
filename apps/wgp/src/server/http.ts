@@ -100,6 +100,16 @@ export async function readText(request: Request, maxBytes: number): Promise<stri
   return Buffer.concat(chunks).toString("utf8");
 }
 
+/**
+ * Sign-in posts must be JSON. A cross-site page can only send JSON after a CORS preflight
+ * we never grant, so another site can't sign a visitor in to its own account (login CSRF)
+ * with a plain form post.
+ */
+export function assertJson(request: Request): void {
+  const type = request.headers.get("content-type") ?? "";
+  if (!/^application\/json\b/i.test(type)) throw new HttpError(415, "unsupported_media_type", "Send JSON");
+}
+
 /** Reads a JSON body (at most `maxBytes`) and validates it with `schema`. An empty body is `{}`. */
 export async function readJson<S extends z.ZodType>(request: Request, schema: S, maxBytes = 8 * 1024): Promise<z.infer<S>> {
   const text = await readText(request, maxBytes);

@@ -170,24 +170,24 @@ export async function verifyPrivyLogin(accessToken: string, opts: { port: PrivyP
   if (!Number.isFinite(claims.expiration) || claims.expiration <= nowSeconds) throw new PrivyAuthError("bad_token", "The token has expired");
   if (typeof claims.user_id !== "string" || !claims.user_id) throw new PrivyAuthError("bad_token", "The token names no user");
 
-  let user: PrivyUserRecord;
-  try {
-    user = await opts.port.getUser(claims.user_id);
-  } catch (error) {
-    throw new PrivyAuthError("privy_user", `Couldn't read the user from Privy: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  const user = await getPrivyUser(opts.port, claims.user_id);
   if (user?.id !== claims.user_id) throw new PrivyAuthError("privy_user", "Privy returned a different user");
   return identityFromUser(user);
 }
 
+/** The user from Privy's API. A failure is logged in Privy's words; callers get ours. */
+async function getPrivyUser(port: PrivyPort, userId: string): Promise<PrivyUserRecord> {
+  try {
+    return await port.getUser(userId);
+  } catch (error) {
+    console.error(`[privy] getUser ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new PrivyAuthError("privy_user", "Couldn't read your account from Privy; try again in a minute");
+  }
+}
+
 /** Reads a known user from Privy again (claiming a name re-checks their wallet). */
 export async function readPrivyIdentity(userId: string, opts: { port: PrivyPort }): Promise<PrivyIdentity> {
-  let user: PrivyUserRecord;
-  try {
-    user = await opts.port.getUser(userId);
-  } catch (error) {
-    throw new PrivyAuthError("privy_user", `Couldn't read the user from Privy: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  const user = await getPrivyUser(opts.port, userId);
   if (user?.id !== userId) throw new PrivyAuthError("privy_user", "Privy returned a different user");
   return identityFromUser(user);
 }

@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 
 import { KeyPair, keyToImplicitAddress } from "near-api-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { identityFromUser, privyEnv, privyPort, PrivyAuthError, PrivyConfigError, toPrivyHttpError, verifiedEmail, verifyPrivyLogin, type PrivyPort, type PrivyUserRecord } from "./privy";
 import { HttpError } from "../http";
@@ -89,6 +89,23 @@ describe("verifyPrivyLogin (Privy's SDK, our checks, Privy's user record)", () =
     for (const over of [{ app_id: "other" }, { issuer: "auth0" }, { expiration: NOW_S() - 1 }, { user_id: "" }]) {
       await expect(verifyPrivyLogin("t", { port: lax(over), appId: APP_ID })).rejects.toMatchObject({ code: "bad_token" });
     }
+  });
+
+  it("doesn't pass Privy's own error text on to the caller", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failing: PrivyPort = {
+      verifyAccessToken: async () => ({ app_id: APP_ID, issuer: "privy.io", issued_at: NOW_S(), expiration: NOW_S() + 60, session_id: "s", user_id: USER }),
+      getUser: async () => {
+        throw new Error("401 Unauthorized: app secret sk-not-for-callers rejected");
+      },
+    };
+    const error = await verifyPrivyLogin("t", { port: failing, appId: APP_ID }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "privy_user" });
+    const http = toPrivyHttpError(error) as HttpError;
+    expect(http.status).toBe(502);
+    expect(http.message).not.toContain("sk-not-for-callers");
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it("refuses a user record for someone other than the token's subject", async () => {

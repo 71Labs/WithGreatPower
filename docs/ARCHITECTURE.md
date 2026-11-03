@@ -192,7 +192,7 @@ NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes
 - **Quick play on a new device:** the Privy NEAR key signs `AddKey(session key)` as a delegate (raw-hash signing, no popup) and the relayer submits it, like NEAR Auth's add-key flow.
 
 ### Switching to NEAR Auth later, without losing anyone
-- **Linking by verified email:** every Google player stores their verified email (`players.email`, migration `0004_privy_email`). `POST /api/auth/near-auth` looks a login up by its Google sub, then by the token's email when Auth0 marks it verified, so a Privy player who signs in through NEAR Auth gets their own hero back. The reverse holds too.
+- **Linking by verified email:** every Google player stores their verified email (`players.email`, migration `0004_privy_email`). `POST /api/auth/near-auth` looks a login up by its Google sub, then by the token's email when Auth0 marks it verified, so a Privy player who signs in through NEAR Auth gets their own hero back. The reverse holds too. Only across the two services: within one, a login with a new subject is another Google account (a recycled mailbox, a re-registered domain), so it never takes over a player by email.
 - **What stays with Privy:** the full-access key of a Privy player's account is their Privy NEAR key (exportable from Privy). A NEAR Auth sign-in into that player plays fine; adding the NEAR Auth key to the account (for NEAR Auth's own new-device popup) is a later, one-time Privy-signed `AddKey`.
 - **To switch:** set `NEXT_PUBLIC_GOOGLE_SIGN_IN=near-auth` and NEAR Auth's mainnet client id; keep the Privy variables so existing Privy players can still sign out and in again during the move.
 

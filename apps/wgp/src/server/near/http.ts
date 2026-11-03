@@ -8,7 +8,7 @@ import type { Db } from "@/server/db/client";
 import { HttpError } from "@/server/http";
 import { releaseBudget, reserveBudget, utcDay, type RateLimit } from "@/server/rate-limit";
 
-import { NearConfigError } from "./env";
+import { NearConfigError, relayerEnv } from "./env";
 import { HandleError } from "./factory";
 import { JwtError } from "./jwt";
 
@@ -78,4 +78,25 @@ export async function spend(
   return async (unused: number) => {
     if (unused > 0) await releaseBudget(db, { scope, key, period, amount: Math.min(unused, amount) });
   };
+}
+
+/**
+ * Reserves `tgas` from the relayer's global daily gas, then one of the caller's daily
+ * calls (`scope`, `key`, `limit`; a 429 when they're out). A caller over their cap gets
+ * the gas straight back, so retrying can't drain the budget every player shares.
+ * Returns a release function for the unused gas.
+ */
+export async function spendRelay(
+  db: Db,
+  tgas: number,
+  calls: { scope: string; key: string; limit: number },
+): Promise<(unused: number) => Promise<void>> {
+  const releaseGas = await spend(db, "relay:tgas", "global", relayerEnv().dailyTgas, tgas);
+  try {
+    await spend(db, calls.scope, calls.key, calls.limit, 1, 429);
+  } catch (error) {
+    await releaseGas(tgas);
+    throw error;
+  }
+  return releaseGas;
 }

@@ -4,23 +4,12 @@
  * (a burst limit per IP and the durable daily budget, as NEAR Auth sign-up has).
  */
 import type { Db } from "@/server/db/client";
-import { HttpError } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
 import { createPlayerAccount, factoryState, inspectAccount } from "@/server/near/factory";
 import { NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spend } from "@/server/near/http";
 
 import { privyEnv, privyPort, readPrivyIdentity, toPrivyHttpError, verifyPrivyLogin, type PrivyIdentity } from "./privy";
 import type { AccountFactory } from "./privy-sign-in";
-
-/**
- * Sign-in posts must be JSON. A cross-site page can only send JSON after a CORS preflight
- * we never grant, so another site can't sign a visitor in to its own account (login CSRF)
- * with a plain form post.
- */
-export function assertJson(request: Request): void {
-  const type = request.headers.get("content-type") ?? "";
-  if (!/^application\/json\b/i.test(type)) throw new HttpError(415, "unsupported_media_type", "Send JSON");
-}
 
 /** Runs a route body, mapping Privy and NEAR errors. Wrap it in `handle()` from server/http. */
 export function privyRoute(fn: () => Promise<Response>): Promise<Response> {

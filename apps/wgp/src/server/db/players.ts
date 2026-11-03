@@ -2,7 +2,7 @@
  * Players and their authoritative saves. Chain's sign-in flow calls `findOrCreatePlayer`
  * and then `createSession(player.id)` (server/auth/session.ts).
  */
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 
 import { newSave } from "@wgp/game-core/engine";
 import type { Save } from "@wgp/game-core/types";
@@ -52,24 +52,30 @@ export function normalizeEmail(raw: unknown): string | null {
 }
 
 /**
- * The player who signed up first with this verified email, whatever service they used.
- * This is how a player keeps their hero when Google sign-in moves between Privy and
- * NEAR Auth. Pass only emails the identity provider verified.
+ * The player who signed up first with this verified email, through any service but
+ * `otherThan`. This is how a player keeps their hero when Google sign-in moves between
+ * Privy and NEAR Auth. Pass only emails the identity provider verified.
  */
-export async function playerByEmail(db: Db, email: string): Promise<Player | null> {
-  const [row] = await db.select().from(players).where(eq(players.email, email)).orderBy(asc(players.createdAt), asc(players.id)).limit(1);
+export async function playerByEmail(db: Db, email: string, otherThan?: Player["authKind"]): Promise<Player | null> {
+  const match = otherThan ? and(eq(players.email, email), ne(players.authKind, otherThan)) : eq(players.email, email);
+  const [row] = await db.select().from(players).where(match).orderBy(asc(players.createdAt), asc(players.id)).limit(1);
   return row ?? null;
 }
 
 /**
  * The player a Google login belongs to: the one with this provider subject, else the
- * first one with this verified email (`linked`: they signed up through the other Google
- * service). Null for a new player.
+ * first one with this verified email who signed up through the other Google service
+ * (`linked`). Never one from the same service: there a new subject is another Google
+ * account (a recycled mailbox, a re-registered domain), not the same player. Null for a
+ * new player.
  */
-export async function findPlayerForLogin(db: Db, login: { authSub: string; email: string | null }): Promise<{ player: Player; linked: boolean } | null> {
+export async function findPlayerForLogin(
+  db: Db,
+  login: { authSub: string; authKind: "privy" | "near_auth"; email: string | null },
+): Promise<{ player: Player; linked: boolean } | null> {
   const [known] = await db.select().from(players).where(eq(players.authSub, login.authSub)).limit(1);
   if (known) return { player: known, linked: false };
-  const byEmail = login.email ? await playerByEmail(db, login.email) : null;
+  const byEmail = login.email ? await playerByEmail(db, login.email, login.authKind) : null;
   return byEmail ? { player: byEmail, linked: true } : null;
 }
 

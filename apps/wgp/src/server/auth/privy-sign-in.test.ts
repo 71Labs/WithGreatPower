@@ -121,14 +121,30 @@ describe("returning players and linking", () => {
     expect(await allPlayers()).toHaveLength(1);
   });
 
+  it("never hands a player to another login of the same service that only shares the email", async () => {
+    // A different Google account with the same address (a recycled mailbox, a re-registered domain).
+    const first = await privySignIn(db, { identity: identity(11, { email: "ex@startup.example" }) }, { factory: closed });
+    const second = await privySignIn(db, { identity: identity(12, { email: "ex@startup.example" }) }, { factory: closed });
+    if (first.kind !== "signed-in" || second.kind !== "signed-in") throw new Error("not signed in");
+    expect(second).toMatchObject({ created: true, linked: false });
+    expect(second.player.id).not.toBe(first.player.id);
+
+    const nearAuth = await findOrCreatePlayer(db, { nearAccountId: `ex.${PARENT}`, authKind: "near_auth", authSub: "google-oauth2|ex1", handle: "ex", email: "ex2@startup.example" });
+    expect(await findPlayerForLogin(db, { authSub: "google-oauth2|ex2", authKind: "near_auth", email: "ex2@startup.example" })).toBeNull();
+    expect(await findPlayerForLogin(db, { authSub: "google-oauth2|ex1", authKind: "near_auth", email: "ex2@startup.example" })).toEqual({
+      player: expect.objectContaining({ id: nearAuth.id }),
+      linked: false,
+    });
+  });
+
   it("lets NEAR Auth find a Privy player the same way, by verified email", async () => {
     const out = await privySignIn(db, { identity: identity(7, { email: "gwen@example.com" }) }, { factory: closed });
     if (out.kind !== "signed-in") throw new Error(out.kind);
     // What POST /api/auth/near-auth does with a Google sub it has never seen.
-    const found = await findPlayerForLogin(db, { authSub: "google-oauth2|gwen", email: "gwen@example.com" });
+    const found = await findPlayerForLogin(db, { authSub: "google-oauth2|gwen", authKind: "near_auth", email: "gwen@example.com" });
     expect(found).toEqual({ player: expect.objectContaining({ id: out.player.id }), linked: true });
-    expect(await findPlayerForLogin(db, { authSub: "google-oauth2|gwen", email: null })).toBeNull();
-    expect(await findPlayerForLogin(db, { authSub: "google-oauth2|gwen", email: "other@example.com" })).toBeNull();
+    expect(await findPlayerForLogin(db, { authSub: "google-oauth2|gwen", authKind: "near_auth", email: null })).toBeNull();
+    expect(await findPlayerForLogin(db, { authSub: "google-oauth2|gwen", authKind: "near_auth", email: "other@example.com" })).toBeNull();
   });
 
   it("records the email on a known player who had none, and refuses banned players", async () => {

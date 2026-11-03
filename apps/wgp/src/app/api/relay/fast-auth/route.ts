@@ -18,8 +18,8 @@ import { getSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { HttpError, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
-import { chainEnv, nearAuthEnv, relayerEnv } from "@/server/near/env";
-import { labMode, NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spend } from "@/server/near/http";
+import { chainEnv, nearAuthEnv } from "@/server/near/env";
+import { labMode, NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spendRelay } from "@/server/near/http";
 import { submitFastAuthSign, validateFastAuthSign } from "@/server/near/near-auth";
 import { relayerHasFunds } from "@/server/near/relay";
 import { provider } from "@/server/near/rpc";
@@ -58,8 +58,11 @@ export const POST = handle("relay/fast-auth", (request: Request) =>
 
     if (!(await relayerHasFunds())) throw new HttpError(503, "relayer_empty", "The relayer is out of funds");
     const db = await getDb();
-    const releaseGas = await spend(db, "relay:tgas", "global", relayerEnv().dailyTgas, SIGN_RESERVE_TGAS);
-    await spend(db, "relay:fast-auth", accountId ?? `ip:${ip}`, NEAR_BUDGETS.fastAuthSignsPerAccountPerDay, 1, 429);
+    const releaseGas = await spendRelay(db, SIGN_RESERVE_TGAS, {
+      scope: "relay:fast-auth",
+      key: accountId ?? `ip:${ip}`,
+      limit: NEAR_BUDGETS.fastAuthSignsPerAccountPerDay,
+    });
 
     let result;
     try {
