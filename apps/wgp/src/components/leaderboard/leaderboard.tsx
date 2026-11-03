@@ -8,6 +8,8 @@ import { CircleAlert, Clock, Users } from "@/components/icons";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { BoardRow } from "@/server/db/leaderboard";
 
+import { boardLines, placeNotice } from "./board-lines";
+
 type Board = LeaderboardView["board"];
 type View = LeaderboardView & { signedIn: boolean };
 type Load = { state: "loading" } | { state: "error" } | { state: "ready"; view: View };
@@ -52,10 +54,13 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
+/** Above the dock, like the place notice: the viewer's row sticks here while it's scrolled out of view. */
+const PINNED = "sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-10 sm:bottom-[calc(78px+env(safe-area-inset-bottom))]";
+
 function Row({ row, you }: { row: BoardRow; you: boolean }) {
   return (
     <li
-      className={`flex min-h-14 items-center gap-3 rounded-[14px] px-2.5 py-2 sm:px-3 ${you ? "bg-game-gold ring-2 ring-game-ink" : ""}`}
+      className={`flex min-h-14 items-center gap-3 rounded-[14px] px-2.5 py-2 sm:px-3 ${you ? `${PINNED} bg-game-gold shadow-[var(--game-shadow-sm)] ring-2 ring-game-ink` : ""}`}
       aria-current={you ? "true" : undefined}
     >
       <RankBadge rank={row.rank} />
@@ -120,57 +125,44 @@ function EmptyBoard({ board }: { board: Board }) {
   );
 }
 
-/** The viewer's place, pinned above the dock while the board scrolls. */
-function YouCard({ view }: { view: View }) {
-  const me = view.me;
+/**
+ * Pinned above the dock for a viewer without a row: why they aren't on the board. A
+ * ranked viewer gets no card: their own row pins itself (boardLines).
+ */
+function PlaceNotice({ view }: { view: View }) {
+  const notice = placeNotice(view);
+  if (!notice) return null;
   return (
-    <div className="sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-10 sm:bottom-[calc(78px+env(safe-area-inset-bottom))]">
+    <div className={PINNED}>
       <StickerPanel as="aside" aria-label="Your place" className="p-2">
-        {me ? (
-          <ol className="flex flex-col">
-            <Row row={me} you />
-          </ol>
-        ) : (
-          <p className="flex min-h-14 items-center gap-3 px-2.5 text-[14px] leading-5 sm:px-3">
-            <Users aria-hidden className="size-5 shrink-0" strokeWidth={2} />
-            {view.signedIn
-              ? view.board === "tonight"
-                ? "You’re not on tonight’s board yet. Finish a ranked patrol to get a place."
-                : "You’re not on this board yet. Finish a ranked patrol to get a place."
-              : "Sign in to put your hero on the board. Guest runs stay unranked."}
-          </p>
-        )}
+        <p className="flex min-h-14 items-center gap-3 px-2.5 text-[14px] leading-5 sm:px-3">
+          <Users aria-hidden className="size-5 shrink-0" strokeWidth={2} />
+          {notice === "unranked"
+            ? view.board === "tonight"
+              ? "You’re not on tonight’s board yet. Finish a ranked patrol to get a place."
+              : "You’re not on this board yet. Finish a ranked patrol to get a place."
+            : "Sign in to put your hero on the board. Guest runs stay unranked."}
+        </p>
       </StickerPanel>
     </div>
   );
 }
 
+/** One list, so the viewer's row can stay pinned while the whole board scrolls under it. */
 function Board({ view }: { view: View }) {
-  const meId = view.me?.playerId;
-  const inTop = !!meId && view.rows.some((r) => r.playerId === meId);
-  const tail = !inTop ? view.around.filter((r) => r.rank > view.rows.length) : [];
-
   if (view.rows.length === 0) return <EmptyBoard board={view.board} />;
   return (
-    <>
-      <ol aria-label="Top heroes" className="flex flex-col gap-0.5">
-        {view.rows.map((r) => (
-          <Row key={r.playerId} row={r} you={r.playerId === meId} />
-        ))}
-      </ol>
-      {tail.length > 0 ? (
-        <>
-          <p aria-hidden className="px-3 text-center text-[18px] font-bold leading-4 tracking-[0.3em] text-game-muted">
+    <ol aria-label="Heroes by rank" className="flex flex-col gap-0.5">
+      {boardLines(view).map((line) =>
+        line.kind === "gap" ? (
+          <li key="gap" aria-hidden className="px-3 py-1 text-center text-[18px] font-bold leading-4 tracking-[0.3em] text-game-muted">
             ···
-          </p>
-          <ol aria-label="Around you" className="flex flex-col gap-0.5">
-            {tail.map((r) => (
-              <Row key={r.playerId} row={r} you={r.playerId === meId} />
-            ))}
-          </ol>
-        </>
-      ) : null}
-    </>
+          </li>
+        ) : (
+          <Row key={line.row.playerId} row={line.row} you={line.you} />
+        ),
+      )}
+    </ol>
   );
 }
 
@@ -178,8 +170,8 @@ function Board({ view }: { view: View }) {
 
 /**
  * Tonight, Season and All time, each a ranked list of verified runs: rank, the hero's
- * sticker in their suit, handle, NEAR account and score. The viewer's own place is
- * pinned above the dock.
+ * sticker in their suit, handle, NEAR account and score. The viewer's own row is drawn
+ * once, where it ranks, and pinned above the dock while it's out of view.
  */
 export function LeaderboardScreen() {
   const [board, setBoard] = useState<Board>("tonight");
@@ -252,7 +244,7 @@ export function LeaderboardScreen() {
         {load.state === "ready" ? <Board view={load.view} /> : null}
       </StickerPanel>
 
-      {load.state === "ready" && load.view.rows.length > 0 ? <YouCard view={load.view} /> : null}
+      {load.state === "ready" && load.view.rows.length > 0 ? <PlaceNotice view={load.view} /> : null}
     </div>
   );
 }
