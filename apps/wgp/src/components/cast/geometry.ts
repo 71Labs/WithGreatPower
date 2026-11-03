@@ -80,13 +80,50 @@ export function trace(d: string, step = 0.5): Poly[] {
   return rings;
 }
 
-/** Even-odd point-in-shape test. */
-export function inside([x, y]: Pt, shape: Poly[]): boolean {
+/** A traced shape ready for `inside`: each ring as flat x, y pairs, and the bounds of them all. */
+interface Shape {
+  rings: Float64Array[];
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+function prepare(rings: Poly[]): Shape {
+  const s: Shape = { rings: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  for (const ring of rings) {
+    const flat = new Float64Array(ring.length * 2);
+    ring.forEach(([x, y], i) => {
+      flat[i * 2] = x;
+      flat[i * 2 + 1] = y;
+      s.minX = Math.min(s.minX, x);
+      s.maxX = Math.max(s.maxX, x);
+      s.minY = Math.min(s.minY, y);
+      s.maxY = Math.max(s.maxY, y);
+    });
+    s.rings.push(flat);
+  }
+  return s;
+}
+
+/** Beyond any rounding in the crossing test below: a point this far outside the bounds is outside. */
+const BOUNDS_SLACK = 1e-6;
+
+/**
+ * Even-odd point-in-shape test. The pattern lines run far past the shapes they're clipped to,
+ * so most points fail the bounds check; the crossing test is the same arithmetic as ever, so
+ * the art comes out identical, only sooner.
+ */
+function inside(x: number, y: number, shape: Shape): boolean {
+  if (y < shape.minY || y > shape.maxY || x < shape.minX - BOUNDS_SLACK || x > shape.maxX + BOUNDS_SLACK) return false;
   let hit = false;
-  for (const ring of shape) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i];
-      const [xj, yj] = ring[j];
+  for (const ring of shape.rings) {
+    const n = ring.length;
+    for (let i = 0, j = n - 2; i < n; j = i, i += 2) {
+      const xi = ring[i];
+      const yi = ring[i + 1];
+      const xj = ring[j];
+      const yj = ring[j + 1];
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
     }
   }
@@ -124,12 +161,12 @@ function simplify(line: Poly, tolerance: number): Poly {
 }
 
 /** Bisects between a point outside `shape` and one inside it to find the boundary. */
-function boundary(outside: Pt, within: Pt, shape: Poly[]): Pt {
+function boundary(outside: Pt, within: Pt, shape: Shape): Pt {
   let a = outside;
   let b = within;
   for (let k = 0; k < 14; k++) {
     const m = lerp(a, b, 0.5);
-    if (inside(m, shape)) b = m;
+    if (inside(m[0], m[1], shape)) b = m;
     else a = m;
   }
   return b;
@@ -137,14 +174,14 @@ function boundary(outside: Pt, within: Pt, shape: Poly[]): Pt {
 
 /** Keeps the parts of each line that fall inside `shape`. */
 export function clipLines(lines: Poly[], shapeD: string): Poly[] {
-  const shape = trace(shapeD);
+  const shape = prepare(trace(shapeD));
   const out: Poly[] = [];
   for (const line of lines) {
     let run: Pt[] = [];
     let prev: Pt | null = null;
     let prevIn = false;
     for (const p of densify(line, 0.4)) {
-      const isIn = inside(p, shape);
+      const isIn = inside(p[0], p[1], shape);
       if (prev && isIn && !prevIn) run = [boundary(prev, p, shape)];
       if (isIn) run.push(p);
       if (prev && !isIn && prevIn) {
@@ -323,17 +360,16 @@ export function endHeading(d: string): { x: number; y: number; angle: number } {
  * rectangle per horizontal run: the JPEG-artifact staircase.
  */
 export function pixelate(d: string, size: number): string {
-  const shape = trace(d);
-  const all = shape.flat();
-  const minX = Math.floor(Math.min(...all.map((p) => p[0])) / size) - 1;
-  const maxX = Math.ceil(Math.max(...all.map((p) => p[0])) / size) + 1;
-  const minY = Math.floor(Math.min(...all.map((p) => p[1])) / size) - 1;
-  const maxY = Math.ceil(Math.max(...all.map((p) => p[1])) / size) + 1;
+  const shape = prepare(trace(d));
+  const minX = Math.floor(shape.minX / size) - 1;
+  const maxX = Math.ceil(shape.maxX / size) + 1;
+  const minY = Math.floor(shape.minY / size) - 1;
+  const maxY = Math.ceil(shape.maxY / size) + 1;
   let out = "";
   for (let row = minY; row <= maxY; row++) {
     let runStart: number | null = null;
     for (let col = minX; col <= maxX; col++) {
-      const isIn = inside([(col + 0.5) * size, (row + 0.5) * size], shape);
+      const isIn = inside((col + 0.5) * size, (row + 0.5) * size, shape);
       if (isIn && runStart === null) runStart = col;
       if (!isIn && runStart !== null) {
         const x0 = runStart * size;

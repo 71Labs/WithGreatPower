@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { Group, Matrix4, Vector3 } from "three";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -17,7 +18,7 @@ import type { Rig } from "./rig";
 async function parse(url: string) {
   const file = readFileSync(fileURLToPath(new URL(`../../../../public${url}`, import.meta.url)));
   const buf = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
-  return new GLTFLoader().parseAsync(buf, "");
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(buf, "");
 }
 
 /** Both clip files merged, with the hero skeleton's rest pose, as the scene loads them. */

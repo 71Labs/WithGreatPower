@@ -23,8 +23,14 @@ cast() {
   blender -b "$BLEND" -P retarget.py -- --cast --out "$MODELS/cast-anims.glb"
 }
 
+# The game loads packed files (meshopt): pack whatever was just written.
+pack() {
+  "$HERE/../../../apps/wgp/scripts/models/compress.sh"
+}
+
 if [[ "$step" == cast ]]; then
   cast
+  pack
   exit 0
 fi
 
@@ -49,4 +55,5 @@ if [[ "$step" == all ]]; then
   # The motion: Quaternius' UAL (mocap/, CC0) retargeted onto the same skeleton.
   blender -b "$BLEND" -P retarget.py -- --out "$MODELS/hero-anims.glb"
   cast
+  pack
 fi

@@ -1,12 +1,16 @@
-import { Geist_Mono, Inter, Manrope } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 
-/** UI text. */
-export const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
+/**
+ * UI text falls back to Inter where Neue Montreal isn't deployed (globals.css). Not preloaded:
+ * where it is deployed (production), Neue Montreal is preloaded instead (font-preload.tsx) and
+ * Inter is only the stand-in while it loads; elsewhere Inter comes with the stylesheet.
+ */
+export const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap", preload: false });
 
-/** Display headlines: set at 500 with tight tracking. */
-export const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["500", "600"], display: "swap" });
+/** Addresses, hashes and amounts in tables: never above the fold, so not preloaded. */
+export const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap", preload: false });
 
-/** Addresses, hashes and amounts in tables. */
-export const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap" });
+export const fontVariables = `${inter.variable} ${geistMono.variable}`;
 
-export const fontVariables = `${inter.variable} ${manrope.variable} ${geistMono.variable}`;
+/** Whether this build ships the licensed Neue Montreal files (next.config.ts checks public/fonts). */
+export const neueMontreal = process.env.WGP_NEUE_MONTREAL === "1";

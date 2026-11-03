@@ -134,11 +134,6 @@ export function Night3D() {
   // One boot per account state; a remount in development reuses the same promise.
   const boot = useRef<{ key: string; promise: Promise<Phase>; applied: boolean } | null>(null);
 
-  // Fetch the 3D code while the night is being set up, not after.
-  useEffect(() => {
-    void import("./stage");
-  }, []);
-
   const guestSave = account.status === "guest" ? save : null;
   useEffect(() => {
     if (phase.kind !== "boot" || account.status === "loading") return;

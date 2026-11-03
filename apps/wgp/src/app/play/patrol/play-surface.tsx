@@ -22,9 +22,10 @@ import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
 import type { Stop, StopResult } from "@wgp/game-core/types";
 
-import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
+import { holdAudioLoads, playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { attachControls, InputLatch, STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
 import { FrameTap } from "@/game3d/nav/tap";
+import { queueSettled } from "@/game3d/scene/characters/files";
 import { QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
 import { nightAudio, RunLoop, RunRecorder, sceneEffects, stopPositions, type LoopEvent3D, type NightSession } from "@/game3d/session";
@@ -127,6 +128,23 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     lastAnnounce.current = now;
     setAnnounce(text);
   }, []);
+
+  // Sound waits for the city's first frame (the 3D code comes first), and the score and the
+  // city's hum (the big downloads) for the hero's files too. Declared before the loop starts,
+  // whose countdown asks for them.
+  useEffect(() => {
+    const hold = holdAudioLoads();
+    const off = hudStore.subscribe(() => {
+      if (!hudStore.getSnapshot()) return;
+      off();
+      hold.effects();
+      void queueSettled().then(hold.all);
+    });
+    return () => {
+      off();
+      hold.all();
+    };
+  }, [hudStore]);
 
   // The loop: input source, events, recording, and the debug hooks. The loop itself lives
   // as long as this component; effects only attach to it, so a remount in development is safe.

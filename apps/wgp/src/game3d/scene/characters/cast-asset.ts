@@ -16,12 +16,17 @@
  *
  * The node extras ("wgp", a JSON string) carry the palette's colours, which entries are flat or
  * glossy, the face's decals and any sockets (Doc's chain booms), so the files are the only
- * source of each character's look. Loaded at most once per file, with GLTFLoader fetched on
- * first use, and only for the characters on the current night.
+ * source of each character's look. Loaded at most once per file (packed by
+ * scripts/models/compress.sh), with GLTFLoader fetched on first use, only for the characters on
+ * the current night, and queued behind the hero's files (files.ts).
  */
 import { BufferAttribute, BufferGeometry, Sphere, Vector3, type Object3D, type SkinnedMesh } from "three";
 
+import { castModelUrl as fileUrl, queueModel } from "./files";
+import { loadGltf } from "./gltf";
 import { orderedBones, remapSkin, type HeroAsset, type HeroBone } from "./hero-asset";
+
+export { CAST_ANIMS } from "./files";
 
 /** Game units per metre: the hero's 88 units for his 1.886 m. Every body shares it. */
 export const UNITS_PER_METRE = 88 / 1.886;
@@ -30,11 +35,8 @@ export const UNITS_PER_METRE = 88 / 1.886;
 export const CAST_BODIES = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei", "gas-goblin", "sandwich-man", "doc-octochain", "sybil"] as const;
 export type CastBodyId = (typeof CAST_BODIES)[number];
 
-/** The cast's extra motion: clips the hero doesn't use (retarget.py --cast). */
-export const CAST_ANIMS = "/models/cast-anims.glb";
-
 export function castModelUrl(id: CastBodyId, low: boolean): string {
-  return low ? `/models/cast-${id}-lo.glb` : `/models/cast-${id}.glb`;
+  return fileUrl(id, low);
 }
 
 export type DecalShapeName = "ellipse" | "ring" | "lower" | "stroke" | "upper" | "arc" | "jag" | "teeth";
@@ -91,12 +93,12 @@ export interface CastAsset {
 const pending = new Map<string, Promise<CastAsset>>();
 const loaded = new Map<string, CastAsset>();
 
-export function loadCastAsset(url: string): Promise<CastAsset> {
+/** Load a body file once, in the queue behind the hero's files (`urgent`: at the front of it). */
+export function loadCastAsset(url: string, urgent = false): Promise<CastAsset> {
   let p = pending.get(url);
   if (!p) {
     p = (async () => {
-      const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-      const gltf = await new GLTFLoader().loadAsync(url);
+      const gltf = await loadGltf(url, queueModel(url, urgent));
       const a = castFromScene(gltf.scene, url);
       loaded.set(url, a);
       return a;

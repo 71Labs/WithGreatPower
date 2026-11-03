@@ -1,7 +1,9 @@
 /**
  * The hero's body file: an MPFB (MakeHuman, CC0) model in public/models, made by
- * launch/brand/hero/export.py --game. Loaded at most once per file with three's GLTFLoader,
- * which is itself fetched on first use, so neither ever reaches a page without the 3D scene.
+ * launch/brand/hero/export.py --game and packed by scripts/models/compress.sh. Loaded at most
+ * once per file with three's GLTFLoader (gltf.ts), which is itself fetched on first use, so
+ * neither ever reaches a page without the 3D scene. files.ts says where the files are and
+ * brings the hero's down ahead of the cast's.
  *
  * What the file holds (glTF metres: +Y up, facing +Z, the soles at y = 0):
  * - one skinned mesh in the rest A-pose on a 53-bone UE-style skeleton;
@@ -17,11 +19,10 @@
  */
 import { BufferAttribute, BufferGeometry, Sphere, Vector3, type AnimationClip, type Object3D, type SkinnedMesh } from "three";
 
-/** The two levels of detail: the full body, and the low tier's lighter one. */
-export const HERO_MODEL = { hi: "/models/hero.glb", lo: "/models/hero-lo.glb" } as const;
+import { fetchModel, HERO_ANIMS, queueModel } from "./files";
+import { loadGltf } from "./gltf";
 
-/** The hero's motion-capture clips (Quaternius' UAL, CC0, retargeted by launch/brand/hero/retarget.py). */
-export const HERO_ANIMS = "/models/hero-anims.glb";
+export { HERO_ANIMS, HERO_MODEL } from "./files";
 
 /** Clips are resampled to this rate. */
 export const CLIP_FPS = 30;
@@ -88,13 +89,12 @@ export function heroAssetNow(url: string): HeroAsset | null {
 
 const clipsPending = new Map<string, Promise<HeroClips>>();
 
-/** Load the clip file once. */
+/** Load a clip file once: the hero's at once, another (the cast's) in the queue behind the hero's files. */
 export function loadHeroClips(url: string = HERO_ANIMS): Promise<HeroClips> {
   let p = clipsPending.get(url);
   if (!p) {
     p = (async () => {
-      const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-      const gltf = await new GLTFLoader().loadAsync(url);
+      const gltf = await loadGltf(url, url === HERO_ANIMS ? fetchModel(url) : queueModel(url));
       const clips = clipsFromGltf(gltf.animations);
       const pelvis = gltf.scene.getObjectByName("pelvis");
       if (pelvis) clips.pelvisRest = [pelvis.position.x, pelvis.position.y, pelvis.position.z];
@@ -137,9 +137,7 @@ export function clipsFromGltf(animations: AnimationClip[]): HeroClips {
 }
 
 async function fetchAsset(url: string): Promise<HeroAsset> {
-  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-  const gltf = await new GLTFLoader().loadAsync(url);
-  return assetFromScene(gltf.scene, url);
+  return assetFromScene((await loadGltf(url)).scene, url);
 }
 
 /**
