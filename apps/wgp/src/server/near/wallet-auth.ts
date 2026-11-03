@@ -4,9 +4,10 @@
  * is a full-access key of the account on chain.
  *
  * Nonces are stateless: 32 random bytes plus an expiry and the account, sealed with an
- * HMAC under AUTH_SECRET. A used nonce is remembered until it expires (per instance;
- * the 5-minute window bounds replays across instances, and replaying only re-signs in
- * the same wallet owner).
+ * HMAC under AUTH_SECRET. Once its signature checks out, a nonce is burned in the
+ * database until it expires (`burnChallenge`), so a signed challenge signs in once
+ * across every server instance; an in-memory set also stops a replay on the same
+ * instance before any RPC work.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
@@ -14,6 +15,8 @@ import { baseDecode } from "near-api-js";
 import { verifyMessage } from "near-api-js/nep413";
 
 import { isAccountId } from "../../lib/near/policy";
+import { burnNonce } from "../auth/nonces";
+import type { Db } from "../db/client";
 import { provider } from "./rpc";
 
 export const SIGN_IN_MESSAGE = "Sign in to With Great Power";
@@ -59,6 +62,17 @@ export function redeemChallenge(secret: string, token: string, accountId: string
   const bytes = Buffer.from(nonce, "base64");
   if (bytes.length !== 32) throw new Error("Bad nonce");
   return new Uint8Array(bytes);
+}
+
+/**
+ * Uses a redeemed challenge up for good, on every instance. False when it already signed
+ * someone in. Call it after redeemChallenge and the signature check.
+ */
+export async function burnChallenge(db: Db, token: string, now = new Date()): Promise<boolean> {
+  const [nonce, exp] = token.split(".");
+  const expiresAt = Number(exp);
+  if (!nonce || !Number.isFinite(expiresAt)) return false;
+  return burnNonce(db, "wallet", nonce, new Date(expiresAt), now);
 }
 
 /** Wallets return base64 signatures; some return "ed25519:<base58>". */

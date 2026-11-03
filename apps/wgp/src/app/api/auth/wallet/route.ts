@@ -6,7 +6,8 @@
  *     message and recipient to `wallet.signMessage`, keep `token`.
  * { action: "verify", accountId, publicKey, signature, token }
  *     Checks the signature, that publicKey is a full-access key of accountId on chain, and
- *     the challenge (once, 5 minutes). 200 { accountId, playerId } and a session cookie.
+ *     the challenge (once on any instance, 5 minutes). 200 { accountId, playerId } and a
+ *     session cookie.
  * { action: "session-key", publicKey }   (signed in)
  *     "Enable quick play": after the wallet added a function-call key for the game
  *     contract, records it so the relayer accepts it. Checked on chain first.
@@ -27,7 +28,7 @@ import { chainEnv } from "@/server/near/env";
 import { NEAR_RATE_LIMITS, nearRoute } from "@/server/near/http";
 import { provider } from "@/server/near/rpc";
 import { addSessionKey } from "@/server/near/session-keys";
-import { handleFromAccount, issueChallenge, redeemChallenge, verifyWalletSignature } from "@/server/near/wallet-auth";
+import { burnChallenge, handleFromAccount, issueChallenge, redeemChallenge, verifyWalletSignature } from "@/server/near/wallet-auth";
 
 const accountId = z.string().refine(isAccountId, "not a NEAR account id");
 const publicKey = z.string().regex(/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,50}$/, "an ed25519 public key");
@@ -65,6 +66,7 @@ export const POST = handle("auth/wallet", (request: Request) =>
         throw unauthorized(`Signature rejected: ${(error as Error).message}`);
       }
       const db = await getDb();
+      if (!(await burnChallenge(db, input.token))) throw unauthorized("Sign-in challenge rejected: Challenge already used");
       const player = await findOrCreatePlayer(db, {
         nearAccountId: input.accountId,
         authKind: "wallet",

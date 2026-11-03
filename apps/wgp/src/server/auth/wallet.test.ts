@@ -1,6 +1,7 @@
 /**
  * POST /api/auth/wallet as an attacker would try it, with the on-chain signature check
- * faked (it passes).
+ * faked (it passes): a cross-site form post, and a signed challenge replayed on another
+ * server instance.
  */
 import { KeyPair } from "near-api-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +61,19 @@ describe("wallet sign-in", () => {
     // What a cross-site <form enctype="text/plain"> sends, without a CORS preflight.
     const res = await post(POST, verify(token), "text/plain");
     expect(res.status).toBe(415);
+    expect(jar.size).toBe(0);
+  });
+
+  it("refuses a signed challenge replayed on another server instance", async () => {
+    const { token } = await challenge();
+    expect((await post(POST, verify(token))).status).toBe(200);
+    jar.clear();
+
+    // A fresh module is what another serverless instance runs: nothing in its memory.
+    vi.resetModules();
+    const { POST: otherInstance } = await import("@/app/api/auth/wallet/route");
+    const replay = await post(otherInstance, verify(token));
+    expect(replay.status).toBe(401);
     expect(jar.size).toBe(0);
   });
 });

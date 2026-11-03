@@ -5,7 +5,8 @@
  *
  * NEAR Auth uses one per Google sign-in: the browser asks Auth0 to put it in the ID
  * token's `nonce` claim, and the server takes it back when the token arrives
- * (src/server/near/near-auth.ts, `redeemNearAuthNonce`).
+ * (src/server/near/near-auth.ts, `redeemNearAuthNonce`). NEAR wallet sign-in seals its
+ * nonces in the challenge instead, and records each here once used (`burnNonce`).
  */
 import { createHash, randomBytes } from "node:crypto";
 
@@ -14,7 +15,7 @@ import { and, eq, gt, lt } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { authNonces } from "@/server/db/schema";
 
-export type NoncePurpose = "near-auth";
+export type NoncePurpose = "near-auth" | "wallet";
 
 /** Long enough to pick a Google account in a popup, short enough to be useless later. */
 export const NONCE_TTL_MS = 10 * 60_000;
@@ -46,6 +47,20 @@ export async function consumeNonce(db: Db, purpose: NoncePurpose, nonce: string,
   const rows = await db
     .delete(authNonces)
     .where(and(eq(authNonces.idHash, hash(nonce)), eq(authNonces.purpose, purpose), gt(authNonces.expiresAt, now)))
+    .returning({ id: authNonces.idHash });
+  return rows.length > 0;
+}
+
+/**
+ * For nonces the server seals instead of storing (NEAR wallet sign-in): records `nonce`
+ * as used until `expiresAt`. True only for the first caller, whichever instance it's on.
+ */
+export async function burnNonce(db: Db, purpose: NoncePurpose, nonce: string, expiresAt: Date, now = new Date()): Promise<boolean> {
+  if (!nonce || nonce.length > 128) return false;
+  const rows = await db
+    .insert(authNonces)
+    .values({ idHash: hash(nonce), purpose, createdAt: now, expiresAt })
+    .onConflictDoNothing({ target: authNonces.idHash })
     .returning({ id: authNonces.idHash });
   return rows.length > 0;
 }
