@@ -16,11 +16,14 @@ import { rateLimiter } from "@/server/rate-limit";
 import { NEAR_RATE_LIMITS } from "@/server/near/http";
 import { playerOnChain } from "@/server/near/operator";
 import { chainStatus, type PlayerView } from "@/server/near/status";
+import { sendMintsSoon } from "@/server/background";
 
 export const GET = handle("chain/status", async (request: Request) => {
   const session = await requireSession(request);
   rateLimiter.enforce("chain-status", session.playerId, NEAR_RATE_LIMITS.chainStatusPerPlayer);
   const db = await getDb();
+  // Players read this when they open their account: a good moment to retry queued mints.
+  sendMintsSoon();
   const { save } = await ensureSave(db, session.playerId);
   const status = await chainStatus(db, {
     player: session.player,
