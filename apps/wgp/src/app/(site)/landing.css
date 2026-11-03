@@ -1,0 +1,26 @@
+/*
+ * The landing page's night bands: the game's city sky (--game-night) behind paper text,
+ * with the halftone dots the city draws on its shadow faces. The night is part of the
+ * game's world, like the stickers, so these values don't change with the theme.
+ * In the components layer, so utilities still win.
+ */
+@layer components {
+  .night {
+    --night-ink: var(--game-paper); /* headlines: 14.2:1 on night */
+    --night-ink-subtle: #c9cbf0; /* body copy: 9.1:1 */
+    --night-ink-faint: #9297d6; /* two-tone lead-ins: 5.2:1 */
+    --night-dot: rgb(255 255 255 / 0.07);
+    /* Focus rings drawn on the night are gold (10.5:1); on paper they go back to red. */
+    --vs-focus: var(--game-gold);
+
+    background-color: var(--game-night);
+    background-image: radial-gradient(var(--night-dot) 1.2px, transparent 1.7px);
+    background-size: 9px 9px;
+    color: var(--night-ink-subtle);
+  }
+
+  .night h1,
+  .night h2 {
+    color: var(--night-ink);
+  }
+}
