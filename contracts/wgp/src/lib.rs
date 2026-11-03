@@ -33,9 +33,7 @@ mod tests;
 
 use near_sdk::json_types::U128;
 use near_sdk::store::{IterableSet, LookupMap};
-use near_sdk::{
-    env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
-};
+use near_sdk::{env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault};
 
 pub use events::*;
 pub use market::*;
