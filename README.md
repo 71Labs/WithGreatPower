@@ -65,14 +65,14 @@ All steps work on the live site, with no install.
    - **Do:** open https://www.wgponnear.fun/lab/economy and press play (up to Instant speed).
    - **See:** days of bot players buying, selling, listing and crafting on the same pricing code, with each item's price and stock charted.
 7. **Check it on NEAR.**
-   - **Do:** after the contract is live (see Status), open https://nearblocks.io/address/game.wgpnear.near.
+   - **Do:** open https://nearblocks.io/address/game.wgpnear.near.
    - **See:** the contract's NEP-245 transfer, mint and burn events. Your account's items and Bits come from `mt_balance_of`.
 
 ## What NEAR does here
 
 | Piece | How |
 |---|---|
-| **Player accounts** | A wallet player is their own NEAR account. A Google player gets a NEAR key from Privy's embedded wallet. Once the factory account is live they get `<name>.wgpnear.near` holding that key; before then they play on the key's implicit account and claim the name later, keeping their save, rank and rewards. |
+| **Player accounts** | A wallet player is their own NEAR account. A Google player gets a NEAR key from Privy's embedded wallet, and the game's factory account (`wgpnear.near`) creates `<name>.wgpnear.near` holding that key. Players who signed up before the factory went live play on the key's implicit account until they claim their name from the account sheet; their save, rank and rewards move with them. |
 | **Items, suits, trophies and Bits** | NEP-245 multi-tokens in one contract, `game.wgpnear.near` (`contracts/wgp`). Heroes and trophies are soulbound. Transfers need 1 yoctoNEAR, so game keys can never move assets. |
 | **Rewards** | Each verified night queues a reward mint (items, plus Bits worth score/100 + 5, plus 1 per Bits token collected, up to 25, counted from the verified replay). The operator account sends `mint_rewards` with per-account nonces, so a retry never mints twice. Mints are sent in the background of player requests; there are no cron jobs. |
 | **The Mempool Market** | In-contract NPC vendor with a bonding curve per item, player listings held in escrow, and a 2% "gas fee" parody that's burned. Guards cap what a stolen game key could do. |
@@ -84,8 +84,9 @@ All steps work on the live site, with no install.
 
 | | |
 |---|---|
-| Live | The game, ranked runs verified by replay, leaderboards, Season 1 (Nov 5–14) with its automatic close, Google sign-in (Privy) and NEAR wallet sign-in, the market and economy lab (simulated until the contract is live), the full soundtrack |
-| Being deployed | `game.wgpnear.near` and its relayer and operator accounts (`scripts/near/setup-mainnet.sh`). Until then, rewards and season records (with their trophies) are queued, not minted, the market runs in simulation (`onChain: false`), and Google players stay on their implicit accounts |
+| Live | The game, ranked runs verified by replay, leaderboards, Season 1 (Nov 5–14) with its automatic close, Google sign-in (Privy) and NEAR wallet sign-in, the full soundtrack |
+| Live on mainnet | The game contract `game.wgpnear.near` (NEP-245 items, suits, trophies and Bits), reward mints from `operator.wgpnear.near`, the Mempool Market on chain (`GET /api/market` → `onChain: true`), the relayer `relayer.wgpnear.near`, and player accounts from the factory `wgpnear.near` |
+| Simulation by design | `/lab/economy`, which fast-forwards bot players on the same pricing code |
 | Waiting on approval | NEAR Auth as a second Google sign-in path (mainnet client) |
 
 ## How verification works

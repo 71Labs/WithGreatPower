@@ -14,9 +14,9 @@ const jobs: { icon: ReactNode; title: string; body: ReactNode }[] = [
     title: "Your account",
     body: (
       <>
-        Continue with Google and you get a NEAR key of your own, no wallet or seed phrase needed. Your name, like{" "}
-        <Account>you.wgpnear.near</Account>, opens when the game’s account factory goes live. Already have a NEAR
-        wallet? Sign one message (NEP-413): no transaction, no fee.
+        Continue with Google and you get a NEAR key of your own and an account like{" "}
+        <Account>you.wgpnear.near</Account>, no wallet or seed phrase needed. Already have a NEAR wallet? Sign one
+        message (NEP-413): no transaction, no fee.
       </>
     ),
   },
@@ -26,8 +26,8 @@ const jobs: { icon: ReactNode; title: string; body: ReactNode }[] = [
     body: (
       <>
         Loot, suits and Bits are NEP-245 tokens of the game contract, <Account>game.wgpnear.near</Account>, held by your
-        own account. The contract is being deployed to NEAR mainnet; until it’s live, rewards from verified nights wait
-        in a queue, then mint to you.
+        own account. The contract is live on NEAR mainnet: rewards from verified nights mint to you in the background,
+        with nothing for you to sign.
       </>
     ),
   },
