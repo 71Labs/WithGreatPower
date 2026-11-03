@@ -1,5 +1,7 @@
 /**
  * GET /api/cron/market-snapshot (Authorization: Bearer $CRON_SECRET) → 200 { onChain, written }
+ * A manual trigger; nothing schedules it. Snapshots are taken in the background of market
+ * reads at most every 30 minutes (src/server/background.ts).
  * Writes a price-history snapshot of every pool whose price moved, or whose last row is
  * over an hour old, so charts keep a point even when nobody trades. Point a cron at it
  * (every 10 to 60 minutes); trades write their own rows as they happen.

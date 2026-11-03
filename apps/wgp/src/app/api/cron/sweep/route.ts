@@ -1,6 +1,7 @@
 /**
  * GET /api/cron/sweep (Authorization: Bearer $CRON_SECRET) → 200 SweepReport
- * Vercel Cron calls it every 10 minutes (vercel.json). Expires abandoned runs, re-queues
+ * Nothing schedules it: the sweep runs in the background of player requests at most every
+ * 10 minutes (src/server/background.ts), and this route is a manual trigger. Expires abandoned runs, re-queues
  * failed or stuck outbox rows (GET /api/cron/mint sends them), prunes expired sessions
  * and sign-in nonces, and old budget counters.
  */
