@@ -242,8 +242,13 @@ export async function submitRun(
   const { result } = verdict;
   const assist = run.assist || (result.stats.assist ?? 0) > 0;
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
-  // Bits come from the verified score alone, so the results screen shows the same number.
-  const bits = nightBits({ score: result.score, levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0) });
+  // Bits come from the verified replay alone (its score and, since ruleset 3, the Bits tokens it
+  // collected); the results screen shows the number this returns.
+  const bits = nightBits({
+    score: result.score,
+    levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0),
+    pickups: result.stats.bits ?? 0,
+  });
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
 

@@ -7,6 +7,7 @@
 import type { Action } from "@wgp/game-core/engine";
 import type { Save } from "@wgp/game-core/types";
 
+import type { ClaimInfo } from "@/server/auth/privy-sign-in";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { ImportResult } from "@/server/db/migrate-save";
 import type { StartedRun } from "@/server/db/runs";
@@ -97,7 +98,10 @@ export const postAction = (action: Action, rev: number) => call<ActionResponse>(
 /** Once per player, onto an empty server save. */
 export const migrateLocalSave = (save: Save) => call<MigrateResponse>("/api/migrate", { method: "POST", json: { save } });
 
-export type { ChainStatus };
+export type { ChainStatus, ClaimInfo };
+
+/** An unclaimed Google player (through Privy): whether "Claim your name" can go through now. */
+export const getClaimInfo = (signal?: AbortSignal) => call<ClaimInfo>("/api/auth/privy/claim", { signal });
 
 /** Signed in: the hero's registration, the session keys the relayer accepts, and the contract's view of the player. */
 export const getChainStatus = (signal?: AbortSignal) => call<ChainStatus>("/api/chain/status", { signal });

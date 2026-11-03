@@ -28,6 +28,8 @@ import { and, asc, eq, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
 
 import type { ItemId } from "@wgp/game-core/types";
 
+import { isImplicitAccountId } from "../../lib/near/policy";
+
 import type { Db } from "./client";
 import { chainOps, players, type ChainOp } from "./schema";
 
@@ -94,18 +96,27 @@ export async function enqueueRewardMint(
   op: { kind: MintKind; dedupeKey: string; playerId: string; payload: Record<string, unknown> },
   now = new Date(),
 ): Promise<{ queued: boolean; nonce: number }> {
-  const [player] = await tx.select({ next: players.nextRewardNonce }).from(players).where(eq(players.id, op.playerId)).for("update");
+  const [player] = await tx
+    .select({ next: players.nextRewardNonce, accountId: players.nearAccountId })
+    .from(players)
+    .where(eq(players.id, op.playerId))
+    .for("update");
   if (!player) throw new Error(`No player ${op.playerId} to mint for`);
 
   const [existing] = await tx.select({ nonce: chainOps.rewardNonce }).from(chainOps).where(eq(chainOps.dedupeKey, op.dedupeKey)).limit(1);
   if (existing) return { queued: false, nonce: existing.nonce ?? 0 };
 
   const nonce = player.next;
+  // A player who claimed a name (move-account.ts) after the caller read them: the payload
+  // still names their old implicit account, so take the account as of this lock.
+  const named = op.payload.accountId;
+  const moved = typeof named === "string" && isImplicitAccountId(named) && named !== player.accountId;
+  const payload = moved ? { ...op.payload, accountId: player.accountId } : op.payload;
   await tx.insert(chainOps).values({
     kind: op.kind,
     dedupeKey: op.dedupeKey,
     playerId: op.playerId,
-    payload: op.payload,
+    payload,
     rewardNonce: nonce,
     nextAttemptAt: now,
     createdAt: now,
@@ -176,6 +187,20 @@ export function planRewardQueue<T extends QueuedMint>(rows: T[], now: Date, limi
 }
 
 /**
+ * Mints of unclaimed players (Google through Privy, still on their key's implicit
+ * account id; src/lib/near/policy.ts `isUnclaimed`) are held: that account doesn't exist
+ * on NEAR, and the contract counts reward nonces per account. When the player claims a
+ * name, `movePlayerAccount` points the held rows at the new account, whose nonces start
+ * where these do (1), so nothing is lost or minted twice.
+ */
+const notHeld = sql`not exists (
+  select 1 from ${players}
+  where ${players.id} = ${chainOps.playerId}
+    and ${players.authKind} = 'privy'
+    and ${players.nearAccountId} ~ '^[0-9a-f]{64}$'
+)`;
+
+/**
  * Claims the next batch of mints (pending → sending) in per-account nonce order. If
  * another worker claimed any of them first, nothing is taken (try again next tick), so a
  * batch never skips a nonce. Returns the claimed rows, ready for `rewardFromOp`.
@@ -184,7 +209,7 @@ export async function claimRewardBatch(db: Db, now = new Date(), limit = REWARD_
   const unsent = await db
     .select()
     .from(chainOps)
-    .where(and(isNotNull(chainOps.rewardNonce), ne(chainOps.status, "sent")))
+    .where(and(isNotNull(chainOps.rewardNonce), ne(chainOps.status, "sent"), notHeld))
     .orderBy(asc(chainOps.playerId), asc(chainOps.rewardNonce))
     .limit(1000);
   const plan = planRewardQueue(unsent, now, limit);

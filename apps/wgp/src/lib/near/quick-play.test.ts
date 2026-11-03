@@ -30,4 +30,8 @@ describe("quick play state", () => {
     expect(quickPlayState({ ...base, available: false, liveKeys: [PK], localKey: { publicKey: PK, accountId: ME } })).toEqual({ state: "unavailable", reason: "test-account" });
     expect(quickPlayState({ ...base, configured: false, enabling: true })).toEqual({ state: "unavailable", reason: "not-configured" });
   });
+
+  it("is unavailable for a Google player who hasn't claimed a name: no account on NEAR to hold a key", () => {
+    expect(quickPlayState({ ...base, available: false, unclaimed: true, localKey: { publicKey: PK, accountId: null } })).toEqual({ state: "unavailable", reason: "unclaimed" });
+  });
 });

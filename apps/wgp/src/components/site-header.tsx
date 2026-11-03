@@ -6,7 +6,7 @@ import { Menu, X } from "@/components/icons";
 
 import { NAV, PLAY_URL } from "@/lib/site";
 import { COLUMN } from "./frame";
-import { LinkButton } from "./ui";
+import { StickerLink } from "./game/kit";
 
 /** A small web: four spokes and two rings, the WGP mark. */
 export function WebMark({ className = "" }: { className?: string }) {
@@ -110,9 +110,9 @@ function MobileMenu() {
       >
         <nav aria-label="Main" className="flex max-h-[calc(100dvh-4rem)] flex-col gap-8 overflow-y-auto px-4 pb-6 pt-2">
           <NavLinks variant="sheet" onNavigate={close} firstRef={firstLinkRef} />
-          <LinkButton href={PLAY_URL} size="lg" className="w-full" onClick={close}>
+          <StickerLink href={PLAY_URL} variant="hero" size="md" className="w-full" onClick={close}>
             Play now
-          </LinkButton>
+          </StickerLink>
         </nav>
       </div>
     </div>
@@ -132,15 +132,17 @@ export function SiteHeader() {
               <WebMark className="size-[18px]" />
             </span>
             <span className="font-display text-[19px] font-medium leading-none tracking-[-0.035em] text-ink-strong">
-              <span className="sm:hidden">WGP</span>
-              <span className="max-sm:hidden">With Great Power</span>
+              <span className="whitespace-nowrap max-sm:hidden md:max-lg:hidden">With Great Power</span>
+              <span className="sm:max-md:hidden lg:hidden">WGP</span>
             </span>
           </Link>
           <nav aria-label="Main" className="hidden justify-self-center md:block">
             <NavLinks variant="bar" />
           </nav>
           <div className="hidden justify-self-end md:block">
-            <LinkButton href={PLAY_URL}>Play now</LinkButton>
+            <StickerLink href={PLAY_URL} variant="paper" size="sm">
+              Play now
+            </StickerLink>
           </div>
           <MobileMenu />
         </div>

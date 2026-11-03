@@ -40,9 +40,11 @@ describe("determinism", () => {
     const base = replayRun({ save: save(), seed: SEED, log });
     const other = playBot(save(), SEED + 1).run;
     expect(hashState(other.sim)).not.toBe(base.hash);
-    // Flip the web on one early frame: the replay diverges (or is refused) but never matches.
+    // Flip the web on a third of a second of early frames: the replay diverges (or is refused)
+    // but never matches. (One flipped frame can be a no-op since ruleset 3: a web let go for a
+    // tick just after it latched on is a tap, and the press back takes the line in hand again.)
     const decoded = decodeInputLog(log);
-    decoded.frames[120] = { ...decoded.frames[120], web: !decoded.frames[120].web };
+    for (let i = 120; i < 140; i++) decoded.frames[i] = { ...decoded.frames[i], web: !decoded.frames[i].web };
     const tampered = replayRun({ save: save(), seed: SEED, log: encodeInputLog(decoded) });
     expect(tampered.hash === base.hash && tampered.score === base.score).toBe(false);
   });

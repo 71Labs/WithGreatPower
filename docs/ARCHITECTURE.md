@@ -36,9 +36,17 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - **Rewritten:**
     - `world.ts` → `city.ts`: an AABB grid, 9×9 blocks, a spatial hash, sphere collision and a raycast shared with the camera.
     - `villains.ts` keeps each joke: Goblin flies a looping path, Sandwich runs the arena roofs, Doc sweeps the bridge plane, Sybil's copies orbit in xz.
-- **Rope in 3D:** gravity → air steer → pump → reel → integrate → project onto the rope sphere and drop outward speed → collide with boxes (land on roofs, slide on walls) → the street or river is a miss. Two substeps above 1,200 u/s.
-- **Release grading uses no trig:** constant tangent bounds replace `atan2`. Since ruleset 2 the perfect window is 20–60° above horizontal, where a swing naturally releases.
-- **Anchor choice ignores the camera.** Heading comes from the stick (one of 64 literal directions), else the bearing to the next stop (one-thumb play), else the villain, else velocity. Since ruleset 2 (`sim3d/swing.ts`) it picks among roof-edge and facade points ahead and up on the buildings flanking the travel line, scored by a short forecast of forward progress and clearance; it never webs behind or straight overhead. Ties break deterministically.
+- **Rope in 3D:** gravity → air steer → pump → reel → integrate → project onto the rope sphere and drop outward speed → collide with boxes (land on roofs, slide on walls) → the street or river is a miss. Two substeps above 1,200 u/s. Since ruleset 3 a slack line below its anchor takes itself up (not shorter than 170), so a web shot while jumping or rising toward its anchor can't drag you into the street.
+- **Release grading uses no trig:** constant tangent bounds replace `atan2`. Since ruleset 3 the perfect window is 15–65° above horizontal (ruleset 2: 20–60°), where a swing naturally releases, and boosts ×1.15; any other release still rising at speed is good and boosts ×1.05.
+- **Anchor choice ignores the camera.** Heading comes from the stick (one of 64 literal directions), else the bearing to the next stop (one-thumb play), else the villain, else velocity. Since ruleset 2 (`sim3d/swing.ts`) it picks among roof-edge and facade points ahead and up on the buildings flanking the travel line, scored by a short forecast of forward progress and clearance; it never webs behind or straight overhead. Ties break deterministically. Since ruleset 3 the heading only aims webs (and leans the pump): nothing moves the hero along it without the stick.
+- **Controls (ruleset 3, `sim3d/hero.ts`), after the owner's playtest:**
+  - **Ground:** only the stick runs, brakes and turns you (the body turns to face it at 19 rad/s). Centred, friction stops you and you stand, indefinitely. A roof's edge holds you unless the stick pushes out over it; then you walk off, with no hop. Only the web takes off: a jump into a swing toward the stick, or toward the next stop with the stick idle (a plain jump if nothing is in reach).
+  - **The web button:** a press is buffered for 0.15 s, so a re-web straight after a release takes. A tap (let go within 0.18 s of the web taking) swings on to the swing's natural end. Held through that end (rising past the window's top, or the top of a weak arc), the web lets go by itself, ungraded, and the next shoots at the top of the arc, so holding chains swings. Letting go yourself is graded.
+  - **Landing:** touching down on a roof ends the swing. Let go first and it's a clean landing: the impact takes half its speed off, a short skid (friction 1,700 above run speed, 2,600 below) and a stop, no bounce. Holding the web through the touchdown shoots a new web on the next tick.
+  - **The street** costs 3 health (ruleset 2: 6) and the combo, and bounces you back up with 80% of your speed (ruleset 2: 55%).
+  - **Air control** is stronger (900 u/s², up to 640 along the stick) and swings faster (pump 400, soft top speed 1,800).
+- **Pickups and the combo (ruleset 3, `sim3d/pickups.ts`):** each leg's swing line runs along the street grid in a Z (down the street by the leg's start, along the cross street halfway, down the street by the stop), and gets a Bits token every 210 units at swing height (from the facades either side), clear of arenas, the river and buildings, with a boost ring in the middle of each long stretch: about 50 tokens and 6 rings a night, placed from the city alone. A token or ring is taken in reach (80 and 110 units, 1.5× that up and down); a ring boosts you to at least 1,000 u/s. The combo counts perfect releases (+1), tokens (+1) and rings (+2), refills a 6 s timer with each, drains 4× faster standing on a roof and ends on the street; its multiplier (×1, then +1 every 4, at most ×4) multiplies what pickups are worth (10 and 50 points).
+- **Render frame v1.3** (additive): `pickups` (id, kind, position, taken), `combo` (count, multiplier, ticks left), `route` (the remaining stop centres, for the map) and the hero's `controlled` (the player is giving input this tick).
 - **Determinism rules:**
   - Banned in the core, enforced by ESLint: `Math.sin/cos/atan2/hypot/pow/random`, `**`, `Date` and `performance`.
   - `dmath.ts` provides polynomial sin, cos and atan2 using only + − × ÷ and `sqrt`.
@@ -55,11 +63,13 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Fights: 1,000 × level × boss multiplier.
   - Errands: 250 each.
   - Perfect swings: 40 each, capped.
-  - Combo, HP left and a time bonus.
+  - Combo (25 per point of the best, the first 40 count), HP left and a time bonus.
+  - Pickups (ruleset 3): each token's 10 and ring's 50 × the combo multiplier when taken, at most 2,000. Stats carry `bits`, `rings` and `pickupsPlaced`.
   - Ties go to the faster run.
 - **Gate:**
-  - Golden logs give identical hashes in Node and in Chromium, WebKit and Firefox (dev page `/lab/determinism`).
-  - A bot clears 30 nights with no NaN.
+  - Golden logs give identical hashes in Node and in Chromium, WebKit and Firefox (dev page `/lab/determinism`). Regenerate after an intended change with `UPDATE_GOLDEN=1 pnpm --filter @wgp/game-core test golden`.
+  - A bot clears 30 nights with no NaN. It steers explicitly since ruleset 3 (at the next pickup when one is close and on the way, else the stop).
+  - `test/feel.test.ts` pins the controls and runs scripted players (holding the web, tapping it, letting go when rising; the stick held toward the stop) over 24 routes each; `FEEL_REPORT=1 pnpm --filter @wgp/game-core test feel-report` prints the numbers (`test/feel-metrics.ts`).
 
 ## 2. 3D client (React Three Fiber, lazy-loaded on `/play/patrol` only)
 - **Stack:** three 0.186, @react-three/fiber 9.8 and drei 10.7 (blastoff's proven versions).
@@ -96,7 +106,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Buildings and props between the camera and the hero, or the fight two-shot, fade to a dot-screen ghost (`city/occlusion.ts`). Collision pull-in eases instead of snapping.
   - Reduced motion: fixed field of view, no speed lines and no shake.
 - **Controls:**
-  - **Touch:** left 40% is an optional floating stick (the default steers you to the next stop); right 60% is hold to web; ability buttons sit in a right-thumb arc; two fingers orbit the camera.
+  - **Touch:** left 40% is a floating stick (the hero only runs on it; without it, webs still aim for the next stop, so one thumb holding the web travels); right 60% is hold to web; ability buttons sit in a right-thumb arc; two fingers orbit the camera.
   - **Keyboard:** WASD, Space or mouse to web, 1–4, G, Esc.
 - **City life and comic finish:** instanced, GPU-driven traffic on street loops, street lamps and signals, crosswalks, parapets, cornices, fire escapes and varied roofs; halftone dots on shadow faces and distant fog bands; speed lines at high speed; ink outlines thicker near the camera.
 - **Quality tiers:** low, medium (the phone default, DPR 1.5) and high, with adaptive DPR and an FPS probe. Ported from blastoff `session/quality.ts`, `gpu.ts` and `camera-fx.ts`, with a context-loss guard. Low drops cars, halftone, speed lines and small details first. The budget is under 100 draw calls (about 50 at most in play today) and about 80k triangles on high, characters included.
@@ -152,13 +162,41 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 
 ## 5. NEAR SDKs and Google sign-in
 - **Packages:**
-  - `@fast-auth-near/browser-sdk` + `javascript-provider` (NEAR Auth).
+  - `@privy-io/react-auth` 3.51 (browser) + `@privy-io/node` 0.37 (server): Google sign-in today, with a Privy NEAR embedded wallet.
+  - `@fast-auth-near/browser-sdk` + `javascript-provider` (NEAR Auth): Google sign-in once NEAR approves our mainnet client.
   - `@hot-labs/near-connect` for existing NEAR wallets (port Vessel's `lib/wallet.tsx` from the archive).
   - One `near-api-js` ≥7.4 on client and server for meta-transactions.
-- **Server accounts** (keys in Vercel env only):
-  - `wgp.testnet` creates accounts.
-  - `relayer.wgp.testnet` pays gas, using 4–8 keys.
-  - `operator.wgp.testnet` mints.
+- **Server accounts** (keys in Vercel env only; mainnet names, testnet uses `wgp.testnet` and so on):
+  - `wgpnear.near`, the factory, creates `<handle>.wgpnear.near` (made by `scripts/near/setup-mainnet.sh`).
+  - The relayer pays gas, using 4–8 keys.
+  - The operator mints.
+- **Which Google service:** `NEXT_PUBLIC_GOOGLE_SIGN_IN=privy|near-auth`, defaulting to `privy` when `NEXT_PUBLIC_PRIVY_APP_ID` is set (`src/lib/privy/config.ts`). NEAR wallet sign-in is always offered.
+
+### Google through Privy (live now)
+NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes through Privy until then. Privy gives each user a NEAR embedded wallet: an ed25519 key ("Tier 2" chain support) whose address is its implicit account id, and which signs raw hashes.
+- **The browser** (`src/lib/privy/`, `src/components/account/privy-host.tsx`):
+  - Privy's SDK is a lazy chunk, mounted only when the sign-in sheet opens, a Google redirect comes back, or a Privy player opens their account; `/` and `/play` don't load it.
+  - "Continue with Google" is a full-page redirect to Google (`useLoginWithOAuth`). Back on our page, Privy finishes the login from its `privy_oauth_*` parameters, the browser makes the user's NEAR wallet if they have none (`useCreateWallet({ chainType: "near" })`), then posts Privy's access token and its session key to `POST /api/auth/privy`.
+  - Sign out also logs out of Privy.
+- **The server** (`src/server/auth/privy*.ts`):
+  - Checks the access token with `@privy-io/node` and `PRIVY_APP_SECRET`: ES256 against the app's keys, issuer `privy.io`, audience our app id, not expired; we check the returned claims again.
+  - Reads the user from Privy's API by the token's user id: the verified Google email and the NEAR wallet's key. Nothing the browser says about them is used.
+- **Who the login is** (`privySignIn`):
+  - A known player (`auth_kind = privy`, `auth_sub` = the Privy user id) is signed in.
+  - A player with the same verified email (they signed up through NEAR Auth) is signed in too: no second hero.
+  - **A new player, factory live:** the same `needs-handle` step as NEAR Auth, then one factory transaction creates `<handle>.wgpnear.near` with the Privy NEAR key (full access) and the browser's session key (game contract only). An account that already holds the user's key (a retry after a lost answer) is adopted.
+  - **A new player, factory not live** (not configured, or `wgpnear.near` not on chain yet; one cached `view_account`): no handle step. The player is made on their key's implicit account id (64 hex) and plays ranked nights at once.
+- **Unclaimed players** (`isUnclaimed`: Privy, on an implicit account id, which doesn't exist on NEAR):
+  - Nothing is sent on chain for them. Reward mints are queued as usual but held (the mint worker skips them); no hero registration; quick play is off.
+  - Once the factory is live, the account sheet offers **"Claim your name"** (`GET`/`POST /api/auth/privy/claim`). The server reads the user's NEAR wallet from Privy again (it must be the key of their implicit account), the factory creates `<handle>.wgpnear.near` with it and the browser's session key, and one transaction moves the player there: the player row, the held mints (now addressed to the new account; their nonces start at 1, which is what a fresh account expects), the chain mirror, price history and the simulated market's wallet. Save, runs and boards are keyed by the player, so they don't move.
+- **Quick play on a new device:** the Privy NEAR key signs `AddKey(session key)` as a delegate (raw-hash signing, no popup) and the relayer submits it, like NEAR Auth's add-key flow.
+
+### Switching to NEAR Auth later, without losing anyone
+- **Linking by verified email:** every Google player stores their verified email (`players.email`, migration `0004_privy_email`). `POST /api/auth/near-auth` looks a login up by its Google sub, then by the token's email when Auth0 marks it verified, so a Privy player who signs in through NEAR Auth gets their own hero back. The reverse holds too.
+- **What stays with Privy:** the full-access key of a Privy player's account is their Privy NEAR key (exportable from Privy). A NEAR Auth sign-in into that player plays fine; adding the NEAR Auth key to the account (for NEAR Auth's own new-device popup) is a later, one-time Privy-signed `AddKey`.
+- **To switch:** set `NEXT_PUBLIC_GOOGLE_SIGN_IN=near-auth` and NEAR Auth's mainnet client id; keep the Privy variables so existing Privy players can still sign out and in again during the move.
+
+### Google through NEAR Auth (Plan A, waiting on mainnet approval)
 - **Sign-up (Plan A):**
   1. A single Google login.
   2. The browser creates a session key.
@@ -168,6 +206,8 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 - **Fallbacks:**
   - **Plan B:** NEAR Auth creates the account, then one popup adds the session key.
   - **Plan C:** contract-level session keys, verified with `ed25519_verify`.
+
+### Relayer and wallets
 - **Relayer (`/api/relay/meta`)** accepts only:
   - a known player and live session key;
   - the game contract as receiver;
@@ -181,7 +221,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Plan C covers wallets that refuse.
 
 ## The Mempool Market (the economy)
-- **Bits** (`item:bits`) are the currency: every verified night mints `floor(score / 100) + 5` (+25 on a level-up, at most 1,000) with its loot, through `mint_rewards` (`src/lib/market/rewards.ts`, `runs.ts`). The results screen shows the same number.
+- **Bits** (`item:bits`) are the currency: every verified night mints `floor(score / 100) + 5` (+25 on a level-up, +1 per Bits token collected up to 25 since ruleset 3, at most 1,000) with its loot, through `mint_rewards` (`src/lib/market/rewards.ts`, `runs.ts`). The tokens come from the verified replay's stats; the results screen shows the server's number.
 - **The vendor, Gwei Stacy,** is an NPC whose stock and till the contract holds. Each item has a virtual-reserve constant-product curve: `x = virtual_items + stock`, `y = virtual_bits + bits`, spot `y / x`. Buying `n` costs `ceil(y·n / (x − n))` (only from stock), selling pays `floor(y·n / (x + n))` (only from the till). Defaults: commons start at 12 Bits, uncommons 40, rares 150, half of each curve's Bits real.
 - **Sinks:** a 2% gas fee on every trade and fill is burned; crafting can burn Bits too (`craft_bits`, off by default until the Suit lab shows it).
 - **Listings** escrow items in the contract; a buyer pays the seller the price less the fee.

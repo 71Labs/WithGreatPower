@@ -13,7 +13,6 @@ import { useEffect, type ReactNode } from "react";
 import { StickerButton, StickerLink } from "@/components/game/kit";
 import { BadgeCheck, CircleAlert, Coins, Medal } from "@/components/icons";
 import type { NightOutcome, NightSession } from "@/game3d/session";
-import { nightBits } from "@/lib/market/rewards";
 import { Chip } from "@/sim/ui/bits";
 import type { HeroSave } from "@/sim/ui/hooks";
 import { Results } from "@/sim/ui/results";
@@ -58,7 +57,7 @@ function Score({ label, value }: { label: string; value: number }) {
   );
 }
 
-/** The night's Bits, by the same rule the server mints them with (src/lib/market/rewards.ts). */
+/** The night's Bits, as the server minted them (src/lib/market/rewards.ts: the score, a level-up and the Bits tokens collected). */
 function EarnedBits({ bits }: { bits: number }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border-2 border-game-ink bg-game-gold px-3 py-2.5">
@@ -73,7 +72,7 @@ function EarnedBits({ bits }: { bits: number }) {
   );
 }
 
-function RankingPanel({ ending, before, onRetry }: { ending: Ending; before: NightSession["before"]; onRetry(): void }) {
+function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) {
   if (ending.kind === "submitting") {
     return (
       <Panel>
@@ -111,7 +110,7 @@ function RankingPanel({ ending, before, onRetry }: { ending: Ending; before: Nig
               </div>
             ) : null}
           </div>
-          <EarnedBits bits={nightBits({ score: o.score, levelledUp: (o.save.hero?.level ?? 0) > before.level })} />
+          <EarnedBits bits={o.bits} />
           <StickerLink href="/play/leaderboard" size="md" className="w-full sm:w-auto sm:self-start">
             See tonight’s board
           </StickerLink>
@@ -183,7 +182,7 @@ export function NightResults({ session, ending, onRetry }: { session: NightSessi
     <div className="absolute inset-0">
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-game-night/55" />
       <Results save={banked ?? preview} before={banked ? session.before : null} subtitle={subtitle}>
-        <RankingPanel ending={ending} before={session.before} onRetry={onRetry} />
+        <RankingPanel ending={ending} onRetry={onRetry} />
       </Results>
     </div>
   );

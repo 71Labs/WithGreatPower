@@ -38,7 +38,7 @@ const at = (name: string) => timestamp(name, { withTimezone: true, mode: "date" 
 
 /* ------------------------------------------------------------------ enums */
 
-export const authKind = pgEnum("auth_kind", ["near_auth", "wallet", "dev"]);
+export const authKind = pgEnum("auth_kind", ["near_auth", "wallet", "dev", "privy"]);
 export const runStatus = pgEnum("run_status", ["issued", "verified", "rejected", "expired"]);
 export const boardKind = pgEnum("board_kind", ["tonight", "season", "alltime"]);
 export const chainOpStatus = pgEnum("chain_op_status", ["pending", "sending", "sent", "failed", "dead"]);
@@ -52,9 +52,18 @@ export const players = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     nearAccountId: text("near_account_id").notNull(),
     authKind: authKind("auth_kind").notNull(),
-    /** The identity provider's subject (Google sub via NEAR Auth, or a wallet's public key). */
+    /**
+     * The identity provider's subject: the Google sub (NEAR Auth), the Privy user id
+     * ("did:privy:…"), "wallet:<account>" or "dev:<handle>".
+     */
     authSub: text("auth_sub"),
     handle: text("handle").notNull(),
+    /**
+     * The player's verified email (lowercased), from Google through Privy or NEAR Auth.
+     * Not unique: a sign-in with another provider finds the oldest player holding it, so
+     * switching providers keeps the hero (src/server/db/players.ts, `playerByEmail`).
+     */
+    email: text("email"),
     createdAt: at("created_at").notNull().defaultNow(),
     bannedAt: at("banned_at"),
     /** Set once, when a guest's local save was imported. */
@@ -66,7 +75,11 @@ export const players = pgTable(
      */
     nextRewardNonce: integer("next_reward_nonce").notNull().default(1),
   },
-  (t) => [uniqueIndex("players_near_account_id_key").on(t.nearAccountId), uniqueIndex("players_auth_sub_key").on(t.authSub)],
+  (t) => [
+    uniqueIndex("players_near_account_id_key").on(t.nearAccountId),
+    uniqueIndex("players_auth_sub_key").on(t.authSub),
+    index("players_email_idx").on(t.email),
+  ],
 );
 
 /** Cookie sessions. Only a SHA-256 of the cookie value is stored. */

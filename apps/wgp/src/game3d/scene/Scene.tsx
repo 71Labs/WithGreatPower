@@ -72,9 +72,14 @@ export interface SceneProps {
   handle?: RefObject<SceneHandle | null>;
   /** About four times a second, renderer.info and the frame rate (for `?debug=1`). */
   onStats?(stats: SceneStats): void;
+  /**
+   * Every frame, after the camera has moved: this frame's chase pose and the canvas size
+   * (CSS px), for overlays placed from the camera (the waypoint, the minimap).
+   */
+  onFrame?(pose: ChasePose | null, width: number, height: number): void;
 }
 
-export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = ALL_CAST, reducedMotion = false, raycast, handle, onStats }: SceneProps) {
+export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = ALL_CAST, reducedMotion = false, raycast, handle, onStats, onFrame }: SceneProps) {
   const engine = useMemo(() => new SceneEngine(city, raycast ?? null), [city, raycast]);
   const lastPose = useRef<ChasePose | null>(null);
   const meter = useMemo(() => new FpsMeter(), []);
@@ -104,6 +109,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.1);
     lastPose.current = engine.update(frame.current, state.camera as PerspectiveCamera, state.size, state.viewport.dpr, dt, state.clock.elapsedTime);
+    onFrame?.(lastPose.current, state.size.width, state.size.height);
     meter.push(delta);
     if (onStats && state.clock.elapsedTime - statsAt.current > 0.25) {
       statsAt.current = state.clock.elapsedTime;

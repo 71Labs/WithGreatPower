@@ -10,6 +10,7 @@
  */
 import type { Save } from "@wgp/game-core/types";
 
+import { isUnclaimed } from "@/lib/near/policy";
 import type { Db } from "@/server/db/client";
 import type { Player } from "@/server/db/schema";
 
@@ -27,8 +28,13 @@ export interface OnChainPlayer {
 }
 
 export interface ChainStatus {
-  /** The account is a real NEAR account (test sign-ins aren't). */
+  /** The account is a real NEAR account (test sign-ins and unclaimed accounts aren't). */
   available: boolean;
+  /**
+   * A Google player on their key's implicit account id, who hasn't claimed a name yet
+   * (src/lib/near/policy.ts, isUnclaimed): the account sheet offers "Claim your name".
+   */
+  unclaimed: boolean;
   /** This server has the contract and relayer configured; until then nothing goes on chain. */
   configured: boolean;
   network: "testnet" | "mainnet" | null;
@@ -91,7 +97,7 @@ export async function chainStatus(
   const { player, save } = input;
   const available = isOnNear(player);
   const config = nearConfig();
-  const base = { available, ...config, accountId: player.nearAccountId };
+  const base = { available, unclaimed: isUnclaimed(player), ...config, accountId: player.nearAccountId };
   if (!available) return { ...base, configured: false, hero: { status: "none", txHash: null, args: null }, sessionKeys: [], onChain: null };
 
   let hero = await queueHeroRegistration(db, player, save, input.now);

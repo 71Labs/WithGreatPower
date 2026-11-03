@@ -30,6 +30,8 @@ import { keyedAccount, provider, freshKeyedAccount } from "./rpc";
 export interface NearAuthIdentity {
   sub: string;
   email?: string;
+  /** Auth0 says the email is verified (`email_verified`); only then does it link players. */
+  emailVerified?: true;
   /** The OIDC nonce the sign-in asked for; must be one we issued (login-nonce.ts). */
   nonce?: string;
 }
@@ -51,6 +53,7 @@ export async function verifyNearAuthIdToken(idToken: string, opts: { env?: NearA
   return {
     sub,
     email: typeof claims.email === "string" ? claims.email : undefined,
+    ...(claims.email_verified === true ? { emailVerified: true as const } : {}),
     ...(typeof claims.nonce === "string" ? { nonce: claims.nonce } : {}),
   };
 }

@@ -23,6 +23,7 @@ import {
   CheckmarkBadge01Icon,
   Clock01Icon,
   Coins01Icon,
+  CompassIcon,
   Copy01Icon,
   DashboardSpeed01Icon,
   DashedLineCircleIcon,
@@ -68,18 +69,17 @@ import {
   Target02Icon,
   Award01Icon,
   MapsLocation01Icon,
+  MapsIcon,
   News01Icon,
   TShirtIcon,
   GameController03Icon,
   FavouriteIcon,
   Rocket01Icon,
   City01Icon,
-  GiftIcon,
   Megaphone01Icon,
   Medal01Icon,
   VoteIcon,
   HandshakeIcon,
-  Exchange01Icon,
   Building03Icon,
   UserMultipleIcon,
   Moon02Icon,
@@ -95,6 +95,11 @@ import {
   PlayIcon,
   PauseIcon,
   RefreshIcon,
+  GithubIcon,
+  HeadphonesIcon,
+  FireIcon,
+  SmartPhone01Icon,
+  ReplayIcon,
 } from "@hugeicons/core-free-icons";
 
 export type IconProps = Omit<ComponentProps<"svg">, "ref"> & { strokeWidth?: number; size?: number | string };
@@ -171,18 +176,18 @@ export const Swords = make(Sword03Icon, "Swords");
 export const Target = make(Target02Icon, "Target");
 export const Award = make(Award01Icon, "Award");
 export const MapPin = make(MapsLocation01Icon, "MapPin");
+export const MapIcon = make(MapsIcon, "MapIcon");
+export const Compass = make(CompassIcon, "Compass");
 export const Newspaper = make(News01Icon, "Newspaper");
 export const Shirt = make(TShirtIcon, "Shirt");
 export const Gamepad = make(GameController03Icon, "Gamepad");
 export const Heart = make(FavouriteIcon, "Heart");
 export const Rocket = make(Rocket01Icon, "Rocket");
 export const City = make(City01Icon, "City");
-export const Gift = make(GiftIcon, "Gift");
 export const Megaphone = make(Megaphone01Icon, "Megaphone");
 export const Medal = make(Medal01Icon, "Medal");
 export const Vote = make(VoteIcon, "Vote");
 export const Handshake = make(HandshakeIcon, "Handshake");
-export const Exchange = make(Exchange01Icon, "Exchange");
 export const Building = make(Building03Icon, "Building");
 export const UsersRound = make(UserMultipleIcon, "UsersRound");
 export const Moon = make(Moon02Icon, "Moon");
@@ -198,6 +203,11 @@ export const ChartLine = make(ChartLineData01Icon, "ChartLine");
 export const Play = make(PlayIcon, "Play");
 export const Pause = make(PauseIcon, "Pause");
 export const RotateCcw = make(RefreshIcon, "RotateCcw");
+export const Github = make(GithubIcon, "Github");
+export const Headphones = make(HeadphonesIcon, "Headphones");
+export const Flame = make(FireIcon, "Flame");
+export const Smartphone = make(SmartPhone01Icon, "Smartphone");
+export const Replay = make(ReplayIcon, "Replay");
 
 /** Lucide's `LucideIcon` type, for components that take an icon as a prop. */
 export type LucideIcon = Icon;

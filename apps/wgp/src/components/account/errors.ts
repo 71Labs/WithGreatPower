@@ -26,7 +26,20 @@ export function googleProblem(error: unknown): SignInProblem {
   switch (code) {
     case "NO_CLIENT_ID":
     case "near_not_configured":
+    case "privy_not_configured":
       return { text: "Google sign-in isn’t set up on this server yet.", googleUnavailable: true };
+    case "privy_timeout":
+    case "privy_load_failed":
+    case "oauth_start_failed":
+      return { text: "Google sign-in couldn’t start. Check your connection, then choose Continue with Google again." };
+    case "oauth_failed":
+    case "privy_not_signed_in":
+      return { text: "Google sign-in didn’t finish. Choose Continue with Google to try again." };
+    case "near_wallet_failed":
+    case "near_wallet_missing":
+      return { text: "Google signed you in, but your NEAR key isn’t ready yet. Choose Continue with Google to try again." };
+    case "privy_user":
+      return { text: "Google sign-in is having trouble on our side. Try again in a minute." };
     case "NONCE_UNSUPPORTED":
       return { text: "This version of the game can’t start Google sign-in safely.", googleUnavailable: true };
     case "popup_open":
@@ -58,7 +71,32 @@ export function googleProblem(error: unknown): SignInProblem {
   }
 }
 
-/** "Enable quick play" failures, from the wallet, NEAR Auth or POST /api/auth/wallet. */
+/** "Claim your name" failures (POST /api/auth/privy/claim). */
+export function claimProblem(error: unknown): SignInProblem & { closed?: boolean; claimed?: boolean } {
+  const code = codeOf(error);
+  switch (code) {
+    case "invalid_handle":
+    case "reserved_handle":
+    case "handle_taken":
+      return { text: messageOf(error) || "Pick another handle.", handle: true };
+    case "names_closed":
+      return { text: "Names aren’t open yet. Your hero is saved; claim your name once they open.", closed: true };
+    case "already_claimed":
+      return { text: "Your account already has its name.", claimed: true };
+    case "wallet_mismatch":
+      return { text: "That Google login doesn’t match this account. Sign out, then sign in with the Google account you started with." };
+    case "budget_exhausted":
+      return { text: "New names are paused for today. Try again tomorrow." };
+    case "rate_limited":
+      return { text: "Too many tries. Wait a minute, then try again." };
+    case "network":
+      return { text: "Couldn’t reach the server. Check your connection and try again." };
+    default:
+      return { text: messageOf(error) ? `Your name wasn’t claimed: ${messageOf(error)}` : "Your name wasn’t claimed. Try again." };
+  }
+}
+
+/** "Enable quick play" failures, from the wallet, NEAR Auth, Privy or POST /api/auth/wallet. */
 export function quickPlayProblem(error: unknown): SignInProblem {
   const code = codeOf(error);
   const message = messageOf(error);
@@ -75,6 +113,11 @@ export function quickPlayProblem(error: unknown): SignInProblem {
       return { text: "Your wallet added a key the game can’t use. Choose Start over to add the right one." };
     case "near_not_configured":
       return { text: "Quick play isn’t set up on this server yet." };
+    case "privy_wrong_account":
+      return { text: "This account was made with another sign-in, so your Google key can’t add a key to it. Your changes are still saved." };
+    case "privy_not_signed_in":
+    case "privy_timeout":
+      return { text: "Google needs you to sign in again here. Sign out, sign back in with Google, then choose Enable quick play." };
     case "budget_exhausted":
     case "relayer_empty":
       return { text: "The game can’t pay for new keys right now. Try again later." };
