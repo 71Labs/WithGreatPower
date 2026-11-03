@@ -210,6 +210,12 @@ export const leaderboardEntries = pgTable(
   ],
 );
 
+/**
+ * Seasons, seeded by migration. The background pass (src/server/db/season-close.ts) moves
+ * one from scheduled to live when it starts and closes it, once, after it ends: the final
+ * standings are frozen here with their Merkle root, and `record_season` is queued in the
+ * outbox. Sending it (src/server/near/season-record.ts) sets `recorded`.
+ */
 export const seasons = pgTable("seasons", {
   /** "s1", "s2", … */
   id: text("id").primaryKey(),
@@ -217,12 +223,18 @@ export const seasons = pgTable("seasons", {
   startsAt: at("starts_at").notNull(),
   endsAt: at("ends_at").notNull(),
   status: seasonStatus("status").notNull().default("scheduled"),
-  /** Merkle root of the final standings, once recorded on chain. */
+  /** Merkle root of the final standings (src/server/near/season.ts), set at the close. */
   root: text("root"),
+  /** The top 10 account ids, best first: who `record_season` gives `trophy:<season>:<rank>`. */
   top10: jsonb("top10"),
+  /** sha256 of the published results file (GET /api/seasons/<id>/results). */
   digest: text("digest"),
   recordTx: text("record_tx"),
   recordedAt: at("recorded_at"),
+  /** When the background pass froze the standings. */
+  closedAt: at("closed_at"),
+  /** The final standings, frozen at the close: the Season board's rows, best first (`SeasonStanding[]`). */
+  standings: jsonb("standings"),
 });
 
 /* ------------------------------------------------------------------ chain */

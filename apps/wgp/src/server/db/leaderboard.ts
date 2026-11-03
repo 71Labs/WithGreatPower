@@ -6,7 +6,8 @@
  * - All time: the best single run.
  *
  * Ranking: higher score, then fewer ticks (the faster run), then whoever got there
- * first. Banned players are hidden. Assist runs never reach these tables.
+ * first. Banned players are hidden. Assist runs never reach these tables. Once a season
+ * closes its board stops moving: the standings frozen on its seasons row are final.
  *
  * Pure data access; the cached reads and tag invalidation live in leaderboard-cache.ts.
  */
@@ -18,7 +19,7 @@ import { utcDay } from "@/server/rate-limit";
 
 import { queryRows, type Db } from "./client";
 import { leaderboardEntries as le, players, saves, type Board } from "./schema";
-import { defaultSeason, seasonAt } from "./seasons";
+import { defaultSeason, openSeasonAt } from "./seasons";
 
 export const BOARDS = ["tonight", "season", "alltime"] as const satisfies readonly Board[];
 export const ALLTIME_PERIOD = "all";
@@ -71,7 +72,8 @@ export async function recordScore(
       .onConflictDoUpdate({ target, set: { bestScore: score, ticks, runId, updatedAt: now } });
     tags.push(boardTag("tonight", day));
 
-    const season = await seasonAt(tx, input.issuedAt);
+    // A closed season's standings are frozen (season-close.ts); the night still counts for Tonight and All time.
+    const season = await openSeasonAt(tx, input.issuedAt);
     if (season) {
       const dScore = score - (old?.bestScore ?? 0);
       const dTicks = ticks - (old?.ticks ?? 0);
@@ -144,6 +146,12 @@ function boardQuery(db: Db, board: Board, period: string) {
 export async function topEntries(db: Db, board: Board, period: string, limit = 50, offset = 0): Promise<BoardRow[]> {
   const rows = await boardQuery(db, board, period).limit(limit).offset(offset);
   return rows.map((r, i) => toRow(r, offset + i + 1));
+}
+
+/** The whole board, ranked from 1, in the order the pages use. For freezing a season's standings. */
+export async function allEntries(db: Db, board: Board, period: string): Promise<BoardRow[]> {
+  const rows = await boardQuery(db, board, period);
+  return rows.map((r, i) => toRow(r, i + 1));
 }
 
 export async function countEntries(db: Db, board: Board, period: string): Promise<number> {
