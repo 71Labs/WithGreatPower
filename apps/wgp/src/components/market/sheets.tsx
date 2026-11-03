@@ -324,7 +324,7 @@ export function ListSheet({
       onClose={close}
       eyebrow="Mempool Market"
       title="List an item"
-      description="Your items wait in escrow until someone buys them or you cancel."
+      description="Your items wait in escrow until someone buys them or you take them down."
       footer={
         item ? (
           <StickerButton variant="hero" size="lg" onClick={submit} disabled={busy} className="w-full sm:w-auto">
