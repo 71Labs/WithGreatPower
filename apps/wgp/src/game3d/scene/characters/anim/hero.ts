@@ -358,7 +358,7 @@ export class HeroAnimator {
    */
   private groundYaw(h: RenderFrame3D["hero"], hs: number, facing: number): number {
     if (hs > 20) this.holdYaw = yawOf(h.vel.x, h.vel.z);
-    else if (!Number.isNaN(facing) && !Number.isNaN(this.lastFac) && Math.abs(angleTo(this.lastFac, facing)) > 1e-3 && (h as { controlled?: boolean }).controlled !== false) this.holdYaw = facing;
+    else if (!Number.isNaN(facing) && !Number.isNaN(this.lastFac) && Math.abs(angleTo(this.lastFac, facing)) > 1e-3 && h.controlled !== false) this.holdYaw = facing;
     return this.holdYaw;
   }
 
