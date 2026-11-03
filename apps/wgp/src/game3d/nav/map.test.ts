@@ -169,6 +169,11 @@ describe("distances and words", () => {
     expect(c.share(3, 100)).toBeCloseTo(0.5, 9);
     expect(c.share(4, 180)).toBe(1);
     expect(c.share(4, 45)).toBeCloseTo(0.25, 9);
+    // Knowing the ruleset's window (6 s at 60 Hz): exact, even if the first frame after a feed already drained.
+    const k = new ComboClock(360);
+    expect(k.share(5, 344)).toBeCloseTo(344 / 360, 9);
+    expect(k.share(5, 180)).toBeCloseTo(0.5, 9);
+    expect(k.share(0, 0)).toBe(0);
     expect(multiplierText(2)).toBe("×2");
     expect(multiplierText(1.5)).toBe("×1.5");
   });

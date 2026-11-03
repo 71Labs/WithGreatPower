@@ -14,6 +14,7 @@ import { Zap } from "@/components/icons";
 import { ComboClock, multiplierText } from "@/game3d/nav/combo";
 import type { FrameTap } from "@/game3d/nav/tap";
 import { Chip } from "@/sim/ui/bits";
+import { COMBO_TICKS } from "@wgp/game-core/sim3d/constants";
 
 export function ComboMeter({ tap, fallback }: { tap: FrameTap; /** The HUD snapshot's combo, for frames without v1.3's. */ fallback: number }) {
   const [rich, setRich] = useState(false);
@@ -23,7 +24,8 @@ export function ComboMeter({ tap, fallback }: { tap: FrameTap; /** The HUD snaps
   const bar = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const clock = new ComboClock();
+    // Ruleset 3's window (6 s; it drains 4× standing on a roof), so the bar is exact.
+    const clock = new ComboClock(COMBO_TICKS);
     let has = false;
     let lastCount = -1;
     let lastMult = -1;
