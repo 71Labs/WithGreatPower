@@ -21,6 +21,7 @@ export const NEAR_RATE_LIMITS = {
   signInPerIp: { limit: 20, windowMs: 60_000 },
   signUpPerIp: { limit: 3, windowMs: 60 * 60_000 },
   walletPerIp: { limit: 30, windowMs: 60_000 },
+  chainStatusPerPlayer: { limit: 30, windowMs: 60_000 },
 } satisfies Record<string, RateLimit>;
 
 /** Daily caps, from the environment where it matters. */

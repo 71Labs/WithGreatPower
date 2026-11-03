@@ -10,6 +10,7 @@ import type { Save } from "@wgp/game-core/types";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { ImportResult } from "@/server/db/migrate-save";
 import type { StartedRun } from "@/server/db/runs";
+import type { ChainStatus } from "@/server/near/status";
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; message?: string; body?: Record<string, unknown> };
 
@@ -94,6 +95,11 @@ export const postAction = (action: Action, rev: number) => call<ActionResponse>(
 
 /** Once per player, onto an empty server save. */
 export const migrateLocalSave = (save: Save) => call<MigrateResponse>("/api/migrate", { method: "POST", json: { save } });
+
+export type { ChainStatus };
+
+/** Signed in: the hero's registration, the session keys the relayer accepts, and the contract's view of the player. */
+export const getChainStatus = (signal?: AbortSignal) => call<ChainStatus>("/api/chain/status", { signal });
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";

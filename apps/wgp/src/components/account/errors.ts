@@ -58,6 +58,34 @@ export function googleProblem(error: unknown): SignInProblem {
   }
 }
 
+/** "Enable quick play" failures, from the wallet, NEAR Auth or POST /api/auth/wallet. */
+export function quickPlayProblem(error: unknown): SignInProblem {
+  const code = codeOf(error);
+  const message = messageOf(error);
+  switch (code) {
+    case "wrong_account":
+      return { text: `${message}. Switch your wallet to the account you signed in with, then choose Enable quick play again.` };
+    case "key_not_found":
+      return { text: "NEAR doesn’t show the new key yet. Wait a moment, then choose Finish setup." };
+    case "key_revoked":
+    case "key_in_use":
+      return { text: "That key can’t be used anymore. Choose Start over to add a new one." };
+    case "wrong_receiver":
+    case "allowance":
+      return { text: "Your wallet added a key the game can’t use. Choose Start over to add the right one." };
+    case "near_not_configured":
+      return { text: "Quick play isn’t set up on this server yet." };
+    case "budget_exhausted":
+    case "relayer_empty":
+      return { text: "The game can’t pay for new keys right now. Try again later." };
+    case "network":
+      return { text: "Couldn’t reach the server. Check your connection and try again." };
+  }
+  if (/reject|cancel|denied|closed/i.test(message)) return { text: "The approval was cancelled, so quick play stays off. Choose Enable quick play to try again." };
+  if (/still loading/i.test(message)) return { text: "Wallets are still loading. Try again in a moment." };
+  return { text: message ? `Quick play didn’t turn on: ${message}` : "Quick play didn’t turn on. Try again." };
+}
+
 export function walletProblem(error: unknown): SignInProblem {
   const message = messageOf(error);
   if (/reject|cancel|denied|closed/i.test(message)) return { text: "The wallet didn’t sign. Choose Use a NEAR wallet to try again." };
