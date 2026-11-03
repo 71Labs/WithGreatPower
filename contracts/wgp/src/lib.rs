@@ -5,21 +5,28 @@
 //! - `suit:<id>`: a suit the player owns. Starter suits come with the hero; the rest are
 //!   crafted from loot.
 //! - `item:<id>`: loot from verified runs, minted by the operator.
+//! - `item:bits`: Bits, the Mempool Market's currency, minted per verified night.
 //! - `trophy:<season>:<rank>` and `trophy:badge:<id>`: soulbound awards.
 //!
 //! Who can do what:
 //! - Players act through a function-call session key (no deposit possible): register a
-//!   hero, craft and equip suits. Our relayer pays their gas.
+//!   hero, craft and equip suits, and trade on the Mempool Market (market.rs) within
+//!   daily caps. Our relayer pays their gas.
 //! - Moving tokens needs exactly 1 yoctoNEAR, so only a full-access key can do it. A
 //!   leaked session key can never move a player's assets.
 //! - The operator (the game server) mints rewards for runs it has replayed and verified,
 //!   and records each season's final board.
 //! - The owner pauses, manages operators, sets suit rules and upgrades the code.
 //!
-//! The contract pays for storage and bounds it per account (`MAX_KINDS` token kinds).
-//! Nothing is stored per run: each run's digest goes in the event log only.
+//! The contract pays for storage and bounds it per account (`MAX_KINDS` token kinds, a
+//! few open listings). Nothing is stored per run or per trade: digests and prices go in
+//! the event log only.
 
 mod events;
+mod market;
+#[cfg(test)]
+mod market_tests;
+mod migrate;
 mod mt;
 #[cfg(test)]
 mod tests;
@@ -31,6 +38,7 @@ use near_sdk::{
 };
 
 pub use events::*;
+pub use market::*;
 pub use mt::Token;
 
 pub type TokenId = String;
@@ -38,10 +46,11 @@ pub type TokenId = String;
 /// Token kinds one account may hold, the hero included. Bounds sponsored storage.
 pub const MAX_KINDS: usize = 64;
 pub const MAX_NAME_CHARS: usize = 24;
-/// A call may log at most 16 KB. 20 worst-case rewards (64-char account, 8 items,
-/// 2 badges) log about 11 KB; `tests::a_full_batch_fits_the_log_limit` checks it.
+/// A call may log at most 16 KB. 20 worst-case rewards (64-char account, 8 items plus
+/// Bits, 2 badges) log about 12 KB; `tests::a_full_batch_fits_the_log_limit` checks it.
 pub const MAX_REWARD_BATCH: usize = 20;
-pub const MAX_ITEMS_PER_REWARD: usize = 8;
+/// Every item kind plus Bits.
+pub const MAX_ITEMS_PER_REWARD: usize = 9;
 pub const MAX_BADGES_PER_REWARD: usize = 2;
 pub const MAX_ITEM_AMOUNT: u32 = 1_000;
 pub const MAX_LEVEL: u32 = 1_000;
@@ -52,11 +61,14 @@ const GAS_FOR_MIGRATE: Gas = Gas::from_tgas(50);
 
 #[derive(BorshStorageKey)]
 #[near]
-enum StorageKey {
+pub(crate) enum StorageKey {
     Operators,
     Players,
     Supply,
     Seasons,
+    // Added with the market; new keys go at the end so existing prefixes never move.
+    Listings,
+    MarketAccounts,
 }
 
 /// One ingredient of a suit recipe.
@@ -221,6 +233,8 @@ pub struct Wgp {
     /// Supply of items, suits and trophies. Hero supply is derived (one per hero).
     supply: LookupMap<TokenId, u128>,
     seasons: LookupMap<String, Season>,
+    /// The Mempool Market. Appended in v2; `migrate` adds it to a v1 state.
+    market: Market,
 }
 
 #[near]
@@ -248,6 +262,7 @@ impl Wgp {
             players: LookupMap::new(StorageKey::Players),
             supply: LookupMap::new(StorageKey::Supply),
             seasons: LookupMap::new(StorageKey::Seasons),
+            market: Market::new(),
         }
     }
 
@@ -304,7 +319,8 @@ impl Wgp {
 
     /// Burn a suit's recipe and mint the suit, then equip it. Mirrors game-core's
     /// `craft-suit`: starter suits unlock at `starter_unlock_level` with no recipe,
-    /// the rest need `min_level` and their ingredients.
+    /// the rest need `min_level` and their ingredients, plus the market's `craft_bits`
+    /// (burned too; 0 by default).
     pub fn craft_suit(&mut self, suit: String) {
         self.assert_live();
         let account = env::predecessor_account_id();
@@ -326,22 +342,32 @@ impl Wgp {
             format!("Reach level {needed} to craft this suit")
         );
 
-        let missing: Vec<String> = rule
+        let craft_bits = if rule.recipe.is_empty() {
+            0
+        } else {
+            self.market.params.craft_bits.0
+        };
+        let mut burn: Vec<(TokenId, u128)> = rule
             .recipe
             .iter()
-            .filter_map(|i| {
-                let have = player.balance(&item_token(&i.item));
-                (have < i.amount as u128)
-                    .then(|| format!("{} x{}", i.item, i.amount as u128 - have))
+            .map(|i| (item_token(&i.item), i.amount as u128))
+            .collect();
+        if craft_bits > 0 {
+            burn.push((BITS_TOKEN.to_string(), craft_bits));
+        }
+        let missing: Vec<String> = burn
+            .iter()
+            .filter_map(|(token, n)| {
+                let have = player.balance(token);
+                (have < *n).then(|| format!("{} x{}", &token[5..], n - have))
             })
             .collect();
         require!(missing.is_empty(), format!("Needs {}", missing.join(", ")));
 
         // Burning first frees kinds, so the suit always fits if the recipe was not empty.
-        for i in &rule.recipe {
-            let token = item_token(&i.item);
-            player.debit(&token, i.amount as u128);
-            self.sub_supply(&token, i.amount as u128);
+        for (token, n) in &burn {
+            player.debit(token, *n);
+            self.sub_supply(token, *n);
         }
         player.credit(&suit_token, 1, true);
         self.add_supply(&suit_token, 1);
@@ -350,12 +376,12 @@ impl Wgp {
         }
         self.players.insert(account.clone(), player);
 
-        if !rule.recipe.is_empty() {
+        if !burn.is_empty() {
             MtEvent::MtBurn(vec![MtBurnEvent {
                 owner_id: account.clone(),
                 authorized_id: None,
-                token_ids: rule.recipe.iter().map(|i| item_token(&i.item)).collect(),
-                amounts: rule.recipe.iter().map(|i| U128(i.amount as u128)).collect(),
+                amounts: burn.iter().map(|(_, n)| U128(*n)).collect(),
+                token_ids: burn.into_iter().map(|(t, _)| t).collect(),
                 memo: Some(format!("craft:{suit}")),
             }])
             .emit();
@@ -622,11 +648,14 @@ impl Wgp {
             )
     }
 
-    /// Runs after `upgrade`. v1 keeps the state as it is.
+    /// Runs after `upgrade`: brings a v1 state (before the market) to v2 with an empty
+    /// market, and leaves a v2 state as it is, so running it twice is harmless.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str("No state to migrate"))
+        let bytes =
+            env::storage_read(b"STATE").unwrap_or_else(|| env::panic_str("No state to migrate"));
+        migrate::upgrade_state(&bytes)
     }
 
     // ---------- Views ----------
@@ -720,7 +749,7 @@ impl Wgp {
         }
         for i in &r.items {
             require!(
-                self.items.contains(&i.item),
+                i.item == BITS || self.items.contains(&i.item),
                 format!("Unknown item: {}", i.item)
             );
             require!(
@@ -823,6 +852,7 @@ fn validate_rules(items: &[String], suits: &[SuitRule], starter_unlock_level: u3
     let mut seen = std::collections::BTreeSet::new();
     for item in items {
         require!(is_slug(item, MAX_ID_LEN), format!("Bad item id: {item}"));
+        require!(item != BITS, "bits is the market's currency, not an item");
         require!(
             seen.insert(item.as_str()),
             format!("Duplicate item: {item}")

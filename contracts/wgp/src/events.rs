@@ -2,13 +2,13 @@
 //!
 //! `MtEvent` mirrors `defuse_nep245::MtEvent` field for field, so NEAR Intents, indexers
 //! and explorers read our mints, burns and transfers exactly as they read intents.near's.
-//! `WgpEvent` carries the game's own facts (heroes, crafts, run digests, seasons), which
-//! live only in logs and never in contract state.
+//! `WgpEvent` carries the game's own facts (heroes, crafts, run digests, seasons, market
+//! trades and listings). Run digests and trade prices live only in logs, never in state.
 
 use near_sdk::json_types::U128;
 use near_sdk::{near, AccountId};
 
-use crate::TokenId;
+use crate::{Listing, TokenId};
 
 #[near(event_json(standard = "nep245"))]
 #[derive(Debug, Clone)]
@@ -71,6 +71,15 @@ pub enum WgpEvent {
     Reward(Vec<RewardData>),
     #[event_version("1.0.0")]
     Season(Vec<SeasonData>),
+    /// A vendor trade: `bits` paid (buy, fee included) or received (sell, after the fee).
+    #[event_version("1.0.0")]
+    MarketTrade(Vec<TradeData>),
+    #[event_version("1.0.0")]
+    MarketList(Vec<Listing>),
+    #[event_version("1.0.0")]
+    MarketFill(Vec<FillData>),
+    #[event_version("1.0.0")]
+    MarketCancel(Vec<Listing>),
 }
 
 #[near(serializers = [json])]
@@ -104,4 +113,30 @@ pub struct SeasonData {
     pub root: String,
     pub digest: String,
     pub top10: Vec<AccountId>,
+}
+
+#[near(serializers = [json])]
+#[derive(Debug, Clone)]
+pub struct TradeData {
+    pub account_id: AccountId,
+    /// "buy" or "sell".
+    pub side: String,
+    pub item: String,
+    pub amount: u32,
+    pub bits: U128,
+    pub fee: U128,
+    /// The spot price after the trade, × 1000.
+    pub price_milli: U128,
+}
+
+#[near(serializers = [json])]
+#[derive(Debug, Clone)]
+pub struct FillData {
+    pub listing_id: u64,
+    pub seller: AccountId,
+    pub buyer: AccountId,
+    pub item: String,
+    pub amount: u32,
+    pub price: U128,
+    pub fee: U128,
 }
