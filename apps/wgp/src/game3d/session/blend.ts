@@ -2,7 +2,8 @@
  * Drawing between ticks. The loop keeps the last two ticks' RenderFrame3Ds (filled by
  * game-core's fillRenderFrame) and writes the frame the scene reads as a blend of them,
  * in place: positions slide by `alpha`, everything else (velocity, facing, the animation
- * state words and their ages, Doc's arms, the Goblin's bank) is the latest tick's. A jump too
+ * state words and their ages, Doc's arms, the Goblin's bank; v1.3's pickups, combo, route and
+ * the hero's `controlled`) is the latest tick's. A jump too
  * big for one tick (a teleport beside an errand ally, a resume) snaps instead of sliding.
  * Allocates only when a list grows.
  */
@@ -86,6 +87,32 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
   h.actionTicks = c.actionTicks;
   h.ropeLen = c.ropeLen;
   h.cloak = c.cloak;
+  h.controlled = c.controlled;
+
+  // v1.3 (ruleset 3): pickups never move, so they're copied as they are; the combo and the route too.
+  if (curr.pickups) {
+    const ps = (out.pickups ??= []);
+    for (let i = 0; i < curr.pickups.length; i++) {
+      const cp = curr.pickups[i];
+      const slot = (ps[i] ??= { id: cp.id, kind: cp.kind, pos: v3(), taken: cp.taken });
+      slot.id = cp.id;
+      slot.kind = cp.kind;
+      copyInto(slot.pos, cp.pos);
+      slot.taken = cp.taken;
+    }
+    ps.length = curr.pickups.length;
+  } else delete out.pickups;
+  if (curr.combo) {
+    const combo = (out.combo ??= { count: 0, multiplier: 1, ticksLeft: 0 });
+    combo.count = curr.combo.count;
+    combo.multiplier = curr.combo.multiplier;
+    combo.ticksLeft = curr.combo.ticksLeft;
+  } else delete out.combo;
+  if (curr.route) {
+    const route = (out.route ??= []);
+    for (let i = 0; i < curr.route.length; i++) copyInto((route[i] ??= v3()), curr.route[i]);
+    route.length = curr.route.length;
+  } else delete out.route;
 
   const vs = out.villains;
   for (let i = 0; i < curr.villains.length; i++) {

@@ -49,6 +49,10 @@ export function sceneEffects(target: () => EffectsTarget | null) {
       case "fizzle":
         t.fizzle?.();
         break;
+      case "pickup":
+        // Ruleset 3: a boost ring zaps (the atlas's mint burst); the scene animates the Bits tokens themselves.
+        if (ev.kind === "ring") t.burst("ZAP!", above(ev.x, ev.y, ev.z, 40), { size: 80, life: 0.6 });
+        break;
       case "shield-pop":
         t.burst("ZAP!", above(ev.x, ev.y, ev.z), { size: 80, life: 0.6 });
         break;

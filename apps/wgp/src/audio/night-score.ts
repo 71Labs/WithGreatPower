@@ -78,7 +78,7 @@ const GREETING: Partial<Record<string, VoiceId>> = {
   gwei: "gwei-backup",
 };
 
-const HOT_SFX: SfxId[] = ["thwip", "swing", "release-perfect", "street-thud", "pow", "villain-hit", "hurt", "webbed"];
+const HOT_SFX: SfxId[] = ["thwip", "swing", "release-perfect", "street-thud", "pow", "villain-hit", "hurt", "webbed", "loot"];
 
 /** A little pitch variety from the event's position, so repeats don't sound identical. */
 const vary = (x: number) => 0.94 + (Math.abs(Math.round(x)) % 13) / 100;
@@ -146,6 +146,14 @@ export function nightScore(stops: readonly Stop[], out: ScoreOut = playerOut) {
           out.sfx("release-perfect");
           out.sfx("swing", { volume: 0.5, rate: vary(ev.y) });
         } else if (ev.grade === "good") out.sfx("swing", { volume: 0.6, rate: vary(ev.y) });
+        else if ("auto" in ev && ev.auto) out.sfx("swing", { volume: 0.35, rate: vary(ev.y) });
+        break;
+      case "pickup":
+        // Ruleset 3: a Bits token chimes a little higher as the combo climbs; a ring whooshes.
+        if (ev.kind === "ring") {
+          out.sfx("release-perfect", { volume: 0.8, rate: 1.12 });
+          out.sfx("swing", { volume: 0.7, rate: 1.2 });
+        } else out.sfx("loot", { volume: 0.45, rate: 0.92 + Math.min(ev.combo, 16) * 0.025 });
         break;
       case "miss":
         out.sfx("street-thud");
