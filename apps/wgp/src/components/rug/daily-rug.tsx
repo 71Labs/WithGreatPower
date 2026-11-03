@@ -12,6 +12,7 @@ import { castById } from "@wgp/game-core/cast";
 import type { Edition } from "@wgp/game-core/types";
 
 import { BackIssues } from "./back-issues";
+import { MarketMovers } from "./market-movers";
 import { ReaderPoll } from "./poll";
 import { QuestBox } from "./quest-box";
 import { SectionHead, sentence } from "./shared";
@@ -107,7 +108,10 @@ function EmptyFrontPage() {
   );
 }
 
-/** The Daily Rug: the latest front page, written from your last patrol, on a sheet of newsprint. */
+/**
+ * The Daily Rug: the latest front page, written from your last patrol, on a sheet of
+ * newsprint, with the Mempool Market's movers in the markets column.
+ */
 export function DailyRugScreen() {
   const save = useHeroSave();
   const latestNight = save?.editions[0]?.night;
@@ -131,6 +135,7 @@ export function DailyRugScreen() {
           issue={latest ? `No. ${latest.night}` : "No edition yet"}
         />
         {latest ? <FrontPage save={save} edition={latest} /> : <EmptyFrontPage />}
+        <MarketMovers />
       </article>
 
       {older.length > 0 ? <BackIssues save={save} editions={older} /> : null}
