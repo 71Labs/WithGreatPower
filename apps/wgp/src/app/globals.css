@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* A short viewport: a phone on its side. The game's HUD and sheets go wide there. */
+@custom-variant short (@media (max-height: 500px));
+
 /*
  * Neue Montreal (Pangram Pangram), self-hosted from /public/fonts. The licensed files live
  * in the owner's fonts/ folder at the repo root, kept out of git, and are copied into

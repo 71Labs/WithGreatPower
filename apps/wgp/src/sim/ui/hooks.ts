@@ -33,3 +33,7 @@ function useMedia(query: string, server: boolean): boolean {
 
 export const useReducedMotion = () => useMedia("(prefers-reduced-motion: reduce)", false);
 export const useCoarsePointer = () => useMedia("(pointer: coarse)", false);
+/** A phone on its side (the `short:` variant in globals.css). */
+export const useShortViewport = () => useMedia("(max-height: 500px)", false);
+/** Narrower than a tablet (Tailwind's md). */
+export const useNarrowViewport = () => useMedia("(max-width: 767.98px)", false);
