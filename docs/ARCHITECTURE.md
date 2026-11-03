@@ -152,13 +152,41 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 
 ## 5. NEAR SDKs and Google sign-in
 - **Packages:**
-  - `@fast-auth-near/browser-sdk` + `javascript-provider` (NEAR Auth).
+  - `@privy-io/react-auth` 3.51 (browser) + `@privy-io/node` 0.37 (server): Google sign-in today, with a Privy NEAR embedded wallet.
+  - `@fast-auth-near/browser-sdk` + `javascript-provider` (NEAR Auth): Google sign-in once NEAR approves our mainnet client.
   - `@hot-labs/near-connect` for existing NEAR wallets (port Vessel's `lib/wallet.tsx` from the archive).
   - One `near-api-js` ≥7.4 on client and server for meta-transactions.
-- **Server accounts** (keys in Vercel env only):
-  - `wgp.testnet` creates accounts.
-  - `relayer.wgp.testnet` pays gas, using 4–8 keys.
-  - `operator.wgp.testnet` mints.
+- **Server accounts** (keys in Vercel env only; mainnet names, testnet uses `wgp.testnet` and so on):
+  - `wgpnear.near`, the factory, creates `<handle>.wgpnear.near` (made by `scripts/near/setup-mainnet.sh`).
+  - The relayer pays gas, using 4–8 keys.
+  - The operator mints.
+- **Which Google service:** `NEXT_PUBLIC_GOOGLE_SIGN_IN=privy|near-auth`, defaulting to `privy` when `NEXT_PUBLIC_PRIVY_APP_ID` is set (`src/lib/privy/config.ts`). NEAR wallet sign-in is always offered.
+
+### Google through Privy (live now)
+NEAR Auth's mainnet client is waiting on NEAR's approval, so Google sign-in goes through Privy until then. Privy gives each user a NEAR embedded wallet: an ed25519 key ("Tier 2" chain support) whose address is its implicit account id, and which signs raw hashes.
+- **The browser** (`src/lib/privy/`, `src/components/account/privy-host.tsx`):
+  - Privy's SDK is a lazy chunk, mounted only when the sign-in sheet opens, a Google redirect comes back, or a Privy player opens their account; `/` and `/play` don't load it.
+  - "Continue with Google" is a full-page redirect to Google (`useLoginWithOAuth`). Back on our page, Privy finishes the login from its `privy_oauth_*` parameters, the browser makes the user's NEAR wallet if they have none (`useCreateWallet({ chainType: "near" })`), then posts Privy's access token and its session key to `POST /api/auth/privy`.
+  - Sign out also logs out of Privy.
+- **The server** (`src/server/auth/privy*.ts`):
+  - Checks the access token with `@privy-io/node` and `PRIVY_APP_SECRET`: ES256 against the app's keys, issuer `privy.io`, audience our app id, not expired; we check the returned claims again.
+  - Reads the user from Privy's API by the token's user id: the verified Google email and the NEAR wallet's key. Nothing the browser says about them is used.
+- **Who the login is** (`privySignIn`):
+  - A known player (`auth_kind = privy`, `auth_sub` = the Privy user id) is signed in.
+  - A player with the same verified email (they signed up through NEAR Auth) is signed in too: no second hero.
+  - **A new player, factory live:** the same `needs-handle` step as NEAR Auth, then one factory transaction creates `<handle>.wgpnear.near` with the Privy NEAR key (full access) and the browser's session key (game contract only). An account that already holds the user's key (a retry after a lost answer) is adopted.
+  - **A new player, factory not live** (not configured, or `wgpnear.near` not on chain yet; one cached `view_account`): no handle step. The player is made on their key's implicit account id (64 hex) and plays ranked nights at once.
+- **Unclaimed players** (`isUnclaimed`: Privy, on an implicit account id, which doesn't exist on NEAR):
+  - Nothing is sent on chain for them. Reward mints are queued as usual but held (the mint worker skips them); no hero registration; quick play is off.
+  - Once the factory is live, the account sheet offers **"Claim your name"** (`GET`/`POST /api/auth/privy/claim`). The server reads the user's NEAR wallet from Privy again (it must be the key of their implicit account), the factory creates `<handle>.wgpnear.near` with it and the browser's session key, and one transaction moves the player there: the player row, the held mints (now addressed to the new account; their nonces start at 1, which is what a fresh account expects), the chain mirror, price history and the simulated market's wallet. Save, runs and boards are keyed by the player, so they don't move.
+- **Quick play on a new device:** the Privy NEAR key signs `AddKey(session key)` as a delegate (raw-hash signing, no popup) and the relayer submits it, like NEAR Auth's add-key flow.
+
+### Switching to NEAR Auth later, without losing anyone
+- **Linking by verified email:** every Google player stores their verified email (`players.email`, migration `0004_privy_email`). `POST /api/auth/near-auth` looks a login up by its Google sub, then by the token's email when Auth0 marks it verified, so a Privy player who signs in through NEAR Auth gets their own hero back. The reverse holds too.
+- **What stays with Privy:** the full-access key of a Privy player's account is their Privy NEAR key (exportable from Privy). A NEAR Auth sign-in into that player plays fine; adding the NEAR Auth key to the account (for NEAR Auth's own new-device popup) is a later, one-time Privy-signed `AddKey`.
+- **To switch:** set `NEXT_PUBLIC_GOOGLE_SIGN_IN=near-auth` and NEAR Auth's mainnet client id; keep the Privy variables so existing Privy players can still sign out and in again during the move.
+
+### Google through NEAR Auth (Plan A, waiting on mainnet approval)
 - **Sign-up (Plan A):**
   1. A single Google login.
   2. The browser creates a session key.
@@ -168,6 +196,8 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 - **Fallbacks:**
   - **Plan B:** NEAR Auth creates the account, then one popup adds the session key.
   - **Plan C:** contract-level session keys, verified with `ed25519_verify`.
+
+### Relayer and wallets
 - **Relayer (`/api/relay/meta`)** accepts only:
   - a known player and live session key;
   - the game contract as receiver;
