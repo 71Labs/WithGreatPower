@@ -2,7 +2,7 @@
 
 /**
  * The 3D night's settings: sound and its two volumes (src/audio/player), the quality tier (picked from the GPU, then the frame rate,
- * until you choose one) and the steady camera (no roll, no shake, a fixed field of view:
+ * until you choose one), whether the minimap keeps north up, and the steady camera (no roll, no shake, a fixed field of view:
  * on by default when the device asks for reduced motion). Remembered in this browser;
  * `?tier=low|medium|high` overrides the tier for testing. The pause sheet shows them.
  */
@@ -18,6 +18,8 @@ export interface PlaySettings {
   /** False once the player picks a tier (or the URL forces one): the frame-rate probe may no longer change it. */
   adaptive: boolean;
   steady: boolean;
+  /** The minimap keeps north up instead of turning with the camera. */
+  northUp: boolean;
 }
 
 const isTier = (t: unknown): t is QualityTier => t === "low" || t === "medium" || t === "high";
@@ -25,7 +27,7 @@ const isTier = (t: unknown): t is QualityTier => t === "low" || t === "medium" |
 /** The settings to start with: the URL's tier, the remembered choice, or the GPU's guess. */
 export function initialSettings(): PlaySettings {
   const forced = new URLSearchParams(window.location.search).get("tier");
-  let saved: { tier?: unknown; steady?: unknown } = {};
+  let saved: { tier?: unknown; steady?: unknown; northUp?: unknown } = {};
   try {
     saved = JSON.parse(window.localStorage.getItem(KEY) ?? "{}") ?? {};
   } catch {
@@ -37,11 +39,12 @@ export function initialSettings(): PlaySettings {
     tier: pinned ?? detectTier(),
     adaptive: pinned === null,
     steady: typeof saved.steady === "boolean" ? saved.steady : reduced,
+    northUp: saved.northUp === true,
   };
 }
 
 /** Remember a choice the player made (the probe's own tier changes aren't saved). */
-export function rememberSettings(next: { tier?: QualityTier; steady?: boolean }) {
+export function rememberSettings(next: { tier?: QualityTier; steady?: boolean; northUp?: boolean }) {
   try {
     const prev = JSON.parse(window.localStorage.getItem(KEY) ?? "{}") ?? {};
     window.localStorage.setItem(KEY, JSON.stringify({ ...prev, ...next }));

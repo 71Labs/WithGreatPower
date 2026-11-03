@@ -1,12 +1,12 @@
 /**
  * What every key and mouse button means, by KeyboardEvent.code (the physical key, so WASD
  * stays put on any layout). WASD or the arrows steer relative to the camera, Space holds
- * the web, 1–4 fire powers, G calls Gwei, Escape or P pauses; plus the look speeds for drag
+ * the web, 1–4 fire powers, G calls Gwei, Escape or P pauses, M opens the city map; plus the look speeds for drag
  * orbit and mouse look. Pure, no DOM.
  */
 import type { Shot } from "./latch";
 
-export type ControlAction = "forward" | "back" | "left" | "right" | "web" | "power-1" | "power-2" | "power-3" | "power-4" | "gwei" | "pause";
+export type ControlAction = "forward" | "back" | "left" | "right" | "web" | "power-1" | "power-2" | "power-3" | "power-4" | "gwei" | "pause" | "map";
 
 export const KEY_BINDINGS: Readonly<Record<string, ControlAction>> = {
   KeyW: "forward",
@@ -29,6 +29,7 @@ export const KEY_BINDINGS: Readonly<Record<string, ControlAction>> = {
   KeyG: "gwei",
   Escape: "pause",
   KeyP: "pause",
+  KeyM: "map",
 };
 
 export function actionForKey(code: string): ControlAction | null {

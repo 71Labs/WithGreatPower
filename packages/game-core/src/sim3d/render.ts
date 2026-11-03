@@ -285,8 +285,11 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   const zones = s.city.zones;
   let r = 0;
   for (let i = s.index; i < zones.length; i++, r++) {
+    // Where the hero is sent: an errand's ally, else the stop's centre (as stopTarget picks).
+    const z = zones[i];
+    const to = z.kind === "errand" ? (z.allyAt ?? z.center) : z.center;
     const at = route[r] ?? (route[r] = v3());
-    set(at, zones[i].center.x, zones[i].center.y, zones[i].center.z);
+    set(at, to.x, to.y, to.z);
   }
   route.length = r;
 

@@ -3,7 +3,8 @@
  * surface, all reporting into one InputLatch.
  *
  * - Keys: WASD or the arrows steer (camera-relative), Space holds the web, 1–4 and G latch
- *   a power or Gwei, Escape or P asks to pause (the page decides what that means).
+ *   a power or Gwei, Escape or P asks to pause and M for the map (the page decides what
+ *   those mean).
  * - Mouse: the left button holds the web, and the first click also locks the pointer to
  *   the surface for mouse look (Escape releases it). Without pointer lock, a right-button
  *   drag orbits the camera.
@@ -26,6 +27,8 @@ export interface ControlsOptions {
   orbit(dYaw: number, dPitch: number, holding: boolean): void;
   /** Escape or P. */
   onPause(): void;
+  /** M: open or close the city map (the page decides). */
+  onMap?(): void;
   /** Whether play input counts right now. */
   enabled(): boolean;
   /** The floating touch stick moved, appeared or went away. */
@@ -85,6 +88,12 @@ export function attachControls(opts: ControlsOptions): Controls {
     if (action === "pause") {
       e.preventDefault();
       if (!e.repeat) opts.onPause();
+      return;
+    }
+    if (action === "map") {
+      if (!opts.onMap) return;
+      e.preventDefault();
+      if (!e.repeat) opts.onMap();
       return;
     }
     if (!opts.enabled()) return;

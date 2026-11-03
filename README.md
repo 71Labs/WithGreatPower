@@ -31,7 +31,8 @@ All steps work on the live site, with no install.
    - **Controls:**
      - WASD or the arrow keys run relative to the camera. Let go and the hero stops and stands; he only moves where you steer.
      - Space or the mouse shoots a web toward where you're steering (or the next stop). Hold it to keep swinging and chain webs, and let go to fly. Release on the rise for a perfect boost, and let go before touching a roof to land.
-     - 1–4 fire powers, G calls Gwei, Esc pauses. Click into the game for mouse look.
+     - 1–4 fire powers, G calls Gwei, M opens the city map, Esc pauses. Click into the game for mouse look.
+     - The minimap (bottom left) and a pin or edge arrow with the distance show where the next stop is.
      - On touch: drag on the left side to steer, hold the right side to web.
    - **See:** a 3D night of stops (villain fights and ally errands) ending on a results screen. Gold Bits tokens and boost rings line each route and build your combo. Guest nights are unranked.
 2. **Sign in with Google or a NEAR wallet.**

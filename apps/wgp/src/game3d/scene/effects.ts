@@ -22,6 +22,7 @@ import {
 
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
+import { NAV_COLORS } from "@/game3d/nav/colors";
 import { CITY, INK, PAPER } from "@/game/style";
 import { inked, resolveFont, sparkle, starburst } from "@/sim/render/draw";
 
@@ -37,13 +38,16 @@ export const BURST_WORDS = {
   "OOF!": [PAPER, CITY.neonRed],
   "SPLASH!": [PAPER, CITY.skyMid],
   sparkle: [PAPER, PAPER],
+  /** Pickups (v1.3): a Bits token, a boost ring. */
+  "+1 BIT!": [NAV_COLORS.bits, PAPER],
+  "BOOST!": [NAV_COLORS.ring, PAPER],
 } as const;
 
 export type BurstWord = keyof typeof BURST_WORDS;
 
 const WORDS = Object.keys(BURST_WORDS) as BurstWord[];
 const COLS = 2;
-const ROWS = 4;
+const ROWS = 5;
 const CELL_W = 512;
 const CELL_H = 256;
 
