@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { StickerChip } from "@/components/game/kit";
 import { Pause, Play } from "@/components/icons";
+import { assetUrl } from "@/lib/assets";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
@@ -91,8 +92,8 @@ export function HeroLoop() {
               onPlaying={() => setShown(true)}
               className={`absolute inset-0 size-full object-cover motion-safe:transition-opacity motion-safe:duration-300 motion-safe:ease-out ${shown ? "opacity-100" : "opacity-0"}`}
             >
-              <source src="/media/hero-loop.webm" type='video/webm; codecs="vp9"' />
-              <source src="/media/hero-loop.mp4" type="video/mp4" />
+              <source src={assetUrl("/media/hero-loop.webm")} type='video/webm; codecs="vp9"' />
+              <source src={assetUrl("/media/hero-loop.mp4")} type="video/mp4" />
             </video>
           ) : null}
         </div>
