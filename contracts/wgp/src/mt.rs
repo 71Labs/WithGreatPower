@@ -13,7 +13,7 @@
 
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
-use near_sdk::{env, ext_contract, near, require, AccountId, Gas, PromiseOrValue};
+use near_sdk::{env, near, require, AccountId, Gas, GasWeight, NearToken};
 
 use crate::{MtEvent, MtTransferEvent, TokenId, Wgp, WgpExt};
 
@@ -31,19 +31,6 @@ pub struct Token {
     pub token_id: TokenId,
     /// Set for one-of-a-kind tokens (heroes, season trophies); null for fungible ones.
     pub owner_id: Option<AccountId>,
-}
-
-#[ext_contract(ext_mt_receiver)]
-#[allow(dead_code)]
-pub trait MultiTokenReceiver {
-    fn mt_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        previous_owner_ids: Vec<AccountId>,
-        token_ids: Vec<TokenId>,
-        amounts: Vec<U128>,
-        msg: String,
-    ) -> PromiseOrValue<Vec<U128>>;
 }
 
 pub(crate) enum Kind<'a> {
@@ -119,7 +106,7 @@ impl Wgp {
         approval: Option<(AccountId, u64)>,
         memo: Option<String>,
         msg: String,
-    ) -> PromiseOrValue<Vec<U128>> {
+    ) {
         near_sdk::assert_one_yocto();
         require!(approval.is_none(), ERR_APPROVALS);
         self.internal_transfer_call(receiver_id, vec![token_id], vec![amount], memo, msg)
@@ -134,7 +121,7 @@ impl Wgp {
         approvals: Option<Vec<Option<(AccountId, u64)>>>,
         memo: Option<String>,
         msg: String,
-    ) -> PromiseOrValue<Vec<U128>> {
+    ) {
         near_sdk::assert_one_yocto();
         assert_no_approvals(&approvals);
         self.internal_transfer_call(receiver_id, token_ids, amounts, memo, msg)
@@ -385,7 +372,7 @@ impl Wgp {
         amounts: Vec<U128>,
         memo: Option<String>,
         msg: String,
-    ) -> PromiseOrValue<Vec<U128>> {
+    ) {
         let sender = env::predecessor_account_id();
         let resolve_gas = GAS_FOR_RESOLVE_BASE
             .saturating_add(GAS_FOR_RESOLVE_PER_TOKEN.saturating_mul(token_ids.len() as u64));
@@ -399,23 +386,46 @@ impl Wgp {
 
         self.internal_transfer(&sender, &receiver_id, &token_ids, &amounts, memo);
         let previous_owner_ids = vec![sender.clone(); token_ids.len()];
-        ext_mt_receiver::ext(receiver_id.clone())
-            .with_static_gas(GAS_FOR_MT_ON_TRANSFER)
-            .with_unused_gas_weight(1)
-            .mt_on_transfer(
-                sender,
-                previous_owner_ids.clone(),
-                token_ids.clone(),
-                amounts.clone(),
-                msg,
-            )
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(resolve_gas)
-                    .with_unused_gas_weight(0)
-                    .mt_resolve_transfer(previous_owner_ids, receiver_id, token_ids, amounts, None),
-            )
-            .into()
+
+        // `receiver.mt_on_transfer(...)`, then `self.mt_resolve_transfer(...)`, whose result
+        // is this call's result (NEP-245's `PromiseOrValue<Vec<U128>>`). Built from `env`'s
+        // low-level promise calls, not `Promise`/`ext_contract`: see `Wgp::upgrade`.
+        let on_transfer_args = serde_json::to_vec(&serde_json::json!({
+            "sender_id": sender,
+            "previous_owner_ids": previous_owner_ids,
+            "token_ids": token_ids,
+            "amounts": amounts,
+            "msg": msg,
+        }))
+        .unwrap_or_else(|_| env::panic_str("Couldn't encode mt_on_transfer"));
+        let resolve_args = serde_json::to_vec(&serde_json::json!({
+            "previous_owner_ids": previous_owner_ids,
+            "receiver_id": receiver_id,
+            "token_ids": token_ids,
+            "amounts": amounts,
+            "approvals": null,
+        }))
+        .unwrap_or_else(|_| env::panic_str("Couldn't encode mt_resolve_transfer"));
+
+        let on_transfer = env::promise_batch_create(&receiver_id);
+        env::promise_batch_action_function_call_weight(
+            on_transfer,
+            "mt_on_transfer",
+            &on_transfer_args,
+            NearToken::from_yoctonear(0),
+            GAS_FOR_MT_ON_TRANSFER,
+            GasWeight(1),
+        );
+        let resolve = env::promise_batch_then(on_transfer, &env::current_account_id());
+        env::promise_batch_action_function_call_weight(
+            resolve,
+            "mt_resolve_transfer",
+            &resolve_args,
+            NearToken::from_yoctonear(0),
+            resolve_gas,
+            GasWeight(0),
+        );
+        env::promise_return(resolve);
     }
 }
 
