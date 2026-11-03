@@ -5,6 +5,4 @@ launch/
 **/node_modules
 **/.next
 apps/wgp/.data
-# Licensed fonts kept on the owner's machine only; never served publicly.
-apps/wgp/public/fonts/NeueMontreal-*
 video-music.mp3
