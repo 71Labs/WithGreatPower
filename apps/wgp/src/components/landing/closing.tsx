@@ -1,33 +1,35 @@
-import { AsciiTerrain } from "@/components/art/ascii";
-import { Chip, Section, TwoTone } from "@/components/frame";
-import { LinkButton } from "@/components/ui";
-import { PLAY_URL } from "@/lib/site";
+import { COLUMN } from "@/components/frame";
+import { StickerLink } from "@/components/game/kit";
+import { ArrowRight, Github } from "@/components/icons";
+import { PLAY_URL, REPO_URL } from "@/lib/site";
 
-/** The last word: one line, two buttons, and the city again, drawn in ASCII. */
+/** The last word, back in the night sky: one line and the red button. */
 export function Closing() {
   return (
-    <Section id="play" labelledBy="closing-title" className="overflow-x-clip" inner="px-4 pt-24 sm:px-10 sm:pt-32">
-      <div className="relative z-[1] flex flex-col items-center gap-6 text-center">
-        <Chip>Suit up</Chip>
-        <TwoTone id="closing-title" lead="The city needs" point="a friendly neighborhood hero." />
-        <p className="text-[17px] leading-7 text-ink-subtle">Pick your powers in under a minute. The villains are already out.</p>
-        <div className="mt-2 flex flex-wrap justify-center gap-3">
-          <LinkButton href={PLAY_URL} size="lg">
+    <section id="play" aria-labelledby="closing-title" className="night">
+      <div className={`${COLUMN} flex flex-col items-center gap-6 px-4 py-24 text-center sm:px-10 sm:py-32`}>
+        <h2
+          id="closing-title"
+          className="font-display text-[clamp(2rem,1.3rem+2.4vw,3.25rem)] font-medium leading-[1.06] tracking-[-0.04em]"
+        >
+          <span className="text-(--night-ink-faint)">The city needs</span>
+          <br />
+          <span className="text-(--night-ink)">a friendly neighborhood hero.</span>
+        </h2>
+        <p className="max-w-[44ch] text-[17px] leading-7">
+          Gas Goblin is already out. Swing in as a guest, or sign in with a NEAR wallet to make the board.
+        </p>
+        <div className="mt-3 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
+          <StickerLink href={PLAY_URL} variant="hero" size="lg" className="w-full sm:w-auto">
             Play now
-          </LinkButton>
-          <LinkButton href="#cast" size="lg" variant="secondary">
-            Meet the cast
-          </LinkButton>
+            <ArrowRight aria-hidden strokeWidth={2.25} className="size-5" />
+          </StickerLink>
+          <StickerLink href={REPO_URL} variant="paper" size="lg" className="w-full sm:w-auto">
+            <Github aria-hidden strokeWidth={2} className="size-5" />
+            Read the source
+          </StickerLink>
         </div>
       </div>
-      {/* Full-bleed band: break out of the content column to the viewport edges. */}
-      <AsciiTerrain
-        variant="skyline"
-        className="-mt-16 ml-[calc(50%-50vw)] h-[360px] w-screen [mask-image:linear-gradient(to_bottom,transparent,black_35%)] sm:-mt-24 sm:h-[520px]"
-        fontSize={11}
-        seed={4}
-        lift={0}
-      />
-    </Section>
+    </section>
   );
 }
