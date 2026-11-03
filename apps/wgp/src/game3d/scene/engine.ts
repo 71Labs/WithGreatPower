@@ -1,6 +1,6 @@
 /**
  * The 3D scene as one plain object: city meshes, sky, the cast (rigged 3D characters and
- * the hero's web), bursts, hazards and the chase camera, updated once per frame from a
+ * the hero's web), bursts, hazards, pickups and the chase camera, updated once per frame from a
  * `RenderFrame3D`. No React here; Scene.tsx creates one per city and calls `update` from
  * `useFrame`, so per-frame data never goes through React state.
  */
@@ -20,6 +20,7 @@ import { createSharedUniforms, type SharedUniforms } from "./city/materials";
 import { setOcclusion } from "./city/occlusion";
 import { Bursts, type BurstOptions } from "./effects";
 import { Hazards } from "./hazards";
+import { PICKUP_WORD, Pickups } from "./pickups";
 import type { QualityPreset } from "./quality";
 import { buildSky, type Sky } from "./sky";
 import { CharacterSystem } from "./characters/characters";
@@ -44,6 +45,8 @@ export class SceneEngine {
   readonly bursts: Bursts;
   readonly web: WebLine;
   readonly hazards: Hazards;
+  /** Bits and boost rings, when the frame has v1.3 pickups. */
+  readonly pickups: Pickups;
   readonly speedLines: SpeedLines;
   /** Camera far plane, from the city's size. */
   readonly far: number;
@@ -78,8 +81,9 @@ export class SceneEngine {
     this.bursts = new Bursts(this.uniforms);
     this.web = this.characters.web;
     this.hazards = new Hazards();
+    this.pickups = new Pickups(cityData, this.uniforms);
     this.speedLines = new SpeedLines();
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.characters.root, this.hazards.root, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.characters.root, this.hazards.root, this.pickups.root, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -102,6 +106,7 @@ export class SceneEngine {
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
     this.bursts.reducedMotion = on;
+    this.pickups.reducedMotion = on;
     this.characters.setReducedMotion(on);
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
@@ -116,6 +121,11 @@ export class SceneEngine {
   burst(word: string, at: Vec3, opts?: BurstOptions): void {
     this.bursts.burst(word, at, opts);
   }
+
+  /** A pickup was taken: its pop word, a little above where it hung. */
+  private readonly onPickup = (kind: "bits" | "ring", at: Vec3) => {
+    this.bursts.burst(PICKUP_WORD[kind], { x: at.x, y: at.y + 40, z: at.z }, { size: kind === "ring" ? 96 : 84, life: 0.7, rise: 30 });
+  };
 
   /** Somersault the hero (a perfect release). */
   flip(): void {
@@ -191,6 +201,7 @@ export class SceneEngine {
       this.characters.update(frame, camera, size, dt, time);
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
       this.hazards.update(frame);
+      this.pickups.update(frame, time, this.onPickup);
       // The sparkle shows once the web's shot has reached the anchor.
       this.bursts.setAnchor(this.characters.stuck);
     }
@@ -223,5 +234,6 @@ export class SceneEngine {
     this.characters.dispose();
     this.bursts.dispose();
     this.hazards.dispose();
+    this.pickups.dispose();
   }
 }
