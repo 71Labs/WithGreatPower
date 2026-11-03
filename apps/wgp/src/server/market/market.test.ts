@@ -14,13 +14,13 @@ import { spotMilli } from "@/lib/market/math";
 import type { Db } from "../db/client";
 import { enqueueRewardMint } from "../db/outbox";
 import { ensureSave, writeSave } from "../db/players";
-import { marketPrices, runs } from "../db/schema";
+import { chainOps, marketPrices, runs } from "../db/schema";
 import { freshDb, givePlayerHero, makePlayer } from "../db/test-helpers";
 import { HttpError } from "../http";
 import { priceStats, recordSnapshots, thin } from "./history";
 import { afterMarketRelay, mirrorInventory } from "./relay";
-import { mintedBits, readSim, simAct, simWallet } from "./sim";
-import { marketListings, marketView } from "./view";
+import { mintedBits, readSim, simAct, simWallet, unsentBits } from "./sim";
+import { marketListings, marketSnapshot, marketView } from "./view";
 
 // Outside Next there is no cache to tag or expire.
 vi.mock("next/cache", () => ({ cacheTag: () => {}, cacheLife: () => {}, revalidateTag: () => {} }));
@@ -155,6 +155,35 @@ describe("the market view", () => {
     expect(await recordSnapshots(db, false, pools, NOW)).toBe(8);
     expect(await recordSnapshots(db, false, pools, new Date(NOW.getTime() + 60_000))).toBe(0);
     expect(await recordSnapshots(db, false, pools, new Date(NOW.getTime() + 61 * 60_000))).toBe(8);
+  });
+});
+
+describe("the answer to a trade", () => {
+  it("carries the market and wallet as they stand right after it (past the view's cache)", async () => {
+    const listed = await simAct(db, { playerId: alice.id, accountId: alice.account, act: { action: "list", item: "crumbs", amount: 1, price: 12 }, now: NOW });
+    await simAct(db, { playerId: alice.id, accountId: alice.account, act: { action: "buy", item: "crumbs", amount: 2, maxBits: 40 }, now: NOW });
+    const snap = await marketSnapshot({ playerId: alice.id, accountId: alice.account });
+    const crumbs = snap.view.items.find((i) => i.item === "crumbs")!;
+    expect(crumbs.pool.stock).toBe(38);
+    expect(crumbs.trades24h).toBe(1);
+    expect(snap.listings.map((l) => l.id)).toEqual([listed.receipt.kind === "listing" ? listed.receipt.listing.id : -1]);
+    expect(snap.me).toMatchObject({ onChain: false, accountId: alice.account, items: { crumbs: 7 }, pendingBits: 0 });
+    expect(snap.me.bits).toBe(200 - 26);
+  });
+});
+
+describe("Bits on the way", () => {
+  it("counts a player's reward Bits until the operator lands them (not dead ones)", async () => {
+    expect(await unsentBits(db, alice.id)).toBe(200);
+    await db.transaction((tx) =>
+      enqueueRewardMint(tx, { kind: "mint_reward", dedupeKey: "mint_reward:alice-2", playerId: alice.id, payload: { accountId: alice.account, items: [{ tokenId: "item:bits", amount: 25 }, { tokenId: "item:crumbs", amount: 2 }], digest: "0".repeat(64) } }),
+    );
+    expect(await unsentBits(db, alice.id)).toBe(225);
+    await db.update(chainOps).set({ status: "sent" }).where(eq(chainOps.dedupeKey, "mint_reward:alice"));
+    expect(await unsentBits(db, alice.id)).toBe(25);
+    await db.update(chainOps).set({ status: "dead" }).where(eq(chainOps.dedupeKey, "mint_reward:alice-2"));
+    expect(await unsentBits(db, alice.id)).toBe(0);
+    expect(await unsentBits(db, bob.id)).toBe(100);
   });
 });
 

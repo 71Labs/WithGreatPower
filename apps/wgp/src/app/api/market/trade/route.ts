@@ -1,5 +1,5 @@
 /**
- * POST /api/market/trade → 200 { receipt, save, rev, bits }: a trade in the SIMULATED
+ * POST /api/market/trade → 200 { receipt, save, rev, bits, market? }: a trade in the SIMULATED
  * market, which runs the contract's rules on the server until the contract's market is
  * live (src/server/market/sim.ts). Once it is, trades are session-key calls relayed by
  * /api/relay/meta and this answers 409 on_chain.
@@ -25,7 +25,7 @@ import { getDb } from "@/server/db/client";
 import { clientIp, conflict, handle, json, readJson } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
 import { simAct } from "@/server/market/sim";
-import { marketView, refreshMarket } from "@/server/market/view";
+import { marketSnapshot, marketView, refreshMarket } from "@/server/market/view";
 import { rateLimiter } from "@/server/rate-limit";
 
 const item = z.enum(Object.keys(ITEMS) as [ItemId, ...ItemId[]]);
@@ -47,8 +47,11 @@ export const POST = handle("market/trade", (request: Request) =>
     rateLimiter.enforce("market-trade", session.playerId, MARKET_LIMITS.tradePerPlayer);
     const act = await readJson(request, body, 2 * 1024);
     if ((await marketView()).onChain) throw conflict("on_chain", "The market is on NEAR now; trade with quick play");
-    const result = await simAct(await getDb(), { playerId: session.playerId, accountId: session.player.nearAccountId, act });
+    const player = { playerId: session.playerId, accountId: session.player.nearAccountId };
+    const result = await simAct(await getDb(), { ...player, act });
     refreshMarket();
-    return json(result);
+    // The cached view can still be the one from before the trade: answer with the market as it is now.
+    const market = await marketSnapshot(player).catch(() => null);
+    return json({ ...result, ...(market ? { market } : {}) });
   }),
 );

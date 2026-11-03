@@ -95,6 +95,27 @@ export async function mintedBits(db: Db, playerId: string): Promise<number> {
   return Number(row?.bits ?? 0);
 }
 
+/**
+ * Bits in a player's reward mints that haven't landed on chain yet (queued, sending or
+ * waiting to retry; not dead ones, which wait for an operator). The market shows them as
+ * "on the way" so a night's Bits never look lost while the operator sends them.
+ */
+export async function unsentBits(db: Db, playerId: string): Promise<number> {
+  const [row] = await queryRows<{ bits: string | number | null }>(
+    db,
+    sql`select coalesce(sum((e->>'amount')::bigint), 0) as bits
+        from chain_ops c, jsonb_array_elements(coalesce(c.payload->'items', '[]'::jsonb)) e
+        where c.player_id = ${playerId}
+          and c.kind in (${sql.join(
+            MINT_KINDS.map((k) => sql`${k}`),
+            sql`, `,
+          )})
+          and c.status in ('pending', 'sending', 'failed')
+          and e->>'tokenId' = ${BITS_TOKEN}`,
+  );
+  return Number(row?.bits ?? 0);
+}
+
 const isItem = (id: string): id is ItemId => id in ITEMS;
 
 /** The game items in a save's inventory, as the market sees them. */
