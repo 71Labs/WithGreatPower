@@ -6,7 +6,7 @@
  * back through callbacks. The 2D and 3D games share it: the 3D night passes its own hint
  * copy and, on touch, lays the powers out in a right-thumb arc.
  */
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 
 import type { SuitColors } from "@/components/cast";
 import { StickerMeter, StickerPanel } from "@/components/game/kit";
@@ -24,7 +24,7 @@ export function useHud(store: HudStore): HudSnapshot | null {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, () => null);
 }
 
-function Vitals({ hud }: { hud: HudSnapshot }) {
+function Vitals({ hud, combo }: { hud: HudSnapshot; combo?: ReactNode }) {
   const buffs = [
     hud.buffs.shield && "Shield",
     hud.buffs.cloak && "Cloaked",
@@ -39,10 +39,12 @@ function Vitals({ hud }: { hud: HudSnapshot }) {
         <StickerMeter label="Web fluid" value={hud.fluid} max={hud.maxFluid} fill="bg-fluid" />
       </StickerPanel>
       <div className="flex flex-col items-start gap-1.5 md:flex-row md:flex-wrap">
-        <Chip tone={hud.combo > 0 ? "paper" : "muted"} size="sm" className="num">
-          <Zap aria-hidden className="size-3.5" strokeWidth={2.25} />
-          Combo {hud.combo}
-        </Chip>
+        {combo ?? (
+          <Chip tone={hud.combo > 0 ? "paper" : "muted"} size="sm" className="num">
+            <Zap aria-hidden className="size-3.5" strokeWidth={2.25} />
+            Combo {hud.combo}
+          </Chip>
+        )}
         {buffs.map((b) => (
           <Chip key={b} tone="gold" size="sm">
             <ShieldCheck aria-hidden className="size-3.5" strokeWidth={2.25} />
@@ -234,6 +236,8 @@ export function Hud({
   touch,
   hint,
   arc = false,
+  minimap,
+  combo,
 }: {
   store: HudStore;
   stops: Stop[];
@@ -248,6 +252,14 @@ export function Hud({
   hint?: { title: string; body: string };
   /** On touch, put the powers in a right-thumb arc (the 3D night, where the right side holds the web). */
   arc?: boolean;
+  /**
+   * The 3D night's minimap: bottom left with a mouse; on touch (with `arc`), top right under
+   * the route bar, away from the left-side stick, and out of the way of the villain bar in a
+   * phone's fights. The first-stop hint moves beside it.
+   */
+  minimap?: ReactNode;
+  /** In place of the combo chip (the 3D night's combo meter). */
+  combo?: ReactNode;
 }) {
   const hud = useHud(store);
   if (!hud || hud.status === "loading") return null;
@@ -258,7 +270,7 @@ export function Hud({
     <div className="pointer-events-none absolute inset-0 select-none">
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 pt-[max(12px,env(safe-area-inset-top))] sm:p-4">
         <div className="pointer-events-auto">
-          <Vitals hud={hud} />
+          <Vitals hud={hud} combo={combo} />
         </div>
         <div className="pointer-events-auto absolute left-1/2 top-4 hidden w-[min(44vw,560px)] -translate-x-1/2 flex-col items-center gap-2 md:flex">
           <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className="w-full" />
@@ -280,6 +292,14 @@ export function Hud({
         <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className="w-full max-w-[520px]" />
         <VillainBar hud={hud} />
       </div>
+
+      {minimap ? (
+        arc && touch ? (
+          <div className={`pointer-events-auto absolute right-3 top-[190px] sm:top-[200px] md:right-4 md:top-[76px] ${hud.villain ? "max-md:hidden" : ""}`}>{minimap}</div>
+        ) : (
+          <div className="pointer-events-auto absolute bottom-0 left-0 p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]">{minimap}</div>
+        )
+      ) : null}
 
       {playing && arc && touch ? <AbilityArc hud={hud} fight={fight} onAbility={onAbility} onGwei={onGwei} /> : null}
       {playing && !(arc && touch) ? (
@@ -311,10 +331,12 @@ export function Hud({
           className={
             arc && touch
               ? "absolute left-0 top-[184px] p-3 sm:top-[194px] md:top-[112px]"
-              : "absolute bottom-[calc(84px+env(safe-area-inset-bottom))] left-0 p-3 sm:bottom-0 sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]"
+              : minimap
+                ? "absolute bottom-0 left-[196px] p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:left-[208px] sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]"
+                : "absolute bottom-[calc(84px+env(safe-area-inset-bottom))] left-0 p-3 sm:bottom-0 sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]"
           }
         >
-          <StickerPanel className="flex max-w-[260px] flex-col gap-1 rounded-[16px] px-3.5 py-2.5 sm:max-w-[300px]">
+          <StickerPanel className={`flex flex-col gap-1 rounded-[16px] px-3.5 py-2.5 ${minimap && arc && touch ? "max-w-[min(260px,calc(100vw-156px))]" : "max-w-[260px]"} sm:max-w-[300px]`}>
             <p className="text-[14px] font-bold leading-5">{hint ? hint.title : touch ? "Hold the left side to swing" : "Hold to swing"}</p>
             <p className="text-[13px] leading-[18px] text-game-muted">
               {hint ? hint.body : touch ? "Let go while you’re rising for a perfect swing." : "Space, or hold the mouse. Let go while you’re rising for a perfect swing. A and D steer."}

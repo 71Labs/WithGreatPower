@@ -23,6 +23,7 @@ import {
   CheckmarkBadge01Icon,
   Clock01Icon,
   Coins01Icon,
+  CompassIcon,
   Copy01Icon,
   DashboardSpeed01Icon,
   DashedLineCircleIcon,
@@ -68,6 +69,7 @@ import {
   Target02Icon,
   Award01Icon,
   MapsLocation01Icon,
+  MapsIcon,
   News01Icon,
   TShirtIcon,
   GameController03Icon,
@@ -171,6 +173,8 @@ export const Swords = make(Sword03Icon, "Swords");
 export const Target = make(Target02Icon, "Target");
 export const Award = make(Award01Icon, "Award");
 export const MapPin = make(MapsLocation01Icon, "MapPin");
+export const MapIcon = make(MapsIcon, "MapIcon");
+export const Compass = make(CompassIcon, "Compass");
 export const Newspaper = make(News01Icon, "Newspaper");
 export const Shirt = make(TShirtIcon, "Shirt");
 export const Gamepad = make(GameController03Icon, "Gamepad");
