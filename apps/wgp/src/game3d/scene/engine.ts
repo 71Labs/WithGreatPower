@@ -20,7 +20,7 @@ import { createSharedUniforms, type SharedUniforms } from "./city/materials";
 import { setOcclusion } from "./city/occlusion";
 import { Bursts, type BurstOptions } from "./effects";
 import { Hazards } from "./hazards";
-import { PICKUP_WORD, Pickups } from "./pickups";
+import { Pickups } from "./pickups";
 import type { QualityPreset } from "./quality";
 import { buildSky, type Sky } from "./sky";
 import { CharacterSystem } from "./characters/characters";
@@ -122,11 +122,6 @@ export class SceneEngine {
     this.bursts.burst(word, at, opts);
   }
 
-  /** A pickup was taken: its pop word, a little above where it hung. */
-  private readonly onPickup = (kind: "bits" | "ring", at: Vec3) => {
-    this.bursts.burst(PICKUP_WORD[kind], { x: at.x, y: at.y + 40, z: at.z }, { size: kind === "ring" ? 96 : 84, life: 0.7, rise: 30 });
-  };
-
   /** Somersault the hero (a perfect release). */
   flip(): void {
     this.characters.flip();
@@ -201,7 +196,7 @@ export class SceneEngine {
       this.characters.update(frame, camera, size, dt, time);
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
       this.hazards.update(frame);
-      this.pickups.update(frame, time, this.onPickup);
+      this.pickups.update(frame, time);
       // The sparkle shows once the web's shot has reached the anchor.
       this.bursts.setAnchor(this.characters.stuck);
     }

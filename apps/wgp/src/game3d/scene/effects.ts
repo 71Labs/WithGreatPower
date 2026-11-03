@@ -39,7 +39,7 @@ export const BURST_WORDS = {
   "SPLASH!": [PAPER, CITY.skyMid],
   sparkle: [PAPER, PAPER],
   /** Pickups (v1.3): a Bits token, a boost ring. */
-  "+5 BITS!": [NAV_COLORS.bits, PAPER],
+  "+1 BIT!": [NAV_COLORS.bits, PAPER],
   "BOOST!": [NAV_COLORS.ring, PAPER],
 } as const;
 
