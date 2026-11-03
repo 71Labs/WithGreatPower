@@ -4,8 +4,10 @@
 #   scripts/deploy-prod.sh
 #
 # The Vercel project builds apps/wgp. The licensed Neue Montreal webfonts are not in git, so
-# they're copied in from this checkout's apps/wgp/public/fonts before the upload; without
-# them the site falls back to Inter. Needs a logged-in Vercel CLI and apps/wgp/.vercel.
+# they're copied in from the owner's fonts/ folder at the repo root (or, failing that, this
+# checkout's apps/wgp/public/fonts) before the upload; without them the site falls back to
+# Inter. Only NeueMontreal-*.woff2 is shipped. Needs a logged-in Vercel CLI and
+# apps/wgp/.vercel.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,12 +21,13 @@ echo "Deploying $(git -C "$WT" log --oneline -1)"
 
 mkdir -p "$WT/.vercel" "$WT/apps/wgp/public/fonts"
 cp "$ROOT/apps/wgp/.vercel/project.json" "$WT/.vercel/project.json"
-fonts=("$ROOT"/apps/wgp/public/fonts/NeueMontreal-*.woff2)
+fonts=("$ROOT"/fonts/NeueMontreal-*.woff2)
+[[ -e "${fonts[0]}" ]] || fonts=("$ROOT"/apps/wgp/public/fonts/NeueMontreal-*.woff2)
 if [[ -e "${fonts[0]}" ]]; then
   cp "${fonts[@]}" "$WT/apps/wgp/public/fonts/"
   echo "With ${#fonts[@]} Neue Montreal files"
 else
-  echo "No Neue Montreal files in apps/wgp/public/fonts; the site will use Inter"
+  echo "No Neue Montreal files in fonts/ or apps/wgp/public/fonts; the site will use Inter"
 fi
 
 (cd "$WT" && vercel deploy --prod --yes)

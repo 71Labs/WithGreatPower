@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
 /*
- * Neue Montreal (Pangram Pangram), self-hosted from /public/fonts. The licensed files are
- * kept out of git and uploaded with production deploys (scripts/deploy-prod.sh); without
- * them, as in a fresh clone, the stack falls back to Inter.
+ * Neue Montreal (Pangram Pangram), self-hosted from /public/fonts. The licensed files live
+ * in the owner's fonts/ folder at the repo root, kept out of git, and are copied into
+ * production deploys (scripts/deploy-prod.sh); without them, as in a fresh clone, the stack
+ * falls back to Inter.
  */
+@font-face {
+  font-family: "Neue Montreal";
+  src: local("Neue Montreal Light"), local("NeueMontreal-Light"), url("/fonts/NeueMontreal-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: "Neue Montreal";
   src: local("Neue Montreal Regular"), local("NeueMontreal-Regular"), url("/fonts/NeueMontreal-Regular.woff2") format("woff2");
