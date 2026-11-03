@@ -1,16 +1,25 @@
 "use client";
 
-import { useLayoutEffect, useState, type ReactNode } from "react";
+/**
+ * The suit lab: loot, every suit, and crafting or changing into one. Signed in, each
+ * change shows where it landed (src/game/chain.ts): on NEAR with quick play on, or
+ * "saved, not yet on chain" without it, next to the offer to turn quick play on.
+ */
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
+import { openAccountSheet } from "@/components/account/sheet-state";
 import { HeroArt } from "@/components/cast";
 import { StickerButton, StickerFrame, StickerLink, StickerPanel, stickerTileClass } from "@/components/game/kit";
 import { GameLoading, GameSheet, useHeroSave, type HeroSave } from "@/components/game/ui";
-import { ArrowRight, Check, Lock, Shirt, Sparkles, X, type Icon } from "@/components/icons";
+import { ArrowRight, Check, CircleDashed, ExternalLink, Hourglass, Lock, Shirt, Sparkles, X, Zap, type Icon } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import type { CastId } from "@wgp/game-core/cast";
 import { ITEMS, RARITY_LABEL, STARTER_UNLOCK_LEVEL, SUITS } from "@wgp/game-core/data";
 import { craftShortfall } from "@wgp/game-core/engine";
-import { useGame } from "@/game/store";
+import { clearActivity, refreshChain, useChain, useChainActivity, type ChainActivity, type ChainView } from "@/game/chain";
+import type { SuitAction } from "@/game/chain-route";
+import { useAccount, useGame } from "@/game/store";
+import { EXPLORER_URL } from "@/lib/near/config";
 import type { ItemId, SuitId } from "@wgp/game-core/types";
 
 const ALL_SUITS = Object.keys(SUITS) as SuitId[];
@@ -54,6 +63,125 @@ function StatusChip({ status }: { status: Status }) {
       <Icon aria-hidden className="size-3" strokeWidth={2.75} />
       {s.label}
     </span>
+  );
+}
+
+/* ------------------------------------------------------------------ on chain or saved */
+
+/** The suits the signed-in player holds on chain, or null when that isn't known (guests, test sign-ins, no NEAR here). */
+function chainSuits(chain: ChainView, playerId: string | null): readonly string[] | null {
+  const s = chain.status;
+  if (!playerId || chain.owner?.id !== playerId || !s?.available || !s.configured || !s.onChain) return null;
+  return s.onChain.suits;
+}
+
+/** Quick play is something this player could turn on now. */
+const canEnable = (chain: ChainView) => chain.quickPlay.state === "off" || chain.quickPlay.state === "pending";
+
+function EnableQuickPlay({ onOpen }: { onOpen?: () => void }) {
+  return (
+    <StickerButton
+      size="sm"
+      className="self-start"
+      onClick={() => {
+        onOpen?.();
+        openAccountSheet();
+      }}
+    >
+      <Zap aria-hidden className="size-4" strokeWidth={2.25} />
+      Enable quick play
+    </StickerButton>
+  );
+}
+
+/** For a suit the hero owns: on NEAR, or saved only. */
+function ChainLine({ onChain, offer, onOpen }: { onChain: boolean; offer: boolean; onOpen: () => void }) {
+  if (onChain) {
+    return (
+      <p className="flex items-center gap-2 text-[14px] font-semibold leading-5">
+        <span aria-hidden className="grid size-5 place-items-center rounded-full border-2 border-game-ink bg-game-mint text-game-paper">
+          <Check className="size-3" strokeWidth={3} />
+        </span>
+        On NEAR, in your account.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-[22px] bg-game-paper-2 px-3 py-2.5">
+      <p className="flex items-start gap-2 text-[14px] leading-5">
+        <CircleDashed aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={2.25} />
+        <span className="[text-wrap:pretty]">
+          <span className="font-semibold">Saved, not yet on chain.</span>
+          {offer ? " Turn on quick play and your next suit change goes on NEAR." : null}
+        </span>
+      </p>
+      {offer ? <EnableQuickPlay onOpen={onOpen} /> : null}
+    </div>
+  );
+}
+
+const sameAction = (a: SuitAction, b: SuitAction | null) => !!b && a.type === b.type && a.suit === b.suit;
+
+/** The notice after a suit change, from where it landed. Null when there's nothing to add to the toast. */
+function activityNotice(a: ChainActivity, chain: ChainView): { tone: "done" | "busy" | "saved"; text: string; txHash?: string | null; offer?: boolean } | null {
+  const suit = SUITS[a.action.suit];
+  const craft = a.action.type === "craft-suit";
+  switch (a.state) {
+    case "sending":
+      return { tone: "busy", text: craft ? `Putting ${suit.name} on NEAR…` : `Changing into ${suit.name} on NEAR…` };
+    case "on-chain":
+      return { tone: "done", text: craft ? `${suit.name} is yours on NEAR, and you’re wearing it.` : `You changed into ${suit.name}, on NEAR.`, txHash: a.txHash };
+    case "saved": {
+      const done = craft ? `${suit.name} ${suit.starter ? "unlocked" : "stitched together"} and saved, not yet on chain.` : `You changed into ${suit.name}. Saved, not yet on chain.`;
+      const why = a.reason === "suit-off-chain" ? " That suit isn’t on NEAR yet." : a.reason === "relayer" ? " NEAR couldn’t take it just now." : "";
+      return { tone: "saved", text: done + why, offer: a.reason === "quick-play-off" && canEnable(chain) };
+    }
+    case "failed":
+      return null;
+  }
+}
+
+const NOTICE_TONE = {
+  done: { icon: Check, className: "bg-game-mint text-game-paper" },
+  busy: { icon: Hourglass, className: "bg-game-gold text-game-ink" },
+  saved: { icon: CircleDashed, className: "bg-game-paper-2 text-game-ink" },
+} as const;
+
+function ToneMark({ tone }: { tone: keyof typeof NOTICE_TONE }) {
+  const { icon: ToneIcon, className } = NOTICE_TONE[tone];
+  return (
+    <span aria-hidden className={`grid size-6 shrink-0 place-items-center rounded-full border-2 border-game-ink ${className}`}>
+      <ToneIcon className="size-3.5" strokeWidth={2.75} />
+    </span>
+  );
+}
+
+function Notice({ notice }: { notice: { tone: keyof typeof NOTICE_TONE; text: string; txHash?: string | null; offer?: boolean } | null }) {
+  // Always in the page, so screen readers hear each change; takes no room while empty.
+  return (
+    <div role="status" aria-live="polite" className="empty:hidden">
+      {notice ? (
+        <div className="flex flex-col gap-2 rounded-[20px] border-2 border-game-ink bg-game-paper px-3 py-2 text-game-ink shadow-[var(--game-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-2 text-[14px] font-semibold leading-5">
+            <ToneMark tone={notice.tone} />
+            <span className="[text-wrap:pretty]">{notice.text}</span>
+          </p>
+          {notice.txHash ? (
+            <a
+              href={`${EXPLORER_URL}/txns/${encodeURIComponent(notice.txHash)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 self-start rounded-full px-2 text-[14px] font-semibold underline decoration-game-ink/40 underline-offset-4 sm:self-auto pointer-fine:hover:decoration-game-ink"
+            >
+              View the transaction
+              <ExternalLink aria-hidden className="size-4" strokeWidth={2} />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          ) : null}
+          {notice.offer ? <EnableQuickPlay /> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -155,6 +283,8 @@ function SuitSheet({
   onClose,
   onCraft,
   onWear,
+  onChainSuits,
+  offerQuickPlay,
 }: {
   save: HeroSave;
   id: SuitId | null;
@@ -162,6 +292,9 @@ function SuitSheet({
   onClose: () => void;
   onCraft: (id: SuitId) => void;
   onWear: (id: SuitId) => void;
+  /** Suits on chain; null hides the on-chain line (guests, test sign-ins, no NEAR here). */
+  onChainSuits: readonly string[] | null;
+  offerQuickPlay: boolean;
 }) {
   const suit = id ? SUITS[id] : null;
   const status = id ? suitStatus(save, id) : null;
@@ -225,16 +358,19 @@ function SuitSheet({
           )}
         </div>
       ) : (
-        <p className="flex items-center gap-2 text-[14px] leading-5 text-game-muted">
-          {status === "equipped" ? (
-            <>
-              <Check aria-hidden className="size-4 shrink-0" strokeWidth={2.5} />
-              You’re wearing it.
-            </>
-          ) : (
-            "It’s yours. Change into it any time between stops."
-          )}
-        </p>
+        <div className="flex flex-col gap-3">
+          <p className="flex items-center gap-2 text-[14px] leading-5 text-game-muted">
+            {status === "equipped" ? (
+              <>
+                <Check aria-hidden className="size-4 shrink-0" strokeWidth={2.5} />
+                You’re wearing it.
+              </>
+            ) : (
+              "It’s yours. Change into it any time between stops."
+            )}
+          </p>
+          {id && onChainSuits ? <ChainLine onChain={onChainSuits.includes(id)} offer={offerQuickPlay} onOpen={onClose} /> : null}
+        </div>
       )}
     </GameSheet>
   );
@@ -278,13 +414,42 @@ function LootStrip({ save }: { save: HeroSave }) {
 export function SuitLab() {
   const save = useHeroSave();
   const { dispatch } = useGame();
+  const account = useAccount();
+  const chain = useChain();
+  const activity = useChainActivity();
   const [openId, setOpenId] = useState<SuitId | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<SuitAction | null>(null);
   // Next keeps this page alive when you leave it: don't come back to old news.
-  useLayoutEffect(() => () => setNotice(null), []);
+  useLayoutEffect(
+    () => () => {
+      setNotice(null);
+      setLastAction(null);
+      clearActivity();
+    },
+    [],
+  );
+
+  const player = account.status === "signed-in" ? account.me.player : null;
+  const playerId = player?.id ?? null;
+  // Mints land a minute or so after a night: look again each visit.
+  useEffect(() => {
+    if (player && player.authKind !== "dev") void refreshChain(player);
+    // `player` changes identity on every /api/me refresh; its id is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId]);
 
   if (!save) return <GameLoading />;
+
+  const onChainSuits = chainSuits(chain, playerId);
+  const offerQuickPlay = onChainSuits !== null && canEnable(chain);
+  const latest = activity && sameAction(activity.action, lastAction) ? activity : null;
+  const shown = latest
+    ? activityNotice(latest, chain)
+    : notice
+      ? { tone: "done" as const, text: notice }
+      : null;
 
   function open(id: SuitId) {
     setOpenId(id);
@@ -294,12 +459,14 @@ export function SuitLab() {
   function craft(id: SuitId) {
     dispatch({ type: "craft-suit", suit: id });
     setSheetOpen(false);
+    setLastAction({ type: "craft-suit", suit: id });
     setNotice(`${SUITS[id].name} ${SUITS[id].starter ? "unlocked" : "stitched together"}, and you’re wearing it.`);
   }
 
   function wear(id: SuitId) {
     dispatch({ type: "equip-suit", suit: id });
     setSheetOpen(false);
+    setLastAction({ type: "equip-suit", suit: id });
     setNotice(`You changed into ${SUITS[id].name}.`);
   }
 
@@ -311,18 +478,13 @@ export function SuitLab() {
         </h1>
         <p className="num text-[14px] font-medium leading-5 text-game-paper/80">
           {save.suits.length} of {ALL_SUITS.length} owned · wearing {SUITS[save.hero.suit].name}
+          {onChainSuits ? ` · ${save.suits.filter((s) => onChainSuits.includes(s)).length} on NEAR` : null}
         </p>
       </header>
 
       <LootStrip save={save} />
 
-      <p
-        role="status"
-        className={notice ? "flex items-center gap-2 rounded-full border-2 border-game-ink bg-game-mint px-4 py-2 text-[14px] font-semibold leading-5 text-game-paper" : "sr-only"}
-      >
-        {notice ? <Check aria-hidden className="size-4 shrink-0" strokeWidth={3} /> : null}
-        {notice}
-      </p>
+      <Notice notice={shown} />
 
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {ALL_SUITS.map((id) => {
@@ -352,7 +514,16 @@ export function SuitLab() {
         })}
       </ul>
 
-      <SuitSheet save={save} id={openId} open={sheetOpen} onClose={() => setSheetOpen(false)} onCraft={craft} onWear={wear} />
+      <SuitSheet
+        save={save}
+        id={openId}
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onCraft={craft}
+        onWear={wear}
+        onChainSuits={onChainSuits}
+        offerQuickPlay={offerQuickPlay}
+      />
     </div>
   );
 }

@@ -7,6 +7,9 @@ import type { Hero, Save } from "@wgp/game-core/types";
 
 import { getMe, migrateLocalSave, postAction, type ApiResult, type Me } from "@/lib/api/client";
 
+import { chainFor, clearActivity, refreshChain, reportActivity, sendSuitOnChain, type ChainActivity } from "./chain";
+import { isSuitAction, routeAction, type SuitAction } from "./chain-route";
+
 /**
  * One store for the whole app; components subscribe with useGame() and useAccount().
  *
@@ -20,6 +23,12 @@ import { getMe, migrateLocalSave, postAction, type ApiResult, type Me } from "@/
  * guess and raises a toast. Patrol steps are never posted: a night only counts as a
  * ranked run, so they play out on an unsaved local copy until the run's verified save
  * arrives (adoptServerSave) or the next menu action replaces it.
+ *
+ * Craft and equip with quick play on go on chain instead of /api/actions (chain-route.ts):
+ * the session key signs them, the relayer lands them, and the server's mirrored save
+ * replaces the guess. A contract refusal reverts the guess with a toast that says why; a
+ * relayer that can't take it falls back to /api/actions, saved but not on chain. The
+ * suit lab reads each outcome from useChainActivity().
  *
  * The guest's local save is never touched while signed in, so signing out brings it back.
  * Until /api/me answers, useGame().save is null (the loading state every screen handles),
@@ -197,6 +206,50 @@ function confirm(save: Save, rev: number) {
   account = { status: "signed-in", me: { ...account.me, save, rev } };
 }
 
+const switchedAway = (me: Me) => account.status !== "signed-in" || account.me.player.id !== me.player.id;
+
+/**
+ * Craft or equip with quick play on: signed by the session key, relayed, and mirrored into
+ * the save by the server. "done" when it was settled here (on chain, or refused and
+ * reverted); otherwise the reason it goes to /api/actions instead, saved but not on chain.
+ */
+async function trySuitOnChain(me: Me, action: SuitAction): Promise<"done" | NonNullable<ChainActivity["reason"]>> {
+  const chain = await chainFor(me.player);
+  const status = chain.status;
+  if (chain.quickPlay.state === "unavailable") return chain.quickPlay.reason === "not-configured" ? "not-configured" : "quick-play-off";
+  if (routeAction(action, { quickPlay: chain.quickPlay, onChainSuits: status?.onChain?.suits ?? null }) === "db") {
+    return chain.quickPlay.state === "on" ? "suit-off-chain" : "quick-play-off";
+  }
+  const id = reportActivity({ action, state: "sending" });
+  const verdict = await sendSuitOnChain(action, me.player.nearAccountId);
+  if (switchedAway(me)) {
+    pending = [];
+    return "done";
+  }
+  if (verdict.kind === "unavailable") return "relayer";
+  // Wearing a suit that only the save holds (the chain's suits weren't known): save it instead.
+  if (verdict.kind === "refused" && action.type === "equip-suit" && /don't own this suit/i.test(verdict.raw)) return "suit-off-chain";
+  if (verdict.kind === "ok") {
+    pending = pending.slice(1);
+    if (verdict.save && verdict.rev !== null) confirm(verdict.save, verdict.rev);
+    else void refreshAccount();
+    reportActivity({ action, state: "on-chain", txHash: verdict.txHash }, id);
+    void refreshChain(me.player);
+  } else {
+    // Refused, busy or signed out: drop the guess, as a failed /api/actions post would.
+    pending = [];
+    reportActivity({ action, state: "failed" }, id);
+    if (verdict.kind === "signed-out") {
+      void refreshAccount();
+      showToast("You were signed out, so that change wasn’t saved. Sign in again to keep playing.", "error");
+    } else {
+      showToast(verdict.text, "error");
+    }
+  }
+  changed();
+  return "done";
+}
+
 /** Posts queued menu actions one by one, each on the revision the last one produced. */
 async function pump() {
   if (pumping) return;
@@ -204,18 +257,32 @@ async function pump() {
   try {
     while (pending.length > 0 && account.status === "signed-in") {
       const me = account.me;
-      const res = await postAction(pending[0]!, me.rev);
-      if (account.status !== "signed-in" || account.me.player.id !== me.player.id) {
+      const action = pending[0]!;
+      let offChain: ChainActivity["reason"] | null = null;
+      if (isSuitAction(action) && me.player.authKind !== "dev") {
+        const outcome = await trySuitOnChain(me, action);
+        if (outcome === "done") continue;
+        if (switchedAway(me)) {
+          pending = [];
+          break;
+        }
+        offChain = outcome;
+      }
+      // The chain attempt awaited: post on the latest revision, not the one read before it.
+      const res = await postAction(action, account.status === "signed-in" ? account.me.rev : me.rev);
+      if (switchedAway(me)) {
         pending = [];
         break;
       }
       if (res.ok) {
         pending = pending.slice(1);
         confirm(res.data.save, res.data.rev);
+        if (offChain && isSuitAction(action) && res.data.applied) reportActivity({ action, state: "saved", reason: offChain });
         changed();
         continue;
       }
       pending = [];
+      if (isSuitAction(action)) clearActivity();
       if (res.status === 409 && res.error === "rev_conflict" && isStoredSave(res.body)) {
         confirm(res.body.save, res.body.rev);
         showToast("Your save changed somewhere else, so you’re looking at the latest.");
@@ -294,6 +361,7 @@ function setAccount(next: AccountState) {
     // Someone else (or nobody) now: drop the last player's unsaved state.
     pending = [];
     overlay = null;
+    clearActivity();
   }
   account = next;
   changed();

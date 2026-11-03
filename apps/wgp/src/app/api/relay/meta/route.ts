@@ -5,9 +5,11 @@
  *   game     a session-key call to an allowlisted game method (register_hero, craft_suit, equip_suit)
  *   add-key  a returning player's NEAR Auth-signed AddKey of this device's game session key
  *
- * 200 { txHash, ok: true, result }            relayed, the call succeeded
+ * 200 { txHash, ok: true, result, save?, rev? } relayed, the call succeeded; craft and equip
+ *                                              return the save they changed (server/near/mirror.ts)
  * 422 { error: "call_failed", txHash, message } relayed, the contract refused (e.g. already has a hero)
  * 400/401/403 { error: <code>, message }       refused before spending gas (see server/near/relay.ts)
+ * 409 run_active                               craft or equip while a ranked run is in flight
  * 429 rate limited · 503 relayer not configured, out of funds or out of budget
  *
  * Needs a session cookie; the delegate must come from the signed-in account.
@@ -32,6 +34,7 @@ import {
   validateAddKeyDelegate,
   validateGameDelegate,
 } from "@/server/near/relay";
+import { guardGameCall, mirrorGameCall, parseCallArgs, type Mirrored } from "@/server/near/mirror";
 import { provider } from "@/server/near/rpc";
 import { addSessionKey, relayLookup, touchSessionKey } from "@/server/near/session-keys";
 
@@ -69,10 +72,13 @@ export const POST = handle("relay/meta", (request: Request) =>
 
     let innerGas: bigint;
     let newKey: string | null = null;
+    let method: string | null = null;
     if (input.kind === "game") {
       const verdict = validateGameDelegate(signed, { contractId: chain.contractId, blockHeight, ...lookup, sessionAccountId: accountId });
       if (!verdict.ok) throw new HttpError(verdict.status, verdict.code, verdict.message);
+      await guardGameCall(db, session.playerId, verdict.methodName);
       innerGas = verdict.gas;
+      method = verdict.methodName;
     } else {
       if (!input.newKey) throw new HttpError(400, "bad_request", "newKey is required for add-key");
       const access = await rpc
@@ -106,9 +112,19 @@ export const POST = handle("relay/meta", (request: Request) =>
     await releaseGas(reserved - Number((result.gasBurnt + TGAS - 1n) / TGAS));
 
     if (newKey && result.ok) await addSessionKey(db, { playerId: session.playerId, publicKey: newKey, addTx: result.txHash });
-    if (input.kind === "game") await touchSessionKey(db, signed.delegate.publicKey);
+    let mirrored: Mirrored | null = null;
+    if (method) {
+      await touchSessionKey(db, signed.delegate.publicKey);
+      const action = signed.delegate.actions[0];
+      const args = action?.kind === "FunctionCall" ? parseCallArgs(action.args) : null;
+      // The call already landed: a mirror that fails is logged, and the next read catches up.
+      mirrored = await mirrorGameCall(db, { player: session.player, method, args, ok: result.ok, txHash: result.txHash, error: result.error }).catch((error: unknown) => {
+        console.error(`[relay/meta] mirror ${method} for ${session.playerId}: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      });
+    }
 
     if (!result.ok) return json({ error: "call_failed", txHash: result.txHash, message: result.error }, { status: 422 });
-    return json({ ok: true, txHash: result.txHash, result: result.result ?? null });
+    return json({ ok: true, txHash: result.txHash, result: result.result ?? null, ...(mirrored ?? {}) });
   }),
 );
