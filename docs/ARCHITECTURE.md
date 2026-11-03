@@ -119,6 +119,11 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   | `GET /api/runs/:id/replay` | Log and seed, so anyone can re-verify a run |
   | `POST /api/actions` | Menu actions (create-hero, pick-power, set-loadout, vote, sleep…) reduced on the server |
   | `/api/me`, `/api/migrate`, `/api/cron/sweep` | Account, local-save migration, cleanup |
+  | `GET /api/cron/mint` | The mint worker: claims up to 20 queued mints in per-account nonce order, sends them with the operator key, records each outcome (applied, duplicate, out of order, full). 503 before claiming anything without NEAR settings |
+  | `GET /api/chain/status` | The signed-in player's chain view: quick play (live session keys), the hero's registration, the contract's `get_player` |
+
+- **Crons** (`apps/wgp/vercel.json`; Vercel sends `Authorization: Bearer $CRON_SECRET`): `/api/cron/mint` every minute, `/api/cron/sweep` every 10 minutes.
+- **On-chain player actions:** a new or imported hero queues a `register_hero` outbox row that waits for the player's session key. With quick play on, the browser signs `register_hero`, `craft_suit` and `equip_suit` with the session key, the relayer lands them, and the relay route mirrors the result into the database (the hero row marked sent; the save crafted or re-suited by the same reducer). Without quick play, craft and equip only change the save, and the UI says "saved, not yet on chain".
 
 - **Boards:** Tonight (nightly best), Season (sum of nightly bests, S1 Nov 5–14) and All-time. A new `/play/leaderboard` tab, in the sticker kit.
 - **Progression:**
@@ -141,7 +146,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
 - **Tests:**
   - `cargo test` unit tests: nonces, recipes, 1-yocto rule, soulbound, operator auth, season immutability, event JSON.
   - A near-workspaces sandbox if the S5 spike passes.
-  - `scripts/near/e2e-chain.ts` on testnet.
+  - `scripts/near/e2e-chain.ts` on testnet or mainnet (`NEAR_NETWORK`), with tiny amounts and an in-memory database.
 
 ## 5. NEAR SDKs and Google sign-in
 - **Packages:**
