@@ -1,7 +1,8 @@
 import { DIR64 } from "@wgp/game-core/sim3d";
 import { describe, expect, it } from "vitest";
 
-import { dragStick, keysStick, stickInput, viewFromPose, worldStick } from "./stick";
+import { STICK_DEAD_ZONE, STICK_FLOOR, STICK_RADIUS } from "./bindings";
+import { dragStick, keysStick, stickInput, stickKnob, viewFromPose, worldStick } from "./stick";
 
 const NORTH = { fx: 0, fz: -1 };
 const EAST = { fx: 1, fz: 0 };
@@ -69,5 +70,53 @@ describe("key and drag sticks", () => {
     expect(far.x).toBeCloseTo(0, 10);
     expect(far.y).toBeCloseTo(-1, 10);
     expect(dragStick(0, 0, 56)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("the touch stick's dead zone", () => {
+  const R = STICK_RADIUS;
+  const D = STICK_DEAD_ZONE;
+  const len = (s: { x: number; y: number }) => Math.hypot(s.x, s.y);
+  const drag = (dx: number, dy: number) => dragStick(dx, dy, R, D, STICK_FLOOR);
+
+  it("ignores a thumb rolling inside the dead zone", () => {
+    expect(drag(0, 0)).toEqual({ x: 0, y: 0 });
+    expect(drag(D * 0.6, -D * 0.6)).toEqual({ x: 0, y: 0 });
+    expect(drag(-D, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("walks the moment the thumb leaves it: no second, hidden dead zone in the sim", () => {
+    const edge = drag(0, -(D + 0.5));
+    expect(len(edge)).toBeGreaterThanOrEqual(STICK_FLOOR);
+    expect(stickInput(edge, NORTH)).toEqual({ dir: 48, mag: 1 });
+  });
+
+  it("grows steadily to a full push at the radius and stays there", () => {
+    let last = 0;
+    for (let d = D + 1; d <= R; d += 1) {
+      const l = len(drag(d, 0));
+      expect(l).toBeGreaterThan(last);
+      last = l;
+    }
+    expect(len(drag(R, 0))).toBeCloseTo(1, 10);
+    expect(len(drag(0, 3 * R))).toBeCloseTo(1, 10);
+    expect(stickInput(drag(0, -R), NORTH)).toEqual({ dir: 48, mag: 3 });
+  });
+
+  it("keeps the drag's direction", () => {
+    const s = drag(30, 40);
+    expect(s.x / len(s)).toBeCloseTo(0.6, 10);
+    expect(s.y / len(s)).toBeCloseTo(-0.8, 10);
+  });
+
+  it("draws the knob on the thumb, held inside the ring", () => {
+    expect(stickKnob(10, -20, R)).toEqual({ x: 10, y: -20 });
+    const k = stickKnob(0, 300, R);
+    expect(k.x).toBeCloseTo(0, 10);
+    expect(k.y).toBeCloseTo(R, 10);
+    const d = stickKnob(-300, 400, R);
+    expect(Math.hypot(d.x, d.y)).toBeCloseTo(R, 10);
+    expect(d.x / d.y).toBeCloseTo(-0.75, 10);
+    expect(stickKnob(0, 0, R)).toEqual({ x: 0, y: 0 });
   });
 });

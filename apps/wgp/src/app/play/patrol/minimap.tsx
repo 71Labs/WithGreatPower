@@ -97,7 +97,7 @@ export interface MinimapProps {
   touch: boolean;
   /** The next stop, for the button's name ("Gas Goblin", "Aunt Mainnet’s errand"). */
   nextLabel: string | null;
-  /** Hidden below md for now (a phone in a fight, where the villain bar takes its place): skip drawing there. */
+  /** Hidden by the HUD (a phone in a fight, where the villain bar takes its place): skip drawing. */
   hidden?: boolean;
 }
 
@@ -130,8 +130,8 @@ export function Minimap({ tap, city, stops, heroColor, northUp, onNorthUp, onOpe
     const off = tap.on(
       throttled(REDRAW_HZ, (t) => {
         const p = live.current;
-        // Hidden under md (a phone's fight): nothing to draw.
-        if ((p.hidden && t.width < 768) || !size.current) return;
+        // Hidden (a phone's fight): nothing to draw.
+        if (p.hidden || !size.current) return;
         const pose = t.pose;
         const rotation = p.northUp || !pose ? 0 : headingUpRotation(pose.target.x - pose.position.x, pose.target.z - pose.position.z);
         drawMinimap(ctx, {
@@ -155,7 +155,7 @@ export function Minimap({ tap, city, stops, heroColor, northUp, onNorthUp, onOpe
 
   const label = `Open the city map${nextLabel ? `. Next stop: ${nextLabel}` : ""}`;
   return (
-    <div className={`relative ${touch ? "[--map:112px] md:[--map:152px]" : "[--map:176px]"}`}>
+    <div className={`relative ${touch ? "[--map:112px] md:[--map:152px] short:[--map:104px]" : "[--map:176px]"}`}>
       {stickers.holder}
       <button
         type="button"

@@ -5,8 +5,8 @@
  * out of every other bundle: the scene canvas, and inside it the driver that advances the
  * night's loop once per frame, before the scene reads the frame it writes.
  */
-import { useFrame } from "@react-three/fiber";
-import { useCallback, useMemo, type RefObject } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useCallback, useEffect, useMemo, type RefObject } from "react";
 
 import type { CastId } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
@@ -24,6 +24,22 @@ function LoopDriver({ loop }: { loop: RunLoop }) {
   return null;
 }
 
+/**
+ * While the night is paused (the pause sheet, the city map) the scene draws only when it
+ * must (a resize, a restored context), not 60 times a second behind the sheet: a phone
+ * stays cool and the battery lasts. One more frame on pausing lets the loop publish the
+ * paused HUD; resuming picks up on the next frame (the loop and scene clamp its long delta).
+ */
+function PauseGate({ paused }: { paused: boolean }) {
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    setFrameloop(paused ? "demand" : "always");
+    if (paused) invalidate();
+  }, [paused, setFrameloop, invalidate]);
+  return null;
+}
+
 export interface StageProps {
   loop: RunLoop;
   city: City;
@@ -35,11 +51,13 @@ export interface StageProps {
   onStats?(stats: SceneStats): void;
   onTierSuggest?(tier: QualityTier): void;
   onContextStalled?(): void;
+  /** The night is paused (or the city map is open over it): draw only when needed. */
+  paused?: boolean;
   /** Overlays placed from the camera (the waypoint, the minimap), run every frame after the camera moves. */
   tap?: FrameTap;
 }
 
-export default function Stage({ loop, city, handle, quality, heroColors, cast, reducedMotion, onStats, onTierSuggest, onContextStalled, tap }: StageProps) {
+export default function Stage({ loop, city, handle, quality, heroColors, cast, reducedMotion, onStats, onTierSuggest, onContextStalled, tap, paused = false }: StageProps) {
   // The scene reads the loop's view through a ref; the view object never changes.
   const frame = useMemo<RefObject<RenderFrame3D | null>>(() => ({ current: loop.view }), [loop]);
   const onFrame = useCallback((pose: ChasePose | null, width: number, height: number) => tap?.run(loop.view, pose, width, height), [tap, loop]);
@@ -59,6 +77,7 @@ export default function Stage({ loop, city, handle, quality, heroColors, cast, r
       onFrame={tap ? onFrame : undefined}
     >
       <LoopDriver loop={loop} />
+      <PauseGate paused={paused} />
     </SceneCanvas>
   );
 }

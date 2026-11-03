@@ -118,6 +118,10 @@ export function attachControls(opts: ControlsOptions): Controls {
     if (!opts.enabled()) return;
     if (e.pointerType === "touch") {
       e.preventDefault();
+      // A primary touch means no other finger is on the glass: any finger still on the books
+      // lost its pointerup (a system gesture, a notification shade), so it can't hold the web
+      // or the stick any more.
+      if (e.isPrimary && touch.size > 0) touch.reset();
       surface.setPointerCapture(e.pointerId);
       touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth);
       return;

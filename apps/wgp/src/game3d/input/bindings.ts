@@ -60,8 +60,14 @@ export const isDirection = (a: ControlAction): a is Direction => a === "forward"
 
 /** Touch: the left share of the screen is the floating stick; the rest holds the web. */
 export const STICK_ZONE = 0.4;
-/** How far (CSS px) a thumb drags for a full stick. */
-export const STICK_RADIUS = 56;
+/** How far (CSS px) a thumb drags for a full stick (about a centimetre on a phone). */
+export const STICK_RADIUS = 64;
+/** A thumb within this many CSS px of where it landed doesn't steer. */
+export const STICK_DEAD_ZONE = 10;
+/** The stick's length at the edge of the dead zone: game-core's smallest step (it reads under 0.15 as centred). */
+export const STICK_FLOOR = 0.15;
+/** A second finger on the same side as a held one must drag this far (CSS px) before the pair orbits the camera. */
+export const ORBIT_SLOP = 12;
 /** Drag to orbit: radians per CSS px, yaw and pitch. */
 export const ORBIT_YAW_PER_PX = 0.006;
 export const ORBIT_PITCH_PER_PX = 0.004;

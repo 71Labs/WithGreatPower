@@ -56,12 +56,27 @@ export function keysStick(held: { forward: boolean; back: boolean; left: boolean
 }
 
 /**
- * A touch stick from a drag: the offset from where the thumb landed (CSS px, y down) over
- * the stick's radius, clamped to length 1. Screen-down is back, so y flips.
+ * A touch stick from a drag: the offset from where the thumb landed (CSS px, y down), with
+ * screen-down as back (y flips).
+ *
+ * - Inside `dead` px it's centred, so a thumb landing and rolling doesn't steer (or turn
+ *   the camera's auto-follow off).
+ * - Past it the length starts at `floor` and reaches 1 at `radius`: game-core's
+ *   quantizeStick reads anything under 0.15 as centred, so a floor of 0.15 makes the edge
+ *   of the dead zone the first walking step instead of a second, invisible dead zone.
  */
-export function dragStick(dx: number, dy: number, radius: number): Stick {
+export function dragStick(dx: number, dy: number, radius: number, dead = 0, floor = 0): Stick {
   const d = Math.sqrt(dx * dx + dy * dy);
-  if (d < 1e-6 || radius <= 0) return { x: 0, y: 0 };
-  const k = Math.min(1, d / radius) / d;
+  if (d < 1e-6 || radius <= 0 || d <= dead) return { x: 0, y: 0 };
+  const t = radius > dead ? Math.min(1, (d - dead) / (radius - dead)) : 1;
+  const k = (floor + (1 - floor) * t) / d;
   return { x: dx * k, y: -dy * k };
+}
+
+/** Where the stick's knob is drawn for a drag: the thumb's offset, held inside the ring (CSS px). */
+export function stickKnob(dx: number, dy: number, radius: number): { x: number; y: number } {
+  const d = Math.sqrt(dx * dx + dy * dy);
+  if (d <= radius || d < 1e-6) return { x: dx, y: dy };
+  const k = radius / d;
+  return { x: dx * k, y: dy * k };
 }
