@@ -303,7 +303,7 @@ describe("the render frame's v1.3 fields", () => {
     expect(f.pickups).toHaveLength(s.pickups.length);
     expect(f.pickups![0]).toEqual({ id: 0, kind: s.pickups[0].kind, pos: { x: s.pickups[0].x, y: s.pickups[0].y, z: s.pickups[0].z }, taken: false });
     expect(f.combo).toEqual({ count: 0, multiplier: 1, ticksLeft: 0 });
-    expect(f.route).toEqual(s.city.zones.map((z) => z.center));
+    expect(f.route).toEqual(s.city.zones.map((z) => (z.kind === "errand" ? (z.allyAt ?? z.center) : z.center)));
     stepSim(s, IDLE_FRAME);
     fillRenderFrame(s, f);
     expect(f.hero.controlled).toBe(false);
