@@ -23,13 +23,13 @@ import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
 import type { Stop, StopResult } from "@wgp/game-core/types";
 
 import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
-import { attachControls, InputLatch, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
+import { attachControls, InputLatch, STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
 import { FrameTap } from "@/game3d/nav/tap";
 import { QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
 import { nightAudio, RunLoop, RunRecorder, sceneEffects, stopPositions, type LoopEvent3D, type NightSession } from "@/game3d/session";
 import { HudStore } from "@/sim/loop";
-import { useCoarsePointer, useReducedMotion } from "@/sim/ui/hooks";
+import { useCoarsePointer, useNarrowViewport, useReducedMotion, useShortViewport } from "@/sim/ui/hooks";
 import { Hud, useHud } from "@/sim/ui/hud";
 import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sheets";
 
@@ -48,6 +48,12 @@ declare global {
     __wgpScene?: SceneStats;
   }
 }
+
+/** While a night is on screen: no pull to refresh, no rubber-band bounce or page scroll behind it, no grey tap flash. */
+const NIGHT_CSS = `
+html:has([data-night]), html:has([data-night]) body { overscroll-behavior: none; overflow: hidden; }
+[data-night], [data-night] * { -webkit-tap-highlight-color: transparent; }
+`;
 
 const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : ALLY_CAST[stop.ally]);
 
@@ -79,6 +85,10 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [tap] = useState(() => new FrameTap());
   const hud = useHud(hudStore);
   const touch = useCoarsePointer();
+  /** A phone, held either way: the HUD gives the minimap's spot to the villain bar in a fight. */
+  const narrow = useNarrowViewport();
+  const short = useShortViewport();
+  const phone = touch && (narrow || short);
   const reducedMotion = useReducedMotion();
   const handle = useRef<SceneHandle | null>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -268,18 +278,18 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     const el = surface.current;
     if (!el) return;
     const ring = stickRing.current;
+    const knob = ring?.querySelector<HTMLElement>("[data-knob]") ?? null;
+    let shown = false;
     const onStick = (v: StickVisual) => {
       if (!ring) return;
-      ring.style.opacity = v.active ? "1" : "0";
-      ring.style.transform = `translate(${v.ox}px, ${v.oy}px)`;
-      const knob = ring.firstElementChild as HTMLElement | null;
-      if (knob) {
-        const dx = v.x - v.ox;
-        const dy = v.y - v.oy;
-        const d = Math.hypot(dx, dy);
-        const k = d > 56 ? 56 / d : 1;
-        knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+      if (v.active !== shown) {
+        shown = v.active;
+        ring.dataset.active = String(v.active);
       }
+      if (!v.active) return;
+      ring.style.transform = `translate3d(${v.ox}px, ${v.oy}px, 0)`;
+      const k = stickKnob(v.x - v.ox, v.y - v.oy, STICK_RADIUS);
+      if (knob) knob.style.transform = `translate3d(${k.x.toFixed(1)}px, ${k.y.toFixed(1)}px, 0)`;
     };
     const c = attachControls({
       latch,
@@ -385,13 +395,23 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     : { title: "Hold Space or the mouse to web", body: "Let go while you’re rising for a perfect swing. WASD steers; click into the game to look around with the mouse, and press Esc to free the cursor." };
 
   return (
-    <div className="absolute inset-0">
-      <div className="absolute inset-0" inert={modal}>
+    // No browser gestures over the night (scroll, zoom, double-tap zoom, pull to refresh);
+    // the sheets' own scrollers still scroll. NIGHT_CSS stops the page bouncing behind it.
+    <div data-night className="absolute inset-0 touch-none">
+      <style href="wgp-night" precedence="medium">
+        {NIGHT_CSS}
+      </style>
+      {/* Long presses select nothing and open no callout or context menu. */}
+      <div className="absolute inset-0 select-none [-webkit-touch-callout:none]" inert={modal} onContextMenu={(e) => e.preventDefault()}>
         <div
           ref={surface}
           className="absolute inset-0 touch-none select-none [-webkit-touch-callout:none]"
           role="application"
-          aria-label="The city. Hold Space or the mouse to web; WASD steers; keys 1 to 4 use powers; G calls Gwei; Escape pauses."
+          aria-label={
+            touch
+              ? "The city. Hold the right side to web; drag on the left to steer; the buttons by your right thumb use powers."
+              : "The city. Hold Space or the mouse to web; WASD steers; keys 1 to 4 use powers; G calls Gwei; Escape pauses."
+          }
         >
           <Stage
             loop={loop}
@@ -406,9 +426,23 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onContextStalled={onFallback}
             tap={tap}
           />
-          <div ref={stickRing} aria-hidden className="pointer-events-none absolute left-0 top-0 opacity-0">
-            <span className="absolute -left-6 -top-6 block size-12 rounded-full border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow-sm)]" />
-            <span className="absolute -left-[60px] -top-[60px] -z-10 block size-[120px] rounded-full border-[2.5px] border-dashed border-game-paper/80 bg-game-ink/20" />
+          {/* The floating stick: its reach (the ring), where the thumb landed (the dot: inside it the stick is centred) and the knob under the thumb. */}
+          <div
+            ref={stickRing}
+            aria-hidden
+            data-stick
+            data-active="false"
+            className="pointer-events-none absolute left-0 top-0 opacity-0 will-change-transform data-[active=true]:opacity-100 motion-safe:transition-[opacity] motion-safe:duration-150 motion-safe:data-[active=true]:duration-0"
+          >
+            <span
+              className="absolute block rounded-full border-[2.5px] border-dashed border-game-paper/80 bg-game-ink/25"
+              style={{ left: -STICK_RADIUS, top: -STICK_RADIUS, width: 2 * STICK_RADIUS, height: 2 * STICK_RADIUS }}
+            />
+            <span
+              className="absolute block rounded-full border-2 border-game-paper bg-game-ink/50"
+              style={{ left: -STICK_DEAD_ZONE, top: -STICK_DEAD_ZONE, width: 2 * STICK_DEAD_ZONE, height: 2 * STICK_DEAD_ZONE }}
+            />
+            <span data-knob className="absolute -left-[26px] -top-[26px] block size-[52px] rounded-full border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow-sm)] will-change-transform" />
           </div>
         </div>
         {/* Under the waypoint and the HUD, so the numbers never hide them. */}
@@ -446,7 +480,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
                 still={still}
                 touch={touch}
                 nextLabel={nextStop ? stopName(nextStop) : null}
-                hidden={touch && !!hud?.villain}
+                hidden={phone && !!hud?.villain}
               />
             }
           />
@@ -454,8 +488,9 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         {!ended && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hud!.index} total={stops.length} /> : null}
         {!ended && hud?.mode === "won" && hud.villain ? <WonCaption villain={hud.villain.kind} /> : null}
         {countdown && !ended ? (
-          <div aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
-            <span key={countdown} className="animate-rise num grid size-28 place-items-center rounded-full border-[3px] border-game-ink bg-game-paper text-[64px] font-bold leading-none text-game-ink shadow-[var(--game-shadow)]">
+          // Off the hero, who stands in the middle: below the feet, or above the head on a phone held sideways.
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%+128px)] flex justify-center short:top-[calc(50%-112px)]">
+            <span key={countdown} className="animate-rise num grid size-24 place-items-center rounded-full border-[3px] border-game-ink bg-game-paper text-[56px] font-bold leading-none text-game-ink shadow-[var(--game-shadow)]">
               {countdown}
             </span>
           </div>
@@ -466,6 +501,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         <PauseMenu
           loadout={loadout}
           mode="3d"
+          touch={touch}
           onResume={() => togglePause(false)}
           onMap={() => openMap("pause")}
           settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
