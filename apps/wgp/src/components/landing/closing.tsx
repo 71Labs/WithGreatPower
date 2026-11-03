@@ -17,7 +17,7 @@ export function Closing() {
           <span className="text-(--night-ink)">a friendly neighborhood hero.</span>
         </h2>
         <p className="max-w-[44ch] text-[17px] leading-7">
-          Gas Goblin is already out. Swing in as a guest, or sign in with a NEAR wallet to make the board.
+          Gas Goblin is already out. Swing in as a guest, or sign in with Google or a NEAR wallet to make the board.
         </p>
         <div className="mt-3 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
           <StickerLink href={PLAY_URL} variant="hero" size="lg" className="w-full sm:w-auto">

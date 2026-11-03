@@ -14,8 +14,9 @@ const jobs: { icon: ReactNode; title: string; body: ReactNode }[] = [
     title: "Your account",
     body: (
       <>
-        Sign in with your NEAR wallet by signing a message (NEP-413): no transaction, no fee. Google sign-in is coming
-        soon and will make you an account like <Account>you.wgpnear.near</Account>, no wallet needed.
+        Continue with Google and you get a NEAR key of your own, no wallet or seed phrase needed. Your name, like{" "}
+        <Account>you.wgpnear.near</Account>, opens when the game’s account factory goes live. Already have a NEAR
+        wallet? Sign one message (NEP-413): no transaction, no fee.
       </>
     ),
   },

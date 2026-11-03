@@ -38,7 +38,7 @@ export function Hero() {
               See how a night plays
             </StickerLink>
           </div>
-          <p className="mt-5 text-[14px] leading-5">Play as a guest right away. Sign in with a NEAR wallet to rank.</p>
+          <p className="mt-5 text-[14px] leading-5">Play as a guest right away. Sign in with Google or a NEAR wallet to rank.</p>
         </div>
         <HeroLoop />
       </div>

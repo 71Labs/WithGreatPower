@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "With Great Power — a friendly neighborhood parody on NEAR", template: "%s · With Great Power" },
   description:
-    "With Great Power (WGP) is a superhero parody game on NEAR. Get bitten by a radioactive validator, pick your powers and swing across the city to stop the villains draining its treasury.",
+    "With Great Power (WGP) is a 3D web-swinging superhero parody game on NEAR. Swing across a comic-book city at night, stop four parody villains, and climb leaderboards where every ranked night is replayed on the server.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
