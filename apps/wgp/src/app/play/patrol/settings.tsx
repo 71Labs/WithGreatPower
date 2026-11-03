@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * The 3D night's settings: the quality tier (picked from the GPU, then the frame rate,
+ * The 3D night's settings: sound and its two volumes (src/audio/player), the quality tier (picked from the GPU, then the frame rate,
  * until you choose one) and the steady camera (no roll, no shake, a fixed field of view:
  * on by default when the device asks for reduced motion). Remembered in this browser;
  * `?tier=low|medium|high` overrides the tier for testing. The pause sheet shows them.
  */
 import { useId } from "react";
 
+import { SoundSliders } from "@/components/game/sound-sliders";
 import { TIERS, detectTier, type QualityTier } from "@/game3d/scene/quality";
 
 const KEY = "wgp:3d-settings:v1";
@@ -56,7 +57,8 @@ export function SettingsPanel({ settings, onTier, onSteady }: { settings: PlaySe
   const id = useId();
   return (
     <div className="flex flex-col gap-4 rounded-[16px] border-2 border-game-ink bg-game-paper-2 p-3">
-      <div className="flex flex-col gap-2">
+      <SoundSliders toggle />
+      <div className="flex flex-col gap-2 border-t-2 border-dashed border-game-ink/30 pt-4">
         <p id={`${id}-q`} className="text-[13px] font-bold leading-4">
           Graphics
         </p>
