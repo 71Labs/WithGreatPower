@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { FontPreload } from "@/app/font-preload";
 import { Frame, Section } from "@/components/frame";
 import { Github } from "@/components/icons";
 import { SiteHeader, WebMark } from "@/components/site-header";
@@ -13,6 +14,8 @@ const footerLink =
 export default function SiteLayout({ children }: { children: ReactNode }) {
   return (
     <Frame className="flex min-h-dvh flex-col">
+      {/* The landing's headlines are set at 500. */}
+      <FontPreload weight="Medium" />
       <SiteHeader />
       <main id="main" className="flex-1">
         {children}

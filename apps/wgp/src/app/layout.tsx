@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { FontPreload } from "./font-preload";
 import { fontVariables } from "./fonts";
 import "./globals.css";
 
@@ -12,6 +13,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={fontVariables}>
+      <head>
+        {/* The two weights every page sets above the fold: body text, and the semibold labels and buttons. */}
+        <FontPreload weight="Regular" />
+        <FontPreload weight="Bold" />
+      </head>
       <body className="min-h-dvh">
         <a
           href="#main"

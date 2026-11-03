@@ -37,6 +37,8 @@ const nextConfig: NextConfig = {
     WGP_MODELS_V: version("models"),
     WGP_AUDIO_V: version("audio"),
     WGP_MEDIA_V: version("media"),
+    // The licensed webfonts are copied in at deploy (scripts/deploy-prod.sh), never committed.
+    WGP_NEUE_MONTREAL: existsSync(join(PUBLIC, "fonts", "NeueMontreal-Regular.woff2")) ? "1" : "",
   },
   images: {
     // AVIF where the browser takes it (about a fifth smaller than WebP for the landing's stills).
@@ -48,6 +50,8 @@ const nextConfig: NextConfig = {
       versioned("/models/:path*"),
       versioned("/audio/:path*"),
       versioned("/media/:path*"),
+      // The webfonts change only with a new licence drop: a week, then refreshed in the background.
+      { source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" }] },
     ];
   },
   turbopack: {
