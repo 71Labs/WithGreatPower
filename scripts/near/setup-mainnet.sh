@@ -11,7 +11,7 @@
 # If PAYER's key is in the key files rather than the macOS keychain, set
 # PAYER_SIGN=sign-with-legacy-keychain (or sign-with-ledger for a Ledger).
 #
-# 1. Creates wgpnear.near funded by PAYER (FUND_PARENT, default 7.5 NEAR), then game., relayer.
+# 1. Creates wgpnear.near funded by PAYER (FUND_PARENT, default 12 NEAR), then game., relayer.
 #    and operator.wgpnear.near funded from it. New keys are saved as files in
 #    ~/.near-credentials/mainnet/, never the repo. Accounts that exist are skipped.
 # 2. Builds the contract and deploys and initialises it on game.wgpnear.near, with
@@ -31,11 +31,14 @@ PARENT=wgpnear.near
 CONTRACT=game.wgpnear.near
 RELAYER=relayer.wgpnear.near
 OPERATOR=operator.wgpnear.near
-FUND_PARENT="${FUND_PARENT:-7.5 NEAR}"
-# From the parent: the contract's code needs ~2.8 NEAR of storage, plus sponsored player storage.
-FUND_CONTRACT='3.5 NEAR'
-FUND_RELAYER='2 NEAR'
-FUND_OPERATOR='0.5 NEAR'
+# NEAR storage costs 1 NEAR per 100 KB. The contract's code (~0.3–0.45 MB with the market) and
+# the player state it sponsors (~0.005 NEAR a player) live on game.; the relayer pays players'
+# gas (~0.001–0.003 NEAR an action); the operator pays for reward batches; the parent keeps
+# ~2 NEAR to create player accounts. Each amount can be overridden.
+FUND_PARENT="${FUND_PARENT:-12 NEAR}"
+FUND_CONTRACT="${FUND_CONTRACT:-5.5 NEAR}"
+FUND_RELAYER="${FUND_RELAYER:-3 NEAR}"
+FUND_OPERATOR="${FUND_OPERATOR:-1.5 NEAR}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CREDS="$HOME/.near-credentials/$NETWORK"
 WASM="$ROOT/contracts/wgp/target/near/wgp.wasm"
