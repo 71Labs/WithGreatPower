@@ -33,9 +33,7 @@ mod tests;
 
 use near_sdk::json_types::U128;
 use near_sdk::store::{IterableSet, LookupMap};
-use near_sdk::{
-    env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise,
-};
+use near_sdk::{env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault};
 
 pub use events::*;
 pub use market::*;
@@ -633,19 +631,25 @@ impl Wgp {
     }
 
     /// Deploy new code (the raw wasm is the call's input) and run `migrate`.
+    ///
+    /// Built from `env`'s low-level promise calls, not `Promise`: near-sdk's `Promise`
+    /// links every action the SDK knows (gas keys, global contracts, state init), and
+    /// mainnet refuses code importing host functions its protocol doesn't have yet.
     #[payable]
-    pub fn upgrade(&mut self) -> Promise {
+    pub fn upgrade(&mut self) {
         self.assert_owner();
         let code =
             env::input().unwrap_or_else(|| env::panic_str("Pass the wasm as the call input"));
-        Promise::new(env::current_account_id())
-            .deploy_contract(code)
-            .function_call(
-                "migrate".to_string(),
-                vec![],
-                NearToken::from_yoctonear(0),
-                GAS_FOR_MIGRATE,
-            )
+        let upgrade = env::promise_batch_create(&env::current_account_id());
+        env::promise_batch_action_deploy_contract(upgrade, &code);
+        env::promise_batch_action_function_call(
+            upgrade,
+            "migrate",
+            &[],
+            NearToken::from_yoctonear(0),
+            GAS_FOR_MIGRATE,
+        );
+        env::promise_return(upgrade);
     }
 
     /// Runs after `upgrade`: brings a v1 state (before the market) to v2 with an empty

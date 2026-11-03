@@ -127,6 +127,7 @@ if [[ "$(rpc_account "$CONTRACT" | jq -r '.code_hash')" != "11111111111111111111
 else
   echo "Building the contract (cargo near build)…"
   (cd "$ROOT/contracts/wgp" && cargo near build non-reproducible-wasm --locked)
+  node "$ROOT/scripts/near/check-wasm-imports.mjs" "$WASM"
   INIT_ARGS=$(cd "$ROOT/apps/wgp" && pnpm exec tsx ../../scripts/near/init-args.ts "$PARENT" "$OPERATOR")
   echo "$INIT_ARGS" | jq -e '.suits | length > 0' >/dev/null
   echo "  wasm $(wc -c <"$WASM" | tr -d ' ') bytes, sha256 $(shasum -a 256 "$WASM" | cut -d' ' -f1)"
