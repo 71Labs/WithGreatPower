@@ -292,12 +292,15 @@ export function PauseMenu({
 }) {
   const [help, setHelp] = useState(false);
   const resume = useRef<HTMLButtonElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // Either page starts at its top, wherever the other was scrolled to.
+    sheet.current?.scrollTo({ top: 0 });
     if (!help) resume.current?.focus({ preventScroll: true });
   }, [help]);
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-game-night/70 p-4">
-      <StickerPanel as="section" role="dialog" aria-modal="true" aria-labelledby="pause-title" className="animate-rise flex max-h-[min(88dvh,720px)] w-full max-w-[420px] flex-col gap-4 overflow-y-auto overscroll-contain p-5">
+      <StickerPanel ref={sheet} as="section" role="dialog" aria-modal="true" aria-labelledby="pause-title" className="animate-rise flex max-h-[min(88dvh,720px)] w-full max-w-[420px] flex-col gap-4 overflow-y-auto overscroll-contain p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 id="pause-title" className="text-[24px] font-bold leading-7 tracking-[-0.02em] text-game-ink">
             {help ? "How to play" : "Paused"}

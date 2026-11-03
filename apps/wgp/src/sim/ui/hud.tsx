@@ -360,7 +360,8 @@ function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onP
         <div className={`absolute inset-x-0 top-0 flex flex-col gap-2 ${edges}`}>
           <div className="flex items-start justify-between gap-2">
             <div data-hud-zone="band" className="min-w-0">
-              <Vitals hud={hud} combo={combo} panel="w-[clamp(140px,40vw,164px)] sm:w-[224px]" />
+              {/* On a 360px phone the meters' labels go a size down so "Web fluid 100 / 100" stays on one line. */}
+              <Vitals hud={hud} combo={combo} panel="w-[clamp(140px,40vw,164px)] sm:w-[224px] max-[379px]:[&>div>div:first-child]:gap-2 max-[379px]:[&>div>div:first-child]:text-[11px]" />
             </div>
             <PauseButton onPause={onPause} />
           </div>
