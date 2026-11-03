@@ -19,6 +19,7 @@ import { adoptServerSave, refreshAccount, useAccount } from "@/game/store";
 import { getListings, getMarket, getMarketMe, postSimTrade, type ListingView, type MarketMe, type MarketSnapshot, type MarketView, type SimTradeRequest } from "@/lib/market/api";
 import { chainCall } from "@/lib/market/chain-calls";
 import { marketProblem } from "@/lib/market/refusal";
+import { isUnclaimed } from "@/lib/near/policy";
 import type { RelayResponse } from "@/lib/near/session-key";
 
 const POLL_MS = 20_000;
@@ -53,7 +54,8 @@ export function useMarketData(): MarketData {
   const [me, setMe] = useState<MarketMe | null>(null);
   const inflight = useRef<AbortController | null>(null);
   const settle = useRef<number | null>(null);
-  const pending = (me?.pendingBits ?? 0) > 0;
+  // Not for an unclaimed Google player: their Bits wait for a name, not for the operator.
+  const pending = (me?.pendingBits ?? 0) > 0 && !(account.status === "signed-in" && isUnclaimed(account.me.player));
 
   const load = useCallback(
     (onto: AbortController) =>

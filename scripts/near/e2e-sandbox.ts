@@ -155,7 +155,9 @@ class Player {
 
   /** One game call through the relayer, exactly as the browser's callGame sends it. */
   async relay(method: string, args: Record<string, unknown>, deposit = 0n) {
-    return this.relayRaw(await this.delegate([actions.functionCall(method, args, 30n * TGAS, deposit)]));
+    const reply = await this.relayRaw(await this.delegate([actions.functionCall(method, args, 30n * TGAS, deposit)]));
+    await recordCost(method, reply.status === 200, reply.body.txHash);
+    return reply;
   }
 
   async trade(req: SimTradeRequest) {
@@ -191,6 +193,18 @@ class Player {
     assert(submitted.body.status === "verified", `run ${submitted.status} ${JSON.stringify(submitted.body).slice(0, 300)}`);
     return { score: submitted.body.score, bits: submitted.body.bits, runId: started.body.runId };
   }
+}
+
+/** What each relayed call cost the relayer: gas burnt (Tgas) and NEAR, per method and outcome. */
+const costs: Record<string, { tgas: number; near: number }[]> = {};
+
+async function recordCost(method: string, ok: boolean, txHash?: string): Promise<void> {
+  if (!txHash) return;
+  const o = await provider().viewTransactionStatus({ txHash, accountId: process.env.RELAYER_ACCOUNT_ID!, waitUntil: "EXECUTED_OPTIMISTIC" });
+  const all = [o.transaction_outcome, ...o.receipts_outcome];
+  const tgas = all.reduce((s, r) => s + Number(r.outcome.gas_burnt), 0) / 1e12;
+  const near = all.reduce((s, r) => s + Number(r.outcome.tokens_burnt), 0) / 1e24;
+  (costs[`${method}${ok ? "" : " (refused)"}`] ??= []).push({ tgas: +tgas.toFixed(2), near: +near.toFixed(6) });
 }
 
 /* ------------------------------------------------------------------ chain views */
@@ -606,6 +620,15 @@ async function main() {
     return `${crumbs.trades24h} trades, spark ${crumbs.spark.join(" ")}`;
   });
 
+  await check("20 price snapshots read the contract's pools (the background job, triggered by hand)", async () => {
+    const auth = { authorization: `Bearer ${process.env.CRON_SECRET}` };
+    const first = await fetch(`${BASE}/api/cron/market-snapshot`, { headers: auth }).then((r) => r.json() as Promise<{ onChain: boolean; written: number }>);
+    const again = await fetch(`${BASE}/api/cron/market-snapshot`, { headers: auth }).then((r) => r.json() as Promise<{ onChain: boolean; written: number }>);
+    assert(first.onChain && again.onChain, "snapshots didn't read the chain");
+    assert(again.written === 0, `a second snapshot right away wrote ${again.written}`);
+    return `first pass wrote ${first.written} pools, an immediate second pass ${again.written}`;
+  });
+
   const final = {
     alice: { bits: await bitsOf(aliceId), player: await playerView(aliceId), market: (await alice.wallet()).body },
     bob: { bits: await bitsOf(bob.accountId), player: await playerView(bob.accountId) },
@@ -613,6 +636,7 @@ async function main() {
   };
   numbers.final = final;
   numbers.staleSharedReads = staleReads;
+  numbers.relayerCost = costs;
   const failed = results.filter((r) => r.outcome === "fail").length;
   console.log(`\n${JSON.stringify({ contract: contractId, rpc: rpcUrls, results, numbers }, null, 2)}`);
   process.exitCode = failed ? 1 : 0;

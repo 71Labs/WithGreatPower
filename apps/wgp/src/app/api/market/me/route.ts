@@ -18,6 +18,7 @@ import { rateLimiter } from "@/server/rate-limit";
 import { sendMintsSoon } from "@/server/background";
 
 import type { MarketMe } from "@/lib/market/api";
+import { isUnclaimed } from "@/lib/near/policy";
 
 export const GET = handle("market/me", (request: Request) =>
   marketRoute(async () => {
@@ -29,7 +30,8 @@ export const GET = handle("market/me", (request: Request) =>
     const [wallet, pendingBits] = onChain
       ? await Promise.all([readChainWallet(accountId), unsentBits(db, session.playerId)])
       : [await simWallet(db, { playerId: session.playerId, accountId }), 0];
-    if (onChain && pendingBits > 0) sendMintsSoon();
+    // An unclaimed Google player's mints wait for their name (outbox.ts), so there's nothing to send.
+    if (onChain && pendingBits > 0 && !isUnclaimed(session.player)) sendMintsSoon();
     const body: MarketMe = { onChain, accountId, ...wallet, pendingBits };
     return json(body);
   }),
