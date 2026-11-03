@@ -1,7 +1,8 @@
 /**
  * The frozen v1 contract between the 3D sim (game-core), the 3D scene (apps/wgp/src/game3d)
  * and the server verifier. Add fields freely; never rename or remove them without updating
- * every consumer in the same PR.
+ * every consumer in the same PR. v1.3 (ruleset 3) added the pickups, the combo, the route and
+ * the hero's `controlled`.
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
@@ -180,6 +181,12 @@ export interface RenderFrame3D {
     ropeLen?: number;
     /** Cloaked (Node sense): drawn faded. Added in v1.2. */
     cloak?: boolean;
+    /**
+     * The player is giving input this tick (the stick tilted or the web held); false when idle,
+     * when the hero just stands and waits (nothing moves him without input since ruleset 3).
+     * Added in v1.3.
+     */
+    controlled?: boolean;
   };
   villains: {
     id: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
@@ -210,6 +217,17 @@ export interface RenderFrame3D {
   stop: number;
   mode: "intro" | "travel" | "fight" | "won" | "errand" | "ko" | "done";
   timeScale: number;
+  /**
+   * The night's Bits tokens and boost rings, in a fixed order (ids are indices), taken ones
+   * included so the scene can play the pickup. Positions never move. A token is taken within
+   * 80 units of the hero's centre (120 up and down), a ring within 110 (165). Added in v1.3
+   * (ruleset 3).
+   */
+  pickups?: { id: number; kind: "bits" | "ring"; pos: Vec3; taken: boolean }[];
+  /** The combo: its count, the multiplier on pickups (1–4) and ticks before it runs out. Added in v1.3. */
+  combo?: { count: number; multiplier: number; ticksLeft: number };
+  /** The remaining stop centres in order (the current stop first), for the map. Added in v1.3. */
+  route?: Vec3[];
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

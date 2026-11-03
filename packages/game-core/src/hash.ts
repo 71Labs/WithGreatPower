@@ -124,6 +124,17 @@ export function hashState(s: SimState): string {
   f.num(h.wallT);
   f.num(h.side);
   f.num(h.landT);
+  // Ruleset 3: the web button's state, the combo's timer and the pickups.
+  f.num(h.webBuf);
+  f.num(h.ropeT);
+  f.bool(h.latched);
+  f.bool(h.rewebWait);
+  f.num(s.comboT);
+  f.num(s.bits);
+  f.num(s.rings);
+  f.num(s.pickupPoints);
+  f.num(s.pickups.length);
+  for (const p of s.pickups) f.bool(p.taken);
 
   const v = s.villain;
   f.bool(!!v);

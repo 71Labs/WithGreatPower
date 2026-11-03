@@ -8,13 +8,14 @@
  * so an input log only holds ticks that moved the world, and the errand's choice is an
  * event logged at the tick it applies.
  */
-import { DT, ERRAND_REACH, ERRAND_TOUCH, HERO_RADIUS, INTRO_SECONDS } from "./constants";
+import { COMBO_TICKS, DT, ERRAND_REACH, ERRAND_TOUCH, HERO_RADIUS, INTRO_SECONDS } from "./constants";
 import { callGwei, fireAbility, makeSlots, stepAbilities } from "./abilities";
 import { CityIndex, generateCity, groundBelow } from "./city";
 import { knockOut, winFight } from "./combat";
 import type { InputFrame, Zone } from "./contract";
 import { len2, len3 } from "./dmath";
 import { newHero, stepHero, stopTarget, travelBearing } from "./hero";
+import { collectPickups, placePickups, stepCombo } from "./pickups";
 import { mix } from "./rng";
 import type { SimConfig, SimState } from "./types";
 import { spawnVillain, stepHazards, stepVillain } from "./villains";
@@ -53,6 +54,12 @@ export function createSim(config: SimConfig): SimState {
     fluidAcc: 0,
     combo: config.combo,
     maxCombo: config.combo,
+    // A combo carried in from an earlier session gets a fresh timer.
+    comboT: config.combo > 0 ? COMBO_TICKS : 0,
+    pickups: placePickups(city, grid),
+    bits: 0,
+    rings: 0,
+    pickupPoints: 0,
     tally: { perfect: 0, good: 0, miss: 0 },
     total: { perfect: 0, good: 0, miss: 0 },
     uses: {},
@@ -231,12 +238,15 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
     case "travel":
       stepHero(s, input, DT);
       stepAbilities(s, DT);
+      collectPickups(s);
+      stepCombo(s);
       checkArrival(s);
       break;
     case "intro":
       stepHero(s, input, DT);
       stepVillain(s, DT);
       stepAbilities(s, DT);
+      stepCombo(s);
       s.modeT -= DT;
       if (s.modeT <= 0) {
         s.mode = "fight";
@@ -248,11 +258,13 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
       stepVillain(s, DT);
       stepHazards(s, DT);
       stepAbilities(s, DT);
+      stepCombo(s);
       break;
     case "won":
       stepHero(s, input, DT);
       stepVillain(s, DT);
       stepAbilities(s, DT);
+      stepCombo(s);
       s.modeT -= DT;
       if (s.modeT <= 0) {
         s.events.push({ type: "stop-done", index: s.index });
@@ -271,22 +283,21 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
   return true;
 }
 
-/** After the errand sheet: take the engine's vitals (a choice may heal) and swing on. */
+/**
+ * After the errand sheet: take the engine's vitals (a choice may heal) and move on. v3: the
+ * hero stands on the ally's roof, turned toward the next stop, until the player moves (v2
+ * pushed him off toward it).
+ */
 export function resolveErrand(s: SimState, vitals: { hp: number; fluid: number }) {
   if (s.mode !== "errand") return;
   s.hp = Math.max(1, Math.min(s.maxHp, Math.round(vitals.hp)));
   s.fluid = Math.max(0, Math.round(vitals.fluid));
   nextStop(s);
-  // A little push off the ally's roof toward the next stop, so the swing starts with momentum.
   const h = s.hero;
   const b = travelBearing(s);
-  if (h.grounded && b) {
-    const along = h.vx * b.x + h.vz * b.z;
-    if (along < 200) {
-      h.vx += b.x * (200 - along);
-      h.vz += b.z * (200 - along);
-    }
-    h.idle = false;
+  if (b) {
+    h.fx = b.x;
+    h.fz = b.z;
   }
 }
 

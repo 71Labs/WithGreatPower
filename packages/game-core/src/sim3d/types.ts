@@ -44,7 +44,7 @@ export interface Hero {
   heldT: number;
   hurtT: number;
   holdPrev: boolean;
-  /** Standing still at a spawn until the first web or stick, so nobody runs off a roof unawares. */
+  /** v3: no input this tick (stick centred, web up): the hero stands and waits (render: controlled = !idle). */
   idle: boolean;
   /** v2: climbing a wall on a web: the wall's outward normal (xz), its top, and seconds since last touching it. */
   climbing: boolean;
@@ -56,6 +56,30 @@ export interface Hero {
   side: number;
   /** v2: the crouch after a hard landing: no run push until it's over. */
   landT: number;
+  /** v3: a buffered web press, seconds left (WEB_BUFFER). */
+  webBuf: number;
+  /** v3: seconds since the current web latched on. */
+  ropeT: number;
+  /** v3: the current web was tapped: it holds to the swing's natural end with the button up. */
+  latched: boolean;
+  /** v3: the last web let go by itself with the button held (or a mantle): the next waits for the top of the arc. */
+  rewebWait: boolean;
+}
+
+/* ------------------------------------------------------------------ pickups (v3) */
+
+export type PickupKind = "bits" | "ring";
+
+/** A Bits token or a boost ring, placed from the city (pickups.ts). */
+export interface Pickup {
+  id: number;
+  kind: PickupKind;
+  x: number;
+  y: number;
+  z: number;
+  /** The leg it lies on: the stop index it leads to. */
+  leg: number;
+  taken: boolean;
 }
 
 /* ------------------------------------------------------------------ villains */
@@ -222,9 +246,14 @@ export type HitSource = "slam" | "dash" | "sling" | "web-bomb" | "validator-slam
 export type SimEvent =
   | { type: "thwip"; x: number; y: number; z: number; ax: number; ay: number; az: number }
   | { type: "fizzle"; x: number; y: number; z: number }
-  | { type: "release"; grade: "perfect" | "good" | null; x: number; y: number; z: number; combo: number }
+  /** v3: `auto` when the web let go by itself at the end of a held (or tapped) swing. */
+  | { type: "release"; grade: "perfect" | "good" | null; x: number; y: number; z: number; combo: number; auto?: boolean }
   | { type: "miss"; x: number; y: number; z: number; damage: number; water: boolean }
   | { type: "land"; x: number; y: number; z: number; speed: number }
+  /** v3: a Bits token or a ring collected: the points it was worth (× the multiplier), and the combo after it. */
+  | { type: "pickup"; kind: PickupKind; id: number; x: number; y: number; z: number; points: number; combo: number; multiplier: number }
+  /** v3: the combo ran out or was broken (the street), with the count it reached. */
+  | { type: "combo-end"; count: number; reason: "time" | "street" }
   | {
       type: "arrive";
       index: number;
@@ -292,9 +321,21 @@ export interface SimState {
   fluid: number;
   /** Fluid regeneration below one unit, in 1/FLUID_REGEN_DEN steps. */
   fluidAcc: number;
+  /**
+   * The combo: v3 counts perfect releases, Bits and rings chained without touching the street
+   * or running out of time (v2 counted perfect releases between misses).
+   */
   combo: number;
   /** The best combo tonight in this session, for the score. */
   maxCombo: number;
+  /** v3: ticks before the combo runs out. */
+  comboT: number;
+  /** v3: Bits tokens and boost rings along the route, and what they've earned tonight. */
+  pickups: Pickup[];
+  bits: number;
+  rings: number;
+  /** v3: pickup points, each worth its base × the combo multiplier when taken (an integer). */
+  pickupPoints: number;
   /** Swings since the last arrival. */
   tally: SwingTally;
   /** Every swing tonight in this session, for the HUD and the score. */

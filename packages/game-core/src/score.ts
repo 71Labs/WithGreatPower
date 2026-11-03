@@ -6,10 +6,14 @@
  *   fights        1,000 × levelScale(level), × 1.5 for a boss (won fights only)
  *   errands       250 each
  *   perfect       40 per perfect swing, the first 60 count
- *   combo         25 per point of the night's best combo
+ *   combo         25 per point of the night's best combo, the first 40 count (v3: capped)
+ *   pickups       v3: what the night's Bits tokens (10) and boost rings (50) were worth,
+ *                 each × the combo multiplier (1–4) when taken; at most 2,000
  *   hp            5 per health point left (0 after a knockout)
  *   time          10 per second under par
  *
+ * The caps keep the board about the night (fights, errands, health, time): style can add at
+ * most 2,400 + 1,000 + 2,000, and every pickup can only be taken once.
  * Ties go to the faster run (fewer ticks); the leaderboard sorts on (score desc, ticks asc).
  */
 import { SIM_HZ } from "./sim3d/constants";
@@ -28,6 +32,10 @@ export const SCORE = {
   perfect: 40,
   perfectCap: 60,
   combo: 25,
+  /** v3: the best combo counts up to this. */
+  comboCap: 40,
+  /** v3: pickup points count up to this. */
+  pickupCap: 2000,
   hp: 5,
   time: 10,
 } as const;
@@ -44,6 +52,8 @@ export interface ScoreInput {
   errands: number;
   perfect: number;
   maxCombo: number;
+  /** v3: the sim's pickup points (each pickup's base × the multiplier when it was taken). */
+  pickupPoints?: number;
   hpLeft: number;
   ticks: number;
 }
@@ -53,6 +63,8 @@ export interface ScoreBreakdown {
   errands: number;
   perfect: number;
   combo: number;
+  /** v3. */
+  pickups: number;
   hp: number;
   time: number;
   total: number;
@@ -64,9 +76,10 @@ export function scoreRun(input: ScoreInput): ScoreBreakdown {
   const fights = input.fights.reduce((n, f) => n + (f.won ? fightPoints(f.level, f.boss) : 0), 0);
   const errands = whole(input.errands) * SCORE.errand;
   const perfect = Math.min(whole(input.perfect), SCORE.perfectCap) * SCORE.perfect;
-  const combo = whole(input.maxCombo) * SCORE.combo;
+  const combo = Math.min(whole(input.maxCombo), SCORE.comboCap) * SCORE.combo;
+  const pickups = Math.min(whole(input.pickupPoints ?? 0), SCORE.pickupCap);
   const hp = whole(input.hpLeft) * SCORE.hp;
   const seconds = Math.floor(whole(input.ticks) / SIM_HZ);
   const time = Math.max(0, PAR_SECONDS - seconds) * SCORE.time;
-  return { fights, errands, perfect, combo, hp, time, total: fights + errands + perfect + combo + hp + time };
+  return { fights, errands, perfect, combo, pickups, hp, time, total: fights + errands + perfect + combo + pickups + hp + time };
 }

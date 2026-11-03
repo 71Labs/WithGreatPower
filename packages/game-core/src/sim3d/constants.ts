@@ -2,7 +2,8 @@
  * Every tunable number in the 3D swing sim, in world units (1 unit ≈ 1 CSS px at 1×, the
  * hero ~88 tall), seconds and units per second. Y is up; the street is y = 0. Most of the
  * 2D sim's numbers carried over; the 3D additions are marked, and ruleset 2's physics pass
- * is marked "v2" (with the v1 value where one changed).
+ * is marked "v2" (with the v1 value where one changed), and ruleset 3's controls and feel pass
+ * "v3" (with the v2 value).
  */
 
 /**
@@ -10,7 +11,7 @@
  * the sim, the city, the engine or the scoring and bump it: old logs are then refused
  * instead of being mis-scored.
  */
-export const RULESET_VERSION = 2;
+export const RULESET_VERSION = 3;
 
 /** The sim steps at a fixed rate, whatever the display does. */
 export const SIM_HZ = 60;
@@ -26,39 +27,59 @@ export const HERO_RADIUS = 26;
 /** The sticker's drawn size in world units. */
 export const HERO_SIZE = 88;
 /**
- * v2: a soft limit. Above it the hero bleeds speed at OVERSPEED_DECEL instead of being clamped
+ * v2: a soft limit (v3: 1,800; v2: 1,650). Above it the hero bleeds speed at OVERSPEED_DECEL instead of being clamped
  * in one tick (v1 clamped). Air drag keeps free falls well under it anyway.
  */
-export const MAX_SPEED = 1650;
+export const MAX_SPEED = 1800;
 export const OVERSPEED_DECEL = 2400;
-/** Air control's acceleration… */
-export const AIR_CONTROL = 520;
-/** …v2: up to this speed along the stick; beyond it the stick only steers, it adds nothing (v1 had no limit). */
-export const AIR_STEER_SPEED = 520;
+/** Air control's acceleration (v3: 900; v2: 520)… */
+export const AIR_CONTROL = 900;
+/** …v2: up to this speed along the stick; beyond it the stick only steers, it adds nothing (v1 had no limit; v3: 640, v2: 520). */
+export const AIR_STEER_SPEED = 640;
 /**
  * v2: quadratic air drag, a = −k|v|v, with k = g / TERMINAL_SPEED², so a long fall levels off at
  * TERMINAL_SPEED (v1: a linear 0.04/s, which never really limited a fall).
  */
 export const TERMINAL_SPEED = 3000;
 export const AIR_DRAG = GRAVITY / (TERMINAL_SPEED * TERMINAL_SPEED);
-/** Auto-run on rooftops toward the heading; the stick nudges it. */
+/**
+ * Running on a roof at this speed with the stick at two thirds (full tilt runs 1.25× it, a
+ * third 0.6×). v3: only the stick runs; with it centred the hero brakes to a stop and stands
+ * (v2 auto-ran toward the next stop).
+ */
 export const RUN_SPEED = 390;
-/** v2: the run's push from a standstill, easing off to RUN_ACCEL_TOP of it at full speed (v1: a flat 1900). */
-export const RUN_ACCEL = 1900;
+/** v2: the run's push from a standstill, easing off to RUN_ACCEL_TOP of it at full speed (v1: a flat 1900; v3: 2,300). */
+export const RUN_ACCEL = 2300;
 export const RUN_ACCEL_TOP = 0.4;
-/** v2: tyre-like grip: braking, and killing sideways slip, at this rate (v1 braked at RUN_ACCEL). */
-export const RUN_BRAKE = 2200;
-/** v2: a landing's friction impulse takes this × the impact speed off the horizontal speed… */
+/** v2: tyre-like grip: braking, and killing sideways slip, at this rate (v1 braked at RUN_ACCEL; v3: 2,900, v2: 2,200). */
+export const RUN_BRAKE = 2900;
+/** v3: with the stick centred on the ground, friction stops the hero at this rate (a full run stops in about 0.2 s)… */
+export const GROUND_FRICTION = 2600;
+/** …and faster than RUN_SPEED (a landing's skid) at this one, so a fast landing slides a little, then stops. */
+export const SKID_FRICTION = 1700;
+/** v3: the body turns to face the stick on the ground at this rate, radians a second (a turnaround takes about 0.17 s). */
+export const HERO_TURN_GROUND = 19;
+/** v2: a landing's friction impulse takes this × the impact speed off the horizontal speed (villains; the hero uses HERO_LAND_FRICTION)… */
 export const LAND_FRICTION = 0.3;
+/** …v3: the hero's (v2: 0.3), so a landing bleeds its momentum into a short skid… */
+export const HERO_LAND_FRICTION = 0.5;
 /** …and a hard landing costs up to this long of crouch (no run push, braking only). */
 export const LAND_STOP = 0.22;
-/** A little hop when you run off a roof edge, so a run flows into a swing. */
-export const EDGE_HOP = 520;
+/**
+ * v3: walking off a roof needs the stick pushed this far out over the edge (as a share of
+ * full tilt, along the edge's outward normal); otherwise the hero stops at the edge. There is
+ * no hop off an edge any more (v2 hopped at 520 whenever a run carried him off).
+ */
+export const EDGE_PUSH = 0.25;
+/** v3: a web from the ground is a jump into the swing: at least this fast upward… */
+export const WEB_JUMP_VY = 430;
+/** …and at least this fast along the heading (v2 hopped straight up at 260). */
+export const WEB_JUMP_PUSH = 220;
 /** 3D: running into a ledge up to this much higher than your roof, you hop up onto it (v2; v1 teleported up). */
 export const STEP_UP = 40;
 /** v2: the position update is split so no substep moves more than this (half a radius); v1 split in two above 1,200 u/s. */
 export const SUBSTEP_LEN = 14;
-/** v2: how fast the body turns to face where it's going, radians a second (v1 snapped). */
+/** v2: how fast the body turns to face where it's going in the air, radians a second (v1 snapped). */
 export const HERO_TURN = 12;
 
 /* ------------------------------------------------------------------ webs */
@@ -74,15 +95,31 @@ export const ANCHOR_CONE = 1;
 /** v2: and at least this far ahead (an anchor straight overhead carries you nowhere). */
 export const ANCHOR_AHEAD_MIN = 24;
 export const ROPE_MIN = 110;
+/** v3: below its anchor a slack line takes itself up, but not shorter than this (a tight circle is no swing). */
+export const ROPE_TAKEUP_MIN = 170;
 /** The rope length a swing is planned around (ANCHOR_AHEAD and ANCHOR_UP make about this). */
 export const ROPE_COMFORT = 270;
 /** v2: no automatic reel-in: the rope keeps its length, so only the pump adds energy (v1 reeled at 46 u/s). */
 export const ROPE_REEL = 0;
-/** Tangential push while swinging below the anchor: the pump, the swing's only energy source (v1: 280). */
-export const ROPE_PUMP = 320;
-/** The pump stops adding above this speed. */
-export const PUMP_MAX_SPEED = 1250;
+/** Tangential push while swinging below the anchor: the pump, the swing's only energy source (v1: 280; v3: 400, v2: 320). */
+export const ROPE_PUMP = 400;
+/** The pump stops adding above this speed (v3: 1,400; v2: 1,250). */
+export const PUMP_MAX_SPEED = 1400;
+/** v3: fizzles (a web with nothing in reach) are reported at most this often; it no longer stops a held web retrying (v2 locked webs out for it). */
 export const FIZZLE_COOLDOWN = 0.3;
+/**
+ * v3, the web button:
+ * - A press is buffered for WEB_BUFFER: if nothing is in reach at the press, every tick in that
+ *   time tries again, held or not (so a re-web straight after a release takes).
+ * - A press let go within WEB_TAP of its web latching on is a tap: the swing carries on to its
+ *   natural end, as if held.
+ * - Held (or latched) through the end of a swing (rising past the top of the perfect window, or
+ *   at the top of the arc), the web lets go by itself, ungraded; still held, the next web shoots
+ *   once the hero has nearly stopped rising (vy under REWEB_VY). Holding the web chains swings.
+ */
+export const WEB_BUFFER = 0.15;
+export const WEB_TAP = 0.18;
+export const REWEB_VY = 140;
 /** 3D: the ideal anchor sits about this far ahead along the heading… */
 export const ANCHOR_AHEAD = 210;
 /** …and this far above the hero (together about ROPE_COMFORT away). */
@@ -113,31 +150,71 @@ export const ARENA_ANCHOR_MARGIN = 40;
 
 /* ------------------------------------------------------------------ release grading */
 
-export const PERFECT_MIN_SPEED = 520;
-export const PERFECT_MIN_VY = 120;
+/** v3: 460 and 100 (v2: 520 and 120). */
+export const PERFECT_MIN_SPEED = 460;
+export const PERFECT_MIN_VY = 100;
 /**
  * The perfect window, in degrees above horizontal (kept for reference; the sim uses the
- * tangents). v2: 20–60°, centred on where a pendulum's release carries furthest and where the
- * anchor choice plans each swing's release (v1: 16–74°, min speed 560, min vy 140).
+ * tangents). v3: 15–65° (v2: 20–60°, v1: 16–74°), around where a pendulum's release carries
+ * furthest and where the anchor choice plans each swing's release.
  */
-export const PERFECT_MIN_ANGLE = 20;
-export const PERFECT_MAX_ANGLE = 60;
-/** tan 20° and tan 60°: vy must sit between these times the horizontal speed. No atan2 needed. */
-export const PERFECT_TAN_LO = 0.36397023426620234;
-export const PERFECT_TAN_HI = 1.7320508075688772;
-export const PERFECT_BOOST = 1.12;
+export const PERFECT_MIN_ANGLE = 15;
+export const PERFECT_MAX_ANGLE = 65;
+/** tan 15° and tan 65°: vy must sit between these times the horizontal speed. No atan2 needed. */
+export const PERFECT_TAN_LO = 0.2679491924311227;
+export const PERFECT_TAN_HI = 2.1445069205095586;
+/** v3: 1.15 (v2: 1.12). */
+export const PERFECT_BOOST = 1.15;
+/** A good release: rising faster than GOOD_MIN_VY and at least GOOD_MIN_SPEED fast. v3: it boosts too, a little. */
 export const GOOD_MIN_VY = 50;
+export const GOOD_MIN_SPEED = 300;
+export const GOOD_BOOST = 1.05;
 
 /* ------------------------------------------------------------------ the street */
 
 export const STREET_Y = 0;
-export const MISS_DAMAGE = 6;
+/** v3: touching the street costs a little (v2: 6) and the combo. */
+export const MISS_DAMAGE = 3;
 export const MISS_COOLDOWN = 1.2;
 /** v2: 900 (v1: 880), so the bounce still peaks at STREET_BOUNCE_TOP under air drag. */
 export const MISS_BOUNCE = 900;
-export const MISS_DAMP = 0.55;
+/** v3: the bounce keeps most of the run-up (v2: 0.55), so a miss is a stumble, not a stop. */
+export const MISS_DAMP = 0.8;
 /** 3D: about where a miss's bounce peaks (with drag, plus the radius); the city keeps an anchor in reach of it on every street. */
 export const STREET_BOUNCE_TOP = 240;
+
+/* ------------------------------------------------------------------ pickups and the combo (v3) */
+
+/**
+ * v3: Bits tokens and boost rings along each leg's swing line (sim3d/pickups.ts places them
+ * from the city). Touching one collects it: a token within PICKUP_REACH of the hero's centre
+ * (REACH_TALL times that up and down), a ring within RING_REACH.
+ */
+export const PICKUP_REACH = 80;
+export const RING_REACH = 110;
+/** The reach is an upright ellipsoid this many times taller than wide, so a swing's arc through the line counts. */
+export const REACH_TALL = 1.5;
+/** Tokens sit about this far apart along a corridor… */
+export const PICKUP_SPACING = 210;
+/** …from this far past the leg's start to this far short of the stop. */
+export const PICKUP_START = 420;
+export const PICKUP_END = 520;
+/** A ring sets the speed to at least RING_SPEED, and multiplies it by RING_BOOST (the soft limit then bleeds it). */
+export const RING_BOOST = 1.2;
+export const RING_SPEED = 1000;
+/**
+ * v3, the combo: perfect releases (+1), Bits (+1) and rings (+2) feed it; each feed refills
+ * COMBO_TICKS. It drains a tick at a time, COMBO_GROUND_DRAIN times faster standing on a roof,
+ * and touching the street ends it. Its multiplier, 1 + count / COMBO_STEP (whole steps, at
+ * most COMBO_MAX_MULT), multiplies what pickups are worth.
+ */
+export const COMBO_TICKS = 360;
+export const COMBO_GROUND_DRAIN = 4;
+export const COMBO_STEP = 4;
+export const COMBO_MAX_MULT = 4;
+/** What a pickup is worth to the score, before the multiplier (integers). */
+export const BITS_POINTS = 10;
+export const RING_POINTS = 50;
 
 /* ------------------------------------------------------------------ fights */
 

@@ -31,5 +31,6 @@ export { arenaZone, bestAnchor, heroHeading, inArena, stopTarget, travelBearing 
 export { docVulnerable, isVulnerable, nearestTarget, villainHits, villainTargets, type Target } from "./combat";
 export { armShoulder, armTip, villainLines } from "./villains";
 export { inReleaseWindow, pickForecast } from "./swing";
+export { comboMultiplier, nextPickup, placePickups } from "./pickups";
 export { botFrame, newBotMemory, type BotMemory } from "./bot";
 export { fillRenderFrame, heroAction, newRenderFrame } from "./render";
