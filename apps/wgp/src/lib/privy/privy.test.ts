@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { isImplicitAccountId, isUnclaimed } from "../near/policy";
 import { beginOAuthReturn, endOAuthReturn, getPrivyState, isOAuthReturn, publishPrivy, reportPrivyFailure, PrivyBridgeError, whenPrivy, type PrivyApi } from "./bridge";
+import { googleProblem } from "../../components/account/errors";
 import { googleSignInMode } from "./config";
 import { bytesToHex, hexToBytes, implicitToPublicKey, nearKeyFromWallet, NearKeyError, publicKeyBytes } from "./near-key";
+import { startPrivyGoogle } from "./sign-in";
 
 const key = KeyPair.fromRandom("ed25519").getPublicKey().toString();
 const implicit = keyToImplicitAddress(key);
@@ -104,5 +106,38 @@ describe("the Privy bridge", () => {
     const slow = whenPrivy({ authenticated: true, timeoutMs: 1000 });
     vi.advanceTimersByTime(1001);
     await expect(slow).rejects.toMatchObject({ code: "privy_not_signed_in" });
+  });
+});
+
+describe("starting Google sign-in", () => {
+  afterEach(() => publishPrivy(null));
+
+  const publishWith = (loginWithGoogle: () => Promise<void>) =>
+    publishPrivy({
+      ready: true,
+      authenticated: false,
+      loginWithGoogle,
+      ensureNearWallet: async () => ({ address: "" }),
+      accessToken: async () => "",
+      signRawHash: async () => new Uint8Array(64),
+      logout: async () => {},
+    });
+
+  it("tells a player Google is off, not to check their connection, when Privy refuses it", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    publishWith(async () => {
+      throw new Error("Login with Google not allowed");
+    });
+    const refused = await startPrivyGoogle().catch((e: unknown) => e);
+    expect(refused).toMatchObject({ code: "oauth_refused" });
+    expect(googleProblem(refused)).toMatchObject({ googleUnavailable: true });
+    expect(googleProblem(refused).text).toMatch(/isn’t available/);
+
+    publishWith(async () => {
+      throw new Error("Failed to fetch");
+    });
+    const failed = await startPrivyGoogle().catch((e: unknown) => e);
+    expect(failed).toMatchObject({ code: "oauth_start_failed" });
+    expect(googleProblem(failed).text).toMatch(/Check your connection/);
   });
 });

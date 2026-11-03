@@ -28,6 +28,8 @@ export function googleProblem(error: unknown): SignInProblem {
     case "near_not_configured":
     case "privy_not_configured":
       return { text: "Google sign-in isn’t set up on this server yet.", googleUnavailable: true };
+    case "oauth_refused":
+      return { text: "Google sign-in isn’t available right now. Use a NEAR wallet, or try Google again later.", googleUnavailable: true };
     case "privy_timeout":
     case "privy_load_failed":
     case "oauth_start_failed":

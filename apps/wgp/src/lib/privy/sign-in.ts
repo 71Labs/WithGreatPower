@@ -82,6 +82,10 @@ export async function startPrivyGoogle(): Promise<"authenticated" | "redirecting
   } catch (error) {
     // Privy's own errors name its endpoints; the player only needs to know it didn't start.
     console.warn("[privy] Google login didn't start:", error);
+    // Privy refusing Google outright (the login method is off for this app) is a setup
+    // problem, not the player's connection: say so, and point them at the wallet instead.
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    if (/not allowed|not enabled/i.test(message)) throw new PrivySignInError("Google sign-in isn’t available", "oauth_refused");
     throw new PrivySignInError("Google sign-in couldn’t start", "oauth_start_failed");
   }
   return "redirecting";
