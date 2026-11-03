@@ -63,6 +63,13 @@ export function classifyGpu(renderer: string, mobile = false): GpuClass {
 
 let gpuCache: { renderer: string; gpuClass: GpuClass } | null = null;
 
+/** A phone or tablet, by user agent; iPadOS asks for desktop pages but has a touch screen. */
+export function isMobileDevice(ua: string, maxTouchPoints = 0): boolean {
+  return /Android|iPhone|iPad|Mobile/i.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1);
+}
+
+const browserIsMobile = () => typeof navigator !== "undefined" && isMobileDevice(navigator.userAgent, navigator.maxTouchPoints || 0);
+
 /** The GPU this browser draws with, from one throwaway context (released at once). */
 export function detectGpu(): { renderer: string; gpuClass: GpuClass } {
   if (gpuCache) return gpuCache;
@@ -74,8 +81,7 @@ export function detectGpu(): { renderer: string; gpuClass: GpuClass } {
     if (gl) {
       const info = gl.getExtension("WEBGL_debug_renderer_info");
       const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-      const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-      gpuCache = { renderer, gpuClass: classifyGpu(renderer, mobile) };
+      gpuCache = { renderer, gpuClass: classifyGpu(renderer, browserIsMobile()) };
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     }
   } catch {
@@ -84,17 +90,26 @@ export function detectGpu(): { renderer: string; gpuClass: GpuClass } {
   return gpuCache;
 }
 
+/** What a browser says about its device, for the starting tier. */
+export interface DeviceHints {
+  gpuClass: GpuClass;
+  /** navigator.deviceMemory, GB (Chromium only, rounded down and capped at 8; undefined elsewhere). */
+  memory?: number;
+  /** navigator.hardwareConcurrency. */
+  cores?: number;
+  mobile: boolean;
+}
+
 /**
  * The starting tier: high on strong GPUs with room to spare, medium (the phone default) on
- * mid-range or unknown ones, low on weak or software renderers and small-memory devices.
+ * mid-range or unknown ones, low on weak or software renderers and small-memory devices
+ * (4 GB or 4 cores and under), and low on 2 GB whatever the GPU. Pure; the FPS probe
+ * corrects a wrong guess after the first seconds of play.
  */
-export function detectTier(): QualityTier {
-  if (typeof navigator === "undefined") return "medium";
-  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
-  const cores = navigator.hardwareConcurrency || 4;
+export function pickTier({ gpuClass, memory, cores = 4, mobile }: DeviceHints): QualityTier {
+  if (memory !== undefined && memory <= 2) return "low";
   const small = (memory !== undefined && memory <= 4) || cores <= 4;
-  const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-  switch (detectGpu().gpuClass) {
+  switch (gpuClass) {
     case "strong":
       return small || mobile ? "medium" : "high";
     case "mid":
@@ -104,6 +119,17 @@ export function detectTier(): QualityTier {
     default:
       return small ? "low" : "medium";
   }
+}
+
+/** This browser's starting tier (pickTier over its GPU, memory, cores and form). */
+export function detectTier(): QualityTier {
+  if (typeof navigator === "undefined") return "medium";
+  return pickTier({
+    gpuClass: detectGpu().gpuClass,
+    memory: (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+    cores: navigator.hardwareConcurrency || 4,
+    mobile: browserIsMobile(),
+  });
 }
 
 export function hasWebGL2(): boolean {
