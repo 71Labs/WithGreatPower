@@ -223,7 +223,7 @@ export default function QuickPlaySection({ me }: { me: Me }) {
   if (qp.state === "on") {
     return (
       <Shell state="on">
-        <Text>Your hero, crafting and suit changes go on NEAR with no popups. The game pays the gas.</Text>
+        <Text>Your hero, crafting, suit changes and market trades go on NEAR with no popups. The game pays the gas.</Text>
         <HeroLine chain={chain} />
       </Shell>
     );
@@ -237,7 +237,7 @@ export default function QuickPlaySection({ me }: { me: Me }) {
       <Text>
         {pendingKey
           ? "The key is on your account. Finish setup to start using it; no new approval needed."
-          : `Crafting and suit changes are saved, not yet on chain. ${privy ? "Turning it on adds" : `One ${wallet ? "wallet" : "Google"} approval adds`} a key for this browser that can only play this game: it can’t move your tokens or NEAR.`}
+          : `Crafting and suit changes are saved, not yet on chain, and the market needs quick play to trade. ${privy ? "Turning it on adds" : `One ${wallet ? "wallet" : "Google"} approval adds`} a key for this browser that can only play this game: it can’t move your tokens or NEAR.`}
       </Text>
       {wallet ? (
         <WalletProvider>

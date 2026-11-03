@@ -8,9 +8,12 @@
  *            server records around a market call)
  *   add-key  a returning player's NEAR Auth-signed AddKey of this device's game session key
  *
- * 200 { txHash, ok: true, result, save?, rev? } relayed, the call succeeded; craft and equip
- *                                              return the save they changed (server/near/mirror.ts)
- * 422 { error: "call_failed", txHash, message } relayed, the contract refused (e.g. already has a hero)
+ * 200 { txHash, ok: true, result, save?, rev?, market? } relayed, the call succeeded; craft and
+ *                                              equip return the save they changed (server/near/mirror.ts),
+ *                                              market calls the market and wallet as they stand now
+ *                                              (MarketSnapshot, read past the cache)
+ * 422 { error: "call_failed", txHash, message, market? } relayed, the contract refused (e.g. already
+ *                                              has a hero, or the price moved past the trade's limit)
  * 400/401/403 { error: <code>, message }       refused before spending gas (see server/near/relay.ts)
  * 409 run_active                               craft or equip while a ranked run is in flight
  * 429 rate limited · 503 relayer not configured, out of funds or out of budget
@@ -28,6 +31,8 @@ import { requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { HttpError, clientIp, handle, json, readJson } from "@/server/http";
 import { afterMarketRelay, beforeMarketRelay, isMarketMethod } from "@/server/market/relay";
+import { marketSnapshot } from "@/server/market/view";
+import type { MarketSnapshot } from "@/lib/market/api";
 import { rateLimiter } from "@/server/rate-limit";
 import { chainEnv } from "@/server/near/env";
 import { deviceId, NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spendRelay } from "@/server/near/http";
@@ -118,6 +123,7 @@ export const POST = handle("relay/meta", (request: Request) =>
 
     if (newKey && result.ok) await addSessionKey(db, { playerId: session.playerId, publicKey: newKey, addTx: result.txHash });
     let mirrored: Mirrored | null = null;
+    let market: MarketSnapshot | null = null;
     if (method) {
       await touchSessionKey(db, signed.delegate.publicKey);
       const action = signed.delegate.actions[0];
@@ -127,12 +133,18 @@ export const POST = handle("relay/meta", (request: Request) =>
         console.error(`[relay/meta] mirror ${method} for ${session.playerId}: ${error instanceof Error ? error.message : String(error)}`);
         return null;
       });
-      if (result.ok && isMarketMethod(method)) {
-        await afterMarketRelay(db, { playerId: session.playerId, accountId, method, result: result.result, txHash: result.txHash });
+      if (isMarketMethod(method)) {
+        if (result.ok) await afterMarketRelay(db, { playerId: session.playerId, accountId, method, result: result.result, txHash: result.txHash });
+        // Win or lose, the trader sees the market as it is now: their trade, or the price that refused it.
+        market = await marketSnapshot({ playerId: session.playerId, accountId }).catch((error: unknown) => {
+          console.error(`[relay/meta] market snapshot for ${session.playerId}: ${error instanceof Error ? error.message : String(error)}`);
+          return null;
+        });
       }
     }
 
-    if (!result.ok) return json({ error: "call_failed", txHash: result.txHash, message: result.error }, { status: 422 });
-    return json({ ok: true, txHash: result.txHash, result: result.result ?? null, ...(mirrored ?? {}) });
+    const snapshot = market ? { market } : {};
+    if (!result.ok) return json({ error: "call_failed", txHash: result.txHash, message: result.error, ...snapshot }, { status: 422 });
+    return json({ ok: true, txHash: result.txHash, result: result.result ?? null, ...(mirrored ?? {}), ...snapshot });
   }),
 );

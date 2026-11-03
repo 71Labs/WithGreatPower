@@ -62,6 +62,15 @@ export interface MarketMe {
   fillBitsLeft: number;
   /** Ids of this player's open listings. */
   open: number[];
+  /** On chain: Bits from verified nights that the operator hasn't landed yet. */
+  pendingBits: number;
+}
+
+/** The market and the trader's wallet right after a trade, read past the cache. */
+export interface MarketSnapshot {
+  view: MarketView;
+  listings: ListingView[];
+  me: MarketMe;
 }
 
 export type SimTradeRequest =
@@ -78,6 +87,8 @@ export interface SimTradeResponse {
   save: Save;
   rev: number;
   bits: number;
+  /** The market after the trade; absent if it couldn't be read. */
+  market?: MarketSnapshot;
 }
 
 export type MarketResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; message?: string };

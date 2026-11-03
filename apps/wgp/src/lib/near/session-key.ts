@@ -225,14 +225,23 @@ export interface RelayResponse {
   rev?: number;
 }
 
-/** Posts a signed delegate to the relayer. */
+/**
+ * Posts a signed delegate to the relayer. A dropped connection answers status 0 ("network")
+ * rather than throwing: the delegate may have landed, so callers must not sign a fresh one
+ * and send it again blind.
+ */
 export async function postToRelay(signedDelegate: Uint8Array, extra: { kind?: "game" | "add-key"; newKey?: string } = {}): Promise<RelayResponse> {
-  const res = await fetch("/api/relay/meta", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-wgp-device": deviceId() },
-    credentials: "same-origin",
-    body: JSON.stringify({ kind: extra.kind ?? "game", signedDelegate: base64Encode(signedDelegate), newKey: extra.newKey }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/relay/meta", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-wgp-device": deviceId() },
+      credentials: "same-origin",
+      body: JSON.stringify({ kind: extra.kind ?? "game", signedDelegate: base64Encode(signedDelegate), newKey: extra.newKey }),
+    });
+  } catch {
+    return { ok: false, status: 0, error: "network" };
+  }
   const body = (await res.json().catch(() => ({}))) as Omit<RelayResponse, "status">;
   return { ...body, ok: res.ok && body.ok !== false, status: res.status };
 }

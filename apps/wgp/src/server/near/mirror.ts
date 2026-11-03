@@ -13,7 +13,7 @@ import { z } from "zod";
 
 import { SUITS } from "@wgp/game-core/data";
 import { reduce } from "@wgp/game-core/engine";
-import type { Save, SuitId } from "@wgp/game-core/types";
+import type { ItemId, Save, SuitId } from "@wgp/game-core/types";
 
 import type { Db } from "@/server/db/client";
 import { ensureSave, writeSave } from "@/server/db/players";
@@ -50,11 +50,25 @@ export async function guardGameCall(db: Db, playerId: string, method: string, no
   if (run) throw conflict("run_active", "Finish or abandon the run in progress first", { runId: run.runId });
 }
 
-/** The save after the chain crafted `suit`: the reducer's craft, or, when the save lacked what the chain had, the suit owned and worn. Pure. */
+/**
+ * The save after the chain crafted `suit`: the reducer's craft, or, when the save lacked what
+ * the chain had, the suit owned and worn and whatever the save held of the recipe spent (the
+ * chain burned all of it, so none of it may stay behind to craft with again). Pure.
+ */
 export function mirrorCraft(save: Save, suit: SuitId): Save {
   const crafted = reduce(save, { type: "craft-suit", suit });
   if (crafted !== save || !save.hero) return crafted;
-  return wearOwned(save, suit);
+  const worn = wearOwned(save, suit);
+  const inventory = { ...worn.inventory };
+  let spent = false;
+  for (const [item, n] of Object.entries(SUITS[suit].recipe) as [ItemId, number][]) {
+    const have = inventory[item] ?? 0;
+    if (have <= 0) continue;
+    spent = true;
+    if (have > n) inventory[item] = have - n;
+    else delete inventory[item];
+  }
+  return spent ? { ...worn, inventory } : worn;
 }
 
 /** The save after the chain equipped `suit`. Pure. */

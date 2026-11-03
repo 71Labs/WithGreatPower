@@ -155,6 +155,13 @@ describe("mirroring relayed game calls", () => {
     expect(out.inventory).toEqual(save.inventory);
   });
 
+  it("spends what the save has of the recipe when it had too little to craft itself (the chain burned it all)", () => {
+    const save = { ...heroSave(), inventory: { "sybil-goo": 2, crumbs: 4 } };
+    const out = mirrorCraft(save, "stealth");
+    expect(out.suits).toContain("stealth");
+    expect(out.inventory).toEqual({ crumbs: 4 });
+  });
+
   it("equip_suit on chain changes the suit worn; refusals and other methods change nothing", async () => {
     await readyToCraft(db, peter.id);
     await call("craft_suit", { suit: "stealth" });

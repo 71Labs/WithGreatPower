@@ -7,7 +7,7 @@
  * the curve the server just read, so what you see is what the chain will charge, up to
  * the slippage limit if someone trades first.
  */
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { StickerButton } from "@/components/game/kit";
 import { GameSheet } from "@/components/game/ui";
@@ -86,8 +86,14 @@ function Line({ label, value, strong = false, hint }: { label: string; value: Re
 }
 
 function Problem({ id, text }: { id: string; text: string | null }) {
+  // The message sits under the receipt; on a short screen it would land below the sheet's
+  // fold, behind the footer button the player just tapped. Bring it into view.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (text) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [text]);
   return (
-    <div id={id} role="status" aria-live="polite" className="empty:hidden">
+    <div ref={ref} id={id} role="status" aria-live="polite" className="empty:hidden scroll-mb-4">
       {text ? (
         <p className="flex items-start gap-2 rounded-[14px] border-2 border-game-ink bg-game-paper-2 px-3.5 py-3 text-[14px] leading-5">
           <CircleAlert aria-hidden className="mt-px size-5 shrink-0 text-game-hero" strokeWidth={2} />
@@ -159,6 +165,8 @@ export function TradeSheet({
     }
     if (held < amount) return held === 0 ? `You don’t have any ${item!.name} to sell.` : `You have only ${formatBits(held)} to sell.`;
     if (!sell) return "The vendor’s till can’t pay for that many. Try fewer.";
+    // The contract would take the item and pay nothing once the fee is out.
+    if (sell.net < 1) return "That’s worth less than a Bit after the gas fee. Sell more at once, or keep it.";
     if (me.tradesLeft <= 0) return "That’s today’s vendor trades used up. The market resets at midnight UTC.";
     return null;
   }
@@ -294,11 +302,13 @@ export function ListSheet({
     const why =
       asking < floor || asking > ceiling
         ? `Price it between ${formatBits(floor)} and ${bitsText(ceiling)}.`
-        : me && me.listingsLeft <= 0
-          ? "That’s today’s listings used up. The market resets at midnight UTC."
-          : me && me.open.length >= view.params.maxOpenListings
-            ? `You can have ${view.params.maxOpenListings} listings open. Cancel one first.`
-            : null;
+        : asking - fee < 1
+          ? `At that price the gas fee takes it all. Ask ${bitsText(fee + 1)} or more.`
+          : me && me.listingsLeft <= 0
+            ? "That’s today’s listings used up. The market resets at midnight UTC."
+            : me && me.open.length >= view.params.maxOpenListings
+              ? `You can have ${view.params.maxOpenListings} listings up at once. Take one down first.`
+              : null;
     setProblem(why);
     if (why) return;
     setBusy(true);
@@ -314,7 +324,7 @@ export function ListSheet({
       onClose={close}
       eyebrow="Mempool Market"
       title="List an item"
-      description="Your items wait in escrow until someone buys them or you cancel."
+      description="Your items wait in escrow until someone buys them or you take them down."
       footer={
         item ? (
           <StickerButton variant="hero" size="lg" onClick={submit} disabled={busy} className="w-full sm:w-auto">
@@ -402,7 +412,13 @@ export function FillSheet({ listing, me, onClose, onTrade }: { listing: ListingV
   const seller = listing.seller.split(".")[0];
 
   async function submit() {
-    const why = !me ? "Sign in to trade." : me.bits < listing!.price ? `You need ${formatBits(listing!.price - me.bits)} more Bits for that.` : null;
+    const why = !me
+      ? "Sign in to trade."
+      : me.bits < listing!.price
+        ? `You need ${formatBits(listing!.price - me.bits)} more Bits for that.`
+        : me.fillsLeft <= 0 || me.fillBitsLeft < listing!.price
+          ? "That’s today’s limit for buying from players. It resets at midnight UTC."
+          : null;
     setProblem(why);
     if (why) return;
     setBusy(true);
