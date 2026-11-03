@@ -6,7 +6,7 @@ import { StickerLink } from "@/components/game/kit";
 import { ArrowRight, ChartLine, Coins, Flame, KeyRound, Tag } from "@/components/icons";
 import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
 import { afterBuy, buyCost, spot } from "@/lib/market/math";
-import { BITS_FOR_SHOWING_UP, BITS_PER_SCORE } from "@/lib/market/rewards";
+import { BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_PICKUP_BITS } from "@/lib/market/rewards";
 import { ITEMS } from "@wgp/game-core/data";
 
 import { PriceCurve, type CurvePoint } from "./price-curve";
@@ -31,7 +31,7 @@ const features: { icon: ReactNode; text: ReactNode }[] = [
     icon: <Coins strokeWidth={2} />,
     text: (
       <>
-        Every verified night pays Bits: your score ÷ {BITS_PER_SCORE}, plus {BITS_FOR_SHOWING_UP} for showing up.
+        Every verified night pays Bits: your score ÷ {BITS_PER_SCORE}, plus {BITS_FOR_SHOWING_UP} for showing up, plus one for each gold Bits token you swing through (up to {MAX_PICKUP_BITS}).
       </>
     ),
   },
