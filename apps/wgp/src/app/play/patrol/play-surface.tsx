@@ -7,6 +7,10 @@
  * loop; the recording is kept fresh for a reload. When the loop's outro ends it calls
  * onDone, and the page draws the results over the still-running city.
  *
+ * Finding the way: a waypoint pin (or edge arrow) for the next stop, the minimap in the HUD
+ * and the full city map (M, the minimap, or the pause sheet; the night waits while it's
+ * open), all placed from a frame tap the scene runs after the camera moves.
+ *
  * `?autopilot=1` hands the input to game-core's bot (and answers errands), `?debug=1`
  * shows the renderer's numbers and exposes `window.__wgpPlay` for headless checks.
  */
@@ -20,16 +24,21 @@ import type { Stop, StopResult } from "@wgp/game-core/types";
 
 import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { attachControls, InputLatch, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
+import { FrameTap } from "@/game3d/nav/tap";
 import { QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
 import { nightAudio, RunLoop, RunRecorder, sceneEffects, stopPositions, type LoopEvent3D, type NightSession } from "@/game3d/session";
 import { HudStore } from "@/sim/loop";
-import { useCoarsePointer } from "@/sim/ui/hooks";
+import { useCoarsePointer, useReducedMotion } from "@/sim/ui/hooks";
 import { Hud, useHud } from "@/sim/ui/hud";
 import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sheets";
 
+import { CityMap, stopName } from "./city-map";
+import { ComboMeter } from "./combo";
+import { Minimap } from "./minimap";
 import { initialSettings, rememberSettings, SettingsPanel, type PlaySettings } from "./settings";
 import { Loading } from "./status";
+import { Waypoint } from "./waypoint";
 
 const Stage = dynamic(() => import("./stage"), { ssr: false, loading: () => <Loading /> });
 
@@ -66,8 +75,11 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [hudStore] = useState(() => new HudStore());
   const [loop] = useState(() => new RunLoop(run, { hud: hudStore }));
   const [latch] = useState(() => new InputLatch());
+  /** Overlays placed from the camera each frame (the waypoint, the minimap, the combo timer). */
+  const [tap] = useState(() => new FrameTap());
   const hud = useHud(hudStore);
   const touch = useCoarsePointer();
+  const reducedMotion = useReducedMotion();
   const handle = useRef<SceneHandle | null>(null);
   const surface = useRef<HTMLDivElement>(null);
   const stickRing = useRef<HTMLDivElement>(null);
@@ -76,16 +88,18 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const lastAnnounce = useRef(0);
   const [settings, setSettings] = useState<PlaySettings>(initialSettings);
   const [paused, setPaused] = useState(false);
+  /** The city map: open over play (the night paused for it) or over the pause sheet. */
+  const [map, setMap] = useState<"play" | "pause" | null>(null);
   const [errand, setErrand] = useState<{ index: number; chosen: string | null } | null>(null);
   const [results, setResults] = useState<StopResult[]>(() => run.save.patrol?.results ?? []);
   const [announce, setAnnounce] = useState("");
 
   // What the controls may do right now, read from their event handlers.
-  const gate = useRef({ paused, errand: !!errand, ended });
+  const gate = useRef({ paused, errand: !!errand, ended, map });
   useEffect(() => {
-    gate.current = { paused, errand: !!errand, ended };
-    if (paused || errand || ended) controls.current?.release();
-  }, [paused, errand, ended]);
+    gate.current = { paused, errand: !!errand, ended, map };
+    if (paused || errand || ended || map) controls.current?.release();
+  }, [paused, errand, ended, map]);
   const done = useRef(onDone);
   useEffect(() => {
     done.current = onDone;
@@ -223,6 +237,32 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     [loop],
   );
 
+  // The city map. From play it pauses the night until it closes; from the pause sheet it
+  // goes back to the sheet.
+  const openMap = useCallback(
+    (from: "play" | "pause") => {
+      if (from === "play") {
+        if (loop.status !== "live" && loop.status !== "intro") return;
+        loop.setPaused(true);
+      }
+      gate.current.map = from;
+      setMap(from);
+    },
+    [loop],
+  );
+  const closeMap = useCallback(() => {
+    const from = gate.current.map;
+    gate.current.map = null;
+    setMap(null);
+    if (from === "play") loop.setPaused(false);
+  }, [loop]);
+  const toggleMap = useCallback(() => {
+    const g = gate.current;
+    if (g.errand || g.ended) return;
+    if (g.map) closeMap();
+    else openMap(g.paused ? "pause" : "play");
+  }, [openMap, closeMap]);
+
   // Keyboard, mouse and touch on the surface.
   useEffect(() => {
     const el = surface.current;
@@ -248,11 +288,14 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       onPause: () => {
         const g = gate.current;
         if (g.errand || g.ended) return;
-        togglePause();
+        // Escape closes the map first.
+        if (g.map) closeMap();
+        else togglePause();
       },
+      onMap: toggleMap,
       enabled: () => {
         const g = gate.current;
-        return !autopilot && !g.paused && !g.errand && !g.ended && (loop.status === "live" || loop.status === "intro");
+        return !autopilot && !g.paused && !g.map && !g.errand && !g.ended && (loop.status === "live" || loop.status === "intro");
       },
       onStick,
     });
@@ -261,7 +304,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       c.detach();
       controls.current = null;
     };
-  }, [latch, loop, autopilot, togglePause]);
+  }, [latch, loop, autopilot, togglePause, closeMap, toggleMap]);
 
   // A hidden tab or a lost focus pauses (not the autopilot, which a headless check drives).
   useEffect(() => {
@@ -318,11 +361,25 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     rememberSettings({ steady });
     setSettings((s) => ({ ...s, steady }));
   };
+  const setNorthUp = useCallback((northUp: boolean) => {
+    rememberSettings({ northUp });
+    setSettings((s) => ({ ...s, northUp }));
+  }, []);
+  const openMapFromHud = useCallback(() => {
+    const g = gate.current;
+    // Not over an errand's choice (its keys stay live) or the results.
+    if (g.errand || g.ended) return;
+    playSfx("ui-tap", { volume: 0.7 });
+    openMap(g.paused ? "pause" : "play");
+  }, [openMap]);
 
   const errandStop = errand ? stops[errand.index] : null;
   const introStop = hud && hud.mode === "intro" && hud.status !== "loading" ? stops[hud.index] : null;
   const countdown = hud?.status === "intro" ? hud.countdown : null;
-  const modal = paused;
+  const modal = paused || !!map;
+  /** No pulsing or breathing: the steady camera, or the device asks for less motion. */
+  const still = settings.steady || reducedMotion;
+  const nextStop = hud && hud.index < stops.length ? stops[hud.index] : null;
   const hint = touch
     ? { title: "Hold the right side to web", body: "Let go while you’re rising for a perfect swing. Your webs aim for the next stop; drag on the left to run and steer." }
     : { title: "Hold Space or the mouse to web", body: "Let go while you’re rising for a perfect swing. WASD steers; click into the game to look around with the mouse, and press Esc to free the cursor." };
@@ -347,12 +404,22 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onStats={debug ? onStats : undefined}
             onTierSuggest={settings.adaptive ? onTierSuggest : undefined}
             onContextStalled={onFallback}
+            tap={tap}
           />
           <div ref={stickRing} aria-hidden className="pointer-events-none absolute left-0 top-0 opacity-0">
             <span className="absolute -left-6 -top-6 block size-12 rounded-full border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow-sm)]" />
             <span className="absolute -left-[60px] -top-[60px] -z-10 block size-[120px] rounded-full border-[2.5px] border-dashed border-game-paper/80 bg-game-ink/20" />
           </div>
         </div>
+        {/* Under the waypoint and the HUD, so the numbers never hide them. */}
+        {debug ? (
+          <pre
+            ref={stats}
+            aria-live="off"
+            className="pointer-events-none absolute right-3 top-[52%] rounded-[12px] border-2 border-game-ink bg-game-paper px-3 py-2 font-mono text-xs leading-5 text-game-ink opacity-90 shadow-[var(--game-shadow-sm)] sm:right-4 sm:top-1/2 sm:-translate-y-1/2"
+          />
+        ) : null}
+        {!ended && hud ? <Waypoint tap={tap} city={run.sim.city} stops={stops} index={hud.index} still={still} touch={touch} /> : null}
         {!ended ? (
           <Hud
             store={hudStore}
@@ -366,6 +433,22 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onAbility={(slot) => latch.pushShot((slot + 1) as 1 | 2 | 3 | 4)}
             onGwei={() => latch.pushShot(5)}
             onPause={() => togglePause(true)}
+            combo={<ComboMeter tap={tap} fallback={hud?.combo ?? 0} />}
+            minimap={
+              <Minimap
+                tap={tap}
+                city={run.sim.city}
+                stops={stops}
+                heroColor={colors.suit}
+                northUp={settings.northUp}
+                onNorthUp={setNorthUp}
+                onOpen={openMapFromHud}
+                still={still}
+                touch={touch}
+                nextLabel={nextStop ? stopName(nextStop) : null}
+                hidden={touch && !!hud?.villain}
+              />
+            }
           />
         ) : null}
         {!ended && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hud!.index} total={stops.length} /> : null}
@@ -377,17 +460,30 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             </span>
           </div>
         ) : null}
-        {debug ? (
-          <pre
-            ref={stats}
-            aria-live="off"
-            className="pointer-events-none absolute right-3 top-[34%] rounded-[12px] sm:right-4 sm:top-1/2 sm:-translate-y-1/2 border-2 border-game-ink bg-game-paper px-3 py-2 font-mono text-xs leading-5 text-game-ink shadow-[var(--game-shadow-sm)]"
-          />
-        ) : null}
       </div>
       {errandStop?.kind === "errand" && !paused && !ended ? <ErrandSheet stop={errandStop} chosen={errand!.chosen} onChoose={chooseErrand} onLeave={leaveErrand} /> : null}
-      {paused && !ended ? (
-        <PauseMenu loadout={loadout} mode="3d" onResume={() => togglePause(false)} settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />} />
+      {paused && !map && !ended ? (
+        <PauseMenu
+          loadout={loadout}
+          mode="3d"
+          onResume={() => togglePause(false)}
+          onMap={() => openMap("pause")}
+          settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
+        />
+      ) : null}
+      {map && !ended ? (
+        <CityMap
+          city={run.sim.city}
+          stops={stops}
+          results={results}
+          frame={loop.view}
+          hero={colors}
+          northUp={settings.northUp}
+          onNorthUp={setNorthUp}
+          onClose={closeMap}
+          still={still}
+          touch={touch}
+        />
       ) : null}
       <p role="status" aria-live="polite" className="sr-only">
         {announce}

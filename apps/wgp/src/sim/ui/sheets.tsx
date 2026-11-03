@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { StickerButton, StickerEyebrow, StickerLink, StickerPanel } from "@/components/game/kit";
-import { Award, Heart, Link2, Megaphone, ShieldCheck } from "@/components/icons";
+import { Award, Heart, Link2, MapIcon, Megaphone, ShieldCheck } from "@/components/icons";
 import { DISTRICTS, ERRANDS, VILLAINS, type ErrandChoice } from "@wgp/game-core/data";
 import type { PowerId, Stop, VillainId } from "@wgp/game-core/types";
 
@@ -198,6 +198,7 @@ const SWINGING: Record<"2d" | "3d", string[]> = {
     "Let go while you’re rising fast and forward for a perfect swing: a boost and +1 combo.",
     "You head for the next stop on your own. To steer, use WASD or the arrow keys, or drag on the left side of a touch screen; directions follow the camera.",
     "Click into the game to look around with the mouse (Esc frees the cursor), or drag with two fingers on a touch screen. The camera settles back behind you.",
+    "The pin over the next stop (or the arrow at the edge of the screen) and the dotted line on the minimap show the way. Press M, or tap the minimap, for the whole city.",
     "Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.",
   ],
 };
@@ -259,12 +260,15 @@ export function PauseMenu({
   onResume,
   mode = "2d",
   settings,
+  onMap,
 }: {
   loadout: PowerId[];
   onResume: () => void;
   mode?: "2d" | "3d";
   /** Extra controls under the note (the 3D night's quality and comfort settings). */
   settings?: ReactNode;
+  /** Open the city map (the 3D night). */
+  onMap?: () => void;
 }) {
   const [help, setHelp] = useState(false);
   const resume = useRef<HTMLButtonElement>(null);
@@ -294,6 +298,13 @@ export function PauseMenu({
               <StickerButton ref={resume} variant="hero" size="lg" onClick={onResume} className="w-full">
                 Resume
               </StickerButton>
+              {onMap ? (
+                <StickerButton size="lg" onClick={onMap} aria-keyshortcuts="M" className="w-full">
+                  <MapIcon aria-hidden className="size-5" strokeWidth={2} />
+                  Open the map
+                  <Kbd>M</Kbd>
+                </StickerButton>
+              ) : null}
               <StickerButton size="lg" onClick={() => setHelp(true)} className="w-full">
                 How to play
               </StickerButton>
