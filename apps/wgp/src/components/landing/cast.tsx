@@ -1,62 +1,78 @@
-import { Sticker } from "@/components/cast";
+import Image from "next/image";
+import Link from "next/link";
+
 import { Chip, InlineTwoTone, Section } from "@/components/frame";
-import { WebMark } from "@/components/site-header";
-import { CAST, type Role } from "@wgp/game-core/cast";
+import { ArrowRight } from "@/components/icons";
+import { castById, type CastId, type Role } from "@wgp/game-core/cast";
 
-import { MiniAvatar } from "./mini-avatar";
+/**
+ * Stills of the 3D cast, captured from /lab/cast: the hero, the four villains, then the
+ * neighbors. The file is the body's name in the game's model folder.
+ */
+const STILLS: { id: CastId; file: string; alt: string }[] = [
+  { id: "node", file: "hero", alt: "The Node’s 3D body in the red web suit, standing on a rooftop" },
+  { id: "gas-goblin", file: "gas-goblin", alt: "Gas Goblin, purple-hooded, riding his yellow glider" },
+  { id: "sandwich-man", file: "sandwich-man", alt: "Sandwich Man, a burger head on a black suit, squaring up" },
+  { id: "doc-octochain", file: "doc-octochain", alt: "Doc Octochain in a green coat, held up by four chain arms" },
+  { id: "sybil", file: "sybil", alt: "The Sybil in black, with one of his copies at his shoulder" },
+  { id: "aunt-mainnet", file: "aunt-mainnet", alt: "Aunt Mainnet in a lilac dress and pearls, waving" },
+  { id: "uncle-gen", file: "uncle-gen", alt: "Uncle Gen in a brown cardigan, mid-sentence" },
+  { id: "mary-jpeg", file: "mary-jpeg", alt: "Mary Jpeg with blocky pixel hair, waving" },
+  { id: "bearson", file: "bearson", alt: "J. Jonah Bearson, a bear in a suit and red tie, chewing a cigar" },
+  { id: "gwei", file: "gwei", alt: "Gwei Stacy in a white mask, crouched on a perch" },
+];
 
-/** Role is said in words, never by color alone; villains get the accent. */
-const roleStyle: Record<Role, string> = {
+/** Role is said in words, never by color alone; villains also get the accent. */
+const roleTone: Record<Role, string> = {
   Hero: "text-ink-strong",
   Ally: "text-ink-subtle",
   Press: "text-ink-subtle",
   Villain: "text-accent",
 };
 
-/** The speech bubble at the end of the sheet, like a sticker someone added. */
-function Bubble() {
-  return (
-    <li className="col-span-2 flex items-center justify-center">
-      <figure className="relative w-full max-w-[300px]">
-        <blockquote className="relative rounded-[20px] border-2 border-ink-strong bg-canvas px-5 pb-5 pt-4 shadow-[var(--shadow-chip)]">
-          <WebMark className="size-6 text-accent" />
-          <p className="mt-2 font-display text-[22px] font-medium leading-[26px] tracking-[-0.02em] text-ink-strong">
-            With great power comes great responsibility.
-          </p>
-          {/* The tail: a rotated square with the bubble's border on two sides. */}
-          <span
-            aria-hidden
-            className="absolute -bottom-[9px] left-10 size-4 rotate-45 border-b-2 border-r-2 border-ink-strong bg-canvas"
-          />
-        </blockquote>
-        <figcaption className="mt-5 flex items-center gap-2.5 pl-5">
-          <MiniAvatar id="uncle-gen" className="size-9 rounded-[10px]" />
-          <span className="hash text-[13px] leading-4 text-ink-subtle">Uncle Gen, every dinner</span>
-        </figcaption>
-      </figure>
-    </li>
-  );
-}
-
 export function Cast() {
   return (
     <Section id="cast" labelledBy="cast-title" inner="px-4 py-20 sm:px-10 sm:py-28">
-      <div className="flex flex-col items-start">
-        <Chip>The cast</Chip>
-        <InlineTwoTone id="cast-title" className="mt-6 max-w-[24ch]" lead="Heroes, villains" point="and one very loud editor." />
-        <p className="mt-5 max-w-[60ch] text-[17px] leading-7 text-ink-subtle">
-          Every character is an original parody. Team up with them, collect them, or web them to a lamppost.
-        </p>
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col items-start">
+          <Chip>The cast</Chip>
+          <InlineTwoTone id="cast-title" className="mt-6 max-w-[20ch]" lead="Real bodies," point="comic-book ink." />
+          <p className="mt-5 max-w-[60ch] text-[17px] leading-7 text-ink-subtle">
+            Every character is a MakeHuman body moved by CC0 motion capture, cel-shaded in hard bands and outlined in
+            ink like the rest of the city. All ten are original parodies.
+          </p>
+        </div>
+        <Link
+          href="/lab/cast"
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start text-[15px] font-medium text-ink-strong underline decoration-hairline-strong underline-offset-4 lg:self-auto [@media(hover:hover)]:hover:decoration-current"
+        >
+          Watch them move in the cast lab
+          <ArrowRight aria-hidden className="size-4" />
+        </Link>
       </div>
-      <ul className="mt-14 grid grid-cols-2 gap-x-4 gap-y-12 sm:mt-16 sm:grid-cols-3 lg:grid-cols-6 lg:gap-x-6">
-        {CAST.map((c) => (
-          <li key={c.id} className="flex flex-col items-center text-center">
-            <Sticker id={c.id} size="md" />
-            <p className={`mt-1.5 text-[12px] font-medium leading-4 ${roleStyle[c.role]}`}>{c.role}</p>
-            <p className="mt-2 max-w-[24ch] text-[13px] leading-5 text-ink-subtle [text-wrap:pretty]">{c.line}</p>
-          </li>
-        ))}
-        <Bubble />
+
+      <ul className="mt-14 grid grid-cols-2 gap-x-4 gap-y-10 sm:mt-16 sm:gap-x-6 lg:grid-cols-5 lg:gap-y-14">
+        {STILLS.map(({ id, file, alt }) => {
+          const c = castById(id);
+          return (
+            <li key={id} className="flex min-w-0 flex-col">
+              <div className="rounded-[22px] bg-white p-1.5 shadow-[var(--game-shadow)] ring-2 ring-game-ink">
+                <div className="relative aspect-[4/5] overflow-hidden rounded-[16px] bg-game-night">
+                  <Image
+                    src={`/media/cast/${file}.webp`}
+                    alt={alt}
+                    fill
+                    sizes="(min-width: 1320px) 230px, (min-width: 1024px) 18vw, calc(50vw - 28px)"
+                    className="object-cover"
+                  />
+                </div>
+              </div>
+              <h3 className="mt-4 font-display text-[18px] font-medium leading-6 tracking-[-0.02em]">{c.name}</h3>
+              <p className={`mt-0.5 text-[13px] font-medium leading-5 ${roleTone[c.role]}`}>{c.role}</p>
+              <p className="mt-1.5 text-[14px] leading-5 text-ink-subtle">{c.line}</p>
+            </li>
+          );
+        })}
       </ul>
     </Section>
   );

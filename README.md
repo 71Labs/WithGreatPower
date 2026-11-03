@@ -6,6 +6,15 @@ A 3D web-swinging superhero parody game on NEAR. You swing through a comic-book 
 - **Built at:** NEAR HACKATHON, Nov 1–14, 2026. Track: Games With Real Economies (`games`).
 - **License:** MIT
 
+## Screenshots
+
+| | |
+|---|---|
+| ![The hero swinging between rooftops at night](docs/screenshots/swing.jpg)<br>**Swing** across a comic-book city, then land and fight. | ![Doc Octochain boss fight on the bridge](docs/screenshots/boss-fight.jpg)<br>**Boss fights**: Doc Octochain holds the bridge. |
+| ![The hero, a MakeHuman body with motion capture](docs/screenshots/cast.jpg)<br>**Real bodies**: MakeHuman characters with motion capture. | ![Sign-in sheet with Google and NEAR wallet options](docs/screenshots/sign-in.jpg)<br>**Sign in** with Google or a NEAR wallet. |
+| ![Night results showing Verified and Ranked with the server's score](docs/screenshots/verified-run.jpg)<br>**Verified · Ranked**: the server replays the night before it counts. | ![All-time leaderboard on the live site](docs/screenshots/leaderboard.jpg)<br>**Leaderboards**: Tonight, Season and All time. |
+| ![Mempool Market with the NPC vendor's prices](docs/screenshots/market.jpg)<br>**Mempool Market**: an NPC vendor whose prices move with every trade. | ![Economy lab after 21 simulated days, with price charts](docs/screenshots/economy.jpg)<br>**Economy lab**: 21 days of bot trading on the real pricing code. |
+
 ## The problem
 
 Web3 games make players fight wallets before villains: seed phrases, popups for every action, gas prompts mid-game. Their leaderboards trust whatever score the browser sends. WGP keeps the chain out of the game loop and makes the scores verifiable:
@@ -25,8 +34,10 @@ All steps work on the live site, with no install.
      - 1–4 fire powers, G calls Gwei, Esc pauses. Click into the game for mouse look.
      - On touch: drag on the left side to steer, hold the right side to web.
    - **See:** a 3D night of stops (villain fights and ally errands) ending on a results screen. Gold Bits tokens and boost rings line each route and build your combo. Guest nights are unranked.
-2. **Sign in with a NEAR wallet.**
-   - **Do:** open the account chip (top of any game screen), then "Use a NEAR wallet", pick a wallet and sign one message (NEP-413; no gas, no transaction).
+2. **Sign in with Google or a NEAR wallet.**
+   - **Do:** open the account chip (top of any game screen), then either:
+     - "Continue with Google": Privy logs you in and makes a NEAR key for you, with no seed phrase or extension;
+     - "Use a NEAR wallet": pick a wallet and sign one message (NEP-413; no gas, no transaction).
    - **See:** the chip shows your account. Your save now lives on the server.
 3. **Play a ranked night.**
    - **Do:** finish a night while signed in.
@@ -59,21 +70,21 @@ All steps work on the live site, with no install.
 
 | Piece | How |
 |---|---|
-| **Player accounts** | A wallet player is their own NEAR account. Google players will get `<name>.wgpnear.near`, created by the game's factory account with the player's own key. |
+| **Player accounts** | A wallet player is their own NEAR account. A Google player gets a NEAR key from Privy's embedded wallet. Once the factory account is live they get `<name>.wgpnear.near` holding that key; before then they play on the key's implicit account and claim the name later, keeping their save, rank and rewards. |
 | **Items, suits, trophies and Bits** | NEP-245 multi-tokens in one contract, `game.wgpnear.near` (`contracts/wgp`). Heroes and trophies are soulbound. Transfers need 1 yoctoNEAR, so game keys can never move assets. |
 | **Rewards** | Each verified night queues a reward mint (items, plus Bits worth score/100 + 5). The operator account sends `mint_rewards` with per-account nonces, so a retry never mints twice. Mints are sent in the background of player requests; there are no cron jobs. |
 | **The Mempool Market** | In-contract NPC vendor with a bonding curve per item, player listings held in escrow, and a 2% "gas fee" parody that's burned. Guards cap what a stolen game key could do. |
 | **No popups in play** | After sign-in, players get a game-only function-call key. Our relayer submits their signed actions as NEP-366 meta-transactions and pays the gas (`/api/relay/meta`: one action, zero deposit, allowlisted methods, budgets). |
-| **Sign-in** | NEAR wallets through near-connect with a NEP-413 signed message. Google sign-in through NEAR Auth (MPC chain signatures) is waiting on NEAR Auth's mainnet approval. |
+| **Sign-in** | NEAR wallets through near-connect with a NEP-413 signed message. Google through Privy: the server verifies Privy's access token and reads the player's verified email and NEAR key from Privy's API. Players are linked by verified email, so switching Google to NEAR Auth later keeps every hero. |
 | **Seasons** | `record_season` stores a season's results root and top 10 on chain (`scripts/near/record-season.ts`). |
 
 ### Status (mainnet)
 
 | | |
 |---|---|
-| Live | The game, ranked runs verified by replay, leaderboards, NEAR wallet sign-in, the market and economy lab (simulated until the contract is live), the full soundtrack |
-| Being deployed | `game.wgpnear.near` and its relayer and operator accounts (`scripts/near/setup-mainnet.sh`). Until then, rewards are queued, not minted, and the market runs in simulation (`onChain: false`) |
-| Waiting on approval | Google sign-in (NEAR Auth mainnet client) |
+| Live | The game, ranked runs verified by replay, leaderboards, Google sign-in (Privy) and NEAR wallet sign-in, the market and economy lab (simulated until the contract is live), the full soundtrack |
+| Being deployed | `game.wgpnear.near` and its relayer and operator accounts (`scripts/near/setup-mainnet.sh`). Until then, rewards are queued, not minted, the market runs in simulation (`onChain: false`), and Google players stay on their implicit accounts |
+| Waiting on approval | NEAR Auth as a second Google sign-in path (mainnet client) |
 
 ## How verification works
 
@@ -126,7 +137,7 @@ docs/                 architecture and design notes
 ## Credits and disclosure
 
 - **AI-assisted:** much of the code, art pipeline and copy was written with AI assistance (Claude Code), directed and reviewed by the team.
-- **Libraries:** Next.js, React, three.js, React Three Fiber and drei, Drizzle ORM, Neon serverless and PGlite, near-api-js, @hot-labs/near-connect, @fast-auth-near (NEAR Auth) SDKs, zod, Tailwind CSS, Hugeicons, Vitest, near-sdk-rs, cargo-near and near-workspaces.
+- **Libraries:** Next.js, React, three.js, React Three Fiber and drei, Drizzle ORM, Neon serverless and PGlite, near-api-js, @hot-labs/near-connect, Privy (`@privy-io/react-auth`, `@privy-io/node`), @fast-auth-near (NEAR Auth) SDKs, zod, Tailwind CSS, Hugeicons, Vitest, near-sdk-rs, cargo-near and near-workspaces.
 - **3D characters:** bodies made with [MakeHuman](http://www.makehumancommunity.org/) via MPFB (CC0 assets; the GPL tool isn't shipped). Motion capture from [Quaternius' Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) (CC0). See `apps/wgp/public/models/LICENSES.md`.
 - **Audio:** generated with ElevenLabs on the owner's paid plan (`apps/wgp/public/audio/CREDITS.md`).
 - **Fonts:** Neue Montreal (Pangram Pangram) is licensed and served in production but isn't in this repository; without it the site falls back to Inter. Inter, Manrope and Geist Mono are from Google Fonts (OFL).
