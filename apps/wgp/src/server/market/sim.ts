@@ -44,6 +44,41 @@ export async function readSim(db: Db): Promise<SimState> {
   return row ? (row.state as SimState) : seedSim();
 }
 
+/**
+ * The sim with everything `from` holds moved to `to`: its Bits, today's counters and its
+ * open listings. For a player who claimed a name (their account id changed). Pure.
+ */
+export function renameSimAccount(state: SimState, from: string, to: string): SimState {
+  if (from === to) return state;
+  const wallets = { ...state.wallets };
+  if (from in wallets) {
+    wallets[to] = (wallets[to] ?? 0) + (wallets[from] ?? 0);
+    delete wallets[from];
+  }
+  const accounts = { ...state.book.accounts };
+  const moved = accounts[from];
+  if (moved) {
+    const existing = accounts[to];
+    accounts[to] = existing ? { ...moved, open: [...existing.open, ...moved.open] } : moved;
+    delete accounts[from];
+  }
+  const listings = state.book.listings.map((l) => (l.seller === from ? { ...l, seller: to } : l));
+  return { book: { ...state.book, accounts, listings }, wallets };
+}
+
+/** Moves `from`'s place in the simulated market to `to`, inside the caller's transaction. */
+export async function moveSimAccount(tx: Db, from: string, to: string, now = new Date()): Promise<void> {
+  const [row] = await tx.select().from(marketSim).where(eq(marketSim.id, SIM_ID)).for("update");
+  if (!row) return;
+  const state = row.state as SimState;
+  const next = renameSimAccount(state, from, to);
+  if (next === state) return;
+  await tx
+    .update(marketSim)
+    .set({ state: next, rev: sql`${marketSim.rev} + 1`, updatedAt: now })
+    .where(eq(marketSim.id, SIM_ID));
+}
+
 /** Bits a player's reward mints carry, sent or still queued. */
 export async function mintedBits(db: Db, playerId: string): Promise<number> {
   const [row] = await queryRows<{ bits: string | number | null }>(

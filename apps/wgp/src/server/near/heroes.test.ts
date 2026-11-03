@@ -236,6 +236,16 @@ describe("chain status", () => {
     const dev = await findOrCreatePlayer(db, { nearAccountId: "t.dev.wgp.testnet", authKind: "dev", authSub: "dev:t", handle: "t" });
     configure();
     const s = await chainStatus(db, { player: dev, save: heroSave(), readPlayer: vi.fn(), now: T0 });
-    expect(s).toMatchObject({ available: false, configured: false, hero: { status: "none" }, onChain: null });
+    expect(s).toMatchObject({ available: false, unclaimed: false, configured: false, hero: { status: "none" }, onChain: null });
+  });
+
+  it("says an unclaimed Google player isn't on NEAR yet, and queues no hero for their implicit account", async () => {
+    const implicit = "ab".repeat(32);
+    const gwen = await findOrCreatePlayer(db, { nearAccountId: implicit, authKind: "privy", authSub: "did:privy:gwen", handle: "hero-ababab" });
+    configure();
+    const readPlayer = vi.fn();
+    const s = await chainStatus(db, { player: gwen, save: heroSave(), readPlayer, now: T0 });
+    expect(s).toMatchObject({ available: false, unclaimed: true, hero: { status: "none" }, sessionKeys: [], onChain: null });
+    expect(readPlayer).not.toHaveBeenCalled();
   });
 });

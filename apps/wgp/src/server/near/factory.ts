@@ -80,6 +80,75 @@ export interface CreatedAccount {
   txHash: string;
 }
 
+/* ------------------------------------------------------------------ is the factory open? */
+
+/**
+ * Whether new player accounts can be made right now: the factory's keys are configured
+ * AND its account exists on chain (the owner funds and creates it with
+ * scripts/near/setup-mainnet.sh). Until then, Google players through Privy sign up on
+ * their key's implicit account id and claim a name later.
+ */
+export type FactoryState = { open: true; parentId: string } | { open: false; reason: "not_configured" | "not_on_chain" | "unreachable" };
+
+/** How long each answer is trusted. An open factory stays open; a missing one is looked for again soon. */
+const FACTORY_STATE_TTL_MS = { open: 10 * 60_000, not_on_chain: 30_000, unreachable: 10_000 } as const;
+
+let factoryCache: { key: string; until: number; state: FactoryState } | null = null;
+
+/** Read-only (one view_account, cached). Never throws. */
+export async function factoryState(opts: { now?: number; exists?: (accountId: string) => Promise<boolean>; env?: Record<string, string | undefined> } = {}): Promise<FactoryState> {
+  let parentId: string;
+  try {
+    parentId = factoryEnv(opts.env).accountId;
+    chainEnv(opts.env);
+  } catch {
+    return { open: false, reason: "not_configured" };
+  }
+  const now = opts.now ?? Date.now();
+  if (factoryCache && factoryCache.key === parentId && factoryCache.until > now) return factoryCache.state;
+  let state: FactoryState;
+  try {
+    const exists = await (opts.exists ?? ((id: string) => accountExists(provider(), id)))(parentId);
+    state = exists ? { open: true, parentId } : { open: false, reason: "not_on_chain" };
+  } catch {
+    state = { open: false, reason: "unreachable" };
+  }
+  const ttl = state.open ? FACTORY_STATE_TTL_MS.open : state.reason === "not_on_chain" ? FACTORY_STATE_TTL_MS.not_on_chain : FACTORY_STATE_TTL_MS.unreachable;
+  factoryCache = { key: parentId, until: now + ttl, state };
+  return state;
+}
+
+/** Tests: forget the cached answer. */
+export function clearFactoryState(): void {
+  factoryCache = null;
+}
+
+/** Which of a player's keys an existing account holds. Read-only. */
+export interface AccountKeys {
+  /** The player's own key is a full-access key of the account. */
+  userKey: boolean;
+  /** This browser's session key is on the account. */
+  sessionKey: boolean;
+}
+
+async function hasKey(accountId: string, publicKey: string, fullAccess: boolean): Promise<boolean> {
+  const key = await provider()
+    .viewAccessKey({ accountId, publicKey, finalityQuery: { finality: "optimistic" } })
+    .catch(() => null);
+  if (!key) return false;
+  return fullAccess ? key.permission === "FullAccess" : true;
+}
+
+/** null when the account doesn't exist; else which of the keys it holds. */
+export async function inspectAccount(accountId: string, keys: { userPublicKey: string; sessionPublicKey?: string }): Promise<AccountKeys | null> {
+  if (!(await accountExists(provider(), accountId))) return null;
+  const [userKey, sessionKey] = await Promise.all([
+    hasKey(accountId, keys.userPublicKey, true),
+    keys.sessionPublicKey ? hasKey(accountId, keys.sessionPublicKey, false) : Promise.resolve(false),
+  ]);
+  return { userKey, sessionKey };
+}
+
 /** Creates the player's account. Throws HandleError("handle_taken") if it exists. */
 export async function createPlayerAccount(input: {
   handle: string;
