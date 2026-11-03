@@ -21,5 +21,36 @@ export class ComboClock {
   }
 }
 
+/**
+ * When to write a draining meter to the page: at most `hz` times a second, with a CSS
+ * transition on the compositor filling the gaps, so the meter doesn't restyle the page
+ * every frame. A big jump (a refill, the combo ending) is written at once. Pure.
+ */
+export class MeterPacer {
+  private last = Number.NaN;
+  private at = -Infinity;
+
+  constructor(
+    private readonly hz = 10,
+    private readonly jump = 0.2,
+  ) {}
+
+  /** The value to write now (seconds, monotonic), or null to leave the meter alone. */
+  next(value: number, time: number): number | null {
+    const change = Math.abs(value - this.last);
+    if (change < 0.002) return null;
+    if (change < this.jump && time - this.at < 1 / this.hz) return null;
+    this.last = value;
+    this.at = time;
+    return value;
+  }
+
+  /** Forget the last write (the meter was hidden or rebuilt). */
+  reset(): void {
+    this.last = Number.NaN;
+    this.at = -Infinity;
+  }
+}
+
 /** "×2", "×1.5". */
 export const multiplierText = (m: number) => `×${Number.isInteger(m) ? m : m.toFixed(1)}`;

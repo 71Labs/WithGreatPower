@@ -5,19 +5,24 @@
  * multiplier it gives (a gold badge), and a bar draining as the combo's time runs out,
  * full again whenever the count goes up. Without it, the HUD's plain "Combo N" chip.
  *
- * The bar and the numbers are written from the frame tap (no React render per frame); React
- * renders only when the frame starts or stops carrying a combo.
+ * The numbers are written from the frame tap when they change, and the bar about ten
+ * times a second with a compositor transition between (MeterPacer), so the meter never
+ * restyles or repaints the page every frame; React renders only when the frame starts or
+ * stops carrying a combo, or (for the plain chip) when the count changes.
  */
 import { useEffect, useRef, useState } from "react";
 
 import { Zap } from "@/components/icons";
-import { ComboClock, multiplierText } from "@/game3d/nav/combo";
+import { ComboClock, MeterPacer, multiplierText } from "@/game3d/nav/combo";
 import type { FrameTap } from "@/game3d/nav/tap";
+import type { HudStore } from "@/sim/loop";
 import { Chip } from "@/sim/ui/bits";
+import { useHudValue } from "@/sim/ui/hud";
 import { COMBO_TICKS } from "@wgp/game-core/sim3d/constants";
 
-export function ComboMeter({ tap, fallback }: { tap: FrameTap; /** The HUD snapshot's combo, for frames without v1.3's. */ fallback: number }) {
+export function ComboMeter({ tap, store }: { tap: FrameTap; /** The HUD snapshot's combo, for frames without v1.3's. */ store: HudStore }) {
   const [rich, setRich] = useState(false);
+  const fallback = useHudValue(store, (h) => h?.combo ?? 0);
   const root = useRef<HTMLSpanElement>(null);
   const count = useRef<HTMLSpanElement>(null);
   const mult = useRef<HTMLSpanElement>(null);
@@ -26,15 +31,16 @@ export function ComboMeter({ tap, fallback }: { tap: FrameTap; /** The HUD snaps
   useEffect(() => {
     // Ruleset 3's window (6 s; it drains 4× standing on a roof), so the bar is exact.
     const clock = new ComboClock(COMBO_TICKS);
+    const pacer = new MeterPacer(10);
     let has = false;
     let lastCount = -1;
     let lastMult = -1;
-    let lastShare = -1;
     return tap.on((t) => {
       const c = t.frame.combo;
       if (!!c !== has) {
         has = !!c;
-        lastCount = lastMult = lastShare = -1;
+        lastCount = lastMult = -1;
+        pacer.reset();
         setRich(has);
       }
       if (!c) return;
@@ -47,11 +53,8 @@ export function ComboMeter({ tap, fallback }: { tap: FrameTap; /** The HUD snaps
         lastMult = c.multiplier;
         mult.current.textContent = multiplierText(c.multiplier);
       }
-      const share = clock.share(c.count, c.ticksLeft);
-      if (Math.abs(share - lastShare) > 0.004 && bar.current) {
-        lastShare = share;
-        bar.current.style.scale = `${share.toFixed(3)} 1`;
-      }
+      const share = pacer.next(clock.share(c.count, c.ticksLeft), t.time);
+      if (share !== null && bar.current) bar.current.style.transform = `scaleX(${share.toFixed(3)})`;
     });
   }, [tap, rich]);
 
@@ -73,9 +76,9 @@ export function ComboMeter({ tap, fallback }: { tap: FrameTap; /** The HUD snaps
           ×1
         </span>
       </span>
-      {/* The combo's time left, draining; full again when the count goes up. */}
+      {/* The combo's time left, draining; full again when the count goes up. Its own layer, tweened between writes. */}
       <span aria-hidden className="mx-2 block h-2 overflow-hidden rounded-full border-2 border-game-ink bg-game-paper-2 group-data-[on=false]:invisible">
-        <span ref={bar} className="block h-full origin-left bg-game-hero" style={{ scale: "0 1" }} />
+        <span ref={bar} className="block h-full origin-left bg-game-hero will-change-transform motion-safe:transition-transform motion-safe:duration-100 motion-safe:ease-linear" style={{ transform: "scaleX(0)" }} />
       </span>
     </span>
   );

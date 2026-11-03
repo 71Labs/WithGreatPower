@@ -98,6 +98,8 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
     let layout = waypointLayout(0, 0, false);
     let layoutKey = "";
     let measuredAt = -Infinity;
+    let lastPlace = "";
+    let lastTurn = "";
     const off = tap.on((t) => {
       const f = t.frame;
       const zone = city.zones[f.stop];
@@ -133,14 +135,24 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
         x = e.x;
         y = e.y;
         next = "arrow";
-        if (wedge.current) wedge.current.style.transform = `rotate(${e.angle.toFixed(3)}rad)`;
-        if (chip.current) chip.current.style.transform = `translate(${(-Math.cos(e.angle) * CHIP_OFFSET).toFixed(1)}px, ${(-Math.sin(e.angle) * CHIP_OFFSET).toFixed(1)}px)`;
+        // A hundredth of a radian is under a pixel at the wedge's tip: skip smaller turns.
+        const turn = e.angle.toFixed(2);
+        if (turn !== lastTurn) {
+          lastTurn = turn;
+          if (wedge.current) wedge.current.style.transform = `rotate(${turn}rad)`;
+          if (chip.current) chip.current.style.transform = `translate3d(${(-Math.cos(e.angle) * CHIP_OFFSET).toFixed(1)}px, ${(-Math.sin(e.angle) * CHIP_OFFSET).toFixed(1)}px, 0)`;
+        }
       }
       if (next !== mode) {
         mode = next;
         el.dataset.mode = next;
       }
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+      // Half-pixel steps: a stop holding still on screen writes nothing.
+      const place = `translate3d(${(Math.round(x * 2) / 2).toFixed(1)}px, ${(Math.round(y * 2) / 2).toFixed(1)}px, 0)`;
+      if (place !== lastPlace) {
+        lastPlace = place;
+        el.style.transform = place;
+      }
       const h = f.hero.pos;
       const m = metres(Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z));
       if (m !== lastM) {
@@ -180,7 +192,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
       </div>
       {/* The edge arrow: centred on its point, the wedge turned toward the stop. */}
       <div className="absolute left-0 top-0 group-data-[mode=pin]:hidden">
-        <span ref={wedge} className="absolute left-0 top-0 block size-0">
+        <span ref={wedge} className="absolute left-0 top-0 block size-0 will-change-transform">
           <svg width="22" height="26" viewBox="0 0 22 26" className="absolute left-[22px] top-[-13px] block">
             <path d="M2 2 L20 13 L2 24 Z" fill={stop.kind === "fight" ? "var(--game-hero)" : "var(--game-gold)"} stroke="var(--game-ink)" strokeWidth="2.5" strokeLinejoin="round" />
           </svg>
@@ -188,7 +200,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
         <span className="absolute left-0 top-0 grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow-sm)]">
           <Face id={cast} className="size-9 rounded-full" />
         </span>
-        <span ref={chip} className="absolute left-0 top-0 block size-0">
+        <span ref={chip} className="absolute left-0 top-0 block size-0 will-change-transform">
           <span
             ref={arrowDist}
             className="num absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 border-game-ink bg-game-paper px-2 text-[12px] font-bold leading-5 text-game-ink shadow-[var(--game-shadow-sm)]"

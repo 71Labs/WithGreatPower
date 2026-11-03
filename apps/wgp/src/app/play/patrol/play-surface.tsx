@@ -30,7 +30,7 @@ import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
 import { nightAudio, RunLoop, RunRecorder, sceneEffects, stopPositions, type LoopEvent3D, type NightSession } from "@/game3d/session";
 import { HudStore } from "@/sim/loop";
 import { useCoarsePointer, useNarrowViewport, useReducedMotion, useShortViewport } from "@/sim/ui/hooks";
-import { Hud, useHud } from "@/sim/ui/hud";
+import { Hud, useHudValue } from "@/sim/ui/hud";
 import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sheets";
 
 import { CityMap, stopName } from "./city-map";
@@ -83,7 +83,13 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [latch] = useState(() => new InputLatch());
   /** Overlays placed from the camera each frame (the waypoint, the minimap, the combo timer). */
   const [tap] = useState(() => new FrameTap());
-  const hud = useHud(hudStore);
+  // Only the few HUD values the page itself places by: it re-renders when one changes, not
+  // on every snapshot (the HUD subscribes to those on its own).
+  const hudIndex = useHudValue(hudStore, (h) => h?.index ?? null);
+  const hudMode = useHudValue(hudStore, (h) => h?.mode ?? null);
+  const hudStatus = useHudValue(hudStore, (h) => h?.status ?? null);
+  const hudCountdown = useHudValue(hudStore, (h) => (h?.status === "intro" ? h.countdown : null));
+  const villainKind = useHudValue(hudStore, (h) => h?.villain?.kind ?? null);
   const touch = useCoarsePointer();
   /** A phone, held either way: the HUD gives the minimap's spot to the villain bar in a fight. */
   const narrow = useNarrowViewport();
@@ -316,18 +322,26 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     };
   }, [latch, loop, autopilot, togglePause, closeMap, toggleMap]);
 
-  // A hidden tab or a lost focus pauses (not the autopilot, which a headless check drives).
+  // A hidden tab (a phone locked, an app switch) or a lost focus pauses (not the autopilot,
+  // which a headless check drives), and lets go of every thumb and key, whose lifts the page
+  // will never hear. Coming back shows the pause sheet; Resume carries on from there.
   useEffect(() => {
+    const onHide = () => {
+      controls.current?.release();
+      togglePause(true);
+    };
     const onVis = () => {
-      if (document.hidden) togglePause(true);
+      if (document.hidden) onHide();
     };
     const onBlur = () => {
       if (!autopilot) togglePause(true);
     };
     document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", onHide);
     window.addEventListener("blur", onBlur);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", onHide);
       window.removeEventListener("blur", onBlur);
     };
   }, [togglePause, autopilot]);
@@ -384,12 +398,12 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   }, [openMap]);
 
   const errandStop = errand ? stops[errand.index] : null;
-  const introStop = hud && hud.mode === "intro" && hud.status !== "loading" ? stops[hud.index] : null;
-  const countdown = hud?.status === "intro" ? hud.countdown : null;
+  const introStop = hudIndex !== null && hudMode === "intro" && hudStatus !== "loading" ? stops[hudIndex] : null;
+  const countdown = hudCountdown;
   const modal = paused || !!map;
   /** No pulsing or breathing: the steady camera, or the device asks for less motion. */
   const still = settings.steady || reducedMotion;
-  const nextStop = hud && hud.index < stops.length ? stops[hud.index] : null;
+  const nextStop = hudIndex !== null && hudIndex < stops.length ? stops[hudIndex] : null;
   const hint = touch
     ? { title: "Hold the right side to web", body: "Let go while you’re rising for a perfect swing. Your webs aim for the next stop; drag on the left to run and steer." }
     : { title: "Hold Space or the mouse to web", body: "Let go while you’re rising for a perfect swing. WASD steers; click into the game to look around with the mouse, and press Esc to free the cursor." };
@@ -424,6 +438,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onStats={debug ? onStats : undefined}
             onTierSuggest={settings.adaptive ? onTierSuggest : undefined}
             onContextStalled={onFallback}
+            paused={modal}
             tap={tap}
           />
           {/* The floating stick: its reach (the ring), where the thumb landed (the dot: inside it the stick is centred) and the knob under the thumb. */}
@@ -453,7 +468,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             className="pointer-events-none absolute right-3 top-[52%] rounded-[12px] border-2 border-game-ink bg-game-paper px-3 py-2 font-mono text-xs leading-5 text-game-ink opacity-90 shadow-[var(--game-shadow-sm)] sm:right-4 sm:top-1/2 sm:-translate-y-1/2"
           />
         ) : null}
-        {!ended && hud ? <Waypoint tap={tap} city={run.sim.city} stops={stops} index={hud.index} still={still} touch={touch} /> : null}
+        {!ended && hudIndex !== null ? <Waypoint tap={tap} city={run.sim.city} stops={stops} index={hudIndex} still={still} touch={touch} /> : null}
         {!ended ? (
           <Hud
             store={hudStore}
@@ -467,7 +482,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onAbility={(slot) => latch.pushShot((slot + 1) as 1 | 2 | 3 | 4)}
             onGwei={() => latch.pushShot(5)}
             onPause={() => togglePause(true)}
-            combo={<ComboMeter tap={tap} fallback={hud?.combo ?? 0} />}
+            combo={<ComboMeter tap={tap} store={hudStore} />}
             minimap={
               <Minimap
                 tap={tap}
@@ -480,13 +495,13 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
                 still={still}
                 touch={touch}
                 nextLabel={nextStop ? stopName(nextStop) : null}
-                hidden={phone && !!hud?.villain}
+                hidden={phone && villainKind !== null}
               />
             }
           />
         ) : null}
-        {!ended && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hud!.index} total={stops.length} /> : null}
-        {!ended && hud?.mode === "won" && hud.villain ? <WonCaption villain={hud.villain.kind} /> : null}
+        {!ended && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
+        {!ended && hudMode === "won" && villainKind ? <WonCaption villain={villainKind} /> : null}
         {countdown && !ended ? (
           // Off the hero, who stands in the middle: below the feet, or above the head on a phone held sideways.
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%+128px)] flex justify-center short:top-[calc(50%-112px)]">
