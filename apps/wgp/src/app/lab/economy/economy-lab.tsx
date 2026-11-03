@@ -87,7 +87,7 @@ function ItemChart({
         {/* The cast art draws with float math that can differ in its last digit between Node and the browser, so it renders after hydration. */}
         {mounted ? <MiniAvatar id={ITEM_SOURCE[item]} className="size-9 rounded-[10px]" /> : <span aria-hidden className="size-9 shrink-0 rounded-[10px] bg-sticker" />}
         <span className="flex min-w-0 flex-1 flex-col">
-          <h3 className="text-[14px] font-semibold leading-5 [overflow-wrap:anywhere]">{ITEMS[item].name}</h3>
+          <h3 className="text-[14px] font-semibold leading-5 text-game-ink [overflow-wrap:anywhere]">{ITEMS[item].name}</h3>
           <span className="num text-[12px] leading-4 text-game-muted">
             {RARITY_LABEL[ITEMS[item].rarity]} · day {history[at]!.day}
           </span>
