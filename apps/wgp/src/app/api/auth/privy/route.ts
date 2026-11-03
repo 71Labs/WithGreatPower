@@ -30,9 +30,9 @@ import { z } from "zod";
 import { isUnclaimed } from "@/lib/near/policy";
 import { createSession } from "@/server/auth/session";
 import { privySignIn } from "@/server/auth/privy-sign-in";
-import { assertJson, identityFromToken, openFactory, privyRoute } from "@/server/auth/privy-route";
+import { identityFromToken, openFactory, privyRoute } from "@/server/auth/privy-route";
 import { getDb } from "@/server/db/client";
-import { clientIp, handle, json, readJson } from "@/server/http";
+import { assertJson, clientIp, handle, json, readJson } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
 import { NEAR_RATE_LIMITS } from "@/server/near/http";
 

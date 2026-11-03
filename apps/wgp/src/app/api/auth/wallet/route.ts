@@ -11,6 +11,8 @@
  *     "Enable quick play": after the wallet added a function-call key for the game
  *     contract, records it so the relayer accepts it. Checked on chain first.
  *     200 { publicKey, live: true }
+ *
+ * 415 when the body isn't sent as JSON (no form posts: login CSRF).
  */
 import { z } from "zod";
 
@@ -19,7 +21,7 @@ import { secret } from "@/server/auth/secrets";
 import { createSession, requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { findOrCreatePlayer } from "@/server/db/players";
-import { HttpError, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
+import { HttpError, assertJson, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
 import { chainEnv } from "@/server/near/env";
 import { NEAR_RATE_LIMITS, nearRoute } from "@/server/near/http";
@@ -42,6 +44,7 @@ const recipientOf = (request: Request) => new URL(request.url).host;
 export const POST = handle("auth/wallet", (request: Request) =>
   nearRoute(async () => {
     rateLimiter.enforce("wallet-ip", clientIp(request), NEAR_RATE_LIMITS.walletPerIp);
+    assertJson(request);
     const input = await readJson(request, body, 4 * 1024);
     const recipient = recipientOf(request);
 

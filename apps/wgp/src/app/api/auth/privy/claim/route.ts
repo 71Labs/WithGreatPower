@@ -17,11 +17,11 @@ import { z } from "zod";
 
 import { requireSession } from "@/server/auth/session";
 import { claimInfo, claimName } from "@/server/auth/privy-sign-in";
-import { assertJson, identityOf, openFactory, privyRoute } from "@/server/auth/privy-route";
+import { identityOf, openFactory, privyRoute } from "@/server/auth/privy-route";
 import { sendMintsSoon } from "@/server/background";
 import { getDb } from "@/server/db/client";
 import { getPlayer } from "@/server/db/players";
-import { HttpError, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
+import { HttpError, assertJson, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
 import { factoryState } from "@/server/near/factory";
 import { NEAR_RATE_LIMITS } from "@/server/near/http";
