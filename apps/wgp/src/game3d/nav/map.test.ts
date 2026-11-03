@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { City, Zone } from "@wgp/game-core/sim3d/contract";
 
 import { ComboClock, multiplierText } from "./combo";
-import { clampToDisc, compass, fitCity, headingUpRotation, mapAngle, metres, remainingRoute, routeDirAt, routeLine, stopPoint, toMap, type MapView } from "./map";
+import { clampToDisc, compass, fitCity, headingUpRotation, mapAngle, metres, pathDirAt, remainingRoute, routeDirAt, routeLine, stopPoint, toMap, type MapView } from "./map";
 
 const zone = (index: number, kind: Zone["kind"], x: number, z: number, allyAt?: { x: number; y: number; z: number }): Zone => ({
   index,
@@ -121,6 +121,26 @@ describe("the route", () => {
     const one = routeDirAt({ x: 0, z: 0 }, [{ x: 0, z: -50 }]);
     expect(one.x).toBeCloseTo(0, 9);
     expect(one.z).toBeCloseTo(-1, 9);
+  });
+
+  it("faces a ring along its street, through the pickups either side of it", () => {
+    // A leg's pickups down a street along z, then turning along x; the next leg far away.
+    const at = (x: number, z: number) => ({ pos: { x, z } });
+    const list = [at(0, 0), at(0, 210), at(0, 420), at(210, 420), at(5000, 5000)];
+    const diagonal = [
+      { x: 0, z: 0 },
+      { x: 3000, z: 3000 },
+    ];
+    expect(pathDirAt(list, 1, diagonal)).toEqual({ x: 0, z: 1 });
+    // At the corner: between the street and the turn.
+    const corner = pathDirAt(list, 2, diagonal);
+    expect(corner.x).toBeCloseTo(Math.SQRT1_2, 9);
+    expect(corner.z).toBeCloseTo(Math.SQRT1_2, 9);
+    // The end of a leg: only the neighbour before counts.
+    expect(pathDirAt(list, 3, diagonal)).toEqual({ x: 1, z: 0 });
+    // Alone: the route line.
+    const alone = pathDirAt([at(100, 100)], 0, diagonal);
+    expect(alone.x).toBeCloseTo(Math.SQRT1_2, 9);
   });
 });
 

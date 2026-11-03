@@ -68,6 +68,25 @@ export function routeDirAt(p: { x: number; z: number }, line: readonly { x: numb
   return dir;
 }
 
+/**
+ * The way the pickup at `i` should face: along the path through its neighbours in the list
+ * (the sim lays each leg's tokens and rings in order along the streets), so a ring stands
+ * across its street. Neighbours further than `near` (another leg) don't count; with none,
+ * the nearest leg of the route line.
+ */
+export function pathDirAt(list: readonly { pos: { x: number; z: number } }[], i: number, line: readonly { x: number; z: number }[], near = 600): { x: number; z: number } {
+  const p = list[i].pos;
+  const close = (q: { x: number; z: number } | undefined) => !!q && Math.hypot(q.x - p.x, q.z - p.z) < near;
+  const a = list[i - 1]?.pos;
+  const b = list[i + 1]?.pos;
+  const okA = close(a);
+  const okB = close(b);
+  if (okA && okB) return unit(b!.x - a!.x, b!.z - a!.z);
+  if (okB) return unit(b!.x - p.x, b!.z - p.z);
+  if (okA) return unit(p.x - a!.x, p.z - a!.z);
+  return routeDirAt(p, line);
+}
+
 function unit(x: number, z: number): { x: number; z: number } {
   const d = Math.hypot(x, z);
   return d > 1e-6 ? { x: x / d, z: z / d } : { x: 1, z: 0 };

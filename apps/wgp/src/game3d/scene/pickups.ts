@@ -3,12 +3,13 @@
  *
  * - Bits: a gold token sticker, camera-facing, with a constant 2.5 px ink rim, an inner
  *   ring and a paper sparkle. It spins (the quad narrows to its edge and back) and bobs.
- * - Boost rings: a cyan hoop standing across the route (its axis along the route segment
- *   nearest it), inked where the tube turns away from the camera, breathing a little.
+ * - Boost rings: a cyan hoop standing across the street it sits on (its axis along the
+ *   path through its neighbouring pickups, which the sim lays in order along each leg),
+ *   inked where the tube turns away from the camera, breathing a little.
  *
- * Reduced motion: no spin, no bob, no breathing. A pickup turning `taken` pops a burst
- * ("+5 BITS!", "BOOST!") through `onTaken`, once; one already taken when first seen (a
- * resumed run) doesn't. Instanced: two draw calls at most, none without pickups.
+ * Taken pickups vanish; the pop ("+1 BIT!", "BOOST!") comes from the sim's `pickup` event
+ * (session/effects.ts). Reduced motion: no spin, no bob, no breathing. Instanced: two draw
+ * calls at most, none without pickups.
  */
 import {
   BufferGeometry,
@@ -27,7 +28,7 @@ import {
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { NAV_COLORS } from "@/game3d/nav/colors";
-import { routeDirAt, routeLine } from "@/game3d/nav/map";
+import { pathDirAt, routeLine } from "@/game3d/nav/map";
 
 import type { SharedUniforms } from "./city/materials";
 import { C, rgb } from "./palette";
@@ -104,12 +105,8 @@ void main() {
 }
 `;
 
-const MAX = 64;
-
-export type PickupKind = "bits" | "ring";
-
-/** The burst a pickup pops when taken. */
-export const PICKUP_WORD: Record<PickupKind, string> = { bits: "+5 BITS!", ring: "BOOST!" };
+/** Instances per kind: a night lays about 50–60 tokens and 8 rings; this leaves room for a long one. */
+const MAX = 256;
 
 export class Pickups {
   readonly root = new Group();
@@ -124,9 +121,7 @@ export class Pickups {
   private readonly params = new Float32Array(MAX * 2);
   private readonly centerAttr: InstancedBufferAttribute;
   private readonly paramsAttr: InstancedBufferAttribute;
-  /** Last `taken` per pickup id, to pop each pickup once. */
-  private readonly seen = new Map<number, boolean>();
-  /** The route line the rings face along, rebuilt when the stop changes. */
+  /** The route line a ring without neighbours faces along, rebuilt when the stop changes. */
   private line: Vec3[] = [];
   private lineKey = -1;
   private readonly m = new Matrix4();
@@ -182,8 +177,8 @@ export class Pickups {
     this.root.name = "pickups";
   }
 
-  /** Draw this frame's pickups; `onTaken` hears each one picked up since the last frame. */
-  update(frame: RenderFrame3D, time: number, onTaken?: (kind: PickupKind, at: Vec3) => void): void {
+  /** Draw this frame's pickups that are still to take. */
+  update(frame: RenderFrame3D, time: number): void {
     const list = frame.pickups;
     if (!list || !list.length) {
       this.hide();
@@ -198,13 +193,9 @@ export class Pickups {
     const still = this.reducedMotion;
     let nt = 0;
     let nr = 0;
-    for (const pk of list) {
-      const was = this.seen.get(pk.id);
-      this.seen.set(pk.id, pk.taken);
-      if (pk.taken) {
-        if (was === false) onTaken?.(pk.kind, pk.pos);
-        continue;
-      }
+    for (let i = 0; i < list.length; i++) {
+      const pk = list[i];
+      if (pk.taken) continue;
       const phase = pk.id * 1.731;
       if (pk.kind === "bits" && nt < MAX) {
         const bob = still ? 0 : Math.sin(time * 2.4 + phase) * 6;
@@ -216,7 +207,7 @@ export class Pickups {
         this.params[nt * 2 + 1] = TOKEN_SIZE;
         nt++;
       } else if (pk.kind === "ring" && nr < MAX) {
-        const d = routeDirAt(pk.pos, this.line);
+        const d = pathDirAt(list, i, this.line);
         this.q.setFromUnitVectors(Pickups.Z, this.axis.set(d.x, 0, d.z));
         const breathe = still ? 1 : 1 + 0.05 * Math.sin(time * 4 + phase);
         this.m.compose(this.p.set(pk.pos.x, pk.pos.y, pk.pos.z), this.q, this.s.setScalar(RING_RADIUS * breathe));
@@ -224,7 +215,6 @@ export class Pickups {
         nr++;
       }
     }
-    if (this.seen.size > MAX * 4) this.prune(list);
     this.tokens.count = nt;
     this.rings.count = nr;
     this.tokens.visible = nt > 0;
@@ -239,12 +229,6 @@ export class Pickups {
   private hide() {
     this.tokens.count = this.rings.count = 0;
     this.tokens.visible = this.rings.visible = false;
-  }
-
-  /** Forget ids no longer in the list (a new night's pickups). */
-  private prune(list: { id: number }[]) {
-    const live = new Set(list.map((p) => p.id));
-    for (const id of this.seen.keys()) if (!live.has(id)) this.seen.delete(id);
   }
 
   dispose(): void {
