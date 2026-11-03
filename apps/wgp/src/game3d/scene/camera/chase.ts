@@ -36,7 +36,8 @@
  *     overhead still fits, and the shot widens before a fighter leaves it. The fit widens
  *     within about a second and tightens slowly (slower still under reduced motion), through
  *     the arm's own spring: no breathing with every swing. Mouse look turns the camera as
- *     ever; the fit only changes how far back it sits.
+ *     ever; the fit only changes how far back it sits. On a portrait screen the fit never
+ *     sits further back than the roomy distance the sides are scored for.
  *   - The look point splits the angles down to each fighter, and a big height gap widens the
  *     FOV a little.
  *   - Pitch stays low (16°, easing up to 23° at most when boxed in) so the city stays behind
@@ -436,7 +437,10 @@ export class ChaseCamera {
       );
       if (!this.inArena || first) this.fitAvg = fit;
       else this.fitAvg += (fit - this.fitAvg) * lowPass(step, fit > this.fitAvg ? t.arenaFitOut : input.reducedMotion ? t.arenaFitInSteady : t.arenaFitIn);
-      distWant = clamp(this.fitAvg, t.arenaMinDist, t.arenaMaxDist);
+      // A portrait screen is narrow: the fit would back right off for a pair side by side.
+      // There it never sits further back than the roomier distance the sides are scored for.
+      const portrait = clamp((1 - input.aspect) / 0.55, 0, 1);
+      distWant = clamp(Math.min(this.fitAvg, lerp(t.arenaMaxDist, roomWant, portrait)), t.arenaMinDist, t.arenaMaxDist);
       // The fighters' line, low-passed and held while they're close (it spins when they swap sides).
       if (!this.inArena || first) {
         this.sepAvg.x = dx;

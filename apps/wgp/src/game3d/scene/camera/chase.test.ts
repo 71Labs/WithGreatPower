@@ -406,6 +406,19 @@ describe("arena two-shot", () => {
     }
   });
 
+  it("on a portrait screen, never backs off further than the roomy two-shot", () => {
+    const input = createChaseInput();
+    input.arena = arena;
+    input.hero = { x: -250, y: 300, z: 0 };
+    input.rival = { x: 250, y: 300, z: 0 };
+    // A tall phone (20:9), fully portrait; a 16:9 one blends most of the way there.
+    input.aspect = 9 / 20;
+    const roomy = 500 * 1.05 + 330;
+    expect(run(new ChaseCamera(), input, 5).want).toBeLessThanOrEqual(roomy + 1);
+    input.aspect = 16 / 9;
+    expect(run(new ChaseCamera(), input, 5).want).toBeLessThan(roomy - 100);
+  });
+
   it("doesn't breathe with a swing: the arm holds steady while the hero pendulums under a flyer", () => {
     const cam = new ChaseCamera();
     const input = createChaseInput();
