@@ -92,7 +92,7 @@ function ItemCard({ item, me, canTrade, onTrade }: { item: MarketItemView; me: M
       <div className="flex items-center gap-2 sm:gap-2.5">
         <MiniAvatar id={ITEM_SOURCE[item.item]} className="size-8 rounded-[9px] sm:size-10 sm:rounded-[11px]" />
         <span className="flex min-w-0 flex-1 flex-col">
-          <h3 className="text-[14px] font-semibold leading-[18px] [overflow-wrap:anywhere] sm:text-[15px] sm:leading-5">{item.name}</h3>
+          <h3 className="text-[14px] font-semibold leading-[18px] text-game-ink [overflow-wrap:anywhere] sm:text-[15px] sm:leading-5">{item.name}</h3>
           <span className="text-[12px] leading-4 text-game-muted">{RARITY_LABEL[item.rarity]}</span>
         </span>
       </div>
