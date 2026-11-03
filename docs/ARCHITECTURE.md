@@ -119,6 +119,7 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   | `GET /api/runs/:id/replay` | Log and seed, so anyone can re-verify a run |
   | `POST /api/actions` | Menu actions (create-hero, pick-power, set-loadout, vote, sleep…) reduced on the server |
   | `/api/me`, `/api/migrate`, `/api/cron/sweep` | Account, local-save migration, cleanup |
+  | `GET /api/market`, `/api/market/listings`, `/api/market/me` · `POST /api/market/trade` · `GET /api/cron/market-snapshot` | The Mempool Market: cached prices and listings, the player's wallet, simulated trades before the contract's market is live, price snapshots |
   | `GET /api/cron/mint` | The mint worker: claims up to 20 queued mints in per-account nonce order, sends them with the operator key, records each outcome (applied, duplicate, out of order, full). 503 before claiming anything without NEAR settings |
   | `GET /api/chain/status` | The signed-in player's chain view: quick play (live session keys), the hero's registration, the contract's `get_player` |
 
@@ -141,8 +142,9 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - **Rewards:** `mint_rewards(batch)`, operator-only, idempotent through a per-account nonce, with the run digest in the event log.
   - **Crafting:** `craft_suit` and `equip_suit`, called by the session key, checking recipes and level.
   - **Seasons:** `record_season(id, root, top10, digest)`, which is immutable and mints trophies; the published leaves let anyone verify.
-  - **Admin:** pause and `upgrade`.
-- **Storage:** sponsored by the contract and bounded per player (64 token kinds max). That's about 1 KB, or roughly 0.01 NEAR on mainnet; nothing is stored per run.
+  - **The Mempool Market** (`market.rs`; see "The Mempool Market" below): `market_buy`, `market_sell`, `list_item`, `buy_listing`, `cancel_listing`, all session-key callable with no deposit.
+  - **Admin:** pause, `set_market_params` and `upgrade` (which runs `migrate`: v1 → v2 adds the market).
+- **Storage:** sponsored by the contract and bounded per player (64 token kinds max, 3 open listings). That's about 1 KB (plus ~750 bytes for an active trader), or roughly 0.01 NEAR on mainnet; nothing is stored per run or per trade. The code itself is ~360 KB, ~3.6 NEAR of storage.
 - **Tests:**
   - `cargo test` unit tests: nonces, recipes, 1-yocto rule, soulbound, operator auth, season immutability, event JSON.
   - A near-workspaces sandbox if the S5 spike passes.
@@ -177,6 +179,17 @@ docs/                 ARCHITECTURE.md, INTERFACE.md, spikes/
   - Sign in by signing a message (NEP-413) against a server nonce.
   - "Enable quick play" adds a session key once.
   - Plan C covers wallets that refuse.
+
+## The Mempool Market (the economy)
+- **Bits** (`item:bits`) are the currency: every verified night mints `floor(score / 100) + 5` (+25 on a level-up, at most 1,000) with its loot, through `mint_rewards` (`src/lib/market/rewards.ts`, `runs.ts`). The results screen shows the same number.
+- **The vendor, Gwei Stacy,** is an NPC whose stock and till the contract holds. Each item has a virtual-reserve constant-product curve: `x = virtual_items + stock`, `y = virtual_bits + bits`, spot `y / x`. Buying `n` costs `ceil(y·n / (x − n))` (only from stock), selling pays `floor(y·n / (x + n))` (only from the till). Defaults: commons start at 12 Bits, uncommons 40, rares 150, half of each curve's Bits real.
+- **Sinks:** a 2% gas fee on every trade and fill is burned; crafting can burn Bits too (`craft_bits`, off by default until the Suit lab shows it).
+- **Listings** escrow items in the contract; a buyer pays the seller the price less the fee.
+- **Abuse guards** (a stolen session key): listing prices within 50%–400% of the vendor's spot price, daily caps per account (40 vendor trades, 10 listings, 10 fills, 3,000 Bits of fills), 3 open listings each, 300 overall, 20 items a call. Transfers still need 1 yocto.
+- **Storage:** one small market entry per trader plus its open listings (a trader with 3 listings: ~750 bytes). The contract's own `mt_balance_of` includes the vendor's stock, till and escrow, matching the transfer events.
+- **Server** (`src/server/market/`): cached views (`/api/market`, `/api/market/listings`, `/api/market/me`), a price-history table (`market_prices`, migration 0003) written by every trade and by `/api/cron/market-snapshot`, and the relayer's hooks that mirror an on-chain trade's items into the save.
+- **Before the contract's market is live** (no NEAR config, no contract, an old contract or no pools), the server runs the same rules (`src/lib/market/engine.ts`) on a simulated book (`market_sim`), flagged `onChain: false`; `/api/market/trade` takes its trades. `src/lib/market/math.ts` mirrors the contract's math; both test against `contracts/wgp/market-vectors.json`.
+- **UI:** `/play/market` (Gwei's stall, listings, buy/sell/list sheets), the markets column in The Daily Rug, "You earned N Bits" on night results, and `/lab/economy`, a fast-forward of bot players on the same engine.
 
 ## 6. Day-one spikes (Nov 2–3, results in `docs/spikes/`)
 - **S1, NEAR Auth on testnet (shared dev client):**

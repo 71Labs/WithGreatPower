@@ -8,6 +8,8 @@
 //! - `hero:*` and `trophy:*` are soulbound.
 //! - The suit a hero is wearing can't leave the account; equip another one first.
 //! - Approvals are not supported (`approval` must be null).
+//! - The contract's own balance includes the market's holdings (the vendor's stock and
+//!   till, escrowed listings), so balances agree with the transfer events.
 
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
@@ -274,10 +276,16 @@ impl Wgp {
                 && self.players.get(account).is_some_and(|p| p.hero.is_some());
             return u128::from(has_hero);
         }
-        self.players
+        let own = self
+            .players
             .get(account)
             .map(|p| p.balance(token_id))
-            .unwrap_or(0)
+            .unwrap_or(0);
+        // The vendor's stock and till and escrowed listings are held by this contract.
+        if *account == env::current_account_id() {
+            return own + self.market_holdings(token_id);
+        }
+        own
     }
 
     fn supply_of(&self, token_id: &str) -> Option<u128> {

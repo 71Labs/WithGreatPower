@@ -7,7 +7,7 @@
  * minting twice, as long as each reward keeps the nonce it was first given. Assign the
  * nonce once, in the same transaction that queues the reward, and store it with it.
  *
- * NEAR caps a call's logs at 16 KB, so batches hold at most 20 rewards (8 items and
+ * NEAR caps a call's logs at 16 KB, so batches hold at most 20 rewards (8 items, Bits and
  * 2 badges each); `sendRewards` splits larger lists.
  */
 import { actions, type Account } from "near-api-js";
@@ -19,7 +19,8 @@ import { summarizeOutcome } from "./relay";
 import { keyedAccount, provider } from "./rpc";
 
 export const MAX_REWARD_BATCH = 20;
-export const MAX_ITEMS_PER_REWARD = 8;
+/** Every item kind plus Bits (contracts/wgp MAX_ITEMS_PER_REWARD). */
+export const MAX_ITEMS_PER_REWARD = 9;
 /** A full batch burns about 9 Tgas in the sandbox; leave room. */
 const MINT_GAS = 100n * TGAS;
 const SEASON_GAS = 100n * TGAS;

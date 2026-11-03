@@ -89,6 +89,12 @@ import {
   Login03Icon,
   UserCircleIcon,
   TestTube01Icon,
+  MinusSignIcon,
+  PlusSignIcon,
+  ChartLineData01Icon,
+  PlayIcon,
+  PauseIcon,
+  RefreshIcon,
 } from "@hugeicons/core-free-icons";
 
 export type IconProps = Omit<ComponentProps<"svg">, "ref"> & { strokeWidth?: number; size?: number | string };
@@ -186,6 +192,12 @@ export const Google = make(GoogleIcon, "Google");
 export const LogIn = make(Login03Icon, "LogIn");
 export const UserCircle = make(UserCircleIcon, "UserCircle");
 export const TestTube = make(TestTube01Icon, "TestTube");
+export const Minus = make(MinusSignIcon, "Minus");
+export const Plus = make(PlusSignIcon, "Plus");
+export const ChartLine = make(ChartLineData01Icon, "ChartLine");
+export const Play = make(PlayIcon, "Play");
+export const Pause = make(PauseIcon, "Pause");
+export const RotateCcw = make(RefreshIcon, "RotateCcw");
 
 /** Lucide's `LucideIcon` type, for components that take an icon as a prop. */
 export type LucideIcon = Icon;

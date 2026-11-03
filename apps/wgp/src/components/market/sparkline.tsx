@@ -1,0 +1,69 @@
+/**
+ * Small market pieces shared by the market, The Daily Rug and the economy lab: a
+ * sparkline (one series, a 2px ink line over a faint wash, the current price dotted),
+ * the 24-hour change pill (a sign and an arrow, never color alone) and number formats.
+ * Server-safe: no hooks.
+ */
+import { ArrowRight } from "@/components/icons";
+
+const bits = new Intl.NumberFormat("en-US");
+
+/** A price in Bits from milli-Bits: 2 decimals under 10, 1 under 100, whole above. */
+export function formatPrice(milli: number): string {
+  const v = milli / 1000;
+  const digits = v < 10 ? 2 : v < 100 ? 1 : 0;
+  return v.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+export const formatBits = (n: number) => bits.format(n);
+
+/** "1 Bit", "39 Bits". */
+export const bitsText = (n: number) => `${bits.format(n)} ${n === 1 ? "Bit" : "Bits"}`;
+
+/** "+12%", "−3%", "0%" with a real minus sign. */
+export function formatChange(change: number): string {
+  const pct = Math.round(change * 100);
+  if (pct > 0) return `+${pct}%`;
+  if (pct < 0) return `−${Math.abs(pct)}%`;
+  return "0%";
+}
+
+export function Sparkline({ points, label, className = "h-9 w-full" }: { points: number[]; label: string; className?: string }) {
+  const pts = points.length > 1 ? points : [points[0] ?? 0, points[0] ?? 0];
+  const lo = Math.min(...pts);
+  const hi = Math.max(...pts);
+  const span = hi - lo || 1;
+  // A 100 × 32 box with 3 units of headroom, so the line never touches the edges.
+  const xy = pts.map((p, i) => [(i / (pts.length - 1)) * 100, hi === lo ? 16 : 29 - ((p - lo) / span) * 26] as const);
+  const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ");
+  const [ex, ey] = xy[xy.length - 1]!;
+  return (
+    <span role="img" aria-label={label} className={`relative block ${className}`}>
+      <svg aria-hidden viewBox="0 0 100 32" preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
+        <path d={`${line} L100 32 L0 32 Z`} className="fill-game-ink/[0.07]" />
+        <path d={line} className="fill-none stroke-game-ink" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-game-ink ring-2 ring-game-paper"
+        style={{ left: `${ex}%`, top: `${(ey / 32) * 100}%` }}
+      />
+    </span>
+  );
+}
+
+/** The 24-hour change as a pill: an arrow and a signed percent; "New" without history. */
+export function ChangePill({ change, className = "" }: { change: number | null; className?: string }) {
+  const pct = change === null ? null : Math.round(change * 100);
+  const tone = pct === null || pct === 0 ? "bg-game-paper-2 text-game-ink" : pct > 0 ? "bg-game-mint text-game-ink" : "bg-game-hero text-game-on-hero";
+  const rotate = pct === null || pct === 0 ? "" : pct > 0 ? "-rotate-45" : "rotate-45";
+  return (
+    <span
+      className={`num inline-flex h-6 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full border-2 border-game-ink pl-1 pr-1.5 text-[12px] font-bold leading-none ${tone} ${className}`}
+    >
+      <ArrowRight aria-hidden className={`size-3.5 ${rotate}`} strokeWidth={2.75} />
+      {pct === null ? "New" : formatChange(change!)}
+      <span className="sr-only">{pct === null ? ", no history yet" : " in 24 hours"}</span>
+    </span>
+  );
+}

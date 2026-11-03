@@ -7,26 +7,26 @@ use near_sdk::{testing_env, AccountId, Gas, NearToken, PromiseResult};
 
 use crate::{Ingredient, RewardMint, RewardStatus, SuitRule, Token, Wgp, MAX_KINDS};
 
-const DIGEST: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+pub(crate) const DIGEST: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 const ROOT: &str = "2222222222222222222222222222222222222222222222222222222222222222";
 
-fn owner() -> AccountId {
+pub(crate) fn owner() -> AccountId {
     "wgp.testnet".parse().unwrap()
 }
-fn operator() -> AccountId {
+pub(crate) fn operator() -> AccountId {
     "operator.wgp.testnet".parse().unwrap()
 }
-fn alice() -> AccountId {
+pub(crate) fn alice() -> AccountId {
     "alice.wgp.testnet".parse().unwrap()
 }
-fn bob() -> AccountId {
+pub(crate) fn bob() -> AccountId {
     "bob.wgp.testnet".parse().unwrap()
 }
-fn contract() -> AccountId {
+pub(crate) fn contract() -> AccountId {
     "game.wgp.testnet".parse().unwrap()
 }
 
-fn ctx(predecessor: AccountId, deposit: u128) -> VMContextBuilder {
+pub(crate) fn ctx(predecessor: AccountId, deposit: u128) -> VMContextBuilder {
     let mut b = VMContextBuilder::new();
     b.current_account_id(contract())
         .predecessor_account_id(predecessor)
@@ -35,18 +35,18 @@ fn ctx(predecessor: AccountId, deposit: u128) -> VMContextBuilder {
     b
 }
 
-fn as_(predecessor: AccountId, deposit: u128) {
+pub(crate) fn as_(predecessor: AccountId, deposit: u128) {
     testing_env!(ctx(predecessor, deposit).build());
 }
 
-fn ing(item: &str, amount: u32) -> Ingredient {
+pub(crate) fn ing(item: &str, amount: u32) -> Ingredient {
     Ingredient {
         item: item.into(),
         amount,
     }
 }
 
-fn suit(id: &str, starter: bool, min_level: u32, recipe: Vec<Ingredient>) -> SuitRule {
+pub(crate) fn suit(id: &str, starter: bool, min_level: u32, recipe: Vec<Ingredient>) -> SuitRule {
     SuitRule {
         id: id.into(),
         starter,
@@ -56,7 +56,7 @@ fn suit(id: &str, starter: bool, min_level: u32, recipe: Vec<Ingredient>) -> Sui
 }
 
 /// The items and suits from game-core's `ITEMS` and `SUITS`.
-fn rules() -> (Vec<String>, Vec<SuitRule>) {
+pub(crate) fn rules() -> (Vec<String>, Vec<SuitRule>) {
     let items = [
         "fee-bomb",
         "goblin-glider",
@@ -97,7 +97,7 @@ fn rules() -> (Vec<String>, Vec<SuitRule>) {
     (items, suits)
 }
 
-fn setup() -> Wgp {
+pub(crate) fn setup() -> Wgp {
     // testing_env! carries storage forward; each contract here starts empty.
     near_sdk::mock::with_mocked_blockchain(|b| {
         b.take_storage();
@@ -107,12 +107,17 @@ fn setup() -> Wgp {
     Wgp::new(owner(), vec![operator()], items, suits, 2)
 }
 
-fn with_hero(c: &mut Wgp, who: AccountId) {
+pub(crate) fn with_hero(c: &mut Wgp, who: AccountId) {
     as_(who, 0);
     c.register_hero("Peter".into(), "classic".into());
 }
 
-fn reward(who: AccountId, nonce: u64, items: Vec<Ingredient>, level: Option<u32>) -> RewardMint {
+pub(crate) fn reward(
+    who: AccountId,
+    nonce: u64,
+    items: Vec<Ingredient>,
+    level: Option<u32>,
+) -> RewardMint {
     RewardMint {
         account_id: who,
         nonce,
@@ -123,19 +128,19 @@ fn reward(who: AccountId, nonce: u64, items: Vec<Ingredient>, level: Option<u32>
     }
 }
 
-fn mint(c: &mut Wgp, r: RewardMint) -> RewardStatus {
+pub(crate) fn mint(c: &mut Wgp, r: RewardMint) -> RewardStatus {
     as_(operator(), 0);
     c.mint_rewards(vec![r]).remove(0)
 }
 
-fn bal(c: &Wgp, who: AccountId, token: &str) -> u128 {
+pub(crate) fn bal(c: &Wgp, who: AccountId, token: &str) -> u128 {
     c.mt_balance_of(who, token.into()).0
 }
 
 /// A contract call to try, for tables of cases that must all panic.
-type Call = Box<dyn Fn(&mut Wgp)>;
+pub(crate) type Call = Box<dyn Fn(&mut Wgp)>;
 
-fn events() -> Vec<String> {
+pub(crate) fn events() -> Vec<String> {
     get_logs()
         .into_iter()
         .filter(|l| l.starts_with("EVENT_JSON:"))
@@ -411,12 +416,18 @@ fn a_full_batch_fits_the_log_limit() {
                 .parse()
                 .unwrap();
             assert_eq!(account.len(), 64);
+            // Every item plus Bits: the most a reward can carry.
             let mut r = reward(
                 account,
                 1,
-                items.iter().map(|it| ing(it, 1000)).collect(),
+                items
+                    .iter()
+                    .map(|it| ing(it, 1000))
+                    .chain([ing("bits", 1000)])
+                    .collect(),
                 Some(1000),
             );
+            assert_eq!(r.items.len(), crate::MAX_ITEMS_PER_REWARD);
             r.badges = vec!["a".repeat(32), "b".repeat(32)];
             r
         })

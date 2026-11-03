@@ -14,6 +14,7 @@ import { and, eq, lte } from "drizzle-orm";
 
 import type { Save } from "@wgp/game-core/types";
 
+import { nightBits } from "@/lib/market/rewards";
 import { secret } from "@/server/auth/secrets";
 import { HttpError, conflict, notFound } from "@/server/http";
 import { reserveBudget, releaseBudget, utcDay } from "@/server/rate-limit";
@@ -21,9 +22,9 @@ import { getVerifier, verifyRun, type Verifier } from "@/server/verify";
 
 import type { Db } from "./client";
 import { recordScore } from "./leaderboard";
-import { enqueueRewardMint, lootDiff } from "./outbox";
+import { BITS_TOKEN_ID, enqueueRewardMint, lootDiff, withBits, type MintItem } from "./outbox";
 import { ensureSave, getPlayer, writeSave } from "./players";
-import { players, runs, type Run } from "./schema";
+import { chainOps, players, runs, type Run } from "./schema";
 
 export const RUN_TTL_MS = 45 * 60_000;
 export const RUNS_PER_DAY = 20;
@@ -138,6 +139,8 @@ export type SubmitResult =
       score: number;
       ticks: number;
       digest: string;
+      /** Bits minted for the night (src/lib/market/rewards.ts). */
+      bits: number;
       /** False for assist runs, which save progress but stay off the boards. */
       ranked: boolean;
       save: Save;
@@ -161,6 +164,13 @@ async function loadRun(db: Db, runId: string): Promise<Run | null> {
   return row ?? null;
 }
 
+/** The Bits a verified run's reward mint carries (0 if it queued none). */
+async function mintedBitsFor(db: Db, runId: string): Promise<number> {
+  const [op] = await db.select({ payload: chainOps.payload }).from(chainOps).where(eq(chainOps.dedupeKey, `mint_reward:${runId}`)).limit(1);
+  const items = (op?.payload as { items?: MintItem[] } | undefined)?.items ?? [];
+  return items.find((i) => i.tokenId === BITS_TOKEN_ID)?.amount ?? 0;
+}
+
 /** The stored outcome of a finished run, for idempotent resubmits. */
 async function storedOutcome(db: Db, run: Run, log: Uint8Array, clientHash: string): Promise<SubmitResult> {
   if (!sameBytes(run.inputLog, log) || run.clientHash !== clientHash) {
@@ -174,6 +184,7 @@ async function storedOutcome(db: Db, run: Run, log: Uint8Array, clientHash: stri
       score: run.verifiedScore ?? 0,
       ticks: run.ticks ?? 0,
       digest: run.digest ?? "",
+      bits: await mintedBitsFor(db, run.id),
       ranked: !run.assist,
       save,
       rev,
@@ -231,6 +242,8 @@ export async function submitRun(
   const { result } = verdict;
   const assist = run.assist || (result.stats.assist ?? 0) > 0;
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
+  // Bits come from the verified score alone, so the results screen shows the same number.
+  const bits = nightBits({ score: result.score, levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0) });
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
 
@@ -257,11 +270,12 @@ export async function submitRun(
 
       const tags = assist ? [] : await recordScore(tx, { playerId, runId: run.id, score: result.score, ticks: result.ticks, issuedAt: run.issuedAt, now });
 
-      // Loot, or a level-up the contract needs for crafting checks, is minted with the
-      // player's next reward nonce, taken in this transaction.
-      const items = lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {});
+      // Loot, the night's Bits (from the verified score) and any level-up the contract
+      // needs for crafting checks are minted with the player's next reward nonce, taken in
+      // this transaction.
       const level = result.save.hero?.level;
       const levelledUp = !!level && level > (startSave.hero?.level ?? 0);
+      const items = withBits(lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {}), bits);
       if (items.length > 0 || levelledUp) {
         await enqueueRewardMint(
           tx,
@@ -282,6 +296,7 @@ export async function submitRun(
       score: result.score,
       ticks: result.ticks,
       digest,
+      bits,
       ranked: !assist,
       save: result.save,
       rev: out.rev,

@@ -1,0 +1,3355 @@
+{
+ "about": "Mempool Market curve cases. contracts/wgp/src/market_tests.rs and apps/wgp/src/lib/market/math.test.ts both check these; regenerate with `cargo test print_market_vectors -- --ignored --nocapture`.",
+ "cases": [
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 1,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "13",
+   "buy_fee": "1",
+   "sell_payout": "11",
+   "sell_fee": "1",
+   "floor": "6",
+   "ceiling": "48"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 1,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "13",
+   "buy_fee": "0",
+   "sell_payout": "11",
+   "sell_fee": "0",
+   "floor": "12",
+   "ceiling": "12"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 1,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "13",
+   "buy_fee": "2",
+   "sell_payout": "11",
+   "sell_fee": "2",
+   "floor": "3",
+   "ceiling": "18"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 2,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "25",
+   "buy_fee": "1",
+   "sell_payout": "23",
+   "sell_fee": "1",
+   "floor": "12",
+   "ceiling": "96"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 2,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "25",
+   "buy_fee": "0",
+   "sell_payout": "23",
+   "sell_fee": "0",
+   "floor": "24",
+   "ceiling": "24"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 2,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "25",
+   "buy_fee": "3",
+   "sell_payout": "23",
+   "sell_fee": "3",
+   "floor": "6",
+   "ceiling": "36"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 3,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "38",
+   "buy_fee": "1",
+   "sell_payout": "34",
+   "sell_fee": "1",
+   "floor": "18",
+   "ceiling": "144"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 3,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "38",
+   "buy_fee": "0",
+   "sell_payout": "34",
+   "sell_fee": "0",
+   "floor": "36",
+   "ceiling": "36"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 3,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "38",
+   "buy_fee": "4",
+   "sell_payout": "34",
+   "sell_fee": "4",
+   "floor": "9",
+   "ceiling": "54"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 5,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "64",
+   "buy_fee": "2",
+   "sell_payout": "56",
+   "sell_fee": "2",
+   "floor": "30",
+   "ceiling": "240"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 5,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "64",
+   "buy_fee": "0",
+   "sell_payout": "56",
+   "sell_fee": "0",
+   "floor": "60",
+   "ceiling": "60"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 5,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "64",
+   "buy_fee": "7",
+   "sell_payout": "56",
+   "sell_fee": "6",
+   "floor": "15",
+   "ceiling": "90"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 8,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "107",
+   "buy_fee": "3",
+   "sell_payout": "87",
+   "sell_fee": "2",
+   "floor": "48",
+   "ceiling": "384"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 8,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "107",
+   "buy_fee": "0",
+   "sell_payout": "87",
+   "sell_fee": "0",
+   "floor": "96",
+   "ceiling": "96"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 8,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "107",
+   "buy_fee": "11",
+   "sell_payout": "87",
+   "sell_fee": "9",
+   "floor": "24",
+   "ceiling": "144"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 13,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "187",
+   "buy_fee": "4",
+   "sell_payout": "134",
+   "sell_fee": "3",
+   "floor": "78",
+   "ceiling": "624"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 13,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "187",
+   "buy_fee": "0",
+   "sell_payout": "134",
+   "sell_fee": "0",
+   "floor": "156",
+   "ceiling": "156"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 13,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "187",
+   "buy_fee": "19",
+   "sell_payout": "134",
+   "sell_fee": "14",
+   "floor": "39",
+   "ceiling": "234"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 20,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "12000",
+   "buy_cost": "320",
+   "buy_fee": "7",
+   "sell_payout": "192",
+   "sell_fee": "4",
+   "floor": "120",
+   "ceiling": "960"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 20,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "12000",
+   "buy_cost": "320",
+   "buy_fee": "0",
+   "sell_payout": "192",
+   "sell_fee": "0",
+   "floor": "240",
+   "ceiling": "240"
+  },
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "amount": 20,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "12000",
+   "buy_cost": "320",
+   "buy_fee": "32",
+   "sell_payout": "192",
+   "sell_fee": "20",
+   "floor": "60",
+   "ceiling": "360"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 1,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "42",
+   "buy_fee": "1",
+   "sell_payout": "39",
+   "sell_fee": "1",
+   "floor": "20",
+   "ceiling": "160"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 1,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "42",
+   "buy_fee": "0",
+   "sell_payout": "39",
+   "sell_fee": "0",
+   "floor": "40",
+   "ceiling": "40"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 1,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "42",
+   "buy_fee": "5",
+   "sell_payout": "39",
+   "sell_fee": "4",
+   "floor": "10",
+   "ceiling": "60"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 2,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "85",
+   "buy_fee": "2",
+   "sell_payout": "76",
+   "sell_fee": "2",
+   "floor": "40",
+   "ceiling": "320"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 2,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "85",
+   "buy_fee": "0",
+   "sell_payout": "76",
+   "sell_fee": "0",
+   "floor": "80",
+   "ceiling": "80"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 2,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "85",
+   "buy_fee": "9",
+   "sell_payout": "76",
+   "sell_fee": "8",
+   "floor": "20",
+   "ceiling": "120"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 3,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "130",
+   "buy_fee": "3",
+   "sell_payout": "111",
+   "sell_fee": "3",
+   "floor": "60",
+   "ceiling": "480"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 3,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "130",
+   "buy_fee": "0",
+   "sell_payout": "111",
+   "sell_fee": "0",
+   "floor": "120",
+   "ceiling": "120"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 3,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "130",
+   "buy_fee": "13",
+   "sell_payout": "111",
+   "sell_fee": "12",
+   "floor": "30",
+   "ceiling": "180"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 5,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "229",
+   "buy_fee": "5",
+   "sell_payout": "177",
+   "sell_fee": "4",
+   "floor": "100",
+   "ceiling": "800"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 5,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "229",
+   "buy_fee": "0",
+   "sell_payout": "177",
+   "sell_fee": "0",
+   "floor": "200",
+   "ceiling": "200"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 5,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "229",
+   "buy_fee": "23",
+   "sell_payout": "177",
+   "sell_fee": "18",
+   "floor": "50",
+   "ceiling": "300"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 8,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "400",
+   "buy_fee": "8",
+   "sell_payout": "266",
+   "sell_fee": "6",
+   "floor": "160",
+   "ceiling": "1280"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 8,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "400",
+   "buy_fee": "0",
+   "sell_payout": "266",
+   "sell_fee": "0",
+   "floor": "320",
+   "ceiling": "320"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 8,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "400",
+   "buy_fee": "40",
+   "sell_payout": "266",
+   "sell_fee": "27",
+   "floor": "80",
+   "ceiling": "480"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 13,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "771",
+   "buy_fee": "16",
+   "sell_payout": "392",
+   "sell_fee": "8",
+   "floor": "260",
+   "ceiling": "2080"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 13,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "771",
+   "buy_fee": "0",
+   "sell_payout": "392",
+   "sell_fee": "0",
+   "floor": "520",
+   "ceiling": "520"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 13,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "771",
+   "buy_fee": "78",
+   "sell_payout": "392",
+   "sell_fee": "40",
+   "floor": "130",
+   "ceiling": "780"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 20,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "40000",
+   "buy_cost": "1600",
+   "buy_fee": "32",
+   "sell_payout": "533",
+   "sell_fee": "11",
+   "floor": "400",
+   "ceiling": "3200"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 20,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "40000",
+   "buy_cost": "1600",
+   "buy_fee": "0",
+   "sell_payout": "533",
+   "sell_fee": "0",
+   "floor": "800",
+   "ceiling": "800"
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "amount": 20,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "40000",
+   "buy_cost": "1600",
+   "buy_fee": "160",
+   "sell_payout": "533",
+   "sell_fee": "54",
+   "floor": "200",
+   "ceiling": "1200"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 1,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": "160",
+   "buy_fee": "4",
+   "sell_payout": "141",
+   "sell_fee": "3",
+   "floor": "75",
+   "ceiling": "600"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 1,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": "160",
+   "buy_fee": "0",
+   "sell_payout": "141",
+   "sell_fee": "0",
+   "floor": "150",
+   "ceiling": "150"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 1,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": "160",
+   "buy_fee": "16",
+   "sell_payout": "141",
+   "sell_fee": "15",
+   "floor": "38",
+   "ceiling": "225"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 2,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": "343",
+   "buy_fee": "7",
+   "sell_payout": "266",
+   "sell_fee": "6",
+   "floor": "150",
+   "ceiling": "1200"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 2,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": "343",
+   "buy_fee": "0",
+   "sell_payout": "266",
+   "sell_fee": "0",
+   "floor": "300",
+   "ceiling": "300"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 2,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": "343",
+   "buy_fee": "35",
+   "sell_payout": "266",
+   "sell_fee": "27",
+   "floor": "75",
+   "ceiling": "450"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 3,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": "554",
+   "buy_fee": "12",
+   "sell_payout": "378",
+   "sell_fee": "8",
+   "floor": "225",
+   "ceiling": "1800"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 3,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": "554",
+   "buy_fee": "0",
+   "sell_payout": "378",
+   "sell_fee": "0",
+   "floor": "450",
+   "ceiling": "450"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 3,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": "554",
+   "buy_fee": "56",
+   "sell_payout": "378",
+   "sell_fee": "38",
+   "floor": "113",
+   "ceiling": "675"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 5,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": "1091",
+   "buy_fee": "22",
+   "sell_payout": "571",
+   "sell_fee": "12",
+   "floor": "375",
+   "ceiling": "3000"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 5,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": "1091",
+   "buy_fee": "0",
+   "sell_payout": "571",
+   "sell_fee": "0",
+   "floor": "750",
+   "ceiling": "750"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 5,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": "1091",
+   "buy_fee": "110",
+   "sell_payout": "571",
+   "sell_fee": "58",
+   "floor": "188",
+   "ceiling": "1125"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 8,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": "2400",
+   "buy_fee": "48",
+   "sell_payout": "800",
+   "sell_fee": "16",
+   "floor": "600",
+   "ceiling": "4800"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 8,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": "2400",
+   "buy_fee": "0",
+   "sell_payout": "800",
+   "sell_fee": "0",
+   "floor": "1200",
+   "ceiling": "1200"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 8,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": "2400",
+   "buy_fee": "240",
+   "sell_payout": "800",
+   "sell_fee": "80",
+   "floor": "300",
+   "ceiling": "1800"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 13,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1075",
+   "sell_fee": "22",
+   "floor": "975",
+   "ceiling": "7800"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 13,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1075",
+   "sell_fee": "0",
+   "floor": "1950",
+   "ceiling": "1950"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 13,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1075",
+   "sell_fee": "108",
+   "floor": "488",
+   "ceiling": "2925"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 20,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "150000",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1333",
+   "sell_fee": "27",
+   "floor": "1500",
+   "ceiling": "12000"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 20,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "150000",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1333",
+   "sell_fee": "0",
+   "floor": "3000",
+   "ceiling": "3000"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "amount": 20,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "150000",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1333",
+   "sell_fee": "134",
+   "floor": "750",
+   "ceiling": "4500"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 1,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": "1",
+   "buy_fee": "1",
+   "sell_payout": "0",
+   "sell_fee": "0",
+   "floor": "1",
+   "ceiling": "2"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 1,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": "1",
+   "buy_fee": "0",
+   "sell_payout": "0",
+   "sell_fee": "0",
+   "floor": "1",
+   "ceiling": "1"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 1,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": "1",
+   "buy_fee": "1",
+   "sell_payout": "0",
+   "sell_fee": "0",
+   "floor": "1",
+   "ceiling": "1"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 2,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": "2",
+   "buy_fee": "1",
+   "sell_payout": "0",
+   "sell_fee": "0",
+   "floor": "1",
+   "ceiling": "4"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 2,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": "2",
+   "buy_fee": "0",
+   "sell_payout": "0",
+   "sell_fee": "0",
+   "floor": "1",
+   "ceiling": "1"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 2,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": "2",
+   "buy_fee": "1",
+   "sell_payout": "0",
+   "sell_fee": "0",
+   "floor": "1",
+   "ceiling": "1"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 3,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": "3",
+   "buy_fee": "1",
+   "sell_payout": "1",
+   "sell_fee": "1",
+   "floor": "1",
+   "ceiling": "6"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 3,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": "3",
+   "buy_fee": "0",
+   "sell_payout": "1",
+   "sell_fee": "0",
+   "floor": "2",
+   "ceiling": "2"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 3,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": "3",
+   "buy_fee": "1",
+   "sell_payout": "1",
+   "sell_fee": "1",
+   "floor": "1",
+   "ceiling": "2"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 5,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": "15",
+   "buy_fee": "1",
+   "sell_payout": "1",
+   "sell_fee": "1",
+   "floor": "2",
+   "ceiling": "10"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 5,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": "15",
+   "buy_fee": "0",
+   "sell_payout": "1",
+   "sell_fee": "0",
+   "floor": "3",
+   "ceiling": "3"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 5,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": "15",
+   "buy_fee": "2",
+   "sell_payout": "1",
+   "sell_fee": "1",
+   "floor": "1",
+   "ceiling": "3"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 8,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1",
+   "sell_fee": "1",
+   "floor": "2",
+   "ceiling": "16"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 8,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1",
+   "sell_fee": "0",
+   "floor": "4",
+   "ceiling": "4"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 8,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "1",
+   "sell_fee": "1",
+   "floor": "1",
+   "ceiling": "6"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 13,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "2",
+   "sell_fee": "1",
+   "floor": "4",
+   "ceiling": "26"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 13,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "2",
+   "sell_fee": "0",
+   "floor": "7",
+   "ceiling": "7"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 13,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "2",
+   "sell_fee": "1",
+   "floor": "2",
+   "ceiling": "9"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 20,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "2",
+   "sell_fee": "1",
+   "floor": "5",
+   "ceiling": "40"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 20,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "2",
+   "sell_fee": "0",
+   "floor": "10",
+   "ceiling": "10"
+  },
+  {
+   "pool": {
+    "virtual_bits": "3",
+    "virtual_items": "1",
+    "bits": "0",
+    "stock": "5"
+   },
+   "amount": 20,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "500",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "2",
+   "sell_fee": "1",
+   "floor": "3",
+   "ceiling": "15"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 1,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": "1014",
+   "buy_fee": "21",
+   "sell_payout": "1011",
+   "sell_fee": "21",
+   "floor": "507",
+   "ceiling": "4049"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 1,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": "1014",
+   "buy_fee": "0",
+   "sell_payout": "1011",
+   "sell_fee": "0",
+   "floor": "1013",
+   "ceiling": "1013"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 1,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": "1014",
+   "buy_fee": "102",
+   "sell_payout": "1011",
+   "sell_fee": "102",
+   "floor": "254",
+   "ceiling": "1518"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 2,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": "2029",
+   "buy_fee": "41",
+   "sell_payout": "2020",
+   "sell_fee": "41",
+   "floor": "1013",
+   "ceiling": "8098"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 2,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": "2029",
+   "buy_fee": "0",
+   "sell_payout": "2020",
+   "sell_fee": "0",
+   "floor": "2025",
+   "ceiling": "2025"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 2,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": "2029",
+   "buy_fee": "203",
+   "sell_payout": "2020",
+   "sell_fee": "202",
+   "floor": "507",
+   "ceiling": "3037"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 3,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": "3047",
+   "buy_fee": "61",
+   "sell_payout": "3027",
+   "sell_fee": "61",
+   "floor": "1519",
+   "ceiling": "12148"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 3,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": "3047",
+   "buy_fee": "0",
+   "sell_payout": "3027",
+   "sell_fee": "0",
+   "floor": "3038",
+   "ceiling": "3038"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 3,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": "3047",
+   "buy_fee": "305",
+   "sell_payout": "3027",
+   "sell_fee": "303",
+   "floor": "760",
+   "ceiling": "4555"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 5,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "5036",
+   "sell_fee": "101",
+   "floor": "2531",
+   "ceiling": "20246"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 5,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "5036",
+   "sell_fee": "0",
+   "floor": "5062",
+   "ceiling": "5062"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 5,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "5036",
+   "sell_fee": "504",
+   "floor": "1266",
+   "ceiling": "7592"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 8,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "8034",
+   "sell_fee": "161",
+   "floor": "4050",
+   "ceiling": "32395"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 8,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "8034",
+   "sell_fee": "0",
+   "floor": "8099",
+   "ceiling": "8099"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 8,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "8034",
+   "sell_fee": "804",
+   "floor": "2025",
+   "ceiling": "12148"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 13,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "12991",
+   "sell_fee": "260",
+   "floor": "6581",
+   "ceiling": "52641"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 13,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "12991",
+   "sell_fee": "0",
+   "floor": "13161",
+   "ceiling": "13161"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 13,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "12991",
+   "sell_fee": "1300",
+   "floor": "3291",
+   "ceiling": "19740"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 20,
+   "fee_bps": 200,
+   "floor_bps": 5000,
+   "ceiling_bps": 40000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "19849",
+   "sell_fee": "397",
+   "floor": "10124",
+   "ceiling": "80987"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 20,
+   "fee_bps": 0,
+   "floor_bps": 10000,
+   "ceiling_bps": 10000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "19849",
+   "sell_fee": "0",
+   "floor": "20247",
+   "ceiling": "20247"
+  },
+  {
+   "pool": {
+    "virtual_bits": "1000000",
+    "virtual_items": "997",
+    "bits": "12345",
+    "stock": "3"
+   },
+   "amount": 20,
+   "fee_bps": 1000,
+   "floor_bps": 2500,
+   "ceiling_bps": 15000,
+   "spot_milli": "1012345",
+   "buy_cost": null,
+   "buy_fee": "0",
+   "sell_payout": "19849",
+   "sell_fee": "1985",
+   "floor": "5062",
+   "ceiling": "30370"
+  }
+ ],
+ "sequences": [
+  {
+   "pool": {
+    "virtual_bits": "480",
+    "virtual_items": "40",
+    "bits": "480",
+    "stock": "40"
+   },
+   "fee_bps": 200,
+   "steps": [
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "66",
+     "fee": "2",
+     "after": {
+      "bits": "544",
+      "stock": "35"
+     },
+     "spot_milli": "13653"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "49",
+     "fee": "2",
+     "after": {
+      "bits": "493",
+      "stock": "39"
+     },
+     "spot_milli": "12316"
+    },
+    {
+     "side": "sell",
+     "amount": 5,
+     "bits": "55",
+     "fee": "2",
+     "after": {
+      "bits": "436",
+      "stock": "44"
+     },
+     "spot_milli": "10904"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "24",
+     "fee": "1",
+     "after": {
+      "bits": "459",
+      "stock": "42"
+     },
+     "spot_milli": "11451"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "10",
+     "fee": "1",
+     "after": {
+      "bits": "448",
+      "stock": "43"
+     },
+     "spot_milli": "11180"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "75",
+     "fee": "2",
+     "after": {
+      "bits": "521",
+      "stock": "37"
+     },
+     "spot_milli": "13000"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "72",
+     "fee": "2",
+     "after": {
+      "bits": "591",
+      "stock": "32"
+     },
+     "spot_milli": "14875"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "48",
+     "fee": "1",
+     "after": {
+      "bits": "638",
+      "stock": "29"
+     },
+     "spot_milli": "16202"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "90",
+     "fee": "2",
+     "after": {
+      "bits": "726",
+      "stock": "24"
+     },
+     "spot_milli": "18843"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "100",
+     "fee": "3",
+     "after": {
+      "bits": "623",
+      "stock": "30"
+     },
+     "spot_milli": "15757"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "34",
+     "fee": "1",
+     "after": {
+      "bits": "656",
+      "stock": "28"
+     },
+     "spot_milli": "16705"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "93",
+     "fee": "2",
+     "after": {
+      "bits": "747",
+      "stock": "23"
+     },
+     "spot_milli": "19476"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "36",
+     "fee": "1",
+     "after": {
+      "bits": "710",
+      "stock": "25"
+     },
+     "spot_milli": "18307"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "125",
+     "fee": "3",
+     "after": {
+      "bits": "832",
+      "stock": "19"
+     },
+     "spot_milli": "22237"
+    },
+    {
+     "side": "sell",
+     "amount": 5,
+     "bits": "99",
+     "fee": "3",
+     "after": {
+      "bits": "730",
+      "stock": "24"
+     },
+     "spot_milli": "18906"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "35",
+     "fee": "1",
+     "after": {
+      "bits": "694",
+      "stock": "26"
+     },
+     "spot_milli": "17787"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "95",
+     "fee": "2",
+     "after": {
+      "bits": "597",
+      "stock": "32"
+     },
+     "spot_milli": "14958"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "66",
+     "fee": "2",
+     "after": {
+      "bits": "661",
+      "stock": "28"
+     },
+     "spot_milli": "16779"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "47",
+     "fee": "1",
+     "after": {
+      "bits": "613",
+      "stock": "31"
+     },
+     "spot_milli": "15394"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "56",
+     "fee": "2",
+     "after": {
+      "bits": "555",
+      "stock": "35"
+     },
+     "spot_milli": "13800"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "92",
+     "fee": "2",
+     "after": {
+      "bits": "645",
+      "stock": "29"
+     },
+     "spot_milli": "16304"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "90",
+     "fee": "2",
+     "after": {
+      "bits": "733",
+      "stock": "24"
+     },
+     "spot_milli": "18953"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "83",
+     "fee": "2",
+     "after": {
+      "bits": "814",
+      "stock": "20"
+     },
+     "spot_milli": "21566"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "59",
+     "fee": "2",
+     "after": {
+      "bits": "753",
+      "stock": "23"
+     },
+     "spot_milli": "19571"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "133",
+     "fee": "3",
+     "after": {
+      "bits": "883",
+      "stock": "17"
+     },
+     "spot_milli": "23912"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "78",
+     "fee": "2",
+     "after": {
+      "bits": "959",
+      "stock": "14"
+     },
+     "spot_milli": "26648"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "58",
+     "fee": "2",
+     "after": {
+      "bits": "1015",
+      "stock": "12"
+     },
+     "spot_milli": "28750"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "128",
+     "fee": "3",
+     "after": {
+      "bits": "1140",
+      "stock": "8"
+     },
+     "spot_milli": "33750"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "73",
+     "fee": "2",
+     "after": {
+      "bits": "1211",
+      "stock": "6"
+     },
+     "spot_milli": "36760"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "166",
+     "fee": "4",
+     "after": {
+      "bits": "1373",
+      "stock": "2"
+     },
+     "spot_milli": "44119"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "47",
+     "fee": "1",
+     "after": {
+      "bits": "1419",
+      "stock": "1"
+     },
+     "spot_milli": "46317"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "237",
+     "fee": "5",
+     "after": {
+      "bits": "1177",
+      "stock": "7"
+     },
+     "spot_milli": "35255"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "97",
+     "fee": "2",
+     "after": {
+      "bits": "1078",
+      "stock": "10"
+     },
+     "spot_milli": "31160"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "218",
+     "fee": "5",
+     "after": {
+      "bits": "1291",
+      "stock": "4"
+     },
+     "spot_milli": "40250"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "133",
+     "fee": "3",
+     "after": {
+      "bits": "1421",
+      "stock": "1"
+     },
+     "spot_milli": "46365"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "49",
+     "fee": "1",
+     "after": {
+      "bits": "1469",
+      "stock": "0"
+     },
+     "spot_milli": "48725"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "132",
+     "fee": "3",
+     "after": {
+      "bits": "1334",
+      "stock": "3"
+     },
+     "spot_milli": "42186"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "91",
+     "fee": "2",
+     "after": {
+      "bits": "1423",
+      "stock": "1"
+     },
+     "spot_milli": "46414"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "49",
+     "fee": "1",
+     "after": {
+      "bits": "1471",
+      "stock": "0"
+     },
+     "spot_milli": "48775"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "90",
+     "fee": "2",
+     "after": {
+      "bits": "1379",
+      "stock": "2"
+     },
+     "spot_milli": "44261"
+    }
+   ]
+  },
+  {
+   "pool": {
+    "virtual_bits": "800",
+    "virtual_items": "20",
+    "bits": "800",
+    "stock": "20"
+   },
+   "fee_bps": 200,
+   "steps": [
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "234",
+     "fee": "5",
+     "after": {
+      "bits": "1029",
+      "stock": "15"
+     },
+     "spot_milli": "52257"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "56",
+     "fee": "2",
+     "after": {
+      "bits": "1083",
+      "stock": "14"
+     },
+     "spot_milli": "55382"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "413",
+     "fee": "9",
+     "after": {
+      "bits": "1487",
+      "stock": "8"
+     },
+     "spot_milli": "81678"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "637",
+     "fee": "13",
+     "after": {
+      "bits": "2111",
+      "stock": "2"
+     },
+     "spot_milli": "132318"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "438",
+     "fee": "9",
+     "after": {
+      "bits": "1664",
+      "stock": "6"
+     },
+     "spot_milli": "94769"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "211",
+     "fee": "5",
+     "after": {
+      "bits": "1870",
+      "stock": "4"
+     },
+     "spot_milli": "111250"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "248",
+     "fee": "5",
+     "after": {
+      "bits": "2113",
+      "stock": "2"
+     },
+     "spot_milli": "132409"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "237",
+     "fee": "5",
+     "after": {
+      "bits": "1871",
+      "stock": "4"
+     },
+     "spot_milli": "111291"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "200",
+     "fee": "5",
+     "after": {
+      "bits": "1666",
+      "stock": "6"
+     },
+     "spot_milli": "94846"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "249",
+     "fee": "6",
+     "after": {
+      "bits": "1411",
+      "stock": "9"
+     },
+     "spot_milli": "76241"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "81",
+     "fee": "2",
+     "after": {
+      "bits": "1490",
+      "stock": "8"
+     },
+     "spot_milli": "81785"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "508",
+     "fee": "10",
+     "after": {
+      "bits": "1988",
+      "stock": "3"
+     },
+     "spot_milli": "121217"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "130",
+     "fee": "3",
+     "after": {
+      "bits": "2115",
+      "stock": "2"
+     },
+     "spot_milli": "132500"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "342",
+     "fee": "7",
+     "after": {
+      "bits": "1766",
+      "stock": "5"
+     },
+     "spot_milli": "102640"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "486",
+     "fee": "10",
+     "after": {
+      "bits": "1270",
+      "stock": "11"
+     },
+     "spot_milli": "66774"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "507",
+     "fee": "10",
+     "after": {
+      "bits": "1767",
+      "stock": "5"
+     },
+     "spot_milli": "102680"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "655",
+     "fee": "13",
+     "after": {
+      "bits": "2409",
+      "stock": "0"
+     },
+     "spot_milli": "160450"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "148",
+     "fee": "4",
+     "after": {
+      "bits": "2257",
+      "stock": "1"
+     },
+     "spot_milli": "145571"
+    },
+    {
+     "side": "sell",
+     "amount": 5,
+     "bits": "575",
+     "fee": "12",
+     "after": {
+      "bits": "1670",
+      "stock": "6"
+     },
+     "spot_milli": "95000"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "459",
+     "fee": "9",
+     "after": {
+      "bits": "2120",
+      "stock": "2"
+     },
+     "spot_milli": "132727"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "123",
+     "fee": "3",
+     "after": {
+      "bits": "1994",
+      "stock": "3"
+     },
+     "spot_milli": "121478"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "113",
+     "fee": "3",
+     "after": {
+      "bits": "1878",
+      "stock": "4"
+     },
+     "spot_milli": "111583"
+    },
+    {
+     "side": "sell",
+     "amount": 5,
+     "bits": "451",
+     "fee": "10",
+     "after": {
+      "bits": "1417",
+      "stock": "9"
+     },
+     "spot_milli": "76448"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "372",
+     "fee": "8",
+     "after": {
+      "bits": "1037",
+      "stock": "15"
+     },
+     "spot_milli": "52485"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "389",
+     "fee": "8",
+     "after": {
+      "bits": "1418",
+      "stock": "9"
+     },
+     "spot_milli": "76482"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "372",
+     "fee": "8",
+     "after": {
+      "bits": "1038",
+      "stock": "15"
+     },
+     "spot_milli": "52514"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "97",
+     "fee": "2",
+     "after": {
+      "bits": "939",
+      "stock": "17"
+     },
+     "spot_milli": "47000"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "102",
+     "fee": "2",
+     "after": {
+      "bits": "1039",
+      "stock": "15"
+     },
+     "spot_milli": "52542"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "389",
+     "fee": "8",
+     "after": {
+      "bits": "1420",
+      "stock": "9"
+     },
+     "spot_milli": "76551"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "169",
+     "fee": "4",
+     "after": {
+      "bits": "1585",
+      "stock": "7"
+     },
+     "spot_milli": "88333"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "554",
+     "fee": "11",
+     "after": {
+      "bits": "2128",
+      "stock": "2"
+     },
+     "spot_milli": "133090"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "143",
+     "fee": "3",
+     "after": {
+      "bits": "2268",
+      "stock": "1"
+     },
+     "spot_milli": "146095"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "480",
+     "fee": "10",
+     "after": {
+      "bits": "1778",
+      "stock": "5"
+     },
+     "spot_milli": "103120"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "230",
+     "fee": "5",
+     "after": {
+      "bits": "2003",
+      "stock": "3"
+     },
+     "spot_milli": "121869"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "219",
+     "fee": "5",
+     "after": {
+      "bits": "1779",
+      "stock": "5"
+     },
+     "spot_milli": "103160"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "97",
+     "fee": "2",
+     "after": {
+      "bits": "1680",
+      "stock": "6"
+     },
+     "spot_milli": "95384"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "603",
+     "fee": "12",
+     "after": {
+      "bits": "2271",
+      "stock": "1"
+     },
+     "spot_milli": "146238"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "481",
+     "fee": "10",
+     "after": {
+      "bits": "1780",
+      "stock": "5"
+     },
+     "spot_milli": "103200"
+    },
+    {
+     "side": "buy",
+     "amount": 1,
+     "bits": "111",
+     "fee": "3",
+     "after": {
+      "bits": "1888",
+      "stock": "4"
+     },
+     "spot_milli": "112000"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "376",
+     "fee": "8",
+     "after": {
+      "bits": "1504",
+      "stock": "8"
+     },
+     "spot_milli": "82285"
+    }
+   ]
+  },
+  {
+   "pool": {
+    "virtual_bits": "1200",
+    "virtual_items": "8",
+    "bits": "1200",
+    "stock": "8"
+   },
+   "fee_bps": 200,
+   "steps": [
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "1113",
+     "fee": "22",
+     "after": {
+      "bits": "2291",
+      "stock": "3"
+     },
+     "spot_milli": "317363"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "733",
+     "fee": "15",
+     "after": {
+      "bits": "1543",
+      "stock": "6"
+     },
+     "spot_milli": "195928"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "468",
+     "fee": "10",
+     "after": {
+      "bits": "2001",
+      "stock": "4"
+     },
+     "spot_milli": "266750"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "241",
+     "fee": "5",
+     "after": {
+      "bits": "1755",
+      "stock": "5"
+     },
+     "spot_milli": "227307"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "914",
+     "fee": "19",
+     "after": {
+      "bits": "822",
+      "stock": "11"
+     },
+     "spot_milli": "106421"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "98",
+     "fee": "3",
+     "after": {
+      "bits": "721",
+      "stock": "12"
+     },
+     "spot_milli": "96050"
+    },
+    {
+     "side": "sell",
+     "amount": 5,
+     "bits": "376",
+     "fee": "8",
+     "after": {
+      "bits": "337",
+      "stock": "17"
+     },
+     "spot_milli": "61480"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "207",
+     "fee": "5",
+     "after": {
+      "bits": "125",
+      "stock": "21"
+     },
+     "spot_milli": "45689"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "353",
+     "fee": "7",
+     "after": {
+      "bits": "471",
+      "stock": "15"
+     },
+     "spot_milli": "72652"
+    },
+    {
+     "side": "sell",
+     "amount": 5,
+     "bits": "292",
+     "fee": "6",
+     "after": {
+      "bits": "173",
+      "stock": "20"
+     },
+     "spot_milli": "49035"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "129",
+     "fee": "3",
+     "after": {
+      "bits": "41",
+      "stock": "23"
+     },
+     "spot_milli": "40032"
+    },
+    {
+     "side": "sell",
+     "amount": 1,
+     "bits": "37",
+     "fee": "1",
+     "after": {
+      "bits": "3",
+      "stock": "24"
+     },
+     "spot_milli": "37593"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "128",
+     "fee": "3",
+     "after": {
+      "bits": "128",
+      "stock": "21"
+     },
+     "spot_milli": "45793"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "218",
+     "fee": "5",
+     "after": {
+      "bits": "341",
+      "stock": "17"
+     },
+     "spot_milli": "61640"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "216",
+     "fee": "5",
+     "after": {
+      "bits": "552",
+      "stock": "14"
+     },
+     "spot_milli": "79636"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "398",
+     "fee": "8",
+     "after": {
+      "bits": "942",
+      "stock": "10"
+     },
+     "spot_milli": "119000"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "841",
+     "fee": "17",
+     "after": {
+      "bits": "1766",
+      "stock": "5"
+     },
+     "spot_milli": "228153"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "1346",
+     "fee": "27",
+     "after": {
+      "bits": "3085",
+      "stock": "1"
+     },
+     "spot_milli": "476111"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "1049",
+     "fee": "22",
+     "after": {
+      "bits": "2014",
+      "stock": "4"
+     },
+     "spot_milli": "267833"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "629",
+     "fee": "13",
+     "after": {
+      "bits": "1372",
+      "stock": "7"
+     },
+     "spot_milli": "171466"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "419",
+     "fee": "9",
+     "after": {
+      "bits": "944",
+      "stock": "10"
+     },
+     "spot_milli": "119111"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "1094",
+     "fee": "22",
+     "after": {
+      "bits": "2016",
+      "stock": "4"
+     },
+     "spot_milli": "268000"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "657",
+     "fee": "13",
+     "after": {
+      "bits": "2660",
+      "stock": "2"
+     },
+     "spot_milli": "386000"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "985",
+     "fee": "20",
+     "after": {
+      "bits": "3625",
+      "stock": "0"
+     },
+     "spot_milli": "603125"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "1288",
+     "fee": "27",
+     "after": {
+      "bits": "2310",
+      "stock": "3"
+     },
+     "spot_milli": "319090"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "1344",
+     "fee": "27",
+     "after": {
+      "bits": "3627",
+      "stock": "0"
+     },
+     "spot_milli": "603375"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "1576",
+     "fee": "33",
+     "after": {
+      "bits": "2018",
+      "stock": "4"
+     },
+     "spot_milli": "268166"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "787",
+     "fee": "17",
+     "after": {
+      "bits": "1214",
+      "stock": "8"
+     },
+     "spot_milli": "150875"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "352",
+     "fee": "7",
+     "after": {
+      "bits": "1559",
+      "stock": "6"
+     },
+     "spot_milli": "197071"
+    },
+    {
+     "side": "buy",
+     "amount": 5,
+     "bits": "1564",
+     "fee": "31",
+     "after": {
+      "bits": "3092",
+      "stock": "1"
+     },
+     "spot_milli": "476888"
+    },
+    {
+     "side": "sell",
+     "amount": 3,
+     "bits": "1051",
+     "fee": "22",
+     "after": {
+      "bits": "2019",
+      "stock": "4"
+     },
+     "spot_milli": "268250"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "449",
+     "fee": "10",
+     "after": {
+      "bits": "1560",
+      "stock": "6"
+     },
+     "spot_milli": "197142"
+    },
+    {
+     "side": "sell",
+     "amount": 4,
+     "bits": "600",
+     "fee": "13",
+     "after": {
+      "bits": "947",
+      "stock": "10"
+     },
+     "spot_milli": "119277"
+    },
+    {
+     "side": "sell",
+     "amount": 6,
+     "bits": "525",
+     "fee": "11",
+     "after": {
+      "bits": "411",
+      "stock": "16"
+     },
+     "spot_milli": "67125"
+    },
+    {
+     "side": "buy",
+     "amount": 3,
+     "bits": "236",
+     "fee": "5",
+     "after": {
+      "bits": "642",
+      "stock": "13"
+     },
+     "spot_milli": "87714"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "198",
+     "fee": "4",
+     "after": {
+      "bits": "836",
+      "stock": "11"
+     },
+     "spot_milli": "107157"
+    },
+    {
+     "side": "buy",
+     "amount": 6,
+     "bits": "959",
+     "fee": "19",
+     "after": {
+      "bits": "1776",
+      "stock": "5"
+     },
+     "spot_milli": "228923"
+    },
+    {
+     "side": "sell",
+     "amount": 2,
+     "bits": "388",
+     "fee": "8",
+     "after": {
+      "bits": "1380",
+      "stock": "7"
+     },
+     "spot_milli": "172000"
+    },
+    {
+     "side": "buy",
+     "amount": 4,
+     "bits": "958",
+     "fee": "19",
+     "after": {
+      "bits": "2319",
+      "stock": "3"
+     },
+     "spot_milli": "319909"
+    },
+    {
+     "side": "buy",
+     "amount": 2,
+     "bits": "798",
+     "fee": "16",
+     "after": {
+      "bits": "3101",
+      "stock": "1"
+     },
+     "spot_milli": "477888"
+    }
+   ]
+  }
+ ]
+}

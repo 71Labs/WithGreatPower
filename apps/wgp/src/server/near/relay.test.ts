@@ -146,6 +146,48 @@ describe("validateGameDelegate", () => {
   });
 });
 
+describe("validateGameDelegate: Mempool Market calls", () => {
+  const market = (method: string, args: Record<string, unknown>, deposit = 0n, gas = 30n * TGAS) => [actions.functionCall(method, args, gas, deposit)];
+  const calls: [string, Record<string, unknown>][] = [
+    ["market_buy", { item: "crumbs", amount: 3, max_bits: "40" }],
+    ["market_sell", { item: "crumbs", amount: 3, min_bits: "30" }],
+    ["list_item", { item: "crumbs", amount: 2, price_bits: "24" }],
+    ["buy_listing", { listing_id: 7 }],
+    ["cancel_listing", { listing_id: 7 }],
+  ];
+
+  it("relays every market method from a session key with no deposit", async () => {
+    for (const [method, args] of calls) {
+      expect(await verdict({ actions: market(method, args) })).toEqual({ ok: true, senderId: ALICE, methodName: method, gas: 30n * TGAS });
+    }
+  });
+
+  it("still refuses a deposit, even a single yocto", async () => {
+    for (const [method, args] of calls) {
+      expect(await verdict({ actions: market(method, args, 1n) })).toMatchObject({ ok: false, code: "deposit" });
+    }
+  });
+
+  it("still refuses other receivers, extra actions, too much gas and unknown keys", async () => {
+    const [method, args] = calls[0]!;
+    expect(await verdict({ actions: market(method, args), receiverId: "market.fakes.testnet" })).toMatchObject({ code: "wrong_receiver" });
+    expect(await verdict({ actions: [...market(method, args), ...market("market_sell", calls[1]![1])] })).toMatchObject({ code: "action_count" });
+    expect(await verdict({ actions: market(method, args, 0n, 31n * TGAS) })).toMatchObject({ code: "gas" });
+    expect(await verdict({ actions: market(method, args) }, { sessionKey: null })).toMatchObject({ code: "unknown_key" });
+    expect(await verdict({ actions: market(method, args) }, { sessionAccountId: "bob.wgp.testnet" })).toMatchObject({ code: "wrong_account" });
+  });
+
+  it("keeps owner and transfer methods off the list", async () => {
+    for (const method of ["set_market_params", "mt_transfer", "mt_batch_transfer", "mt_transfer_call", "upgrade", "mint_rewards"]) {
+      expect(await verdict({ actions: market(method, {}) })).toMatchObject({ ok: false, code: "method" });
+    }
+  });
+
+  it("refuses oversized market args", async () => {
+    expect(await verdict({ actions: market("market_buy", { item: "x".repeat(1100), amount: 1, max_bits: "1" }) })).toMatchObject({ code: "args" });
+  });
+});
+
 describe("decodeSignedDelegate", () => {
   it("round-trips what near-api-js encodes", async () => {
     const d = decodeSignedDelegate(await signed());
