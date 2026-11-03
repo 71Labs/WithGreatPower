@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { edgePoint, inBox, place, project, waypointLayout, type CameraPose, type SafeInsets } from "./waypoint";
+import { edgePoint, inBox, mergeRects, place, project, waypointLayout, waypointLayoutFromHud, type CameraPose, type HudZones, type Rect, type SafeInsets } from "./waypoint";
 
 const W = 1440;
 const H = 900;
@@ -143,5 +143,101 @@ describe("placing the waypoint", () => {
     const under = { x: mini.x0 + 20, y: mini.y1 + 40, depth: 500, behind: false, bearing: 0 };
     expect(inBox(under, w, h, pin, avoidPin)).toBe(false);
     expect(inBox({ ...under, x: 120 }, w, h, pin, avoidPin)).toBe(true);
+  });
+});
+
+describe("placing the waypoint around the HUD as laid out", () => {
+  const inside = (r: Rect, x: number, y: number) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1;
+  /** Stops all round the camera: ahead and up, both sides, behind, below, overhead. */
+  const AROUND = [
+    { x: 3000, y: 2400, z: -1000 },
+    { x: -3000, y: 2400, z: -1000 },
+    { x: 3000, y: 0, z: -200 },
+    { x: -3000, y: 0, z: -200 },
+    { x: 900, y: 0, z: 250 },
+    { x: -900, y: 0, z: 250 },
+    { x: 0, y: -2000, z: -300 },
+    { x: 0, y: 4000, z: -300 },
+  ];
+
+  const check = (w: number, h: number, zones: HudZones) => {
+    const { arrow, avoid } = waypointLayoutFromHud(w, h, zones);
+    const band = Math.max(...zones.band.map((r) => r.y1));
+    expect(arrow.top).toBeGreaterThan(band);
+    expect(arrow.left).toBeGreaterThan(zones.safe.left);
+    expect(arrow.right).toBeGreaterThan(zones.safe.right);
+    expect(arrow.bottom).toBeGreaterThan(zones.safe.bottom);
+    for (const p of AROUND) {
+      const e = edgePoint(project(p, NORTH, w, h), w, h, arrow, avoid);
+      for (const r of zones.avoid) expect(inside(r, e.x, e.y)).toBe(false);
+      expect(e.y).toBeGreaterThanOrEqual(arrow.top - 1e-6);
+      expect(e.x).toBeGreaterThanOrEqual(arrow.left - 1e-6);
+      expect(e.x).toBeLessThanOrEqual(w - arrow.right + 1e-6);
+    }
+  };
+
+  it("keeps a phone held upright's arrow below the route bar, off the hint, the minimap and the arc", () => {
+    const w = 390;
+    const h = 844;
+    const zones: HudZones = {
+      safe: { top: 47, right: 0, bottom: 34, left: 0 },
+      band: [
+        { x0: 12, y0: 47, x1: 378, y1: 117 },
+        { x0: 12, y0: 125, x1: 378, y1: 185 },
+      ],
+      avoid: [
+        { x0: 12, y0: 193, x1: 240, y1: 316 },
+        { x0: 255, y0: 193, x1: 378, y1: 316 },
+        { x0: 194, y0: 614, x1: 390, y1: 810 },
+      ],
+    };
+    check(w, h, zones);
+    // The hint beside the minimap fills the width: the box starts below that row. After the
+    // first leg the hint goes, and the arrow may come up beside the minimap again.
+    expect(waypointLayoutFromHud(w, h, zones).arrow.top).toBeGreaterThan(316);
+    const later = { ...zones, avoid: zones.avoid.slice(1) };
+    check(w, h, later);
+    expect(waypointLayoutFromHud(w, h, later).arrow.top).toBeLessThan(316);
+    // A pin whose body would cover the minimap becomes the arrow; one clear of everything stays a pin.
+    const { pin, avoidPin } = waypointLayoutFromHud(w, h, later);
+    expect(inBox({ x: 300, y: 340, depth: 500, behind: false, bearing: 0 }, w, h, pin, avoidPin)).toBe(false);
+    expect(inBox({ x: 150, y: 520, depth: 500, behind: false, bearing: 0 }, w, h, pin, avoidPin)).toBe(true);
+  });
+
+  it("works for a phone on its side: under the route bar, past the notch, the meters, the minimap and the arc", () => {
+    const w = 844;
+    const h = 390;
+    const zones: HudZones = {
+      safe: { top: 0, right: 47, bottom: 21, left: 47 },
+      band: [{ x0: 251, y0: 12, x1: 605, y1: 72 }],
+      avoid: [
+        // The meters, and the first-leg hint stacked under them.
+        { x0: 59, y0: 12, x1: 239, y1: 156 },
+        { x0: 59, y0: 164, x1: 307, y1: 272 },
+        { x0: 662, y0: 12, x1: 785, y1: 135 },
+        { x0: 601, y0: 173, x1: 797, y1: 369 },
+      ],
+    };
+    check(w, h, zones);
+    // The arrow comes up to just under the route bar, not under the tallest sticker.
+    expect(waypointLayoutFromHud(w, h, zones).arrow.top).toBeLessThan(135);
+  });
+
+  it("merges stickers that touch, so the arrow can't slide from one into the next", () => {
+    const merged = mergeRects([
+      { x0: 0, y0: 0, x1: 100, y1: 100 },
+      { x0: 50, y0: 100, x1: 200, y1: 150 },
+      { x0: 300, y0: 300, x1: 320, y1: 320 },
+      { x0: 190, y0: 140, x1: 210, y1: 400 },
+    ]);
+    expect(merged).toEqual([
+      { x0: 0, y0: 0, x1: 210, y1: 400 },
+      { x0: 300, y0: 300, x1: 320, y1: 320 },
+    ]);
+  });
+
+  it("never pushes the arrow's box past the middle of a very short screen", () => {
+    const { arrow } = waypointLayoutFromHud(600, 300, { safe: { top: 0, right: 0, bottom: 0, left: 0 }, band: [{ x0: 0, y0: 0, x1: 600, y1: 200 }], avoid: [] });
+    expect(arrow.top).toBe(150);
   });
 });

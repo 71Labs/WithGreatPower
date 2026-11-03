@@ -139,6 +139,82 @@ export function waypointLayout(w: number, h: number, touch: boolean): WaypointLa
   return { arrow, pin: { ...arrow, top: arrow.top + PIN_TALL - 14, bottom: Math.round(arrow.bottom / 2) }, avoid, avoidPin };
 }
 
+/**
+ * The HUD as measured on the page (CSS px, the canvas's coordinates): the band across the
+ * top the arrow stays below, the boxes it slides past and a pin never covers, and the
+ * screen's safe area (notch, home indicator, rounded corners).
+ */
+export interface HudZones {
+  /** The top band (meters, route bar, villain bar). */
+  band: Rect[];
+  /** The minimap, the first-leg hint, the power arc, a column of stickers. */
+  avoid: Rect[];
+  safe: SafeInsets;
+}
+
+/** The arrow's centre stays this far inside the safe area's sides (the arrow is 48px across). */
+const ARROW_EDGE = 40;
+/** This far below the band (half the arrow and some air). */
+const ARROW_BELOW_BAND = 36;
+/** And this far above the bottom of the safe area, room for its distance chip. */
+const ARROW_BOTTOM = 72;
+/** Air around an avoided box. */
+const ZONE_PAD = 8;
+
+/**
+ * Where the waypoint may go, from the HUD as laid out right now: below the band, inside
+ * the safe area, clear of every avoided box. Works for any layout the HUD takes (a phone
+ * upright or sideways, a tablet), where waypointLayout's fixed boxes can't.
+ */
+export function waypointLayoutFromHud(w: number, h: number, zones: HudZones): WaypointLayout {
+  const { safe } = zones;
+  const band = zones.band.reduce((m, r) => Math.max(m, r.y1), safe.top);
+  const arrow: SafeInsets = {
+    // On a very short screen, never below the middle.
+    top: Math.round(Math.min(band + ARROW_BELOW_BAND, h / 2)),
+    right: Math.round(safe.right + ARROW_EDGE),
+    bottom: Math.round(safe.bottom + ARROW_BOTTOM),
+    left: Math.round(safe.left + ARROW_EDGE),
+  };
+  let avoid = mergeRects(zones.avoid.filter((r) => r.x1 > r.x0 && r.y1 > r.y0 && r.x0 < w && r.y0 < h).map((r) => ({ x0: r.x0 - ZONE_PAD, y0: r.y0 - ZONE_PAD, x1: r.x1 + ZONE_PAD, y1: r.y1 + ZONE_PAD })));
+  // A row of stickers right across the top edge (the hint beside the minimap) can't be slid
+  // past: it's part of the band, so the box starts below it.
+  for (let blocked = true; blocked; ) {
+    const row = avoid.find((r) => r.x0 <= arrow.left && r.x1 >= w - arrow.right && r.y0 <= arrow.top && r.y1 > arrow.top);
+    blocked = !!row;
+    if (row) {
+      arrow.top = Math.round(Math.min(row.y1 + ARROW_BELOW_BAND - ZONE_PAD, h / 2));
+      avoid = avoid.filter((r) => r !== row);
+      if (arrow.top >= h / 2) break;
+    }
+  }
+  const avoidPin = avoid.map((r) => ({ x0: r.x0 - PIN_HALF, y0: r.y0, x1: r.x1 + PIN_HALF, y1: r.y1 + PIN_TALL }));
+  return { arrow, pin: { ...arrow, top: arrow.top + PIN_TALL - 14, bottom: Math.round(arrow.bottom / 2) }, avoid, avoidPin };
+}
+
+/**
+ * Touching or overlapping boxes as one box each (their bounds), so sliding the arrow out of
+ * one never drops it into the next (stickers stacked in a column, the hint beside the minimap).
+ */
+export function mergeRects(rects: readonly Rect[]): Rect[] {
+  const out = rects.map((r) => ({ ...r }));
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let i = 0; i < out.length && !merged; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const a = out[i];
+        const b = out[j];
+        if (a.x0 > b.x1 || b.x0 > a.x1 || a.y0 > b.y1 || b.y0 > a.y1) continue;
+        out[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+        out.splice(j, 1);
+        merged = true;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 function box(w: number, h: number, inset: SafeInsets) {
   const left = inset.left;
   const right = Math.max(left, w - inset.right);

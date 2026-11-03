@@ -18,7 +18,7 @@ import { useEffect, useRef } from "react";
 
 import { metres, stopPoint } from "@/game3d/nav/map";
 import type { FrameTap } from "@/game3d/nav/tap";
-import { edgePoint, inBox, project, waypointLayout } from "@/game3d/nav/waypoint";
+import { edgePoint, inBox, project, waypointLayout, waypointLayoutFromHud, type HudZones, type Rect } from "@/game3d/nav/waypoint";
 import { Face } from "@/sim/ui/bits";
 import { stopCast } from "@/sim/ui/hud";
 import type { City, Vec3 } from "@wgp/game-core/sim3d/contract";
@@ -45,6 +45,26 @@ export function NavStyles() {
   );
 }
 
+/**
+ * The touch HUD's zones (sim/ui/hud.tsx marks them `data-hud-zone`) and the safe area (read
+ * off a probe padded with env(safe-area-inset-*)), in the canvas's CSS px; null when there's
+ * no touch HUD on the page.
+ */
+function measureHud(el: HTMLElement, probe: HTMLElement | null): HudZones | null {
+  const scope = el.closest("[data-night]") ?? el.ownerDocument;
+  const band: Rect[] = [];
+  const avoid: Rect[] = [];
+  scope.querySelectorAll<HTMLElement>("[data-hud-zone]").forEach((zone) => {
+    const r = zone.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    (zone.dataset.hudZone === "band" ? band : avoid).push({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom });
+  });
+  if (!band.length) return null;
+  const s = probe ? getComputedStyle(probe) : null;
+  const px = (v: string | undefined) => Number.parseFloat(v ?? "") || 0;
+  return { band, avoid, safe: { top: px(s?.paddingTop), right: px(s?.paddingRight), bottom: px(s?.paddingBottom), left: px(s?.paddingLeft) } };
+}
+
 export interface WaypointProps {
   tap: FrameTap;
   city: City;
@@ -62,6 +82,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
   const chip = useRef<HTMLSpanElement>(null);
   const pinDist = useRef<HTMLSpanElement>(null);
   const arrowDist = useRef<HTMLSpanElement>(null);
+  const safe = useRef<HTMLSpanElement>(null);
   const isTouch = useRef(touch);
   useEffect(() => {
     isTouch.current = touch;
@@ -76,6 +97,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
     const at: Vec3 = { x: 0, y: 0, z: 0 };
     let layout = waypointLayout(0, 0, false);
     let layoutKey = "";
+    let measuredAt = -Infinity;
     const off = tap.on((t) => {
       const f = t.frame;
       const zone = city.zones[f.stop];
@@ -91,9 +113,13 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
       at.z = p.z;
       const pr = project(at, t.pose, t.width, t.height);
       const key = `${t.width}x${t.height}${isTouch.current ? "t" : ""}`;
-      if (key !== layoutKey) {
+      // The touch HUD moves with the phone's orientation and the night (the hint goes, a
+      // fight swaps the minimap for the villain bar): measure it twice a second.
+      if (key !== layoutKey || (isTouch.current && t.time - measuredAt > 0.5)) {
         layoutKey = key;
-        layout = waypointLayout(t.width, t.height, isTouch.current);
+        measuredAt = t.time;
+        const zones = isTouch.current ? measureHud(el, safe.current) : null;
+        layout = zones ? waypointLayoutFromHud(t.width, t.height, zones) : waypointLayout(t.width, t.height, isTouch.current);
       }
       let x: number;
       let y: number;
@@ -137,6 +163,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
   return (
     <div ref={root} aria-hidden data-mode="pin" className="group pointer-events-none invisible absolute left-0 top-0 z-0 will-change-transform">
       <NavStyles />
+      <span ref={safe} className="invisible absolute size-0 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]" />
       {/* The pin: its tip on the point. */}
       <div className="absolute bottom-0 left-0 flex -translate-x-1/2 flex-col items-center group-data-[mode=arrow]:hidden">
         <span
