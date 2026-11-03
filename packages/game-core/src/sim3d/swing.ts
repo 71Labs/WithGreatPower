@@ -7,6 +7,8 @@
  *   work and minus drag's. Going taut from slack is an inelastic jerk (the outward speed is
  *   lost), as it is for a real rope.
  * - The pump (holding the web below the anchor) and the stick are the only energy in.
+ * - v3: below the anchor a slack line takes itself up (ROPE_TAKEUP_MIN), and a web from the
+ *   ground launches a jump into the swing (launchFromGround); the forecast does both too.
  * - Anchors sit on what you can see: a facade's roof edge or a point on its wall face, or a
  *   prop anchor (antenna tip, water-tower rim, billboard, crane, cable). They lie ahead of
  *   the heading, at most 45° to either side, never behind. Each candidate's swing is run
@@ -42,10 +44,13 @@ import {
   PREDICT_SECONDS,
   PUMP_MAX_SPEED,
   ROPE_PUMP,
+  ROPE_TAKEUP_MIN,
   SIDE_BONUS,
   SLAM_SPEED,
   STREET_Y,
   SWING_CLEAR,
+  WEB_JUMP_PUSH,
+  WEB_JUMP_VY,
 } from "./constants";
 import { docVulnerable, nearestTarget } from "./combat";
 import { clamp, len2, len3, MAG_SCALE } from "./dmath";
@@ -96,6 +101,10 @@ const BACKSWING = 0.35;
  * rope, within the swing's tangent plane), the pump, quadratic air drag; then gravity and the
  * move, exact for constant gravity over the step; then the rope. Returns whether the rope
  * held the body this step. `drag` is the quadratic coefficient (tests pass 0).
+ *
+ * v3: below the anchor the line takes up its slack (down to ROPE_TAKEUP_MIN), as v2 did only
+ * on a roof: a web shot while jumping or rising toward its anchor swings on the line you'd
+ * reach it with, not on one long enough to drag you into the street. Taking up slack does no work.
  */
 export function flightStep(b: Body, rope: Rope | null, dt: number, f: FlightInput, drag = AIR_DRAG): boolean {
   let nx = 0;
@@ -112,6 +121,7 @@ export function flightStep(b: Body, rope: Rope | null, dt: number, f: FlightInpu
       ny = dy / d;
       nz = dz / d;
     }
+    if (dy < 0 && d < rope.len) rope.len = Math.max(d, Math.min(rope.len, ROPE_TAKEUP_MIN));
     taut = d >= rope.len - 0.01;
   }
   // The stick: build speed along it, but only up to AIR_STEER_SPEED; past that it adds nothing.
@@ -466,8 +476,19 @@ const AHEAD_STEPS: readonly number[] = [0.45, 1, 1.5];
 /** cos 40° and sin 40°: where the cheap estimate puts a swing's release. */
 const COS40 = 0.766044443118978;
 const SIN40 = 0.6427876096865394;
-/** A grounded hero hops into a web at least this fast (as attach does). */
-export const ATTACH_HOP = 260;
+/**
+ * A web from the ground is a jump into the swing (v3; v2 hopped straight up at 260): at least
+ * WEB_JUMP_VY up and WEB_JUMP_PUSH along the heading (hx, hz). The hero's attach and the
+ * forecast below both launch this way.
+ */
+export function launchFromGround(b: Body, hx: number, hz: number) {
+  if (b.vy < WEB_JUMP_VY) b.vy = WEB_JUMP_VY;
+  const along = b.vx * hx + b.vz * hz;
+  if (along < WEB_JUMP_PUSH) {
+    b.vx += hx * (WEB_JUMP_PUSH - along);
+    b.vz += hz * (WEB_JUMP_PUSH - along);
+  }
+}
 
 interface PickCache {
   key: number[];
@@ -549,8 +570,9 @@ function search(
   start.y = h.y;
   start.z = h.z;
   start.vx = h.vx;
-  start.vy = h.grounded ? Math.max(h.vy, ATTACH_HOP) : h.vy;
+  start.vy = h.vy;
   start.vz = h.vz;
+  if (h.grounded) launchFromGround(start, hx, hz);
   const v2 = start.vx * start.vx + start.vy * start.vy + start.vz * start.vz;
   const wantV2 = PERFECT_MIN_SPEED * PERFECT_MIN_SPEED;
   let count = 0;

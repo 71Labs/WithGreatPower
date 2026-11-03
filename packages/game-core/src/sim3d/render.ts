@@ -12,6 +12,7 @@
 import { DT } from "./constants";
 import type { HeroAction, RenderFrame3D, Vec3 } from "./contract";
 import { datan2, dcos, dsin, len2 } from "./dmath";
+import { comboMultiplier } from "./pickups";
 import { armShoulder, armTip } from "./villains";
 import type { SimState, Villain } from "./types";
 
@@ -36,12 +37,16 @@ export function newRenderFrame(): RenderFrame3D {
       actionTicks: 0,
       ropeLen: 0,
       cloak: false,
+      controlled: false,
     },
     villains: [],
     hazards: [],
     stop: 0,
     mode: "travel",
     timeScale: 1,
+    pickups: [],
+    combo: { count: 0, multiplier: 1, ticksLeft: 0 },
+    route: [],
   };
 }
 
@@ -225,7 +230,7 @@ function fillArms(v: Villain, slot: VillainSlot) {
 
 /* ------------------------------------------------------------------ the frame */
 
-/** Write the state into `out` (tick, hero, villains, hazards, stop, mode). */
+/** Write the state into `out` (tick, hero, villains, hazards, stop, mode; v1.3: pickups, combo, route). */
 export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, timeScale = 1): RenderFrame3D {
   const h = s.hero;
   const t = trackOf(s);
@@ -260,6 +265,30 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   out.hero.actionTicks = s.tick - t.actionStart;
   out.hero.ropeLen = h.rope ? h.rope.len : 0;
   out.hero.cloak = h.cloakT > 0;
+  // v1.3.
+  out.hero.controlled = !h.idle;
+  const ps = out.pickups ?? (out.pickups = []);
+  for (let i = 0; i < s.pickups.length; i++) {
+    const p = s.pickups[i];
+    const slot = ps[i] ?? (ps[i] = { id: p.id, kind: p.kind, pos: v3(), taken: false });
+    slot.id = p.id;
+    slot.kind = p.kind;
+    set(slot.pos, p.x, p.y, p.z);
+    slot.taken = p.taken;
+  }
+  ps.length = s.pickups.length;
+  const c = out.combo ?? (out.combo = { count: 0, multiplier: 1, ticksLeft: 0 });
+  c.count = s.combo;
+  c.multiplier = comboMultiplier(s.combo);
+  c.ticksLeft = s.combo > 0 ? Math.max(0, s.comboT) : 0;
+  const route = out.route ?? (out.route = []);
+  const zones = s.city.zones;
+  let r = 0;
+  for (let i = s.index; i < zones.length; i++, r++) {
+    const at = route[r] ?? (route[r] = v3());
+    set(at, zones[i].center.x, zones[i].center.y, zones[i].center.z);
+  }
+  route.length = r;
 
   const vs = out.villains;
   let n = 0;

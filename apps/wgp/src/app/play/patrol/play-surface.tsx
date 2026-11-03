@@ -324,7 +324,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const countdown = hud?.status === "intro" ? hud.countdown : null;
   const modal = paused;
   const hint = touch
-    ? { title: "Hold the right side to web", body: "Let go while you’re rising for a perfect swing. You head for the next stop on your own; drag on the left to steer." }
+    ? { title: "Hold the right side to web", body: "Let go while you’re rising for a perfect swing. Your webs aim for the next stop; drag on the left to run and steer." }
     : { title: "Hold Space or the mouse to web", body: "Let go while you’re rising for a perfect swing. WASD steers; click into the game to look around with the mouse, and press Esc to free the cursor." };
 
   return (

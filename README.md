@@ -28,8 +28,12 @@ All steps work on the live site, with no install.
 
 1. **Play a night as a guest.**
    - **Do:** open https://www.wgponnear.fun/play, then Patrol.
-   - **Controls:** WASD or the arrow keys move relative to the camera. Hold Space or the mouse to web, and let go to fly. 1–4 fire powers, G calls Gwei, Esc pauses. Click into the game for mouse look. On touch: drag on the left side to steer, hold the right side to web.
-   - **See:** a 3D night of stops (villain fights and ally errands) ending on a results screen. Guest nights are unranked.
+   - **Controls:**
+     - WASD or the arrow keys run relative to the camera. Let go and the hero stops and stands; he only moves where you steer.
+     - Space or the mouse shoots a web toward where you're steering (or the next stop). Hold it to keep swinging and chain webs, and let go to fly. Release on the rise for a perfect boost, and let go before touching a roof to land.
+     - 1–4 fire powers, G calls Gwei, Esc pauses. Click into the game for mouse look.
+     - On touch: drag on the left side to steer, hold the right side to web.
+   - **See:** a 3D night of stops (villain fights and ally errands) ending on a results screen. Gold Bits tokens and boost rings line each route and build your combo. Guest nights are unranked.
 2. **Sign in with Google or a NEAR wallet.**
    - **Do:** open the account chip (top of any game screen), then either:
      - "Continue with Google": Privy logs you in and makes a NEAR key for you, with no seed phrase or extension;
@@ -47,6 +51,7 @@ All steps work on the live site, with no install.
    cd apps/wgp && pnpm exec tsx ../../scripts/verify-run.ts <runId>   # one run (runId from /api/leaderboard)
    ```
    **See:** `OK <run> <player>: score … vs …, ticks … vs …, hash … vs …` and `N/N runs reproduced`. The script downloads the run's seed, start save and input log from `GET /api/runs/<id>/replay` and replays it locally with `@wgp/game-core`.
+   - **Older runs:** a run recorded under an older ruleset is skipped with a note. To replay it, check out that ruleset's tag: runs from before ruleset 3 need `git checkout ruleset-v2`.
 5. **Trade in the Mempool Market.**
    - **Do:** open https://www.wgponnear.fun/play/market.
    - **See:**

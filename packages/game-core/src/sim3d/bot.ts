@@ -3,6 +3,9 @@
  * like a person reads the screen and answers with an InputFrame, the only thing a real
  * player can send: hold to web when falling, let go in the perfect window, and in fights
  * fly at the villain and use its powers. Ported from the 2D bot.
+ *
+ * Ruleset 3: nothing moves the hero without the stick, so the bot steers: at the next
+ * pickup when one is close and on the way, else at the next stop.
  */
 import { abilityBlocked, gweiBlocked } from "./abilities";
 import { docVulnerable, isVulnerable, nearestTarget } from "./combat";
@@ -11,6 +14,7 @@ import type { InputFrame } from "./contract";
 import { DIR64, dirIndex, len2, len3 } from "./dmath";
 import { raycastCity } from "./city";
 import { bestAnchor, heroHeading, stopTarget, travelBearing } from "./hero";
+import { nextPickup } from "./pickups";
 import { pickForecast } from "./swing";
 import { IDLE_FRAME } from "./sim";
 import type { SimState } from "./types";
@@ -34,6 +38,8 @@ export interface BotMemory {
   lastX: number;
   lastY: number;
   lastZ: number;
+  /** How long the web has been held on the ground with nothing taking (then it lets go, to jump). */
+  groundT: number;
 }
 
 export const newBotMemory = (): BotMemory => ({
@@ -50,11 +56,33 @@ export const newBotMemory = (): BotMemory => ({
   lastX: 0,
   lastY: 0,
   lastZ: 0,
+  groundT: 0,
 });
 
-/** tan 23° and tan 56°: the bot aims inside the perfect window (20–60°), with a margin. */
-const TAN_LO = 0.4244748162096047;
+/** tan 22° and tan 56°: the bot aims inside the perfect window (15–65°), with a margin, early (where the swing carries furthest). */
+const TAN_LO = 0.4040262258351568;
 const TAN_HI = 1.4825609685127403;
+/** A pickup this close, and not behind on the way to the stop, is worth steering at. */
+const PICKUP_DETOUR = 520;
+
+/** Where to steer while travelling: the next pickup on this leg if it's close and on the way, else the stop. */
+function travelGoal(s: SimState): { x: number; z: number } | null {
+  const goal = stopTarget(s);
+  if (!goal) return null;
+  const h = s.hero;
+  const p = nextPickup(s);
+  if (p) {
+    const dx = p.x - h.x;
+    const dz = p.z - h.z;
+    const d = len2(dx, dz);
+    const gx = goal.x - h.x;
+    const gz = goal.z - h.z;
+    const gd = len2(gx, gz) || 1;
+    // Only a small turn off the way to the stop (within about 37°): bigger detours cost more misses than they pay.
+    if (d < PICKUP_DETOUR && d > 1 && (dx * gx + dz * gz) / (gd * d) > 0.8 && d < gd) return { x: p.x, z: p.z };
+  }
+  return { x: goal.x, z: goal.z };
+}
 
 /** The ability or Gwei to fire this tick, as an InputFrame one-shot (0 for none). */
 function pickShot(s: SimState, mem: BotMemory): InputFrame["shot"] {
@@ -189,7 +217,7 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
   // Doc with his arms out: keep clear and wait for the opening.
   const open = v ? isVulnerable(v) : true;
 
-  // The stick: none while travelling (the heading follows the route), toward or away from him in fights.
+  // The stick: at the stop (or a pickup on the way) while travelling, toward or away from him in fights.
   let dir = 0;
   let mag = 0;
   if (fight && t) {
@@ -218,6 +246,13 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
       mem.escapeT -= dt;
       dir = mem.escapeDir;
       mag = 3;
+    } else {
+      // v3: steer, or nothing moves (no auto-run): at a pickup on the way, else the stop.
+      const g = travelGoal(s);
+      if (g && len2(g.x - h.x, g.z - h.z) > 1) {
+        dir = dirIndex(g.x - h.x, g.z - h.z);
+        mag = 3;
+      }
     }
   }
   const frame: InputFrame = { dir: mag ? dir : 0, mag, web: false, shot };
@@ -227,7 +262,7 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
   if (h.rope) {
     const speed = len3(h.vx, h.vy, h.vz);
     const hs = len2(h.vx, h.vz);
-    const perfect = h.vy > 140 && hs > 120 && speed > 540 && h.vy >= hs * TAN_LO && h.vy <= hs * TAN_HI;
+    const perfect = h.vy > 110 && hs > 120 && speed > 480 && h.vy >= hs * TAN_LO && h.vy <= hs * TAN_HI;
     mem.hangT = Math.min(speed, moved) < 160 ? mem.hangT + dt : 0;
     mem.ropeT += dt;
     let letGo = perfect;
@@ -278,8 +313,17 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
     // Stuck, only webs that go forward; pinned on a roof, anything (it may climb out).
     const pinned = h.grounded && moved < 20;
     const ok = !!a && (mem.stuckT < 2 || ahead > 40 || pinned);
-    hold = ok && (h.grounded || h.vy < 80);
+    // On a roof, always press: a web, or with nothing in reach a jump (v3: only the web takes off).
+    hold = h.grounded || (ok && h.vy < 80);
   }
+  // Held on the ground with nothing taking: let go a tick, so the next press jumps.
+  if (hold && h.grounded && !h.rope && mem.holding) {
+    mem.groundT += dt;
+    if (mem.groundT > 0.3) {
+      hold = false;
+      mem.groundT = 0;
+    }
+  } else mem.groundT = 0;
   mem.holding = hold;
   frame.web = hold;
   return frame;

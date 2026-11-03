@@ -1,11 +1,27 @@
 /**
- * The hero in 3D: one-button web-swinging. Hold to shoot a web to an anchor ahead (swing.ts
+ * The hero in 3D: one-button web-swinging. Press to shoot a web to an anchor ahead (swing.ts
  * picks it by predicting the swing); while held, an exact rope constraint swings you; let go
  * to fly. Releases are graded (perfect, good) and the street or the river is a miss.
  *
  * The heading never involves the camera: it is the stick's DIR64 direction when the stick
  * is tilted, else the bearing to the next stop (travel) or the villain (fights), else your
- * velocity. So a phone player can hold one thumb on the web and still go the right way.
+ * velocity. It only chooses anchors (and the pump's lean), so a phone player can hold one
+ * thumb on the web and the swings still go the right way.
+ *
+ * Ruleset v3 controls, from the owner's playtest (no auto-run, clean landings, forgiving swings):
+ * - On the ground only the stick moves you: run, brake and turn on it. Centred, friction
+ *   stops you and you stand there. You stop at a roof's edge unless the stick pushes out over
+ *   it (and then you walk off, no hop). Only the web takes off: from the ground it is a jump
+ *   into the swing (or a plain jump, with nothing in reach).
+ * - The web button (WEB_BUFFER, WEB_TAP, REWEB_VY in constants.ts): a press is buffered for a
+ *   moment, so a re-web straight after a release takes; a tap swings on to the swing's natural
+ *   end; held through that end the web lets go by itself and, still held, the next shoots at
+ *   the top of the arc, so holding chains swings. Letting go yourself is graded: perfect and
+ *   good releases both boost, and perfects feed the combo.
+ * - Touching down on a roof ends the swing. Let go first and it's a clean landing: the speed
+ *   bleeds off in a short skid and you stand. Hold the web through the touchdown and a new
+ *   web shoots on the next tick (you asked for it). The street costs a little health and the
+ *   combo, and bounces you back up with most of your speed.
  *
  * Ruleset v2 physics: quadratic air drag with a terminal speed; air control that only builds
  * speed up to a limit; the rope's tension does no work (only the pump adds energy); running
@@ -20,13 +36,17 @@ import {
   CLIMB_PUSH,
   CLIMB_SLIDE,
   CLIMB_SPEED,
-  EDGE_HOP,
+  EDGE_PUSH,
   FIZZLE_COOLDOWN,
+  GOOD_BOOST,
+  GOOD_MIN_SPEED,
   GOOD_MIN_VY,
   GRAVITY,
+  GROUND_FRICTION,
+  HERO_LAND_FRICTION,
   HERO_RADIUS,
   HERO_TURN,
-  LAND_FRICTION,
+  HERO_TURN_GROUND,
   LAND_STOP,
   MANTLE_CLEAR,
   MAX_SPEED,
@@ -36,21 +56,27 @@ import {
   MISS_DAMP,
   OVERSPEED_DECEL,
   PERFECT_BOOST,
+  PERFECT_TAN_HI,
+  REWEB_VY,
   ROPE_MIN,
   ANCHOR_RANGE_FAR,
   RUN_ACCEL,
   RUN_ACCEL_TOP,
   RUN_BRAKE,
   RUN_SPEED,
+  SKID_FRICTION,
   STEP_UP,
   STREET_Y,
   SUBSTEP_LEN,
+  WEB_BUFFER,
+  WEB_TAP,
 } from "./constants";
-import { collideSphere, overRiver, supported, type AnchorPick, type SphereHit } from "./city";
+import { collideSphere, groundBelow, overRiver, supported, type AnchorPick, type SphereHit } from "./city";
 import { nearestTarget } from "./combat";
 import type { InputFrame, Vec3, Zone } from "./contract";
 import { clamp, datan2, dcos, DIR64, dsin, len2, len3, MAG_SCALE } from "./dmath";
-import { ATTACH_HOP, flightStep, inReleaseWindow, pickAnchor, wrapRope, type FlightInput } from "./swing";
+import { breakCombo, feedCombo } from "./pickups";
+import { flightStep, inReleaseWindow, launchFromGround, pickAnchor, wrapRope, type FlightInput } from "./swing";
 import type { Hero, SimState } from "./types";
 
 /** A new hero. When grounded, `y` is the roof under the feet; otherwise it's the centre. */
@@ -79,7 +105,7 @@ export function newHero(x: number, y: number, z: number, grounded: boolean): Her
     heldT: 0,
     hurtT: 0,
     holdPrev: false,
-    idle: grounded,
+    idle: true,
     climbing: false,
     wallNx: 0,
     wallNz: 0,
@@ -87,6 +113,10 @@ export function newHero(x: number, y: number, z: number, grounded: boolean): Her
     wallT: 0,
     side: 0,
     landT: 0,
+    webBuf: 0,
+    ropeT: 0,
+    latched: false,
+    rewebWait: false,
   };
 }
 
@@ -119,7 +149,8 @@ export function travelBearing(s: SimState): { x: number; z: number } | null {
 
 /**
  * Which way the hero wants to go: the stick, else the next stop (travel) or the villain
- * (fights), else the velocity, else the facing. Always a unit xz vector.
+ * (fights), else the velocity, else the facing. Always a unit xz vector. Since v3 it only
+ * aims webs (and leans the pump): nothing moves the hero along it without the stick.
  */
 export function heroHeading(s: SimState, input: InputFrame): { x: number; z: number } {
   if (input.mag > 0) {
@@ -168,28 +199,46 @@ export function bestAnchor(s: SimState, hx: number, hz: number): AnchorPick | nu
 
 function attach(s: SimState, a: AnchorPick, hx: number, hz: number) {
   const h = s.hero;
-  const d = len3(a.x - h.x, a.y - h.y, a.z - h.z);
-  h.rope = { x: a.x, y: a.y, z: a.z, len: clamp(d, ROPE_MIN, ANCHOR_RANGE_FAR) };
+  // From the ground, a jump into the swing.
   if (h.grounded) {
     h.grounded = false;
-    h.vy = Math.max(h.vy, ATTACH_HOP);
+    launchFromGround(h, hx, hz);
   }
-  h.idle = false;
+  const d = len3(a.x - h.x, a.y - h.y, a.z - h.z);
+  h.rope = { x: a.x, y: a.y, z: a.z, len: clamp(d, ROPE_MIN, ANCHOR_RANGE_FAR) };
   h.climbing = false;
   h.landT = 0;
+  h.ropeT = 0;
+  // Shot by a buffered press after the button came up: a tap, which swings to its natural end.
+  h.latched = !s.input.web;
+  h.webBuf = 0;
+  h.rewebWait = false;
   const lat = -(a.x - h.x) * hz + (a.z - h.z) * hx;
   h.side = lat > 30 ? 1 : lat < -30 ? -1 : 0;
   s.events.push({ type: "thwip", x: h.x, y: h.y, z: h.z, ax: a.x, ay: a.y, az: a.z });
 }
 
+/** Scale the velocity by `k`, never past MAX_SPEED (a boost on top of a faster speed adds nothing). */
+function boost(h: Hero, k: number) {
+  const speed = len3(h.vx, h.vy, h.vz);
+  if (speed <= 1e-9) return;
+  const boosted = Math.max(speed, Math.min(MAX_SPEED, speed * k));
+  const m = boosted / speed;
+  h.vx *= m;
+  h.vy *= m;
+  h.vz *= m;
+}
+
 /**
  * Let go of the web and grade the release; the velocity carries on as it was. Perfect:
- * rising fast at 20–60° above horizontal (swing.ts inReleaseWindow, where the anchor choice
- * plans each swing to release), which adds PERFECT_BOOST.
+ * rising fast at 15–65° above horizontal (swing.ts inReleaseWindow, where the anchor choice
+ * plans each swing to release), which adds PERFECT_BOOST and feeds the combo. Good: any other
+ * release still rising at speed, which adds GOOD_BOOST (v3).
  */
 export function release(s: SimState, grade = true) {
   const h = s.hero;
   h.climbing = false;
+  h.latched = false;
   if (!h.rope) return;
   h.rope = null;
   if (!grade) return;
@@ -197,21 +246,108 @@ export function release(s: SimState, grade = true) {
   let result: "perfect" | "good" | null = null;
   if (inReleaseWindow(h.vx, h.vy, h.vz)) {
     result = "perfect";
-    const boosted = Math.min(MAX_SPEED, speed * PERFECT_BOOST);
-    const k = boosted / speed;
-    h.vx *= k;
-    h.vy *= k;
-    h.vz *= k;
-    s.combo += 1;
-    if (s.combo > s.maxCombo) s.maxCombo = s.combo;
+    boost(h, PERFECT_BOOST);
+    feedCombo(s, 1);
     s.tally.perfect += 1;
     s.total.perfect += 1;
-  } else if (h.vy > GOOD_MIN_VY) {
+  } else if (h.vy > GOOD_MIN_VY && speed > GOOD_MIN_SPEED) {
     result = "good";
+    boost(h, GOOD_BOOST);
     s.tally.good += 1;
     s.total.good += 1;
   }
   s.events.push({ type: "release", grade: result, x: h.x, y: h.y, z: h.z, combo: s.combo });
+}
+
+/** The web lets go by itself at the end of a held or tapped swing: ungraded, no boost. */
+function releaseAuto(s: SimState) {
+  const h = s.hero;
+  h.rope = null;
+  h.latched = false;
+  h.climbing = false;
+  s.events.push({ type: "release", grade: null, x: h.x, y: h.y, z: h.z, combo: s.combo, auto: true });
+}
+
+/** A swing lasts at least this long before it can end by itself. */
+const SWING_MIN = 0.25;
+/** Rising slower than this past the bottom, a swing has run out of steam… */
+const STALL_SPEED = 240;
+/** …and lets go by itself only with at least this much room under the feet to fall and web again. */
+const STALL_ROOM = 160;
+
+/** A swing this long is going round in circles (a conical orbit under the stick): it ends heading the right way. */
+const SWING_LONG = 1.5;
+
+/**
+ * Whether a held or tapped swing has reached its natural end: past the bottom of the arc
+ * (moving away from the anchor) and rising, either steeper than the perfect window's top or,
+ * with room below, too slowly to go on (the top of a weak arc). Low down, a weak swing keeps
+ * swinging (the pump builds it up) rather than dropping you into the street. A swing gone on
+ * for SWING_LONG ends the moment it carries you along the heading (hx, hz), not falling.
+ */
+export function swingDone(s: SimState, hx: number, hz: number): boolean {
+  const h = s.hero;
+  const rope = h.rope;
+  if (!rope || h.climbing || h.ropeT < SWING_MIN) return false;
+  const hs = len2(h.vx, h.vz);
+  if (h.ropeT > SWING_LONG && h.vy > -60 && h.vx * hx + h.vz * hz > 0.8 * hs && hs > 200) return true;
+  if (h.vy <= 0 || (h.x - rope.x) * h.vx + (h.z - rope.z) * h.vz <= 0) return false;
+  if (h.vy >= hs * PERFECT_TAN_HI) return true;
+  return len3(h.vx, h.vy, h.vz) < STALL_SPEED && h.y - HERO_RADIUS - groundBelow(s.grid, h.x, h.z, h.y) > STALL_ROOM;
+}
+
+/**
+ * The web button, before the physics step (see the file comment). `can` is false while
+ * frozen, caught in a trap or slamming: any web lets go then.
+ */
+function webInput(s: SimState, input: InputFrame, hx: number, hz: number, can: boolean, frozen: boolean, dt: number) {
+  const h = s.hero;
+  const pressed = input.web && !h.holdPrev;
+  if (!input.web) h.rewebWait = false;
+  if (pressed) h.webBuf = WEB_BUFFER;
+  if (!can) {
+    if (h.rope) release(s, !frozen);
+    h.webBuf = 0;
+    return;
+  }
+  if (h.rope) {
+    if (pressed && h.latched) h.latched = false; // a tapped swing taken back in hand
+    else if (!input.web && !h.latched) {
+      // Let go: a graded release, unless the web only just latched on (a tap, which runs on,
+      // up a wall too); off a wall, just a drop.
+      if (h.ropeT < WEB_TAP) h.latched = true;
+      else release(s, !h.climbing);
+    }
+    if (h.rope && swingDone(s, hx, hz)) {
+      releaseAuto(s);
+      h.rewebWait = input.web;
+    }
+  }
+  if (!h.rope) {
+    const want = input.web || h.webBuf > 0;
+    // After a swing ended by itself, the held web waits for the top of the arc.
+    const wait = h.rewebWait && !h.grounded && h.vy > REWEB_VY;
+    if (want && !wait) {
+      const a = pickAnchor(s, hx, hz);
+      if (a) attach(s, a, hx, hz);
+      else if (h.grounded && (pressed || h.webBuf === 0)) {
+        // Nothing in reach from a roof: a plain jump along the heading (on the press, or held
+        // once the buffer has run out); the web keeps looking in the air.
+        h.grounded = false;
+        h.landT = 0;
+        launchFromGround(h, hx, hz);
+      }
+    }
+  }
+  if (h.rope) h.webBuf = 0;
+  else if (h.webBuf > 0) {
+    h.webBuf = Math.max(0, h.webBuf - dt);
+    if (h.webBuf === 0 && h.fizzleCd <= 0) {
+      // Nothing came in reach while buffered: the strand flies out and drops (a held web keeps looking).
+      h.fizzleCd = FIZZLE_COOLDOWN;
+      s.events.push({ type: "fizzle", x: h.x, y: h.y, z: h.z });
+    }
+  }
 }
 
 const hit: SphereHit = { hit: false, top: false, topY: 0, wall: false, wallNx: 0, wallNz: 0, wallTop: 0, ceiling: false };
@@ -274,6 +410,7 @@ function friction(h: Hero, decel: number, dt: number) {
 function stepKnockedOut(s: SimState, arena: Zone | null, dt: number) {
   const h = s.hero;
   h.rope = null;
+  h.latched = false;
   h.climbing = false;
   if (h.grounded) {
     friction(h, RUN_BRAKE * 0.6, dt);
@@ -290,26 +427,26 @@ function stepKnockedOut(s: SimState, arena: Zone | null, dt: number) {
       h.y = hit.topY + HERO_RADIUS;
       h.vy = 0;
       h.grounded = true;
-      friction(h, (Math.max(0, -vyBefore) * LAND_FRICTION) / dt, dt);
+      friction(h, (Math.max(0, -vyBefore) * HERO_LAND_FRICTION) / dt, dt);
     }
   }
   if (h.y - HERO_RADIUS <= STREET_Y) {
     h.y = STREET_Y + HERO_RADIUS;
-    if (!h.grounded) friction(h, (Math.max(0, -h.vy) * LAND_FRICTION) / dt, dt);
+    if (!h.grounded) friction(h, (Math.max(0, -h.vy) * HERO_LAND_FRICTION) / dt, dt);
     h.vy = 0;
     h.grounded = true;
   }
   if (arena) confine(s, arena);
 }
 
-/** Turn the facing toward (wx, wz) at most HERO_TURN·dt radians. */
-function turnFacing(h: Hero, wx: number, wz: number, dt: number) {
+/** Turn the facing toward (wx, wz) at most rate·dt radians. */
+function turnFacing(h: Hero, wx: number, wz: number, dt: number, rate = HERO_TURN) {
   const wl = len2(wx, wz);
   if (wl < 1e-9) return;
   const ux = wx / wl;
   const uz = wz / wl;
   const angle = datan2(h.fx * uz - h.fz * ux, h.fx * ux + h.fz * uz);
-  const max = HERO_TURN * dt;
+  const max = rate * dt;
   if (angle <= max && angle >= -max) {
     h.fx = ux;
     h.fz = uz;
@@ -325,7 +462,7 @@ function turnFacing(h: Hero, wx: number, wz: number, dt: number) {
   h.fz = nz / l;
 }
 
-/** Running on a roof: push along the heading on an easing curve, brake and grip at RUN_BRAKE. */
+/** Running on a roof: push along (hx, hz) on an easing curve, brake and grip at RUN_BRAKE. */
 function run(h: Hero, hx: number, hz: number, target: number, dt: number) {
   const along = h.vx * hx + h.vz * hz;
   const side = -h.vx * hz + h.vz * hx;
@@ -347,6 +484,47 @@ function run(h: Hero, hx: number, hz: number, target: number, dt: number) {
 /** How fast a small ledge is stepped up, units a second (smooth, never a pop). */
 const STEP_RATE = 900;
 
+/**
+ * Off the edge of a roof after a grounded move from (gx, gz): walk off if the stick (sx, sz,
+ * scaled by tilt) pushes out over the edge, else stop at it. The edge's outward normal is
+ * found per axis (every roof is an axis-aligned box): the axis whose move, undone, puts the
+ * hero back on the roof.
+ */
+function edge(s: SimState, gx: number, gz: number, sx: number, sz: number) {
+  const h = s.hero;
+  const g = s.grid;
+  const r = HERO_RADIUS;
+  // Nothing under where the move began either (the roof went, or never was): fall.
+  if (!supported(g, gx, h.y, gz, r)) {
+    h.grounded = false;
+    return;
+  }
+  const backX = supported(g, gx, h.y, h.z, r);
+  const backZ = supported(g, h.x, h.y, gz, r);
+  // Undoing one axis's move helps: that axis went over. Neither alone helps: a corner, both did.
+  const offX = backX || !backZ ? (h.x > gx ? 1 : h.x < gx ? -1 : 0) : 0;
+  const offZ = backZ || !backX ? (h.z > gz ? 1 : h.z < gz ? -1 : 0) : 0;
+  const push = Math.max(offX ? sx * offX : 0, offZ ? sz * offZ : 0);
+  if (push > EDGE_PUSH) {
+    h.grounded = false;
+    return;
+  }
+  if (offX) {
+    h.x = gx;
+    h.vx = 0;
+  }
+  if (offZ) {
+    h.z = gz;
+    h.vz = 0;
+  }
+  if (!supported(g, h.x, h.y, h.z, r)) {
+    h.x = gx;
+    h.z = gz;
+    h.vx = 0;
+    h.vz = 0;
+  }
+}
+
 /** One fixed step of hero physics. */
 export function stepHero(s: SimState, input: InputFrame, dt: number) {
   const h = s.hero;
@@ -362,20 +540,12 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
   h.hurtT = Math.max(0, h.hurtT - dt);
   h.heldT = Math.max(0, h.heldT - dt);
   h.landT = Math.max(0, h.landT - dt);
+  if (h.rope) h.ropeT += dt;
+  h.idle = input.mag === 0 && !input.web;
 
-  const hold = input.web && !frozen && h.heldT <= 0 && h.slam === 0;
+  const can = !frozen && h.heldT <= 0 && h.slam === 0;
   const head = heroHeading(s, input);
-
-  // Webs: holding keeps trying until something is in reach; nothing in reach is a fizzle, never a hit.
-  if (hold && !h.rope && h.fizzleCd <= 0) {
-    const a = pickAnchor(s, head.x, head.z);
-    if (a) attach(s, a, head.x, head.z);
-    else if (!h.holdPrev) {
-      h.fizzleCd = FIZZLE_COOLDOWN;
-      s.events.push({ type: "fizzle", x: h.x, y: h.y, z: h.z });
-    }
-  }
-  if (!hold && h.rope) release(s, !frozen);
+  webInput(s, input, head.x, head.z, can, frozen, dt);
   h.holdPrev = input.web;
 
   if (s.mode === "ko") {
@@ -395,15 +565,17 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
   const sx = input.mag > 0 ? DIR64[input.dir][0] * tilt : 0;
   const sz = input.mag > 0 ? DIR64[input.dir][1] * tilt : 0;
   if (h.grounded) {
-    if (input.mag > 0) h.idle = false;
-    let speed: number;
-    if (input.mag > 0) speed = arena ? RUN_SPEED * tilt : RUN_SPEED * (input.mag === 3 ? 1.25 : input.mag === 2 ? 1 : 0.6);
-    else speed = arena || h.idle ? 0 : RUN_SPEED;
-    run(h, head.x, head.z, speed, dt);
+    // Only the stick runs; centred, friction stops you.
+    if (input.mag > 0) {
+      const speed = arena ? RUN_SPEED * tilt : RUN_SPEED * (input.mag === 3 ? 1.25 : input.mag === 2 ? 1 : 0.6);
+      run(h, DIR64[input.dir][0], DIR64[input.dir][1], speed, dt);
+    } else friction(h, len2(h.vx, h.vz) > RUN_SPEED ? SKID_FRICTION : GROUND_FRICTION, dt);
     h.vy = 0;
   }
 
   const wasGrounded = h.grounded;
+  const gx = h.x;
+  const gz = h.z;
   let landed = false;
   let landY = 0;
   let landSpeed = 0;
@@ -428,18 +600,6 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
       if (h.grounded) {
         h.x += h.vx * sdt;
         h.z += h.vz * sdt;
-        // On a web from a roof: once the rope goes taut it lifts you off. Standing on a roof you
-        // take up the slack (down to ROPE_MIN), so running off the edge swings on the line you
-        // hold, not on one long enough to reach the street. A slack line does no work: energy is unchanged.
-        const rope = h.rope;
-        if (rope) {
-          const dx = h.x - rope.x;
-          const dy = h.y - rope.y;
-          const dz = h.z - rope.z;
-          const d = len3(dx, dy, dz);
-          if (d > rope.len && dy < 0) h.grounded = false;
-          else if (d < rope.len) rope.len = Math.max(d, Math.min(rope.len, ROPE_MIN));
-        }
       } else {
         flightStep(h, h.rope, sdt, fin);
         if (h.slam > 0) h.vy = Math.min(h.vy, -1400);
@@ -471,8 +631,11 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
           landSpeed = before;
           // The landing's friction impulse, and a crouch for a hard one.
           const impact = vyBefore < 0 ? -vyBefore : 0;
-          friction(h, (impact * LAND_FRICTION) / sdt, sdt);
+          friction(h, (impact * HERO_LAND_FRICTION) / sdt, sdt);
           h.landT = Math.max(h.landT, LAND_STOP * Math.min(1, impact / 1500));
+          // Touching down ends the swing (holding the web, the next one shoots next tick).
+          if (h.rope) release(s, false);
+          h.rewebWait = false;
         }
         h.grounded = true;
         h.y = hit.topY + HERO_RADIUS;
@@ -503,11 +666,8 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
     }
   }
   if (landed) s.events.push({ type: "land", x: h.x, y: landY, z: h.z, speed: landSpeed });
-  else if (wasGrounded && h.grounded && !stepping && !supported(s.grid, h.x, h.y, h.z, HERO_RADIUS)) {
-    // Ran off a roof: a little hop if running forward, so a run flows into a swing.
-    h.grounded = false;
-    if (!h.rope && h.vx * h.fx + h.vz * h.fz > 120) h.vy = EDGE_HOP;
-  }
+  // Over a roof's edge: walk off only pushing out over it, else stop there (v3: no hop off edges).
+  else if (wasGrounded && h.grounded && !stepping && !supported(s.grid, h.x, h.y, h.z, HERO_RADIUS)) edge(s, gx, gz, sx, sz);
 
   // The street (or the river) is a miss.
   if (h.y - HERO_RADIUS <= STREET_Y) {
@@ -520,13 +680,15 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
       if (h.missCd <= 0) {
         const damage = Math.min(MISS_DAMAGE, s.hp - 1);
         s.hp -= Math.max(0, damage);
-        s.combo = 0;
+        breakCombo(s, "street");
         s.tally.miss += 1;
         s.total.miss += 1;
         h.missCd = MISS_COOLDOWN;
         s.events.push({ type: "miss", x: h.x, y: h.y, z: h.z, damage: Math.max(0, damage), water });
       }
       h.rope = null;
+      h.latched = false;
+      h.rewebWait = false;
       h.climbing = false;
       h.grounded = false;
       h.vx *= MISS_DAMP;
@@ -537,7 +699,7 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
 
   confine(s, arena);
 
-  // Over the soft limit (a boosted release, a dash): bleed it off rather than clamp.
+  // Over the soft limit (a boosted release, a dash, a ring): bleed it off rather than clamp.
   const speed = len3(h.vx, h.vy, h.vz);
   if (speed > MAX_SPEED && h.slam === 0 && h.dashT <= 0) {
     const k = Math.max(MAX_SPEED, speed - OVERSPEED_DECEL * dt) / speed;
@@ -546,12 +708,13 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
     h.vz *= k;
   }
 
-  // Face where you're going, turning at a limited rate (on a wall, face it).
+  // Face where you're going, turning at a limited rate: on a wall, face it; on the ground,
+  // face the stick (a quick turn on the spot), else the slide.
   if (h.climbing) turnFacing(h, -h.wallNx, -h.wallNz, dt);
-  else {
-    const hs = len2(h.vx, h.vz);
-    if (hs > (h.grounded ? 30 : 40)) turnFacing(h, h.vx, h.vz, dt);
-  }
+  else if (h.grounded) {
+    if (input.mag > 0) turnFacing(h, sx, sz, dt, HERO_TURN_GROUND);
+    else if (len2(h.vx, h.vz) > 30) turnFacing(h, h.vx, h.vz, dt, HERO_TURN_GROUND);
+  } else if (len2(h.vx, h.vz) > 40) turnFacing(h, h.vx, h.vz, dt);
 }
 
 /**
@@ -598,8 +761,10 @@ function stepClimb(s: SimState, dt: number) {
     return;
   }
   if (h.y - HERO_RADIUS >= h.wallTop - 4) {
-    // The mantle: a hop that clears the edge by MANTLE_CLEAR, pushed in over the roof.
+    // The mantle: a hop that clears the edge by MANTLE_CLEAR, pushed in over the roof. A web
+    // still held waits for the top of the hop.
     release(s, false);
+    h.rewebWait = true;
     const need = Math.max(4, h.wallTop + HERO_RADIUS + MANTLE_CLEAR - h.y);
     h.vy = Math.sqrt(2 * GRAVITY * need);
     h.vx = -nx * CLIMB_PUSH;
