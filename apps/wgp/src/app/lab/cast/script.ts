@@ -16,8 +16,13 @@ const WALL_X = 430;
 
 export type LabCharacter = Exclude<CharacterKey, "sybil-copy">;
 
-/** The hero's actions, plus two lab-only moves: `stride` (stand, walk, run, stop) and `land` (a drop onto the roof). */
-export const HERO_STATES: string[] = ["idle", "stride", "run", "swing", "air", "land", "climb", "dash", "slam", "held", "hurt", "ko"];
+/**
+ * The hero's actions, plus lab-only moves: `stride` (stand, walk, run, stop), `land` (a drop
+ * onto the roof), `reverse` (run, pull the stick back, run back, stop, start off behind him),
+ * `strafe` (the stick to the side while the sim's facing stays put) and `turn` (the facing
+ * swung round on the spot).
+ */
+export const HERO_STATES: string[] = ["idle", "stride", "reverse", "strafe", "turn", "run", "swing", "air", "land", "climb", "dash", "slam", "held", "hurt", "ko"];
 /** The sim's villain states, plus `hit` (idle, taking a blow every 1.4 s). */
 export const VILLAIN_STATES = ["idle", "windup", "attack", "hit", "stunned", "guard", "open", "webbed"] as const;
 /** Waiting, `wave` (the hero swings close) and `talk` (the errand is open). */
@@ -84,6 +89,92 @@ export function labCity(ally: LabCharacter | null): City {
 
 const v = (x = 0, y = 0, z = 0): Vec3 => ({ x, y, z });
 
+/** The sim's roof running (ruleset 2's numbers): the push from a standstill, easing off near the top speed, and the brake that also kills sideways slip. */
+const RUN_TOP = 390;
+const RUN_ACCEL = 1900;
+const RUN_ACCEL_TOP = 0.4;
+const RUN_BRAKE = 2200;
+/** How fast the sim turns the facing toward the velocity (rad/s). */
+const SIM_TURN = 12;
+
+/** One step of a stick program: where the stick points (null: let go) until `until` says it's done. */
+interface StickStep {
+  stick: [number, number] | null;
+  until(t: number, p: Vec3): boolean;
+}
+
+/**
+ * A copy of game-core's `run` on a roof: speed along the stick on an easing curve, braking
+ * when over it or going the other way, sideways slip braked away; the sim's facing turns
+ * toward the velocity at its rate.
+ */
+class RoofRunner {
+  readonly pos = v();
+  readonly vel = v();
+  yaw = 0;
+  private step = 0;
+  private t = 0;
+
+  reset(x: number, z: number, yaw: number): void {
+    Object.assign(this.pos, v(x, ROOF + 26, z));
+    Object.assign(this.vel, v());
+    this.yaw = yaw;
+    this.step = 0;
+    this.t = 0;
+  }
+
+  /** Advance the program by dt (it loops); returns the stick in use. */
+  advance(program: StickStep[], dt: number): [number, number] | null {
+    let s = program[this.step];
+    this.t += dt;
+    if (s.until(this.t, this.pos)) {
+      this.step = (this.step + 1) % program.length;
+      this.t = 0;
+      s = program[this.step];
+    }
+    const stick = s.stick;
+    const h = this.vel;
+    const [hx, hz] = stick ?? (Math.hypot(h.x, h.z) > 1 ? [h.x / Math.hypot(h.x, h.z), h.z / Math.hypot(h.x, h.z)] : [Math.sin(this.yaw), Math.cos(this.yaw)]);
+    const target = stick ? RUN_TOP : 0;
+    const along = h.x * hx + h.z * hz;
+    const side = -h.x * hz + h.z * hx;
+    let a = along;
+    if (a < target) {
+      if (a < 0) a = Math.min(target, a + RUN_BRAKE * dt);
+      else a = Math.min(target, a + RUN_ACCEL * (1 - (1 - RUN_ACCEL_TOP) * Math.min(1, a / Math.max(1, target))) * dt);
+    } else if (a > target) a = Math.max(target, a - RUN_BRAKE * dt);
+    const sd = side > 0 ? Math.max(0, side - RUN_BRAKE * dt) : Math.min(0, side + RUN_BRAKE * dt);
+    h.x = hx * a - hz * sd;
+    h.z = hz * a + hx * sd;
+    this.pos.x += h.x * dt;
+    this.pos.z += h.z * dt;
+    const hs = Math.hypot(h.x, h.z);
+    if (hs > 30) {
+      let d = Math.atan2(h.x, h.z) - this.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      this.yaw += Math.max(-SIM_TURN * dt, Math.min(SIM_TURN * dt, d));
+    }
+    return stick;
+  }
+}
+
+const after = (s: number) => (t: number) => t >= s;
+/** Run up the roof, pull the stick back into a reversal, run back past the start, stop, then start off the way he isn't facing. */
+const REVERSE: StickStep[] = [
+  { stick: null, until: after(1.2) },
+  { stick: [0, 1], until: (_, p) => p.z > 170 },
+  { stick: [0, -1], until: (_, p) => p.z < -200 },
+  { stick: null, until: after(1.4) },
+];
+/** The stick to one side and the other, with stops, while the sim's facing stays on +z. */
+const STRAFE: StickStep[] = [
+  { stick: null, until: after(1) },
+  { stick: [1, 0], until: (_, p) => p.x > 60 },
+  { stick: null, until: after(1.1) },
+  { stick: [-1, 0], until: (_, p) => p.x < -250 },
+  { stick: null, until: after(1.1) },
+];
+
 export class CastScript {
   readonly frame: RenderFrame3D;
   character: LabCharacter = "hero";
@@ -94,6 +185,7 @@ export class CastScript {
   onFlip: (() => void) | null = null;
   private t = 0;
   private lastCycle = -1;
+  private readonly runner = new RoofRunner();
   /** Distance round the stride's circle. */
   private dist = 0;
 
@@ -115,6 +207,8 @@ export class CastScript {
     this.state = state;
     this.t = 0;
     this.lastCycle = -1;
+    if (state === "reverse") this.runner.reset(-60, -200, 0);
+    if (state === "strafe") this.runner.reset(-95, -40, 0);
   }
 
   /** Where the camera should look (the featured body's middle). */
@@ -193,6 +287,28 @@ export class CastScript {
         const R = 170;
         const a = this.dist / R;
         set(v(-120 + Math.cos(a) * R, ROOF + 26, Math.sin(a) * R), v(-Math.sin(a) * sp, 0, Math.cos(a) * sp), true, sp > 1 ? "run" : "idle");
+        break;
+      }
+      case "reverse":
+      case "strafe": {
+        const r = this.runner;
+        r.advance(this.state === "reverse" ? REVERSE : STRAFE, dt);
+        const moving = Math.hypot(r.vel.x, r.vel.z) > 1;
+        set(r.pos, r.vel, true, moving ? "run" : "idle");
+        // The sim's facing: turning toward the velocity at its rate, or (strafing) held on +z.
+        h.facing = this.state === "strafe" ? v(0, 0, 1) : v(Math.sin(r.yaw), 0, Math.cos(r.yaw));
+        break;
+      }
+      case "turn": {
+        // On the spot: the facing swung 90° left, then 180° right, then back, at the sim's rate.
+        const u = t % 5.4;
+        const want = u < 1.2 ? 0 : u < 2.6 ? Math.PI / 2 : u < 4 ? -Math.PI / 2 : 0;
+        const from = u < 1.2 ? 0 : u < 2.6 ? 0 : u < 4 ? Math.PI / 2 : -Math.PI / 2;
+        const start = u < 1.2 ? 0 : u < 2.6 ? 1.2 : u < 4 ? 2.6 : 4;
+        const d = want - from;
+        const yaw = from + Math.sign(d) * Math.min(Math.abs(d), SIM_TURN * (u - start));
+        set(v(0, ROOF + 26, 0), v(), true, "idle");
+        h.facing = v(Math.sin(yaw), 0, Math.cos(yaw));
         break;
       }
       case "land": {

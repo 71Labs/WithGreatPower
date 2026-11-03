@@ -22,10 +22,14 @@ const CHARACTERS: LabCharacter[] = ["hero", ...VILLAINS, ...ALLIES];
 
 interface LabApi {
   set(character: LabCharacter, state: string): void;
+  /** Start the current state's motion over from its beginning. */
+  restart(): void;
   scrub(v: number | null): void;
   angle(a: number | null): void;
   /** Camera distance multiplier (1 = the state's framing; under 0.7 it follows the hero). */
   zoom(z: number): void;
+  /** Slow motion: the script and the cast run at this fraction of real time (1 = real time). */
+  speed(k: number): void;
   debug(on: boolean): void;
   tier(t: QualityTier): void;
   flip(): void;
@@ -166,9 +170,16 @@ export default function CastBench() {
         setCharacter(c);
         setState(s);
       },
+      restart: () => {
+        const s = actions.current?.script;
+        if (s) actions.current?.show(s.character, s.state);
+      },
       scrub: (v) => setScrub(v === null || !Number.isFinite(v) ? null : Math.min(1, Math.max(0, v))),
       zoom: (z) => {
         if (actions.current && Number.isFinite(z)) actions.current.zoom = Math.min(4, Math.max(0.1, z));
+      },
+      speed: (k) => {
+        if (actions.current && Number.isFinite(k)) actions.current.speed = Math.min(1, Math.max(0.05, k));
       },
       angle: (a) => {
         setTurntable(a === null || !Number.isFinite(a));

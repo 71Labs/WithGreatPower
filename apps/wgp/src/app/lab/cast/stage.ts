@@ -35,6 +35,8 @@ export class LabStage {
   angle = 0.6;
   /** Camera distance multiplier; under 0.7 the camera follows the hero's body, under 0.35 his head and shoulders. */
   zoom = 1;
+  /** Slow motion: the fraction of real time the script and the cast run at. */
+  speed = 1;
   private turn = 0;
   private readonly focus = { x: 0, y: 330, z: 0 };
   private readonly joint = new Vector3();
@@ -72,7 +74,7 @@ export class LabStage {
 
   /** Advance one display frame; returns fresh stats about twice a second, else null. */
   frame(camera: PerspectiveCamera, size: { width: number; height: number }, dpr: number, delta: number, time: number, info: { calls: number; triangles: number }): StageStats | null {
-    const dt = Math.min(delta, 0.1);
+    const dt = Math.min(delta, 0.1) * this.speed;
     const s = this.script;
     s.step(dt);
     const p = s.frame.hero.pos;
