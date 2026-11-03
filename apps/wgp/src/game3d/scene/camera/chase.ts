@@ -30,9 +30,17 @@
  *     are scored by their room: the arena bounds plus some slack, and the buildings.
  *   - The score prefers side-on views and the current side, and is re-picked four times a
  *     second.
- *   - The look point splits the angles down to each fighter, and a big height gap backs the
- *     arm off and widens the FOV a little, so both stay in frame.
- *   - Pitch stays low (16°, climbing to 23° at most when boxed in) so the city stays behind
+ *   - The arm is the shortest that keeps both bodies inside a safe frame (clear of the HUD)
+ *     from where the camera looks now, at its FOV and the screen's shape (`arenaFit`), now and
+ *     a quarter second on along their velocities, so a close fight reads big, a flyer far
+ *     overhead still fits, and the shot widens before a fighter leaves it. The fit widens
+ *     within about a second and tightens slowly (slower still under reduced motion), through
+ *     the arm's own spring: no breathing with every swing. Mouse look turns the camera as
+ *     ever; the fit only changes how far back it sits. On a portrait screen the fit never
+ *     sits further back than the roomy distance the sides are scored for.
+ *   - The look point splits the angles down to each fighter, and a big height gap widens the
+ *     FOV a little.
+ *   - Pitch stays low (16°, easing up to 23° at most when boxed in) so the city stays behind
  *     the fighters. The arm shortens (never under 280) rather than climbing to a top-down
  *     view, and the shader fades a corner tower in the way.
  *
@@ -118,12 +126,28 @@ export const CHASE_TUNING = {
   pitchMax: 1.25,
   /** Arena two-shot: angles off the fighters' line to try (radians), distance range, pitch and its cap. */
   arenaSides: [1.15, 0.8, 0.5] as readonly number[],
-  arenaMinDist: 460,
+  arenaMinDist: 400,
   arenaMaxDist: 1100,
+  /** The least room a side is scored for (the fit itself may ask for less). */
+  arenaRoomMin: 460,
+  /** The two-shot fit: each fighter's half extent (a body, a glider, a reaching arm), and the share of the half frame both stay inside, across and up-down (the HUD sits at the edges). */
+  arenaBody: 60,
+  arenaSafeX: 0.66,
+  arenaSafeY: 0.58,
+  /** The fit's low-pass (s): widening, tightening, and tightening under reduced motion; and the arm's spring when a two-shot widens (s). */
+  arenaFitOut: 0.2,
+  arenaFitIn: 1.4,
+  arenaFitInSteady: 2.6,
+  arenaDistOutTime: 0.5,
+  /** The fit also takes both fighters this far ahead along their velocities (s), but never more than `arenaLeadMax` units ahead. */
+  arenaLead: 0.25,
+  arenaLeadMax: 140,
   /** Extra vertical FOV (degrees) when the fighters are far apart in height, or the arm is boxed in (not under reduced motion). */
   arenaFovBoost: 8,
   arenaPitch: 0.28,
   arenaPitchMax: 0.4,
+  /** The boxed-in climb's spring (s). */
+  arenaClimbTime: 0.35,
   /** Margin inside the arena bounds, how far past them the camera may go, and how often to re-pick a side (s). */
   arenaMargin: 30,
   arenaSlack: 260,
@@ -149,8 +173,9 @@ export interface ChaseInput {
   anchor: Vec3 | null;
   /** The hero's facing (unit xz), for the first view when the run starts standing still. */
   facing: Vec3 | null;
-  /** The other fighter for the arena two-shot, or null outside fights. */
+  /** The other fighter for the arena two-shot, or null outside fights; and its velocity, when the frame has it. */
   rival: Vec3 | null;
+  rivalVel: Vec3 | null;
   /** The arena the two-shot stays near. */
   arena: Zone["bounds"] | null;
   /** Manual orbit this frame (radians, from mouse look or drag deltas) and whether a pointer is down. */
@@ -184,6 +209,7 @@ export function createChaseInput(): ChaseInput {
     anchor: null,
     facing: null,
     rival: null,
+    rivalVel: null,
     arena: null,
     orbitYaw: 0,
     orbitPitch: 0,
@@ -225,6 +251,59 @@ export function steersByHand(steer: { x: number; y: number } | null, t: ChaseTun
   return mag > t.steerMin && steer.y < t.steerForward * mag;
 }
 
+/**
+ * The two-shot's arm: the shortest distance from `pivot` (back along `yaw`, up by `pitch`)
+ * at which both fighters, each `arenaBody` round, sit inside the safe frame: across, each
+ * within `arenaSafeX` of the half width of the view centred on the pivot; up and down, the
+ * pair's angular spread within `arenaSafeY` of the half height (the look point centres that
+ * spread). Perspective is exact: the nearer fighter counts bigger. Capped at `arenaMaxDist`.
+ */
+export function arenaFit(a: Vec3, b: Vec3, pivot: Vec3, yaw: number, pitch: number, fov: number, aspect: number, t: ChaseTuning = CHASE_TUNING): number {
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const sy = Math.sin(yaw);
+  const cy = Math.cos(yaw);
+  const tanV = Math.tan((clamp(fov, 10, 150) * Math.PI) / 360);
+  const tanX = tanV * Math.max(0.1, aspect) * t.arenaSafeX;
+  const tanY = tanV * t.arenaSafeY;
+  const r = t.arenaBody;
+  // Each fighter against the arm (toward the camera), the view's right and its up.
+  const ax = a.x - pivot.x;
+  const ay = a.y - pivot.y;
+  const az = a.z - pivot.z;
+  const bx = b.x - pivot.x;
+  const by = b.y - pivot.y;
+  const bz = b.z - pivot.z;
+  const depthA = -sy * cp * ax + sp * ay - cy * cp * az;
+  const depthB = -sy * cp * bx + sp * by - cy * cp * bz;
+  const latA = Math.abs(-cy * ax + sy * az);
+  const latB = Math.abs(-cy * bx + sy * bz);
+  const upA = sy * sp * ax + cp * ay + cy * sp * az;
+  const upB = sy * sp * bx + cp * by + cy * sp * bz;
+  // Across is linear in the distance.
+  let lo = Math.max(depthA + (latA + r) / tanX, depthB + (latB + r) / tanX, 1);
+  const hi = t.arenaMaxDist;
+  if (!(lo < hi)) return hi;
+  const fits = (d: number) => {
+    const za = d - depthA;
+    const zb = d - depthB;
+    if (za < 1 || zb < 1) return false;
+    const top = Math.max(Math.atan2(upA + r, za), Math.atan2(upB + r, zb));
+    const bottom = Math.min(Math.atan2(upA - r, za), Math.atan2(upB - r, zb));
+    return Math.tan((top - bottom) / 2) <= tanY;
+  };
+  if (fits(lo)) return lo;
+  if (!fits(hi)) return hi;
+  // Up and down: bisect (the spread shrinks as the arm grows).
+  let up = hi;
+  for (let i = 0; i < 14; i++) {
+    const mid = (lo + up) / 2;
+    if (fits(mid)) up = mid;
+    else lo = mid;
+  }
+  return up;
+}
+
 export class ChaseCamera {
   readonly pose: ChasePose = { position: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, fov: CHASE_TUNING.fovSlow, arm: 0, want: 0, yaw: 0 };
   /** The yaw, unwrapped (a spring needs continuity). */
@@ -239,6 +318,8 @@ export class ChaseCamera {
   private sinceManual = Infinity;
   private readonly pitch = new Smoothed(CHASE_TUNING.pitch);
   private readonly manualPitch = new Smoothed();
+  /** The extra pitch a boxed-in two-shot climbs by. */
+  private readonly climb = new Smoothed();
   private readonly dist = new Smoothed(CHASE_TUNING.distSlow);
   private readonly fov = new Smoothed(CHASE_TUNING.fovSlow);
   private readonly arm = new Smoothed(CHASE_TUNING.distSlow);
@@ -252,6 +333,8 @@ export class ChaseCamera {
   private arenaLine = 0;
   private readonly sepAvg = { x: 0, z: 0 };
   private arenaPickIn = 0;
+  /** The two-shot fit, low-passed (widening fast, tightening slowly). */
+  private fitAvg = 0;
   private inArena = false;
   private started = false;
   // Scratch.
@@ -264,6 +347,10 @@ export class ChaseCamera {
   private readonly leadNow: MutableVec3 = { x: 0, y: 0, z: 0 };
   private readonly leanNow: MutableVec3 = { x: 0, y: 0, z: 0 };
   private readonly dir: MutableVec3 = { x: 0, y: 0, z: 0 };
+  private readonly ahead: [MutableVec3, MutableVec3] = [
+    { x: 0, y: 0, z: 0 },
+    { x: 0, y: 0, z: 0 },
+  ];
 
   constructor(
     private raycast: Raycast | null = null,
@@ -318,19 +405,42 @@ export class ChaseCamera {
     let pitchWant = t.pitch + clamp(-this.vyAvg * t.pitchPerFall, -t.pitchRiseMax, t.pitchFallMax);
     let focusY = hero.y;
     let fovBoost = 0;
+    let roomWant = distWant;
     if (arena && input.rival) {
       const r = input.rival;
       const dx = r.x - hero.x;
       const dy = r.y - hero.y;
       const dz = r.z - hero.z;
-      // Vertical separation counts more: the view is wider than it is tall.
-      const sep = Math.sqrt(dx * dx + dz * dz + dy * dy * 2.4);
-      distWant = clamp(sep * 1.05 + 330, t.arenaMinDist, t.arenaMaxDist);
+      // Vertical separation counts more: the view is wider than it is tall. The sides are
+      // scored for this much room (more than the fit asks), so the arm has some to spare.
+      roomWant = clamp(Math.sqrt(dx * dx + dz * dz + dy * dy * 2.4) * 1.05 + 330, t.arenaRoomMin, t.arenaMaxDist);
       if (!input.reducedMotion) fovBoost = clamp((Math.abs(dy) - 200) / 400, 0, 1) * t.arenaFovBoost;
       pitchWant = t.arenaPitch;
       this.pivotWant.x = (hero.x + r.x) / 2;
       this.pivotWant.z = (hero.z + r.z) / 2;
       focusY = (hero.y + r.y) / 2;
+      // The arm that fits both, seen the way the camera looks now (the player's own look included).
+      const o = this.probe;
+      o.x = this.pivotWant.x;
+      o.y = focusY + t.pivotLift * (this.started ? this.arm.value : t.arenaMinDist);
+      o.z = this.pivotWant.z;
+      const fitYaw = this.started ? this.yawS.value : this.travelYaw;
+      const fitPitch = this.started ? this.pitch.value + this.manualPitch.value : t.arenaPitch;
+      const fitFov = this.started ? this.fov.value : chaseFov(this.speedAvg, input.aspect, input.reducedMotion, t);
+      // Where both will be a moment from now counts too, so the shot widens before a fighter leaves it.
+      const ahead = this.ahead;
+      leadInto(ahead[0], hero, vel, t);
+      leadInto(ahead[1], r, input.rivalVel, t);
+      const fit = Math.max(
+        arenaFit(hero, r, o, fitYaw, fitPitch, fitFov, input.aspect, t),
+        arenaFit(ahead[0], ahead[1], o, fitYaw, fitPitch, fitFov, input.aspect, t),
+      );
+      if (!this.inArena || first) this.fitAvg = fit;
+      else this.fitAvg += (fit - this.fitAvg) * lowPass(step, fit > this.fitAvg ? t.arenaFitOut : input.reducedMotion ? t.arenaFitInSteady : t.arenaFitIn);
+      // A portrait screen is narrow: the fit would back right off for a pair side by side.
+      // There it never sits further back than the roomier distance the sides are scored for.
+      const portrait = clamp((1 - input.aspect) / 0.55, 0, 1);
+      distWant = clamp(Math.min(this.fitAvg, lerp(t.arenaMaxDist, roomWant, portrait)), t.arenaMinDist, t.arenaMaxDist);
       // The fighters' line, low-passed and held while they're close (it spins when they swap sides).
       if (!this.inArena || first) {
         this.sepAvg.x = dx;
@@ -349,7 +459,7 @@ export class ChaseCamera {
       this.arenaYaw = this.trackSide(line, this.arenaYaw);
       if (this.arenaPickIn <= 0) {
         this.arenaPickIn = t.arenaPickEvery;
-        this.arenaYaw = this.pickSide(line, arena, focusY, distWant);
+        this.arenaYaw = this.pickSide(line, arena, focusY, roomWant);
       }
       yawTarget = this.arenaYaw;
     } else {
@@ -409,19 +519,25 @@ export class ChaseCamera {
     if (moved) this.manualPitch.snap(clamp(this.manualPitch.value + input.orbitPitch, t.pitchMin - t.pitch, t.pitchMax - t.pitch));
     else if (this.sinceManual >= t.manualHold) this.manualPitch.step(0, t.orbitRecenterTime, step);
     let pitch = clamp(this.pitch.step(pitchWant, t.pitchTime, step) + this.manualPitch.value, t.pitchMin, t.pitchMax);
-    const want = this.dist.step(distWant, t.distTime, step);
+    // A two-shot widens on a quicker spring than it tightens (both critically damped).
+    const want = this.dist.step(distWant, arena && distWant > this.dist.value ? t.arenaDistOutTime : t.distTime, step);
     const pivot = this.pivot.step(this.pivotWant, t.followTime, t.followTimeY, step, this.pivotNow);
     clampLag(this.pivot, pivot, this.pivotWant, Math.min(t.lagMax, t.lagArm * this.arm.value), t.lagArmY * this.arm.value);
 
-    // Arenas: when the room behind is short, climb a little (never toward top-down) and let the arm shorten.
+    // Arenas: when the room behind is short, climb a little (never toward top-down) and let the
+    // arm shorten. The climb eases in and out on its own spring: the room can change in a step
+    // (a fighter crossing the arena's edge), and a step in pitch is a jolt.
     const slack = t.arenaSlack - t.arenaMargin;
+    let climbWant = 0;
     if (arena) {
       this.dir.x = -Math.sin(yaw);
       this.dir.y = 0;
       this.dir.z = -Math.cos(yaw);
       const room = rayExit(pivot, this.dir, arena.x0 - slack, arena.x1 + slack, arena.z0 - slack, arena.z1 + slack);
-      if (room < want * Math.cos(pitch)) pitch = Math.max(pitch, Math.min(t.arenaPitchMax, Math.acos(clamp(room / want, 0, 1))));
+      if (room < want * Math.cos(pitch)) climbWant = Math.max(0, Math.min(t.arenaPitchMax, Math.acos(clamp(room / want, 0, 1))) - pitch);
     }
+    if (first) this.climb.snap(climbWant);
+    pitch += Math.max(0, this.climb.step(climbWant, t.arenaClimbTime, step));
 
     // The arm points back along the yaw and up by the pitch.
     const cp = Math.cos(pitch);
@@ -550,6 +666,20 @@ export class ChaseCamera {
     }
     return wrapAngle(best);
   }
+}
+
+/** Where a fighter will be `arenaLead` seconds on (at most `arenaLeadMax` away), into `out`. */
+function leadInto(out: MutableVec3, p: Vec3, v: Vec3 | null, t: ChaseTuning): void {
+  out.x = p.x;
+  out.y = p.y;
+  out.z = p.z;
+  if (!v) return;
+  const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+  if (!(sp > 1e-3) || !Number.isFinite(sp)) return;
+  const k = Math.min(t.arenaLead, t.arenaLeadMax / sp);
+  out.x += v.x * k;
+  out.y += v.y * k;
+  out.z += v.z * k;
 }
 
 /**

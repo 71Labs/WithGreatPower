@@ -132,9 +132,10 @@ export class SceneEngine {
     this.characters.fizzle();
   }
 
-  /** Cut the camera to its wanted pose on the next frame. */
+  /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
   cut(): void {
     this.chase.reset();
+    this.speedLines.reset();
   }
 
   update(frame: RenderFrame3D | null, camera: PerspectiveCamera, size: ViewSize, dpr: number, dt: number, time: number): ChasePose | null {
@@ -158,6 +159,7 @@ export class SceneEngine {
       const zone = this.cityData.zones[frame.stop];
       const rival = frame.mode === "fight" ? (frame.villains.find((v) => !v.copy) ?? frame.villains[0]) : undefined;
       i.rival = rival && zone ? rival.pos : null;
+      i.rivalVel = rival && zone ? (rival.vel ?? null) : null;
       i.arena = rival && zone ? zone.bounds : null;
       i.orbitYaw = this.orbitYaw;
       i.orbitPitch = this.orbitPitch;
