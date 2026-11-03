@@ -9,12 +9,15 @@
  *   seamlessly: near each seam a second pass starts on the loop's last 40 ms, which the
  *   file repeats just before the loop start (scripts/audio/master.py), and the two crossfade.
  * - Stings play once over the bed, which ducks under them; voices duck all the music.
- * - Files load when a cue first plays (or is preloaded for the next stop), never all up front.
+ * - Files load when a cue first plays (or is preloaded for the next stop), never all up front,
+ *   and wait while a page holds them back (holdAudioLoads: the 3D night's first seconds).
  * - The pause sheet ducks the music and the ambience; a hidden tab suspends everything.
  *
  * `?debug=1` or `?autopilot=1` keeps a log of cues, voices and missing files on
  * `window.__wgpAudio` for headless checks.
  */
+import { assetUrl } from "@/lib/assets";
+
 import { LOOPS } from "./loops";
 import { audioPath, type MusicId, type SfxId, type VoiceId } from "./manifest";
 
@@ -258,13 +261,57 @@ function context(): AudioContext | null {
 
 const isBed = (kind: Kind, id: string) => kind === "music" && !!LOOPS[`music/${id}`];
 
+/* ------------------------------------------------------------------ holding downloads */
+
+/** While set, downloads wait: every file for `effectsHold`, the looping beds for `bedsHold` (released with or after it). */
+let effectsHold: Promise<void> | null = null;
+let bedsHold: Promise<void> | null = null;
+
+export interface AudioHold {
+  /** Let everything but the looping beds download. */
+  effects(): void;
+  /** Let everything download. */
+  all(): void;
+}
+
+/**
+ * Hold sound downloads back while a page needs the connection for what's on screen (the 3D
+ * night: its code, then its hero's files): everything until `effects()`, the looping beds
+ * (the score and the city's ambience, almost all the bytes) until `all()`, or `maxMs` at the
+ * most. A cue asked for meanwhile plays once its file arrives, as ever. Releasing twice is
+ * harmless.
+ */
+export function holdAudioLoads(maxMs = 20_000): AudioHold {
+  let effects!: () => void;
+  let beds!: () => void;
+  const fx = new Promise<void>((resolve) => (effects = resolve));
+  const bd = new Promise<void>((resolve) => (beds = resolve));
+  const all = () => {
+    effects();
+    beds();
+  };
+  const timer = typeof window === "undefined" ? null : window.setTimeout(all, maxMs);
+  effectsHold = fx;
+  bedsHold = bd;
+  void fx.then(() => {
+    if (effectsHold === fx) effectsHold = null;
+  });
+  void bd.then(() => {
+    if (timer !== null) window.clearTimeout(timer);
+    if (bedsHold === bd) bedsHold = null;
+  });
+  return { effects, all };
+}
+
 function load(kind: Kind, id: string): Promise<AudioBuffer | null> {
   const url = audioPath(kind, id);
   let pending = buffers.get(url);
   if (!pending) {
     const c = context();
     if (!c) return Promise.resolve(null);
-    pending = fetch(url)
+    const wait = (LOOPS[`${kind}/${id}`] ? bedsHold : effectsHold) ?? Promise.resolve();
+    pending = wait
+      .then(() => fetch(assetUrl(url)))
       .then((r) => (r.ok ? r.arrayBuffer() : null))
       .then((b) => (b ? c.decodeAudioData(b) : null))
       .catch(() => null)
