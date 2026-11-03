@@ -9,10 +9,12 @@ import type { LeaderboardView } from "@/server/db/board-view";
 import type { BoardRow } from "@/server/db/leaderboard";
 
 import { boardLines, placeNotice } from "./board-lines";
+import { SeasonCard, TrophyMark } from "./season-card";
 
 type Board = LeaderboardView["board"];
 type View = LeaderboardView & { signedIn: boolean };
-type Load = { state: "loading" } | { state: "error" } | { state: "ready"; view: View };
+/** `receivedAt` is the device's clock when the answer came, for the countdown's skew. */
+type Load = { state: "loading" } | { state: "error" } | { state: "ready"; view: View; receivedAt: number };
 
 const TABS: StickerTab<Board>[] = [
   { id: "tonight", label: "Tonight" },
@@ -35,8 +37,15 @@ function periodLabel(view: View): { title: string; detail: string } {
   const start = day(view.season.startsAt, { month: "short", day: "numeric" });
   // ends_at is exclusive: the last day is the one before.
   const last = day(new Date(new Date(view.season.endsAt).getTime() - 1).toISOString(), { month: "short", day: "numeric" });
-  const when = { upcoming: `Starts ${start}, ends ${last}`, live: `${start} – ${last}`, ended: `Ended ${last}` }[view.season.phase];
-  return { title: view.season.name, detail: `${when} · nightly bests add up` };
+  // The season card under it says where the season stands.
+  return { title: view.season.name, detail: `${start} – ${last}` };
+}
+
+/** On the Season board, the places that win a trophy, and whether it's won yet. */
+type Trophy = { won: boolean } | null;
+function trophyFor(view: View, rank: number): Trophy {
+  if (view.board !== "season" || !view.season || rank > view.season.trophies) return null;
+  return { won: view.season.phase === "final" };
 }
 
 /* ------------------------------------------------------------------ rows */
@@ -57,7 +66,7 @@ function RankBadge({ rank }: { rank: number }) {
 /** Above the dock, like the place notice: the viewer's row sticks here while it's scrolled out of view. */
 const PINNED = "sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-10 sm:bottom-[calc(78px+env(safe-area-inset-bottom))]";
 
-function Row({ row, you }: { row: BoardRow; you: boolean }) {
+function Row({ row, you, trophy = null }: { row: BoardRow; you: boolean; trophy?: Trophy }) {
   return (
     <li
       className={`flex min-h-14 items-center gap-3 rounded-[14px] px-2.5 py-2 sm:px-3 ${you ? `${PINNED} bg-game-gold shadow-[var(--game-shadow-sm)] ring-2 ring-game-ink` : ""}`}
@@ -81,6 +90,12 @@ function Row({ row, you }: { row: BoardRow; you: boolean }) {
           {row.nearAccountId}
         </span>
       </span>
+      {trophy ? (
+        <>
+          <TrophyMark />
+          <span className="sr-only">{trophy.won ? `, won season trophy ${row.rank}` : ", in the trophy places"}</span>
+        </>
+      ) : null}
       <span className="num shrink-0 text-right text-[16px] font-bold leading-5">
         {points.format(row.score)}
         <span className="sr-only"> points</span>
@@ -108,12 +123,15 @@ function SkeletonRows() {
   );
 }
 
-function EmptyBoard({ board }: { board: Board }) {
+function EmptyBoard({ view }: { view: View }) {
+  const ended = view.season?.phase === "final" || view.season?.phase === "closing";
   const line =
-    board === "tonight"
+    view.board === "tonight"
       ? "Nobody has finished a ranked patrol tonight. Swing out and take first place."
-      : board === "season"
-        ? "No nightly bests in this season yet. Every night you finish adds to your total."
+      : view.board === "season"
+        ? ended
+          ? `${view.season?.name ?? "This season"} ended without a ranked night. Tonight’s board is still open.`
+          : "No nightly bests in this season yet. Every night you finish adds to your total."
         : "No verified runs yet. The first finished patrol sets the record.";
   return (
     <div className="flex flex-col items-start gap-3 px-2.5 py-6 sm:px-3">
@@ -132,16 +150,23 @@ function EmptyBoard({ board }: { board: Board }) {
 function PlaceNotice({ view }: { view: View }) {
   const notice = placeNotice(view);
   if (!notice) return null;
+  const final = view.board === "season" && view.season?.phase === "final";
+  const line =
+    notice === "sign-in"
+      ? final
+        ? "Sign in to see your place in the final standings."
+        : "Sign in to put your hero on the board. Guest runs stay unranked."
+      : final
+        ? `You didn’t finish a ranked night in ${view.season?.name ?? "this season"}. Tonight’s board is open.`
+        : view.board === "tonight"
+          ? "You’re not on tonight’s board yet. Finish a ranked patrol to get a place."
+          : "You’re not on this board yet. Finish a ranked patrol to get a place.";
   return (
     <div className={PINNED}>
       <StickerPanel as="aside" aria-label="Your place" className="p-2">
         <p className="flex min-h-14 items-center gap-3 px-2.5 text-[14px] leading-5 sm:px-3">
           <Users aria-hidden className="size-5 shrink-0" strokeWidth={2} />
-          {notice === "unranked"
-            ? view.board === "tonight"
-              ? "You’re not on tonight’s board yet. Finish a ranked patrol to get a place."
-              : "You’re not on this board yet. Finish a ranked patrol to get a place."
-            : "Sign in to put your hero on the board. Guest runs stay unranked."}
+          {line}
         </p>
       </StickerPanel>
     </div>
@@ -150,7 +175,7 @@ function PlaceNotice({ view }: { view: View }) {
 
 /** One list, so the viewer's row can stay pinned while the whole board scrolls under it. */
 function Board({ view }: { view: View }) {
-  if (view.rows.length === 0) return <EmptyBoard board={view.board} />;
+  if (view.rows.length === 0) return <EmptyBoard view={view} />;
   return (
     <ol aria-label="Heroes by rank" className="flex flex-col gap-0.5">
       {boardLines(view).map((line) =>
@@ -159,7 +184,7 @@ function Board({ view }: { view: View }) {
             ···
           </li>
         ) : (
-          <Row key={line.row.playerId} row={line.row} you={line.you} />
+          <Row key={line.row.playerId} row={line.row} you={line.you} trophy={trophyFor(view, line.row.rank)} />
         ),
       )}
     </ol>
@@ -184,7 +209,7 @@ export function LeaderboardScreen() {
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const view = (await res.json()) as View;
-        setLoads((prev) => ({ ...prev, [board]: { state: "ready", view } }));
+        setLoads((prev) => ({ ...prev, [board]: { state: "ready", view, receivedAt: Date.now() } }));
       })
       .catch(() => {
         if (controller.signal.aborted) return;
@@ -229,6 +254,9 @@ export function LeaderboardScreen() {
           ) : null}
         </div>
 
+        {load.state === "ready" && load.view.board === "season" && load.view.season ? (
+          <SeasonCard season={load.view.season} serverNow={load.view.now} receivedAt={load.receivedAt} />
+        ) : null}
         {load.state === "loading" ? <SkeletonRows /> : null}
         {load.state === "error" ? (
           <div className="flex flex-col items-start gap-3 px-2.5 py-6 sm:px-3">
