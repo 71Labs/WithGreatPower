@@ -6,6 +6,11 @@
  * One full-screen triangle drawn last, without depth; fragments are opaque or discarded, so
  * nothing blends. Hidden (no draw call) below the speed threshold, under reduced motion and
  * on tiers without it.
+ *
+ * The focus must always be a real number: the shader only draws a streak where its discard
+ * tests fail, and every comparison with NaN fails, so a NaN focus paints the whole frame
+ * ink. A hero who stops dead (stood beside an errand ally) has no vanishing point, so the
+ * focus holds where it was; a camera cut clears the lines at once.
  */
 import { BufferAttribute, BufferGeometry, Mesh, ShaderMaterial, Vector2, Vector3, type PerspectiveCamera } from "three";
 
@@ -63,6 +68,23 @@ void main() {
 `;
 
 const _v = new Vector3();
+const clampFocus = (v: number) => Math.max(-0.6, Math.min(0.6, v));
+
+/**
+ * The vanishing point of motion along `vel` (NDC, kept within ±0.6 of the centre; the centre
+ * when the motion points behind the camera), written into `out`. False, and `out` left as it
+ * was, when there's no direction to project: a stopped hero (projecting the camera's own
+ * position divides by zero) or a projection that isn't finite.
+ */
+export function motionFocus(vel: Vec3, camera: PerspectiveCamera, out: Vector2): boolean {
+  const len = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+  if (!(len > 1e-3) || !Number.isFinite(len)) return false;
+  _v.set(vel.x / len, vel.y / len, vel.z / len).multiplyScalar(1000).add(camera.position).project(camera);
+  if (!Number.isFinite(_v.x) || !Number.isFinite(_v.y) || !Number.isFinite(_v.z)) return false;
+  const behind = _v.z > 1;
+  out.set(behind ? 0 : clampFocus(_v.x), behind ? 0 : clampFocus(_v.y));
+  return true;
+}
 
 export class SpeedLines {
   readonly mesh: Mesh;
@@ -109,10 +131,19 @@ export class SpeedLines {
     u.uStrength.value = this.strength;
     u.uRes.value.set(Math.max(1, width), Math.max(1, height));
     u.uTick.value = Math.floor(time * 12) % 97;
-    // The vanishing point of the motion: far along the velocity from the camera.
-    _v.set(vel.x, vel.y, vel.z).normalize().multiplyScalar(1000).add(camera.position).project(camera);
-    const behind = _v.z > 1;
-    u.uFocus.value.set(behind ? 0 : Math.max(-0.6, Math.min(0.6, _v.x)), behind ? 0 : Math.max(-0.6, Math.min(0.6, _v.y)));
+    // The vanishing point of the motion; a stopped hero keeps the last one while the lines fade.
+    motionFocus(vel, camera, u.uFocus.value);
+  }
+
+  /** A camera cut: the lines belong to the last shot's motion, so they go at once. */
+  reset(): void {
+    this.strength = 0;
+    this.mesh.visible = false;
+  }
+
+  /** The current strength (0–1), for tests. */
+  get level(): number {
+    return this.strength;
   }
 
   dispose(): void {

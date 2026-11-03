@@ -132,9 +132,10 @@ export class SceneEngine {
     this.characters.fizzle();
   }
 
-  /** Cut the camera to its wanted pose on the next frame. */
+  /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
   cut(): void {
     this.chase.reset();
+    this.speedLines.reset();
   }
 
   update(frame: RenderFrame3D | null, camera: PerspectiveCamera, size: ViewSize, dpr: number, dt: number, time: number): ChasePose | null {
