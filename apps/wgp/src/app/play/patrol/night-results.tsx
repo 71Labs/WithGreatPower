@@ -12,7 +12,9 @@ import { useEffect, type ReactNode } from "react";
 
 import { StickerButton, StickerLink } from "@/components/game/kit";
 import { BadgeCheck, CircleAlert, Coins, Medal } from "@/components/icons";
+import { useAccount } from "@/game/store";
 import type { NightOutcome, NightSession } from "@/game3d/session";
+import { isUnclaimed } from "@/lib/near/policy";
 import { Chip } from "@/sim/ui/bits";
 import type { HeroSave } from "@/sim/ui/hooks";
 import { Results } from "@/sim/ui/results";
@@ -59,12 +61,20 @@ function Score({ label, value }: { label: string; value: number }) {
 
 /** The night's Bits, as the server minted them (src/lib/market/rewards.ts: the score, a level-up and the Bits tokens collected). */
 function EarnedBits({ bits }: { bits: number }) {
+  const account = useAccount();
+  // The mint goes out after this screen; say when they'll be spendable so they never look lost.
+  const unclaimed = account.status === "signed-in" && isUnclaimed(account.me.player);
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border-2 border-game-ink bg-game-gold px-3 py-2.5">
-      <p className="flex items-center gap-2 text-[15px] font-bold leading-5">
-        <Coins aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
-        You earned <span className="num">{fmt(bits)}</span> Bits
-      </p>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="flex items-center gap-2 text-[15px] font-bold leading-5">
+          <Coins aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
+          You earned <span className="num">{fmt(bits)}</span> Bits
+        </p>
+        <p className="pl-7 text-[12px] font-medium leading-4 text-game-ink [text-wrap:pretty]">
+          {unclaimed ? "Saved for you. Claim your name to spend them." : "They reach your market wallet within a minute or two."}
+        </p>
+      </div>
       <StickerLink href="/play/market" size="sm">
         Spend them at the market
       </StickerLink>

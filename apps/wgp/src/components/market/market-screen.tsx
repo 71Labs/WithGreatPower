@@ -14,11 +14,12 @@ import { StickerTabs, tabPanelProps, type StickerTab } from "@/components/game/u
 import { AVATARS } from "@/components/cast";
 import { CircleAlert, Coins, ExternalLink, Hourglass, KeyRound, LogIn, Store, Tag } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { showToast } from "@/game/store";
+import { showToast, useAccount } from "@/game/store";
 import { RARITY_LABEL } from "@wgp/game-core/data";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
 import { EXPLORER_URL } from "@/lib/near/config";
+import { isUnclaimed } from "@/lib/near/policy";
 
 import { ITEM_SOURCE, VENDOR_AFTER, vendorLine } from "./copy";
 import { FillSheet, ListSheet, TradeSheet, type Side } from "./sheets";
@@ -30,7 +31,7 @@ const ID = "market";
 
 /* ------------------------------------------------------------------ the stall */
 
-function Vendor({ view, me, signedIn, quickPlay, line }: { view: MarketView; me: MarketMe | null; signedIn: boolean; quickPlay: QuickPlay; line: string }) {
+function Vendor({ view, me, signedIn, unclaimed, quickPlay, line }: { view: MarketView; me: MarketMe | null; signedIn: boolean; unclaimed: boolean; quickPlay: QuickPlay; line: string }) {
   return (
     <StickerPanel as="section" aria-labelledby="vendor-name" className="flex flex-col gap-4 p-3 sm:flex-row sm:items-center sm:gap-5 sm:p-4">
       <div className="flex min-w-0 flex-1 items-start gap-3.5 sm:items-center">
@@ -60,7 +61,7 @@ function Vendor({ view, me, signedIn, quickPlay, line }: { view: MarketView; me:
                 <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-semibold leading-4 text-game-muted">
                   <Hourglass aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
                   <span>
-                    <span className="num">+{formatBits(me.pendingBits)}</span> on the way
+                    <span className="num">+{formatBits(me.pendingBits)}</span> {unclaimed ? "waiting for your name" : "on the way"}
                   </span>
                 </span>
               ) : null}
@@ -77,6 +78,15 @@ function Vendor({ view, me, signedIn, quickPlay, line }: { view: MarketView; me:
             <LogIn aria-hidden className="size-5" strokeWidth={2} />
             Sign in to trade
           </StickerButton>
+        ) : view.onChain && unclaimed ? (
+          // A Google player still on their key's address: nothing reaches NEAR until they pick a name.
+          <div className="flex flex-col gap-1.5">
+            <StickerButton variant="hero" onClick={askToSignIn} className="w-full">
+              <KeyRound aria-hidden className="size-5" strokeWidth={2} />
+              Claim your name
+            </StickerButton>
+            <p className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">Your Bits and loot are saved. They reach your wallet once you pick a name, and then you can trade.</p>
+          </div>
         ) : view.onChain && quickPlay === "needed" ? (
           <div className="flex flex-col gap-1.5">
             <StickerButton variant="hero" onClick={askToSignIn} className="w-full">
@@ -297,6 +307,7 @@ function Header({ view }: { view: MarketView | null }) {
 
 export function MarketScreen() {
   const { market, listings, me, signedIn, refresh, adopt } = useMarketData();
+  const account = useAccount();
   const view = market.state === "ready" ? market.data : null;
   const quickPlay = useQuickPlay(!!view?.onChain, me?.accountId ?? null);
   const [tab, setTab] = useState<Tab>("vendor");
@@ -308,7 +319,8 @@ export function MarketScreen() {
   // Gwei's line changes daily; the day comes from the server's answer, not the render.
   const day = view ? Math.floor(Date.parse(view.updatedAt) / 86_400_000) : 0;
 
-  const canTrade = signedIn && !!me && (!view?.onChain || quickPlay === "ready");
+  const unclaimed = account.status === "signed-in" && isUnclaimed(account.me.player);
+  const canTrade = signedIn && !!me && (!view?.onChain || (quickPlay === "ready" && !unclaimed));
 
   async function run(req: SimTradeRequest) {
     const res = await trade(!!view?.onChain, req);
@@ -366,7 +378,7 @@ export function MarketScreen() {
       ) : null}
       {view ? (
         <>
-          <Vendor view={view} me={me} signedIn={signedIn} quickPlay={quickPlay} line={after ?? vendorLine(day)} />
+          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day)} />
           <StickerTabs tabs={tabs} value={tab} onChange={setTab} label="Market" idPrefix={ID} className="self-stretch sm:min-w-[360px] sm:self-start" />
           {tab === "vendor" ? (
             <section {...tabPanelProps(ID, "vendor")} aria-label="Gwei’s prices" className="focus-visible:outline-offset-4">
