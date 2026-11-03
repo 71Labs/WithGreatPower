@@ -15,6 +15,9 @@ describe("near-key", () => {
     expect(nearKeyFromWallet({ address: implicit })).toEqual({ publicKey: key, implicitAccountId: implicit });
     expect(nearKeyFromWallet({ address: implicit.toUpperCase(), publicKey: key })).toEqual({ publicKey: key, implicitAccountId: implicit });
     expect(nearKeyFromWallet({ publicKey: `0x${implicit}` }).implicitAccountId).toBe(implicit);
+    // How Privy's API reports it: a 00 key-type byte (ed25519), then the key in hex.
+    expect(nearKeyFromWallet({ address: implicit, publicKey: `00${implicit}` })).toEqual({ publicKey: key, implicitAccountId: implicit });
+    expect(nearKeyFromWallet({ publicKey: `0x00${implicit}` }).implicitAccountId).toBe(implicit);
     expect(bytesToHex(publicKeyBytes(key.slice("ed25519:".length)))).toBe(implicit);
     expect(bytesToHex(hexToBytes(`0x${implicit}`))).toBe(implicit);
   });
@@ -25,6 +28,7 @@ describe("near-key", () => {
     expect(() => nearKeyFromWallet({ address: "alice.near" })).toThrow(NearKeyError);
     expect(() => nearKeyFromWallet({})).toThrow(NearKeyError);
     expect(() => publicKeyBytes("ed25519:short")).toThrow(NearKeyError);
+    expect(() => publicKeyBytes(`01${implicit}`)).toThrow(NearKeyError);
     expect(() => hexToBytes("abc")).toThrow(NearKeyError);
   });
 });
