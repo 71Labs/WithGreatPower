@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { Group, Vector3 } from "three";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -30,7 +31,7 @@ const RUN_BRAKE = 2200;
 
 async function parse(url: string) {
   const file = readFileSync(fileURLToPath(new URL(`../../../../../public${url}`, import.meta.url)));
-  return new GLTFLoader().parseAsync(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength), "");
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength), "");
 }
 
 const v = (x = 0, y = 0, z = 0): Vec3 => ({ x, y, z });

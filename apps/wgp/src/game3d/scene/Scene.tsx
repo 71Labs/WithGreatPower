@@ -87,10 +87,11 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
   const gl = useThree((s) => s.gl);
 
   useEffect(() => () => engine.dispose(), [engine]);
+  // The tier before the cast: the first build then asks for this tier's body files only.
+  useEffect(() => engine.setQuality(quality), [engine, quality]);
   useEffect(() => {
     engine.setCast(heroColors, cast);
   }, [engine, heroColors, cast]);
-  useEffect(() => engine.setQuality(quality), [engine, quality]);
   useEffect(() => engine.setReducedMotion(reducedMotion), [engine, reducedMotion]);
 
   useImperativeHandle(

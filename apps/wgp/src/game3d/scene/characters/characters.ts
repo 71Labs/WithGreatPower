@@ -6,10 +6,11 @@
  * physics debug overlay.
  *
  * The hero is a real human body: the MPFB model in public/models (hero-model.ts), fetched
- * on the first frame (the tier is settled by then: the low tier takes the lighter file),
- * moving with motion-capture clips (hero-anims.glb) where it stands, runs, lands, gets hit,
- * punches (when a villain within reach takes a hit) and falls. Until the files arrive, or
- * if they can't load, the procedural hero stands in.
+ * when the cast is first built (the tier is set by then: the low tier takes the lighter file;
+ * the patrol page has usually started the download already, files.ts), moving with
+ * motion-capture clips (hero-anims.glb) where it stands, runs, lands, gets hit, punches (when
+ * a villain within reach takes a hit) and falls. Until the files arrive, or if they can't
+ * load, the procedural hero stands in. The cast's files queue behind the hero's.
  *
  * Draw calls: two per visible body (fill and hull), two for all of Sybil's copies, two for
  * Doc's chains, one per visible strand, one for all the shadows.
@@ -36,6 +37,7 @@ import { CAST_DEFS } from "./cast";
 import type { Lod } from "./cast/kit";
 import { CAST_ANIMS, castAssetNow, castModelUrl, loadCastAsset, UNITS_PER_METRE, type CastAsset, type CastBodyId } from "./cast-asset";
 import { CastCopies, CastModel } from "./cast-model";
+import { queueAfter } from "./files";
 import { ARMS, DocChains } from "./chains";
 import { RigDebug } from "./debug";
 import { heroAssetNow, heroScale, HERO_ANIMS, HERO_MODEL, loadHeroAsset, loadHeroClips, type HeroAsset, type HeroClips } from "./hero-asset";
@@ -200,8 +202,17 @@ export class CharacterSystem {
     this.heroAsked = asset && this.heroClips ? asset.url : null;
     this.hero = { model: heroModel, anim: this.animateHero(heroModel) };
     this.root.add(heroModel.group);
+    // The hero's files first (the tier is settled before the first build); the cast's queue
+    // behind them, in the order the night meets them (files.ts).
+    this.askHero();
     const villainIds = new Set<VillainKey>(["gas-goblin", "sandwich-man", "doc-octochain", "sybil"].filter((id) => this.cast.includes(id as CastId)) as VillainKey[]);
     for (const z of this.city.zones) if (z.villain) villainIds.add(z.villain);
+    const met = (id: CastBodyId) => {
+      const i = this.cast.indexOf(id as CastId);
+      return i < 0 ? this.cast.length : i;
+    };
+    const bodies = new Set<CastBodyId>([...villainIds, ...this.city.zones.flatMap((z) => (z.ally ? [z.ally] : []))]);
+    for (const id of [...bodies].sort((a, b) => met(a) - met(b))) this.askCast(id);
     for (const id of villainIds) this.villain(id);
     for (const z of this.city.zones) {
       if (!z.ally) continue;
@@ -213,8 +224,6 @@ export class CharacterSystem {
       this.allies.push(ally);
       this.root.add(model.group);
     }
-    for (const id of villainIds) this.askCast(id);
-    for (const a of this.allies) this.askCast(a.zone.ally!);
   }
 
   /* ---------------------------------------------------------------- the cast's bodies */
@@ -254,8 +263,8 @@ export class CharacterSystem {
     return anim;
   }
 
-  /** Fetch a character's body file and the cast's clips (once each), then swap the body in. */
-  private askCast(id: CastBodyId): void {
+  /** Fetch a character's body file and the cast's clips (once each), then swap the body in. `urgent`: ahead of the queue. */
+  private askCast(id: CastBodyId, urgent = false): void {
     const url = this.castUrl(id);
     if (this.castAsked.has(url)) return;
     this.castAsked.add(url);
@@ -278,7 +287,7 @@ export class CharacterSystem {
         },
       );
     }
-    loadCastAsset(url).then(
+    loadCastAsset(url, urgent).then(
       (asset) => {
         if (this.castClips) this.swapCast(asset);
       },
@@ -366,7 +375,10 @@ export class CharacterSystem {
     const url = this.heroUrl();
     if (this.heroAsked === url) return;
     this.heroAsked = url;
-    Promise.all([loadHeroAsset(url), loadHeroClips(HERO_ANIMS)]).then(
+    const files = Promise.all([loadHeroAsset(url), loadHeroClips(HERO_ANIMS)]);
+    // Nothing queued (the cast, their clips) takes bandwidth from these.
+    queueAfter(files);
+    files.then(
       ([asset, clips]) => {
         this.heroClips = clips;
         const hero = this.hero;
@@ -528,7 +540,7 @@ export class CharacterSystem {
   update(frame: RenderFrame3D, camera: PerspectiveCamera, size: { width: number; height: number }, dt: number, time: number): void {
     if (this.hero) this.askHero();
     // Gwei swings in to assist in fights: her body comes once the first fight starts.
-    if (this.built && (frame.mode === "fight" || frame.hazards.some((h) => h.kind === "gwei"))) this.askCast("gwei");
+    if (this.built && (frame.mode === "fight" || frame.hazards.some((h) => h.kind === "gwei"))) this.askCast("gwei", true);
     const hero = this.hero;
     if (!hero) return;
     const cam = camera.position;
