@@ -29,8 +29,8 @@ import { getDb } from "@/server/db/client";
 import { HttpError, clientIp, handle, json, readJson } from "@/server/http";
 import { afterMarketRelay, beforeMarketRelay, isMarketMethod } from "@/server/market/relay";
 import { rateLimiter } from "@/server/rate-limit";
-import { chainEnv, relayerEnv } from "@/server/near/env";
-import { deviceId, NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spend } from "@/server/near/http";
+import { chainEnv } from "@/server/near/env";
+import { deviceId, NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spendRelay } from "@/server/near/http";
 import {
   relayerHasFunds,
   reserveTgasFor,
@@ -105,8 +105,7 @@ export const POST = handle("relay/meta", (request: Request) =>
 
     if (!(await relayerHasFunds())) throw new HttpError(503, "relayer_empty", "The relayer is out of funds");
     const reserved = reserveTgasFor(innerGas);
-    const releaseGas = await spend(db, "relay:tgas", "global", relayerEnv().dailyTgas, reserved);
-    await spend(db, "relay:calls", accountId, NEAR_BUDGETS.relayCallsPerAccountPerDay, 1, 429);
+    const releaseGas = await spendRelay(db, reserved, { scope: "relay:calls", key: accountId, limit: NEAR_BUDGETS.relayCallsPerAccountPerDay });
 
     let result;
     try {
