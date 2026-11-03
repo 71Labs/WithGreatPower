@@ -1,10 +1,13 @@
 /**
  * The chain outbox. Rows are written in the same transaction as the game state that
- * earns them; Chain's worker (src/server/near) claims `pending` rows and sends them.
+ * earns them; the mint worker (src/server/near/mint-worker.ts, GET /api/cron/mint)
+ * claims pending mints and sends them with the operator key.
  *
  * Payloads, for Chain:
  * - `mint_reward`: { runId, playerId, accountId, items: [{ tokenId, amount }], level?, digest }
  * - `mint_import`: { playerId, accountId, items: [{ tokenId, amount }], trophy, level?, digest }
+ * - `register_hero`: { accountId, name, suit }. Only the player's own key can send it, so
+ *   it waits (pending, no nonce) for their session key; see src/server/near/heroes.ts.
  *
  * Reward nonces. The contract's `mint_rewards` applies a mint only when its nonce is
  * exactly the account's last applied nonce + 1 (anything lower is "duplicate", anything
@@ -181,16 +184,37 @@ export async function claimRewardBatch(db: Db, now = new Date(), limit = REWARD_
     .where(and(inArray(chainOps.id, ids), eq(chainOps.status, "pending")))
     .returning({ id: chainOps.id });
   if (claimed.length !== ids.length) {
-    const mine = claimed.map((c) => c.id);
-    if (mine.length > 0) {
-      await db
-        .update(chainOps)
-        .set({ status: "pending", attempts: sql`${chainOps.attempts} - 1`, updatedAt: now })
-        .where(inArray(chainOps.id, mine));
-    }
+    await releaseRewardClaims(
+      db,
+      claimed.map((c) => c.id),
+      now,
+    );
     return [];
   }
   return plan.map((r) => ({ ...r, status: "sending" as const, attempts: r.attempts + 1, updatedAt: now }));
+}
+
+/** Hands claimed mints back to the queue unsent: pending again, the claim's attempt undone. */
+export async function releaseRewardClaims(db: Db, ids: string[], now = new Date()): Promise<void> {
+  if (ids.length === 0) return;
+  await db
+    .update(chainOps)
+    .set({ status: "pending", attempts: sql`${chainOps.attempts} - 1`, updatedAt: now })
+    .where(and(inArray(chainOps.id, ids), eq(chainOps.status, "sending")));
+}
+
+/**
+ * Sets aside claimed mints that can never be sent as they are (a malformed row): "dead",
+ * with the reason. Like any dead mint, each blocks its player's later mints until an
+ * operator resolves it.
+ */
+export async function buryRewardOps(db: Db, rows: { key: string; error: string }[], now = new Date()): Promise<void> {
+  for (const r of rows) {
+    await db
+      .update(chainOps)
+      .set({ status: "dead", error: r.error.slice(0, 500), updatedAt: now })
+      .where(and(eq(chainOps.id, r.key), eq(chainOps.status, "sending")));
+  }
 }
 
 /** The operator's Reward (src/server/near/operator.ts) for a claimed mint row. Throws on a malformed row. */
