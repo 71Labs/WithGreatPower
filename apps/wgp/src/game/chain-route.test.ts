@@ -83,6 +83,7 @@ function me(save: Save, rev = 1): Me {
 function status(over: Partial<ChainStatus> = {}): ChainStatus {
   return {
     available: true,
+    unclaimed: false,
     configured: true,
     network: "mainnet",
     contractId: "game.wgpnear.near",

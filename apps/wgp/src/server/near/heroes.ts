@@ -16,6 +16,7 @@ import { eq, sql } from "drizzle-orm";
 import { SUITS } from "@wgp/game-core/data";
 import type { Save, SuitId } from "@wgp/game-core/types";
 
+import { isUnclaimed } from "@/lib/near/policy";
 import type { Db } from "@/server/db/client";
 import { enqueueChainOp } from "@/server/db/outbox";
 import { chainOps, type Player } from "@/server/db/schema";
@@ -42,8 +43,11 @@ export interface HeroOnChain {
 
 type ChainPlayer = Pick<Player, "id" | "nearAccountId" | "authKind">;
 
-/** Test sign-ins aren't NEAR accounts: nothing goes on chain for them. */
-export const isOnNear = (player: Pick<Player, "authKind">) => player.authKind !== "dev";
+/**
+ * Test sign-ins aren't NEAR accounts, and an unclaimed Google player's implicit account
+ * doesn't exist on NEAR yet (src/lib/near/policy.ts): nothing goes on chain for either.
+ */
+export const isOnNear = (player: Pick<Player, "authKind" | "nearAccountId">) => player.authKind !== "dev" && !isUnclaimed(player);
 
 /** A name the contract accepts: no control characters, trimmed, at most 24 characters. Pure. */
 export function cleanHeroName(raw: string): string {

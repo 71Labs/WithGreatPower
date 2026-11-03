@@ -6,7 +6,8 @@
  *
  * - Wallet players: the wallet adds a function-call key, limited to the game contract
  *   with no deposit allowed (lib/near/wallet.tsx), and the server records it.
- * - Google players on a new device: NEAR Auth signs the same key, our relayer adds it.
+ * - Google players on a new device: NEAR Auth (a popup) or, for players who signed in
+ *   through Privy, their Privy NEAR key (no popup) signs the same key; our relayer adds it.
  *
  * The state (on, off, pending) comes from src/game/chain.ts. The account sheet loads this
  * module only when it opens for a signed-in player, so near-connect never weighs on the
@@ -174,6 +175,21 @@ function GoogleActions({ me, setProblem }: { me: Me; setProblem: (p: SignInProbl
   );
 }
 
+function PrivyActions({ me, setProblem }: { me: Me; setProblem: (p: SignInProblem | null) => void }) {
+  const { busy, run } = useEnable(me, setProblem);
+  const enable = () =>
+    run(async () => {
+      const { addSessionKeyWithPrivy } = await import("@/lib/privy/sign-in");
+      await addSessionKeyWithPrivy(me.player.nearAccountId);
+    }, false);
+  return (
+    <StickerButton variant="hero" className="w-full" aria-disabled={busy || undefined} aria-busy={busy || undefined} onClick={() => !busy && void enable()}>
+      <Zap aria-hidden className="size-5" strokeWidth={2} />
+      {busy ? "Adding the key…" : "Enable quick play"}
+    </StickerButton>
+  );
+}
+
 export default function QuickPlaySection({ me }: { me: Me }) {
   const chain = useChain();
   const [problem, setProblem] = useState<SignInProblem | null>(null);
@@ -195,7 +211,8 @@ export default function QuickPlaySection({ me }: { me: Me }) {
 
   const qp = chain.quickPlay;
   if (qp.state === "unavailable") {
-    if (qp.reason === "test-account") return null;
+    // Test players have no account on NEAR, and unclaimed ones see "Claim your name" instead.
+    if (qp.reason === "test-account" || qp.reason === "unclaimed") return null;
     return (
       <Shell state="unavailable">
         <Text>This server isn’t connected to NEAR yet, so suit changes are saved here but not put on chain.</Text>
@@ -213,18 +230,21 @@ export default function QuickPlaySection({ me }: { me: Me }) {
   }
 
   const wallet = me.player.authKind === "wallet";
+  const privy = me.player.authKind === "privy";
   const pendingKey = qp.state === "pending" && !chain.enabling ? qp.publicKey : null;
   return (
     <Shell state={qp.state}>
       <Text>
         {pendingKey
           ? "The key is on your account. Finish setup to start using it; no new approval needed."
-          : `Crafting and suit changes are saved, not yet on chain. One ${wallet ? "wallet" : "Google"} approval adds a key for this browser that can only play this game: it can’t move your tokens or NEAR.`}
+          : `Crafting and suit changes are saved, not yet on chain. ${privy ? "Turning it on adds" : `One ${wallet ? "wallet" : "Google"} approval adds`} a key for this browser that can only play this game: it can’t move your tokens or NEAR.`}
       </Text>
       {wallet ? (
         <WalletProvider>
           <WalletActions me={me} pendingKey={pendingKey} setProblem={setProblem} />
         </WalletProvider>
+      ) : privy ? (
+        <PrivyActions me={me} setProblem={setProblem} />
       ) : (
         <GoogleActions me={me} setProblem={setProblem} />
       )}

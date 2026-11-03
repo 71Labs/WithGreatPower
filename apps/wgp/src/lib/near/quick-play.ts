@@ -7,11 +7,12 @@
  * - pending: an "Enable quick play" is under way here, or the key was added to the
  *   account but the server hasn't recorded it yet (finishing needs no new approval).
  * - off: no usable key in this browser.
- * - unavailable: a test sign-in (not a NEAR account), or a server without NEAR settings.
+ * - unavailable: a test sign-in (not a NEAR account), a Google player who hasn't claimed
+ *   a name yet (their implicit account isn't on NEAR), or a server without NEAR settings.
  */
 
 export type QuickPlay =
-  | { state: "unavailable"; reason: "test-account" | "not-configured" }
+  | { state: "unavailable"; reason: "test-account" | "unclaimed" | "not-configured" }
   | { state: "off" }
   | { state: "pending"; publicKey: string | null }
   | { state: "on"; publicKey: string };
@@ -25,6 +26,8 @@ export interface LocalKey {
 export interface QuickPlayInput {
   /** The signed-in account is a real NEAR account. */
   available: boolean;
+  /** An unclaimed Google player (src/lib/near/policy.ts): no account on NEAR to hold a key yet. */
+  unclaimed?: boolean;
   /** The server can relay game calls. */
   configured: boolean;
   accountId: string;
@@ -37,6 +40,7 @@ export interface QuickPlayInput {
 }
 
 export function quickPlayState(i: QuickPlayInput): QuickPlay {
+  if (i.unclaimed) return { state: "unavailable", reason: "unclaimed" };
   if (!i.available) return { state: "unavailable", reason: "test-account" };
   if (!i.configured) return { state: "unavailable", reason: "not-configured" };
   const key = i.localKey;

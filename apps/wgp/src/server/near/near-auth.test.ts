@@ -51,6 +51,14 @@ describe("verifyNearAuthIdToken", () => {
     expect(id).toEqual({ sub: "google-oauth2|1234567890", email: "peter@example.com" });
   });
 
+  it("says when Auth0 verified the email, the only case in which it links a Privy player", async () => {
+    clearJwksCache();
+    const verified = await verifyNearAuthIdToken(jwt(idClaims({ email_verified: true })), { env: ENV, fetcher, now: NOW });
+    expect(verified).toEqual({ sub: "google-oauth2|1234567890", email: "peter@example.com", emailVerified: true });
+    const unverified = await verifyNearAuthIdToken(jwt(idClaims({ email_verified: "true" })), { env: ENV, fetcher, now: NOW });
+    expect(unverified.emailVerified).toBeUndefined();
+  });
+
   it("refuses forged, foreign, expired and stale tokens", async () => {
     clearJwksCache();
     const cases: [string, RegExp][] = [

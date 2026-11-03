@@ -18,6 +18,8 @@
  * sign-in, returning               200 { accountId, created: false, sessionKeyLive }
  *     Session cookie set. If this browser's key isn't live yet, add it: NEAR Auth signs
  *     an AddKey delegate (one popup) and /api/relay/meta { kind: "add-key" } relays it.
+ *     "Returning" includes a player who signed up with Google through Privy: the token's
+ *     verified email finds them, so they keep their hero (docs/ARCHITECTURE.md §5).
  * verify                           200 { sub, userPublicKey, implicitAccountId, accountId | null, fastAuthContractId }
  *     Checks the token and derives the key without creating anything (the lab uses it).
  *
@@ -27,7 +29,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { getDb } from "@/server/db/client";
-import { findOrCreatePlayer } from "@/server/db/players";
+import { findOrCreatePlayer, findPlayerForLogin, normalizeEmail, rememberEmail } from "@/server/db/players";
 import { createSession } from "@/server/auth/session";
 import { HttpError, badRequest, clientIp, handle, json, readJson } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
@@ -36,7 +38,7 @@ import { assertHandleAvailable, createPlayerAccount, normalizeHandle, suggestHan
 import { NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spend } from "@/server/near/http";
 import { nearAuthNonceCookieName, readCookie, redeemNearAuthNonce } from "@/server/near/login-nonce";
 import { deriveNearAuthPublicKey, implicitAccountId, verifyNearAuthIdToken } from "@/server/near/near-auth";
-import { addSessionKey, liveSessionKeys, playerByAuthSub } from "@/server/near/session-keys";
+import { addSessionKey, liveSessionKeys } from "@/server/near/session-keys";
 
 const publicKey = z.string().regex(/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,50}$/, "an ed25519 public key");
 
@@ -67,7 +69,11 @@ export const POST = handle("auth/near-auth", (request: Request) =>
 
     const env = nearAuthEnv();
     const userPublicKey = await deriveNearAuthPublicKey(identity.sub, env);
-    const existing = await playerByAuthSub(db, identity.sub);
+    // Known by this Google sub, or by the verified email of a player who signed up
+    // through Privy: the same person keeps the same hero whichever service signs them in.
+    const email = identity.emailVerified ? normalizeEmail(identity.email) : null;
+    const found = await findPlayerForLogin(db, { authSub: identity.sub, email });
+    const existing = found ? await rememberEmail(db, found.player, email) : null;
 
     if (input.mode === "verify") {
       await redeemNearAuthNonce(db, { ...nonce, consume: true });
@@ -107,7 +113,7 @@ export const POST = handle("auth/near-auth", (request: Request) =>
       throw error;
     }
     await clearNonceCookie();
-    const player = await findOrCreatePlayer(db, { nearAccountId: created.accountId, authKind: "near_auth", authSub: identity.sub, handle: handleName });
+    const player = await findOrCreatePlayer(db, { nearAccountId: created.accountId, authKind: "near_auth", authSub: identity.sub, handle: handleName, email });
     await addSessionKey(db, { playerId: player.id, publicKey: input.sessionPublicKey, addTx: created.txHash });
     await createSession(player.id, request);
     return json({ accountId: created.accountId, created: true, txHash: created.txHash, sessionKeyLive: true }, { status: 201 });

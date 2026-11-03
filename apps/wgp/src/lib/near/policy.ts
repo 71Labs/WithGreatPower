@@ -48,3 +48,20 @@ export const ACCOUNT_ID_RE = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+
 export function isAccountId(value: string): boolean {
   return ACCOUNT_ID_RE.test(value);
 }
+
+/** An implicit account id: the 32 bytes of an ed25519 public key, in lowercase hex. */
+export const IMPLICIT_ACCOUNT_RE = /^[0-9a-f]{64}$/;
+
+export function isImplicitAccountId(value: string): boolean {
+  return IMPLICIT_ACCOUNT_RE.test(value);
+}
+
+/**
+ * A Google player (through Privy) who signed up before the account factory was live, so
+ * they play on their key's implicit account id, which doesn't exist on NEAR. They claim
+ * `<handle>.<parent>` later (POST /api/auth/privy/claim). Until then nothing is sent on
+ * chain for them: their reward mints wait in the outbox and quick play is off.
+ */
+export function isUnclaimed(player: { authKind: string; nearAccountId: string }): boolean {
+  return player.authKind === "privy" && isImplicitAccountId(player.nearAccountId);
+}
