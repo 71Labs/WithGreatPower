@@ -7,8 +7,9 @@
  *   cd apps/wgp && pnpm exec tsx ../../scripts/verify-run.ts <runId>          # one run
  *   … --base http://localhost:3000   … --top 10   … --board tonight
  *
- * Exits non-zero if any run doesn't reproduce. A run recorded under a different ruleset
- * needs that version of game-core (check out the commit that shipped it).
+ * Exits non-zero if any run doesn't reproduce. A run recorded under another ruleset is
+ * skipped: replay it from the git tag of its ruleset (`git checkout ruleset-v2`, for
+ * runs from before ruleset 3).
  */
 import { replayRun } from "@wgp/game-core/replay";
 import { RULESET_VERSION } from "@wgp/game-core/sim3d/constants";
@@ -49,18 +50,20 @@ async function topRuns(): Promise<string[]> {
   return view.rows.map((r) => r.runId).filter((id): id is string => !!id).slice(0, top);
 }
 
-async function verify(runId: string): Promise<boolean> {
+type Verdict = "ok" | "fail" | "skip";
+
+async function verify(runId: string): Promise<Verdict> {
   const run = await getJson<PublicReplay>(`/api/runs/${encodeURIComponent(runId)}/replay`);
   const label = `${run.runId.slice(0, 8)} ${run.handle}`;
   if (run.ruleset !== String(RULESET_VERSION)) {
-    console.log(`SKIP  ${label}: recorded under ruleset ${run.ruleset}, this checkout is ${RULESET_VERSION}`);
-    return true;
+    console.log(`SKIP  ${label}: recorded under ruleset ${run.ruleset}; replay it from the tag (git checkout ruleset-v${run.ruleset})`);
+    return "skip";
   }
   const result = replayRun({ save: run.startSave, seed: run.seed, log: new Uint8Array(Buffer.from(run.log, "base64")) });
   const ok = result.ok && result.score === run.score && result.ticks === run.ticks && (run.hash === null || result.hash === run.hash);
   const detail = `score ${result.score} vs ${run.score}, ticks ${result.ticks} vs ${run.ticks}, hash ${result.hash.slice(0, 12)} vs ${(run.hash ?? "-").slice(0, 12)}`;
   console.log(`${ok ? "OK  " : "FAIL"}  ${label}: ${result.ok ? detail : `replay rejected (${result.reason})`}`);
-  return ok;
+  return ok ? "ok" : "fail";
 }
 
 async function main() {
@@ -69,10 +72,11 @@ async function main() {
     console.log(`No ranked runs on the ${board} board at ${base} yet.`);
     return;
   }
-  let failed = 0;
-  for (const id of ids) if (!(await verify(id))) failed += 1;
-  console.log(`${ids.length - failed}/${ids.length} runs reproduced from ${base}.`);
-  if (failed > 0) process.exit(1);
+  const tally = { ok: 0, fail: 0, skip: 0 };
+  for (const id of ids) tally[await verify(id)] += 1;
+  const checked = tally.ok + tally.fail;
+  console.log(`${tally.ok}/${checked} runs reproduced from ${base}${tally.skip ? ` (${tally.skip} from another ruleset skipped)` : ""}.`);
+  if (tally.fail > 0) process.exit(1);
 }
 
 main().catch((error: unknown) => {
