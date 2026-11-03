@@ -9,6 +9,7 @@
     "lint": "eslint",
     "simulate": "tsx scripts/simulate.ts",
     "audio": "tsx --env-file=.env.local scripts/audio/generate.ts",
+    "audio:master": "python3 scripts/audio/master.py",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",

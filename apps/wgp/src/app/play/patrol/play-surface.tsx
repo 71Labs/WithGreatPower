@@ -18,7 +18,7 @@ import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
 import type { Stop, StopResult } from "@wgp/game-core/types";
 
-import { stopMusic } from "@/audio/player";
+import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { attachControls, InputLatch, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
 import { QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
@@ -207,6 +207,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       stopRecording();
       timers.forEach((t) => window.clearTimeout(t));
       stopMusic();
+      setAmbience(null);
+      setAudioPaused(false);
       if (debug || autopilot) delete window.__wgpPlay;
     };
   }, [loop, latch, run, session, stops, autopilot, debug, touch, say]);
@@ -278,7 +280,10 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   }, [togglePause, autopilot]);
 
   // Choosing shows the outcome on the sheet; "Swing on" sends the choice to the run.
-  const chooseErrand = useCallback((id: string) => setErrand((e) => (e && !e.chosen ? { ...e, chosen: id } : e)), []);
+  const chooseErrand = useCallback((id: string) => {
+    playSfx("ui-tap", { volume: 0.7 });
+    setErrand((e) => (e && !e.chosen ? { ...e, chosen: id } : e));
+  }, []);
   const leaveErrand = useCallback(() => {
     const stop = errand ? stops[errand.index] : null;
     if (!errand?.chosen || stop?.kind !== "errand") return;

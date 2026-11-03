@@ -7,8 +7,9 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 
-import { stopMusic } from "@/audio/player";
+import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { simAudio } from "@/audio/sim-audio";
+import { SoundSliders } from "@/components/game/sound-sliders";
 import { StickerLink, StickerPanel } from "@/components/game/kit";
 import { castById, type CastId } from "@wgp/game-core/cast";
 import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
@@ -156,6 +157,7 @@ function PlaySurface({ save }: { save: HeroSave }) {
       const p = ses.save().patrol;
       const stop = p?.stops[p.index];
       if (!p || stop?.kind !== "errand" || p.results.length > p.index) return;
+      playSfx("ui-tap", { volume: 0.7 });
       ses.send({ type: "errand", choice: id });
       setErrand((e) => (e ? { ...e, chosen: id } : e));
       if (autoErrands.current) window.setTimeout(leave, 600);
@@ -313,6 +315,8 @@ function PlaySurface({ save }: { save: HeroSave }) {
       loop.dispose();
       renderer?.dispose();
       stopMusic();
+      setAmbience(null);
+      setAudioPaused(false);
       session.current = null;
       if (debug) delete window.__wgpSim;
     };
@@ -462,7 +466,17 @@ function PlaySurface({ save }: { save: HeroSave }) {
           onLeave={leave}
         />
       ) : null}
-      {paused ? <PauseMenu loadout={save.hero.loadout.filter((id) => save.hero.powers[id])} onResume={() => togglePause(false)} /> : null}
+      {paused ? (
+        <PauseMenu
+          loadout={save.hero.loadout.filter((id) => save.hero.powers[id])}
+          onResume={() => togglePause(false)}
+          settings={
+            <div className="rounded-[16px] border-2 border-game-ink bg-game-paper-2 p-3">
+              <SoundSliders toggle />
+            </div>
+          }
+        />
+      ) : null}
       {needsChoice ? (
         <MotionChoice
           onPlay={() => {

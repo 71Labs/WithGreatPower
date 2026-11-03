@@ -3,7 +3,8 @@
 import { createElement, useEffect } from "react";
 
 import { StickerFrame, StickerLink, ON_PAPER } from "@/components/game/kit";
-import { markEditionRead } from "@/components/game/shell";
+import { playSfx, playSting, playVoice } from "@/audio/player";
+import { markEditionRead, useUnreadEdition } from "@/components/game/shell";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight } from "@/components/icons";
 import { AVATARS } from "@/components/cast";
@@ -107,15 +108,31 @@ function EmptyFrontPage() {
   );
 }
 
+/** When the jingle last played: a remount (or React's development double run) doesn't play it twice. */
+let lastJingle = -Infinity;
+
 /** The Daily Rug: the latest front page, written from your last patrol, on a sheet of newsprint. */
 export function DailyRugScreen() {
   const save = useHeroSave();
   const latestNight = save?.editions[0]?.night;
 
-  // Reading it clears the dock's "new" badge. Runs only while this page is on screen.
+  const unread = useUnreadEdition(save);
+
+  // The paper lands: its jingle over the hub theme, and the snap of newsprint.
   useEffect(() => {
-    if (latestNight) markEditionRead(latestNight);
-  }, [latestNight]);
+    if (performance.now() - lastJingle < 2000) return;
+    lastJingle = performance.now();
+    playSting("rug-jingle");
+    playSfx("newspaper", { volume: 0.8 });
+  }, []);
+
+  // Reading it clears the dock's "new" badge (and a new edition gets Bearson's shout).
+  // Runs only while this page is on screen.
+  useEffect(() => {
+    if (!latestNight) return;
+    if (unread) playVoice("bearson-late-edition", { delay: 1.1 });
+    markEditionRead(latestNight);
+  }, [latestNight, unread]);
 
   if (!save) return <GameLoading />;
   const [latest, ...older] = save.editions;
