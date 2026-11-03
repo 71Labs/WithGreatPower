@@ -44,7 +44,8 @@ All steps work on the live site, with no install.
    - **Do:** finish a night while signed in.
    - **See:**
      - the results show **Verified · Ranked**, the server's score and your rank on Tonight's board;
-     - https://www.wgponnear.fun/play/leaderboard lists you on the Tonight, Season and All-time boards.
+     - https://www.wgponnear.fun/play/leaderboard lists you on the Tonight, Season and All-time boards;
+     - the Season tab counts down to the end of Season 1 (Nov 5–14 UTC) and marks the top 10, who win soulbound trophies. After the close it shows the frozen final standings, with the root, the digest and the results file to check them.
 4. **Verify any ranked run yourself.**
    ```bash
    pnpm install
@@ -77,14 +78,14 @@ All steps work on the live site, with no install.
 | **The Mempool Market** | In-contract NPC vendor with a bonding curve per item, player listings held in escrow, and a 2% "gas fee" parody that's burned. Guards cap what a stolen game key could do. |
 | **No popups in play** | After sign-in, players get a game-only function-call key. Our relayer submits their signed actions as NEP-366 meta-transactions and pays the gas (`/api/relay/meta`: one action, zero deposit, allowlisted methods, budgets). |
 | **Sign-in** | NEAR wallets through near-connect with a NEP-413 signed message. Google through Privy: the server verifies Privy's access token and reads the player's verified email and NEAR key from Privy's API. Players are linked by verified email, so switching Google to NEAR Auth later keeps every hero. |
-| **Seasons** | `record_season` stores a season's results root and top 10 on chain (`scripts/near/record-season.ts`). |
+| **Seasons** | The first player request after a season's end (plus 50 minutes for runs already in flight) closes it, once: the final standings are frozen with their Merkle root, and `record_season` (root, results digest, top 10) is queued in the outbox. The operator sends it, and the contract stores it for good and mints a soulbound `trophy:<season>:<rank>` to each of the top 10. The results file with every leaf's proof is at `/api/seasons/<id>/results`; `scripts/near/record-season.ts` recomputes the same root. |
 
 ### Status (mainnet)
 
 | | |
 |---|---|
-| Live | The game, ranked runs verified by replay, leaderboards, Google sign-in (Privy) and NEAR wallet sign-in, the market and economy lab (simulated until the contract is live), the full soundtrack |
-| Being deployed | `game.wgpnear.near` and its relayer and operator accounts (`scripts/near/setup-mainnet.sh`). Until then, rewards are queued, not minted, the market runs in simulation (`onChain: false`), and Google players stay on their implicit accounts |
+| Live | The game, ranked runs verified by replay, leaderboards, Season 1 (Nov 5–14) with its automatic close, Google sign-in (Privy) and NEAR wallet sign-in, the market and economy lab (simulated until the contract is live), the full soundtrack |
+| Being deployed | `game.wgpnear.near` and its relayer and operator accounts (`scripts/near/setup-mainnet.sh`). Until then, rewards and season records (with their trophies) are queued, not minted, the market runs in simulation (`onChain: false`), and Google players stay on their implicit accounts |
 | Waiting on approval | NEAR Auth as a second Google sign-in path (mainnet client) |
 
 ## How verification works
@@ -111,7 +112,7 @@ pnpm dev                                         # http://localhost:3000/play
 
 | Command | What it does |
 |---|---|
-| `pnpm test` | Unit and integration tests: game-core (simulation, goldens, replay, a bot across 30 nights) and the app (server, verifier, market, relayer abuse cases, outbox) |
+| `pnpm test` | Unit and integration tests: game-core (simulation, goldens, replay, a bot across 30 nights) and the app (server, verifier, market, relayer abuse cases, outbox, season close) |
 | `pnpm typecheck` / `pnpm lint` | TypeScript and ESLint across the workspace |
 | `cd contracts/wgp && cargo test` | Contract unit tests. Sandbox tests are in `contracts/wgp/sandbox`. |
 | `cd apps/wgp && pnpm simulate 14` | A bot plays 14 nights through the rules engine |

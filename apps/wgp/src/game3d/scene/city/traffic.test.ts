@@ -60,4 +60,15 @@ describe("occlusion", () => {
     setOcclusion(u, { x: 0, y: 0, z: 0 }, null, null);
     expect(u.uOccHero.value.w).toBe(0);
   });
+
+  it("aims the rival's end at the villain itself, so a body just inside a tower still fades it", () => {
+    const u = createSharedUniforms();
+    setOcclusion(u, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 500 }, { x: 0, y: 0, z: 400 });
+    expect(OCCLUSION.pullRival).toBeLessThan(10);
+    const b: Vector4 = u.uOccB.value;
+    expect(b.w).toBe(1);
+    expect(b.z).toBeCloseTo(400 - OCCLUSION.pullRival);
+    // The hero's end still stops short of the wall he clings to.
+    expect(u.uOccA.value.z).toBeCloseTo(500 - OCCLUSION.pull);
+  });
 });

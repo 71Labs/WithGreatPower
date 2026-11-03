@@ -1,17 +1,26 @@
 /**
- * Commit a finished season on chain: Merkle root of the final board, digest of the
- * published results file, and trophies for the top 10. The contract accepts a season
+ * Commit a finished season on chain by hand: Merkle root of the final board, digest of
+ * the published results file, and trophies for the top 10. The contract accepts a season
  * once, forever, so this asks before sending.
+ *
+ * The server does this on its own: the first request after a season's freeze closes it
+ * (apps/wgp/src/server/db/season-close.ts, the same `commitSeason` as here) and the
+ * outbox sends record_season once the contract is live
+ * (apps/wgp/src/server/near/season-record.ts). This script is the manual fallback and a
+ * way to check the server's root; if both run, the server finds the season on chain and
+ * settles it when the roots match.
  *
  *   cd apps/wgp
  *   pnpm exec tsx --env-file=.env.local ../../scripts/near/record-season.ts <season_id> <board.json> [--out <dir>] [--send]
  *
- * board.json: the final Season board, ranked: [{ "rank": 1, "accountId": "peter.wgp.testnet", "score": 123450 }, …]
- *   (Backend: topEntries(db, "season", <season_id>, 10_000) mapped to rank/accountId/score.)
+ * board.json, either:
+ * - the final Season board, ranked: [{ "rank": 1, "accountId": "peter.wgp.testnet", "score": 123450 }, …]
+ *   (the frozen `seasons.standings` mapped to rank/accountId = nearAccountId/score); or
+ * - the server's published results file, GET /api/seasons/<id>/results ({ leaves: [...] }).
  *
- * Without --send it only writes <out>/season-<id>.json (publish it at /seasons/<id>.json)
- * and prints root, digest and top 10. With --send it also calls record_season from
- * OPERATOR_ACCOUNT_ID, after you type the season id.
+ * Without --send it only writes <out>/season-<id>.json (byte for byte what the server
+ * publishes) and prints root, digest and top 10. With --send it also calls record_season
+ * from OPERATOR_ACCOUNT_ID, after you type the season id.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -34,7 +43,8 @@ async function main() {
     process.exit(1);
   }
 
-  const board = JSON.parse(await readFile(boardFile, "utf8")) as SeasonLeaf[];
+  const parsed = JSON.parse(await readFile(boardFile, "utf8")) as SeasonLeaf[] | { leaves: SeasonLeaf[] };
+  const board = (Array.isArray(parsed) ? parsed : parsed.leaves).map(({ rank, accountId, score }) => ({ rank, accountId, score }));
   const commitment = commitSeason(seasonId, board);
   await mkdir(out, { recursive: true });
   const file = path.join(out, `season-${seasonId}.json`);

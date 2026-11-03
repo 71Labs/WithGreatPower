@@ -6,11 +6,14 @@
  *     message and recipient to `wallet.signMessage`, keep `token`.
  * { action: "verify", accountId, publicKey, signature, token }
  *     Checks the signature, that publicKey is a full-access key of accountId on chain, and
- *     the challenge (once, 5 minutes). 200 { accountId, playerId } and a session cookie.
+ *     the challenge (once on any instance, 5 minutes). 200 { accountId, playerId } and a
+ *     session cookie.
  * { action: "session-key", publicKey }   (signed in)
  *     "Enable quick play": after the wallet added a function-call key for the game
  *     contract, records it so the relayer accepts it. Checked on chain first.
  *     200 { publicKey, live: true }
+ *
+ * 415 when the body isn't sent as JSON (no form posts: login CSRF).
  */
 import { z } from "zod";
 
@@ -19,13 +22,13 @@ import { secret } from "@/server/auth/secrets";
 import { createSession, requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { findOrCreatePlayer } from "@/server/db/players";
-import { HttpError, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
+import { HttpError, assertJson, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
 import { chainEnv } from "@/server/near/env";
 import { NEAR_RATE_LIMITS, nearRoute } from "@/server/near/http";
 import { provider } from "@/server/near/rpc";
 import { addSessionKey } from "@/server/near/session-keys";
-import { handleFromAccount, issueChallenge, redeemChallenge, verifyWalletSignature } from "@/server/near/wallet-auth";
+import { burnChallenge, handleFromAccount, issueChallenge, redeemChallenge, verifyWalletSignature } from "@/server/near/wallet-auth";
 
 const accountId = z.string().refine(isAccountId, "not a NEAR account id");
 const publicKey = z.string().regex(/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,50}$/, "an ed25519 public key");
@@ -42,6 +45,7 @@ const recipientOf = (request: Request) => new URL(request.url).host;
 export const POST = handle("auth/wallet", (request: Request) =>
   nearRoute(async () => {
     rateLimiter.enforce("wallet-ip", clientIp(request), NEAR_RATE_LIMITS.walletPerIp);
+    assertJson(request);
     const input = await readJson(request, body, 4 * 1024);
     const recipient = recipientOf(request);
 
@@ -59,9 +63,12 @@ export const POST = handle("auth/wallet", (request: Request) =>
       try {
         await verifyWalletSignature({ accountId: input.accountId, publicKey: input.publicKey, signature: input.signature, nonce, recipient });
       } catch (error) {
-        throw unauthorized(`Signature rejected: ${(error as Error).message}`);
+        // Logged, not echoed: a failed RPC call's message can name the RPC URL, API key included.
+        console.error(`[auth/wallet] signature for ${input.accountId}: ${(error as Error).message}`);
+        throw unauthorized("Signature rejected: sign in with a full-access key of that account");
       }
       const db = await getDb();
+      if (!(await burnChallenge(db, input.token))) throw unauthorized("Sign-in challenge rejected: Challenge already used");
       const player = await findOrCreatePlayer(db, {
         nearAccountId: input.accountId,
         authKind: "wallet",
