@@ -109,6 +109,15 @@ const CHOICES = {
   error: { eyebrow: "Ranked night", title: "Couldn’t start a ranked night", body: "" },
 } as const;
 
+/**
+ * `?autopilot=1` hands the night to game-core's bot. In production it only plays nights
+ * that count for nothing (guest and unranked), so the bot can't put a score on the boards
+ * or earn Bits; in development it plays ranked nights too, for local end-to-end checks.
+ */
+function botMayPlay(session: NightSession): boolean {
+  return process.env.NODE_ENV !== "production" || session.mode !== "ranked";
+}
+
 function useUrlFlag(name: string): boolean {
   const [on] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get(name) === "1");
   return on;
@@ -191,7 +200,7 @@ export function Night3D() {
   } else {
     body = (
       <>
-        <PlaySurface key={phase.session.runId ?? phase.session.run.seed} session={phase.session} autopilot={autopilot} debug={debug} ended={!!ending} onDone={finish} onFallback={fallback} />
+        <PlaySurface key={phase.session.runId ?? phase.session.run.seed} session={phase.session} autopilot={autopilot && botMayPlay(phase.session)} debug={debug} ended={!!ending} onDone={finish} onFallback={fallback} />
         {ending ? <NightResults session={phase.session} ending={ending} onRetry={() => void finish()} /> : null}
       </>
     );

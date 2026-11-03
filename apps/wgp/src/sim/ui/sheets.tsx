@@ -220,7 +220,7 @@ export function HowToPlay({ loadout, mode = "2d", touch = false }: { loadout: Po
   return (
     <div className="flex flex-col gap-5 text-[14px] leading-5">
       <section className="flex flex-col gap-2">
-        <h3 className="text-[15px] font-bold">Swinging</h3>
+        <h3 className="text-[15px] font-bold text-game-ink">Swinging</h3>
         <ul className="flex list-disc flex-col gap-1.5 pl-5">
           {(thumbs ? SWINGING_TOUCH : SWINGING[mode]).map((line) => (
             <li key={line}>{line}</li>
@@ -228,7 +228,7 @@ export function HowToPlay({ loadout, mode = "2d", touch = false }: { loadout: Po
         </ul>
       </section>
       <section className="flex flex-col gap-2">
-        <h3 className="text-[15px] font-bold">Fighting</h3>
+        <h3 className="text-[15px] font-bold text-game-ink">Fighting</h3>
         <p>
           {thumbs
             ? "Slam into a villain at speed to land a hit, or tap a power by your right thumb. After a hit he guards for a moment. If Gwei Stacy is with you tonight, her face joins the powers in a fight: tap it to call her."
@@ -247,7 +247,7 @@ export function HowToPlay({ loadout, mode = "2d", touch = false }: { loadout: Po
       </section>
       {loadout.length ? (
         <section className="flex flex-col gap-2">
-          <h3 className="text-[15px] font-bold">Your powers</h3>
+          <h3 className="text-[15px] font-bold text-game-ink">Your powers</h3>
           <ul className="flex flex-col gap-2">
             {loadout.map((id, i) => {
               const Icon = POWER_ICONS[id];
