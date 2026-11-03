@@ -3,7 +3,9 @@
  * earns them; Chain's worker (src/server/near) claims `pending` rows and sends them.
  *
  * Payloads, for Chain:
- * - `mint_reward`: { runId, playerId, accountId, items: [{ tokenId, amount }], level?, digest }
+ * - `mint_reward`: { runId, playerId, accountId, items: [{ tokenId, amount }], level?, digest }.
+ *   `items` include the night's Bits as `item:bits` (src/lib/market/rewards.ts), so they
+ *   go out through the same `mint_rewards` call as the loot.
  * - `mint_import`: { playerId, accountId, items: [{ tokenId, amount }], trophy, level?, digest }
  *
  * Reward nonces. The contract's `mint_rewards` applies a mint only when its nonce is
@@ -33,6 +35,16 @@ export interface MintItem {
 }
 
 export const itemTokenId = (item: ItemId) => `item:${item}`;
+
+/** Bits, the Mempool Market's currency: an item token the contract mints like loot. */
+export const BITS_TOKEN_ID = "item:bits";
+
+/** A reward's items with `bits` Bits added (none when 0), still sorted by token id. */
+export function withBits(items: MintItem[], bits: number): MintItem[] {
+  const amount = Math.floor(bits);
+  if (amount <= 0) return items;
+  return [...items.filter((i) => i.tokenId !== BITS_TOKEN_ID), { tokenId: BITS_TOKEN_ID, amount }].sort((a, b) => a.tokenId.localeCompare(b.tokenId));
+}
 
 /** Outbox kinds sent through the contract's `mint_rewards`, each with a reward nonce. */
 export const MINT_KINDS = ["mint_reward", "mint_import"] as const;

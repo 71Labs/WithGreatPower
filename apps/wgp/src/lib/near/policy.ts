@@ -6,11 +6,18 @@
 
 export const TGAS = 1_000_000_000_000n;
 
+/**
+ * Mempool Market methods (contracts/wgp/src/market.rs). None takes a deposit; the
+ * contract's daily caps, listing floor and ceiling bound what a leaked key could do.
+ */
+export const MARKET_METHODS = ["market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"] as const;
+export type MarketMethod = (typeof MARKET_METHODS)[number];
+
 /** Game methods a session key may call through `/api/relay/meta`. */
-export const RELAY_METHODS = ["register_hero", "craft_suit", "equip_suit"] as const;
+export const RELAY_METHODS = ["register_hero", "craft_suit", "equip_suit", ...MARKET_METHODS] as const;
 export type RelayMethod = (typeof RELAY_METHODS)[number];
 
-/** Gas a relayed game call may attach. register_hero/craft/equip burn about 2.5 Tgas. */
+/** Gas a relayed game call may attach. Game and market calls burn about 2.5 to 3.5 Tgas. */
 export const MAX_RELAY_GAS = 30n * TGAS;
 /** What clients attach by default. */
 export const DEFAULT_RELAY_GAS = 30n * TGAS;

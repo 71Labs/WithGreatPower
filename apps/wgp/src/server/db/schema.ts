@@ -278,6 +278,50 @@ export const budgetCounters = pgTable(
   (t) => [primaryKey({ columns: [t.scope, t.key, t.period] })],
 );
 
+/* ------------------------------------------------------------------ the Mempool Market */
+
+/**
+ * Price history for charts, the 24 h change and The Daily Rug: one row per trade the
+ * server saw (relayed on chain, or simulated) and periodic snapshots of every pool
+ * (src/server/market/history.ts). Prices are the vendor's spot price × 1000 after it.
+ */
+export const marketPrices = pgTable(
+  "market_prices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    item: text("item").notNull(),
+    at: at("at").notNull().defaultNow(),
+    /** "trade" (vendor buy or sell), "fill" (a listing bought) or "snapshot". */
+    kind: text("kind").notNull(),
+    /** False for the simulated market that runs before the contract is live. */
+    onChain: boolean("on_chain").notNull(),
+    priceMilli: bigint("price_milli", { mode: "number" }).notNull(),
+    stock: integer("stock").notNull(),
+    /** The vendor's till for this item. */
+    till: bigint("till", { mode: "number" }).notNull(),
+    side: text("side"),
+    amount: integer("amount"),
+    /** Bits the trade moved (paid with the fee, received after it, or a listing's price). */
+    bits: bigint("bits", { mode: "number" }),
+    fee: bigint("fee", { mode: "number" }),
+    accountId: text("account_id"),
+    txHash: text("tx_hash"),
+  },
+  (t) => [index("market_prices_item_at_idx").on(t.item, t.at), index("market_prices_at_idx").on(t.at)],
+);
+
+/**
+ * The simulated market (src/server/market/sim.ts): the same book the contract keeps
+ * (pools, listings, daily counters) plus each account's Bits moved by simulated trades.
+ * One row, locked per trade. Used only until the contract's market is live.
+ */
+export const marketSim = pgTable("market_sim", {
+  id: text("id").primaryKey(),
+  state: jsonb("state").notNull(),
+  rev: integer("rev").notNull().default(0),
+  updatedAt: at("updated_at").notNull().defaultNow(),
+});
+
 export type Player = typeof players.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type ChainOp = typeof chainOps.$inferSelect;

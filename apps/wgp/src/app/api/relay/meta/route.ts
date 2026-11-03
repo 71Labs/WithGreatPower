@@ -2,7 +2,10 @@
  * POST /api/relay/meta — relay a NEP-366 meta-transaction; our relayer pays the gas.
  *
  * Body: { kind?: "game" | "add-key", signedDelegate: base64(borsh SignedDelegateAction), newKey?: "ed25519:…" }
- *   game     a session-key call to an allowlisted game method (register_hero, craft_suit, equip_suit)
+ *   game     a session-key call to an allowlisted game method (register_hero, craft_suit,
+ *            equip_suit, and the Mempool Market's market_buy, market_sell, list_item,
+ *            buy_listing, cancel_listing; see src/server/market/relay.ts for what the
+ *            server records around a market call)
  *   add-key  a returning player's NEAR Auth-signed AddKey of this device's game session key
  *
  * 200 { txHash, ok: true, result }            relayed, the call succeeded
@@ -22,6 +25,7 @@ import { TGAS } from "@/lib/near/policy";
 import { requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { HttpError, clientIp, handle, json, readJson } from "@/server/http";
+import { afterMarketRelay, beforeMarketRelay, isMarketMethod } from "@/server/market/relay";
 import { rateLimiter } from "@/server/rate-limit";
 import { chainEnv, relayerEnv } from "@/server/near/env";
 import { deviceId, NEAR_BUDGETS, NEAR_RATE_LIMITS, nearRoute, spend } from "@/server/near/http";
@@ -69,10 +73,14 @@ export const POST = handle("relay/meta", (request: Request) =>
 
     let innerGas: bigint;
     let newKey: string | null = null;
+    let method: string | null = null;
     if (input.kind === "game") {
       const verdict = validateGameDelegate(signed, { contractId: chain.contractId, blockHeight, ...lookup, sessionAccountId: accountId });
       if (!verdict.ok) throw new HttpError(verdict.status, verdict.code, verdict.message);
       innerGas = verdict.gas;
+      method = verdict.methodName;
+      // Market trades are mirrored into the save, so none while a ranked run replays from it.
+      if (isMarketMethod(method)) await beforeMarketRelay(db, session.playerId);
     } else {
       if (!input.newKey) throw new HttpError(400, "bad_request", "newKey is required for add-key");
       const access = await rpc
@@ -107,6 +115,9 @@ export const POST = handle("relay/meta", (request: Request) =>
 
     if (newKey && result.ok) await addSessionKey(db, { playerId: session.playerId, publicKey: newKey, addTx: result.txHash });
     if (input.kind === "game") await touchSessionKey(db, signed.delegate.publicKey);
+    if (result.ok && method && isMarketMethod(method)) {
+      await afterMarketRelay(db, { playerId: session.playerId, accountId, method, result: result.result, txHash: result.txHash });
+    }
 
     if (!result.ok) return json({ error: "call_failed", txHash: result.txHash, message: result.error }, { status: 422 });
     return json({ ok: true, txHash: result.txHash, result: result.result ?? null });

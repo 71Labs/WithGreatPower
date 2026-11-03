@@ -102,7 +102,8 @@ describe("runs", () => {
       const run = await startRun(db, { playerId, now: T0 });
       const out = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(240) });
 
-      expect(out).toMatchObject({ status: "verified", score: 4200, ticks: 12000, ranked: true, rev: rev + 1, idempotent: false });
+      // 4,200 points: 42 Bits, plus 5 for showing up.
+      expect(out).toMatchObject({ status: "verified", score: 4200, ticks: 12000, bits: 47, ranked: true, rev: rev + 1, idempotent: false });
       if (out.status !== "verified") throw new Error("unreachable");
       expect(out.tags.sort()).toEqual(["leaderboard:alltime:all", "leaderboard:season:s1", "leaderboard:tonight:2026-11-06"]);
 
@@ -128,6 +129,7 @@ describe("runs", () => {
         accountId: "peter.wgp.testnet",
         digest: row.digest,
         items: [
+          { tokenId: "item:bits", amount: 47 },
           { tokenId: "item:fee-bomb", amount: 2 },
           { tokenId: "item:goblin-glider", amount: 1 },
         ],
@@ -141,7 +143,7 @@ describe("runs", () => {
       const run = await startRun(db, { playerId, now: T0 });
       const first = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(240) });
       const again = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(250) });
-      expect(again).toMatchObject({ status: "verified", score: 4200, idempotent: true });
+      expect(again).toMatchObject({ status: "verified", score: 4200, bits: 47, idempotent: true });
       expect(first.status === "verified" && again.status === "verified" && again.rev).toBe(rev + 1);
       expect(verifier.calls).toHaveLength(1);
       expect(await db.select().from(chainOps)).toHaveLength(1);

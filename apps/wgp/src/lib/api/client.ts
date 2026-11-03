@@ -27,7 +27,8 @@ export type MeResponse = Me | { signedIn: false };
 export type Board = LeaderboardView["board"];
 export type LeaderboardResponse = LeaderboardView & { signedIn: boolean };
 
-export type SubmitResponse = { status: "verified"; runId: string; score: number; ticks: number; digest: string; ranked: boolean; save: Save; rev: number; idempotent: boolean };
+/** `bits`: the Bits minted for the night (src/lib/market/rewards.ts). */
+export type SubmitResponse = { status: "verified"; runId: string; score: number; ticks: number; digest: string; bits: number; ranked: boolean; save: Save; rev: number; idempotent: boolean };
 
 export interface ActionResponse {
   applied: boolean;
