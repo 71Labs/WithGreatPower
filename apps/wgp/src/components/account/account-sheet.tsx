@@ -1,10 +1,15 @@
 "use client";
 
 /**
- * The account sheet. Signed out, it offers Google (NEAR Auth, Plan A), an existing NEAR
- * wallet, and in local development a test player; a new Google player then picks a
- * handle. Signed in, it shows who you are on NEAR, quick play (./quick-play.tsx), today's
- * ranked runs and Sign out.
+ * The account sheet. Signed out, it offers Google, an existing NEAR wallet, and in local
+ * development a test player; a new Google player then picks a handle. Signed in, it shows
+ * who you are on NEAR, quick play (./quick-play.tsx) or, for a Google player still on
+ * their key's address, "Claim your name" (./claim-name.tsx), today's ranked runs and
+ * Sign out.
+ *
+ * Google goes through Privy (a full-page redirect to Google and back; src/lib/privy) or
+ * NEAR Auth (a popup; src/lib/near/near-auth.ts), per NEXT_PUBLIC_GOOGLE_SIGN_IN
+ * (src/lib/privy/config.ts). Neither SDK is in this module: each loads when needed.
  *
  * Opened by the account chip, by openAccountSheet() and by the `wgp:sign-in` event.
  */
@@ -16,22 +21,38 @@ import { GameSheet } from "@/components/game/ui";
 import { refreshAccount, showToast, useAccount, useGame } from "@/game/store";
 import { devSignIn, devSignInAvailable, signOut, type Me } from "@/lib/api/client";
 import { EXPLORER_URL, NETWORK, PLAYER_PARENT_ID } from "@/lib/near/config";
-import { HANDLE_RE, RESERVED_HANDLES } from "@/lib/near/policy";
+import { isUnclaimed } from "@/lib/near/policy";
+import { clearPrivyFailure, endOAuthReturn, getPrivyState, requestPrivy, signOutOfPrivy, usePrivyReturning } from "@/lib/privy/bridge";
+import { GOOGLE_SIGN_IN, PRIVY_APP_ID } from "@/lib/privy/config";
 
 import { googleProblem, walletProblem, type SignInProblem } from "./errors";
+import { HandleField, handleProblem } from "./handle-field";
 import { closeAccountSheet, openAccountSheet, useAccountSheetOpen } from "./sheet-state";
 
 const WalletSignIn = lazy(() => import("./wallet-sign-in"));
 /** Quick play pulls in near-connect for wallet players: load it only once a signed-in sheet opens. */
 const QuickPlaySection = lazy(() => import("./quick-play"));
+/** Only unclaimed Google players see it. */
+const ClaimNameSection = lazy(() => import("./claim-name"));
 
 /** The NEAR Auth client is heavy (Auth0, near-api-js): load it only when the sheet opens. */
 const nearAuth = () => import("@/lib/near/near-auth");
+/** Privy sign-in steps (near-api-js for the session key); Privy itself loads through the bridge. */
+const privySignIn = () => import("@/lib/privy/sign-in");
 
 type Busy = null | "google" | "wallet" | "dev" | "handle" | "sign-out";
 type Google = { state: "loading" } | { state: "ready" } | { state: "unavailable"; text: string };
 
-const AUTH_LABEL: Record<string, string> = { near_auth: "Google, through NEAR Auth", wallet: "NEAR wallet", dev: "Test sign-in (this computer only)" };
+const AUTH_LABEL: Record<string, string> = {
+  near_auth: "Google, through NEAR Auth",
+  privy: "Google",
+  wallet: "NEAR wallet",
+  dev: "Test sign-in (this computer only)",
+};
+
+/** Privy needs no warm-up to be tapped, and without an app id it can't work at all: say so up front. */
+const initialGoogle = (): Google =>
+  GOOGLE_SIGN_IN === "near-auth" ? { state: "loading" } : PRIVY_APP_ID ? { state: "ready" } : { state: "unavailable", text: "Google sign-in isn’t set up on this server yet." };
 
 /** Shown under the controls after something failed. Polite: it answers what the player just did. */
 function Problem({ problem, className = "" }: { problem: SignInProblem | null; className?: string }) {
@@ -58,17 +79,26 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const sectionFallback = (text: string) => (
+  <p role="status" className="rounded-[26px] border-2 border-game-ink bg-game-paper-2 px-4 py-3 text-[14px] leading-5 text-game-muted">
+    {text}
+  </p>
+);
+
 function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
   const { used, limit } = me.runsToday;
   const left = Math.max(0, limit - used);
   const dev = me.player.authKind === "dev";
+  const unclaimed = isUnclaimed(me.player);
   return (
     <div className="flex flex-col gap-4">
       <dl className="flex flex-col gap-2">
-        <Row label="NEAR account">
+        <Row label={unclaimed ? "Your key’s address" : "NEAR account"}>
           <span className="block font-mono text-[14px] leading-5 [overflow-wrap:anywhere]">{me.player.nearAccountId}</span>
           {dev ? (
             <span className="mt-1 block text-[13px] font-medium leading-5 text-game-muted">A test account: it isn’t on NEAR, so nothing is minted to it.</span>
+          ) : unclaimed ? (
+            <span className="mt-1 block text-[13px] font-medium leading-5 text-game-muted">Your Google sign-in holds this key. It goes on NEAR when you claim your name.</span>
           ) : (
             <a
               href={`${EXPLORER_URL}/address/${encodeURIComponent(me.player.nearAccountId)}`}
@@ -84,14 +114,12 @@ function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
         </Row>
         <Row label="Signed in with">{AUTH_LABEL[me.player.authKind] ?? me.player.authKind}</Row>
       </dl>
-      {dev ? null : (
-        <Suspense
-          fallback={
-            <p role="status" className="rounded-[26px] border-2 border-game-ink bg-game-paper-2 px-4 py-3 text-[14px] leading-5 text-game-muted">
-              Checking quick play…
-            </p>
-          }
-        >
+      {dev ? null : unclaimed ? (
+        <Suspense fallback={sectionFallback("Checking your name…")}>
+          <ClaimNameSection me={me} />
+        </Suspense>
+      ) : (
+        <Suspense fallback={sectionFallback("Checking quick play…")}>
           <QuickPlaySection me={me} />
         </Suspense>
       )}
@@ -106,28 +134,25 @@ function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
   );
 }
 
-function handleProblem(raw: string): string | null {
-  const h = raw.trim().toLowerCase();
-  if (!h) return "Pick a handle.";
-  if (!HANDLE_RE.test(h)) return "Use 2–32 of a–z, 0–9, - and _, starting and ending with a letter or digit.";
-  if (RESERVED_HANDLES.has(h)) return "That handle is reserved. Pick another.";
-  return null;
-}
-
 export function AccountSheet() {
   const open = useAccountSheetOpen();
   const account = useAccount();
   const { save } = useGame();
   const ids = useId();
+  const returning = usePrivyReturning();
   const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<"options" | "handle">("options");
   const [busy, setBusy] = useState<Busy>(null);
   const [problem, setProblem] = useState<SignInProblem | null>(null);
-  const [google, setGoogle] = useState<Google>({ state: "loading" });
+  const [google, setGoogle] = useState<Google>(initialGoogle);
   const [devOn, setDevOn] = useState(false);
   const [devHandle, setDevHandle] = useState("dev-hero");
   const [handle, setHandle] = useState("");
   const [handleError, setHandleError] = useState<string | null>(null);
+  /** The handle step's account parent: the server's, when it said (Privy), else the public config's. */
+  const [parentId, setParentId] = useState(PLAYER_PARENT_ID);
+  /** Privy: on the way to Google's page (else, while busy, finishing after it). */
+  const [leaving, setLeaving] = useState(false);
   const handleRef = useRef<HTMLInputElement>(null);
 
   // Render the body (and load its SDKs) only once someone opens the sheet.
@@ -135,28 +160,37 @@ export function AccountSheet() {
 
   const guest = account.status === "guest";
   const me = account.status === "signed-in" ? account.me : null;
+  const privyPlayer = me?.player.authKind === "privy";
 
-  // Opening as a guest: warm up Google (SDK + a sign-in nonce, so the popup opens straight
-  // from the tap) and ask whether dev sign-in is on. Signed in: refresh today's numbers.
+  // Opening as a guest: warm up Google (Privy's SDK, or NEAR Auth's SDK and a sign-in
+  // nonce so its popup opens straight from the tap) and ask whether dev sign-in is on.
+  // Signed in: refresh today's numbers; a Privy player gets Privy loaded for quick play
+  // and sign-out.
   useEffect(() => {
     if (!open) return;
     if (account.status === "signed-in") {
+      if (privyPlayer) requestPrivy();
       void refreshAccount();
       return;
     }
     if (account.status !== "guest") return;
     let live = true;
-    nearAuth()
-      .then((m) => m.prepareNearAuthSignIn())
-      .then(
-        () => live && setGoogle({ state: "ready" }),
-        (error: unknown) => {
-          if (!live) return;
-          const p = googleProblem(error);
-          // Only a missing setup rules Google out; anything else may pass on a retry.
-          setGoogle(p.googleUnavailable ? { state: "unavailable", text: p.text } : { state: "ready" });
-        },
-      );
+    if (GOOGLE_SIGN_IN === "privy") {
+      // Load the SDK while the player reads; a problem loading it surfaces on the tap.
+      if (PRIVY_APP_ID) requestPrivy();
+    } else {
+      nearAuth()
+        .then((m) => m.prepareNearAuthSignIn())
+        .then(
+          () => live && setGoogle({ state: "ready" }),
+          (error: unknown) => {
+            if (!live) return;
+            const p = googleProblem(error);
+            // Only a missing setup rules Google out; anything else may pass on a retry.
+            setGoogle(p.googleUnavailable ? { state: "unavailable", text: p.text } : { state: "ready" });
+          },
+        );
+    }
     if (process.env.NODE_ENV !== "production") {
       const ctrl = new AbortController();
       devSignInAvailable(ctrl.signal)
@@ -170,10 +204,11 @@ export function AccountSheet() {
     return () => {
       live = false;
     };
-  }, [open, account.status]);
+  }, [open, account.status, privyPlayer]);
 
   function reset() {
     setStep("options");
+    setLeaving(false);
     setBusy(null);
     setProblem(null);
     setHandleError(null);
@@ -186,40 +221,95 @@ export function AccountSheet() {
     if (busy === null) reset();
   }
 
-  async function signedIn() {
+  async function signedIn(note?: string) {
     const next = await refreshAccount();
     reset();
     closeAccountSheet();
-    if (next.status === "signed-in") showToast(`Signed in as ${next.me.player.handle}.`, "success");
+    if (next.status === "signed-in") showToast(`Signed in as ${next.me.player.handle}.${note ? ` ${note}` : ""}`, "success");
     else showToast("Signed in, but the server didn’t remember it. Try again.", "error");
   }
+
+  /** A failed Google step: say why, and offer the options again. */
+  function googleFailed(error: unknown) {
+    const p = googleProblem(error);
+    if (p.googleUnavailable) setGoogle({ state: "unavailable", text: p.text });
+    setStep("options");
+    setProblem(p);
+    setLeaving(false);
+    setBusy(null);
+    openAccountSheet();
+    if (GOOGLE_SIGN_IN === "near-auth") {
+      // A spent nonce: fetch the next one now, so the retry's popup isn't blocked.
+      void nearAuth()
+        .then((m) => m.prepareNearAuthSignIn())
+        .catch(() => {});
+    }
+  }
+
+  function askForHandle(suggested: string | undefined, parent: string | undefined) {
+    setHandle(suggested ?? "");
+    setParentId(parent ?? PLAYER_PARENT_ID);
+    setStep("handle");
+    setLeaving(false);
+    setBusy(null);
+    openAccountSheet();
+    requestAnimationFrame(() => handleRef.current?.focus());
+  }
+
+  /** Privy, back from Google (or already logged in to Privy): the NEAR wallet, then our server. */
+  async function finishPrivy() {
+    const m = await privySignIn();
+    const outcome = await m.finishPrivySignIn();
+    if (outcome.status === "needs-handle") return askForHandle(outcome.suggestedHandle, outcome.parentId);
+    await signedIn(
+      outcome.unclaimed && outcome.created
+        ? "Your hero is saved to your Google sign-in; claim your NEAR name from your account once names open."
+        : outcome.linked
+          ? "Your hero came with you."
+          : undefined,
+    );
+  }
+
+  // Google came back through Privy: finish signing in, with the sheet showing progress.
+  useEffect(() => {
+    // The live flag, not this render's: a re-run effect (Strict Mode) must not finish twice.
+    if (!returning || !getPrivyState().returning) return;
+    endOAuthReturn();
+    void (async () => {
+      setBusy("google");
+      setProblem(null);
+      openAccountSheet();
+      try {
+        await finishPrivy();
+      } catch (error) {
+        googleFailed(error);
+      }
+    })();
+    // finishPrivy and googleFailed only read setters and module constants.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returning]);
 
   async function continueWithGoogle() {
     if (busy || google.state === "unavailable") return;
     setBusy("google");
     setProblem(null);
     try {
-      const m = await nearAuth();
-      const outcome = await m.nearAuthSignIn();
-      if (outcome.status === "needs-handle") {
-        setHandle(outcome.suggestedHandle ?? "");
-        setStep("handle");
-        setBusy(null);
-        openAccountSheet();
-        requestAnimationFrame(() => handleRef.current?.focus());
+      if (GOOGLE_SIGN_IN === "privy") {
+        clearPrivyFailure();
+        setLeaving(true);
+        const m = await privySignIn();
+        // Leaving for Google: the busy label stays up until the page goes.
+        if ((await m.startPrivyGoogle()) === "redirecting") return;
+        setLeaving(false);
+        await finishPrivy();
         return;
       }
+      const m = await nearAuth();
+      const outcome = await m.nearAuthSignIn();
+      if (outcome.status === "needs-handle") return askForHandle(outcome.suggestedHandle, undefined);
       await signedIn();
     } catch (error) {
-      const p = googleProblem(error);
-      if (p.googleUnavailable) setGoogle({ state: "unavailable", text: p.text });
-      setProblem(p);
-      setBusy(null);
-      openAccountSheet();
-      // A spent nonce: fetch the next one now, so the retry's popup isn't blocked.
-      void nearAuth()
-        .then((m) => m.prepareNearAuthSignIn())
-        .catch(() => {});
+      googleFailed(error);
     }
   }
 
@@ -234,10 +324,15 @@ export function AccountSheet() {
     }
     setBusy("handle");
     setProblem(null);
+    const chosen = handle.trim().toLowerCase();
     try {
-      const m = await nearAuth();
-      const outcome = await m.nearAuthSignIn({ handle: handle.trim().toLowerCase() });
-      if (outcome.status === "needs-handle") throw new Error("The server still needs a handle");
+      if (GOOGLE_SIGN_IN === "privy") {
+        const outcome = await (await privySignIn()).finishPrivySignIn({ handle: chosen });
+        if (outcome.status === "needs-handle") throw new Error("The server still needs a handle");
+      } else {
+        const outcome = await (await nearAuth()).nearAuthSignIn({ handle: chosen });
+        if (outcome.status === "needs-handle") throw new Error("The server still needs a handle");
+      }
       await signedIn();
     } catch (error) {
       const p = googleProblem(error);
@@ -247,7 +342,7 @@ export function AccountSheet() {
         setHandleError(p.text);
         handleRef.current?.focus();
       } else {
-        // The login itself has to start over (an expired nonce, a closed server).
+        // The login itself has to start over (an expired nonce or token, a closed server).
         setStep("options");
         setProblem(p);
       }
@@ -277,6 +372,8 @@ export function AccountSheet() {
       setProblem({ text: res.status === 0 ? "Couldn’t reach the server, so you’re still signed in. Try again." : "Couldn’t sign out. Try again." });
       return;
     }
+    // Out of Privy too, so the next Google sign-in asks Google again.
+    await signOutOfPrivy({ load: privyPlayer });
     await refreshAccount();
     reset();
     closeAccountSheet();
@@ -284,6 +381,7 @@ export function AccountSheet() {
   }
 
   const googleOut = google.state === "unavailable";
+  const googleLabel = busy !== "google" ? "Continue with Google" : GOOGLE_SIGN_IN === "near-auth" ? "Waiting for Google…" : leaving ? "Opening Google…" : "Finishing sign-in…";
 
   let title: ReactNode = "Sign in";
   let description: ReactNode = "Save your hero to a NEAR account and get on the leaderboard.";
@@ -315,43 +413,17 @@ export function AccountSheet() {
     );
     body = (
       <form id={`${ids}-handle`} onSubmit={(e) => void createAccount(e)} noValidate className="flex flex-col gap-2">
-        <label htmlFor={`${ids}-handle-input`} className="text-[14px] font-semibold leading-5">
-          Handle
-        </label>
-        <div className="flex min-h-12 items-center rounded-[14px] border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow-sm)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--vs-focus)]">
-          <input
-            ref={handleRef}
-            id={`${ids}-handle-input`}
-            type="text"
-            inputMode="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            maxLength={32}
-            value={handle}
-            onChange={(e) => {
-              setHandle(e.target.value);
-              if (handleError) setHandleError(null);
-            }}
-            aria-invalid={handleError ? true : undefined}
-            aria-describedby={`${ids}-handle-help`}
-            className="h-11 min-w-0 flex-1 rounded-l-[12px] bg-transparent pl-3.5 text-[16px] font-semibold text-game-ink outline-none"
-          />
-          <span aria-hidden className="shrink-0 pr-3.5 font-mono text-[14px] text-game-muted">
-            .{PLAYER_PARENT_ID}
-          </span>
-        </div>
-        <p id={`${ids}-handle-help`} className={`flex items-start gap-1.5 text-[13px] leading-5 ${handleError ? "text-game-ink" : "text-game-muted"}`}>
-          {handleError ? <CircleAlert aria-hidden className="mt-px size-4 shrink-0 text-game-hero" strokeWidth={2} /> : null}
-          <span>
-            {handleError ?? "2–32 characters: a–z, 0–9, - and _."} Your account will be{" "}
-            <span className="font-mono [overflow-wrap:anywhere]">
-              {(handle.trim().toLowerCase() || "handle") + "." + PLAYER_PARENT_ID}
-            </span>
-            .
-          </span>
-        </p>
+        <HandleField
+          id={`${ids}-handle`}
+          value={handle}
+          onChange={(next) => {
+            setHandle(next);
+            if (handleError) setHandleError(null);
+          }}
+          error={handleError}
+          parentId={parentId}
+          inputRef={handleRef}
+        />
         <Problem problem={problem} className="empty:-mt-2" />
       </form>
     );
@@ -372,7 +444,7 @@ export function AccountSheet() {
             onClick={() => void continueWithGoogle()}
           >
             <Google aria-hidden className="size-5" strokeWidth={2} />
-            {busy === "google" ? "Waiting for Google…" : "Continue with Google"}
+            {googleLabel}
           </StickerButton>
           {googleOut ? <p className="-mt-1 text-center text-[13px] leading-5 text-game-muted">{google.text} Use a NEAR wallet instead.</p> : null}
           <Suspense

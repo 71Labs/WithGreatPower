@@ -41,7 +41,15 @@ const listeners = new Set<() => void>();
 function derive(v: ChainView): ChainView {
   const s = v.status;
   const quickPlay = s
-    ? quickPlayState({ available: s.available, configured: s.configured, accountId: s.accountId, liveKeys: s.sessionKeys, localKey: v.localKey, enabling: v.enabling })
+    ? quickPlayState({
+        available: s.available,
+        unclaimed: s.unclaimed,
+        configured: s.configured,
+        accountId: s.accountId,
+        liveKeys: s.sessionKeys,
+        localKey: v.localKey,
+        enabling: v.enabling,
+      })
     : v.enabling
       ? ({ state: "pending", publicKey: null } as const)
       : ({ state: "off" } as const);
