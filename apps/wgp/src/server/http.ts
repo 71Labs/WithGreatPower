@@ -138,9 +138,9 @@ export function clientIp(request: Request): string {
 }
 
 /**
- * Cron routes: `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends exactly this when
- * CRON_SECRET is set). Without a secret, production refuses every call and development
- * lets them through.
+ * Cron routes: `Authorization: Bearer <CRON_SECRET>`, exactly what Vercel Cron sends when
+ * CRON_SECRET is set (a bare secret without the scheme is refused). Without a secret,
+ * production refuses every call and development lets them through.
  */
 export function assertCron(request: Request, env: Record<string, string | undefined> = process.env): void {
   const secret = env.CRON_SECRET;
@@ -148,7 +148,8 @@ export function assertCron(request: Request, env: Record<string, string | undefi
     if (env.NODE_ENV !== "production") return;
     throw new HttpError(401, "unauthorized", "CRON_SECRET is not set; cron routes are closed");
   }
-  const given = Buffer.from((request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""));
+  const bearer = /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "");
+  const given = Buffer.from(bearer?.[1] ?? "");
   const expected = Buffer.from(secret);
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
     throw new HttpError(401, "unauthorized", "Bad or missing cron secret");

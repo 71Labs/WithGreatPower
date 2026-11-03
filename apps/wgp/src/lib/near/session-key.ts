@@ -214,10 +214,15 @@ export async function signDelegate(delegate: DelegateAction, key: SessionKey): P
 
 export interface RelayResponse {
   ok: boolean;
+  /** The HTTP status (422: the contract refused; 503: the relayer can't take it). */
+  status: number;
   txHash?: string;
   result?: unknown;
   error?: string;
   message?: string;
+  /** Craft and equip: the save the server mirrored from the chain, and its revision. */
+  save?: unknown;
+  rev?: number;
 }
 
 /** Posts a signed delegate to the relayer. */
@@ -228,8 +233,8 @@ export async function postToRelay(signedDelegate: Uint8Array, extra: { kind?: "g
     credentials: "same-origin",
     body: JSON.stringify({ kind: extra.kind ?? "game", signedDelegate: base64Encode(signedDelegate), newKey: extra.newKey }),
   });
-  const body = (await res.json().catch(() => ({}))) as RelayResponse;
-  return { ...body, ok: res.ok && body.ok !== false };
+  const body = (await res.json().catch(() => ({}))) as Omit<RelayResponse, "status">;
+  return { ...body, ok: res.ok && body.ok !== false, status: res.status };
 }
 
 /**

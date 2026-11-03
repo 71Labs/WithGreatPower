@@ -21,7 +21,13 @@ submission*.json
 
 # Commercial font (Pangram Pangram). Needs a webfont license before it is committed or served publicly.
 apps/*/public/fonts/NeueMontreal-*
+# The owner's licensed font files (copied into production deploys, never committed)
+/fonts/
 
 # Licensed music for the launch video stays local
 /video-music.mp3
 launch/audio/
+
+# Claude Code: local settings and agent worktrees
+.claude/settings.local.json
+.claude/worktrees/

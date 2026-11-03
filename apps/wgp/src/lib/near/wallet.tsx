@@ -36,12 +36,27 @@ interface WalletContextValue {
   disconnect: () => Promise<void>;
   /** NEP-413 sign-in as `account` (default: the connected one, else pick one). Resolves once the session cookie is set. */
   signIn: (account?: string) => Promise<string>;
-  /** Adds this browser's session key to the account (one wallet approval). */
-  enableQuickPlay: () => Promise<{ publicKey: string }>;
+  /**
+   * Adds a new session key for this browser to the account (one wallet approval) and has
+   * the server record it. With `expectedAccountId`, refuses (code "wrong_account") when
+   * the wallet is connected as someone else, before asking for anything.
+   */
+  enableQuickPlay: (expectedAccountId?: string) => Promise<{ publicKey: string }>;
   call: (options: CallOptions) => Promise<unknown>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
+
+/** A failure with the server's (or our own) error code, for messages a player can act on. */
+export class WalletError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = "WalletError";
+  }
+}
 
 async function postWallet<T>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch("/api/auth/wallet", {
@@ -50,9 +65,26 @@ async function postWallet<T>(body: Record<string, unknown>): Promise<T> {
     credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  const json = (await res.json().catch(() => ({}))) as T & { message?: string };
-  if (!res.ok) throw new Error(json.message ?? `Wallet sign-in failed (${res.status})`);
+  const json = (await res.json().catch(() => ({}))) as T & { message?: string; error?: string };
+  if (!res.ok) throw new WalletError(json.message ?? `Wallet sign-in failed (${res.status})`, json.error ?? `http_${res.status}`);
   return json;
+}
+
+/**
+ * Has the server record a session key the wallet already added (it checks the key on
+ * chain first). The chain can lag the wallet by a block or two, so a key that isn't
+ * visible yet is asked about again, a few times.
+ */
+export async function recordWalletSessionKey(publicKey: string, tries = 4): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await postWallet({ action: "session-key", publicKey });
+      return;
+    } catch (error) {
+      if (attempt >= tries || !(error instanceof WalletError) || error.code !== "key_not_found") throw error;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
 }
 
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -126,9 +158,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return result.accountId;
   }, [accountId, connect, connector]);
 
-  const enableQuickPlay = useCallback(async () => {
+  const enableQuickPlay = useCallback(async (expectedAccountId?: string) => {
     const id = accountId ?? (await connect());
     if (!id) throw new Error("No wallet account connected");
+    if (expectedAccountId && id !== expectedAccountId) {
+      throw new WalletError(`Your wallet is connected as ${id}, not ${expectedAccountId}`, "wrong_account");
+    }
     const key = await createSessionKey();
     const wallet = await connector().wallet();
     await wallet.signAndSendTransaction({
@@ -144,8 +179,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         },
       ],
     });
+    // Bound first: if recording fails, quick play shows as pending and finishing needs no new approval.
     await bindSessionKey(id);
-    await postWallet({ action: "session-key", publicKey: key.publicKey });
+    await recordWalletSessionKey(key.publicKey);
     return { publicKey: key.publicKey };
   }, [accountId, connect, connector]);
 

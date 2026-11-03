@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Local PGlite database (src/server/db/client.ts)
 /.data/
+
+# Raw ElevenLabs takes before mastering (scripts/audio/generate.ts)
+/.audio-raw/

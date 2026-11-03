@@ -3,7 +3,8 @@
 /**
  * The account sheet. Signed out, it offers Google (NEAR Auth, Plan A), an existing NEAR
  * wallet, and in local development a test player; a new Google player then picks a
- * handle. Signed in, it shows who you are on NEAR, today's ranked runs and Sign out.
+ * handle. Signed in, it shows who you are on NEAR, quick play (./quick-play.tsx), today's
+ * ranked runs and Sign out.
  *
  * Opened by the account chip, by openAccountSheet() and by the `wgp:sign-in` event.
  */
@@ -21,6 +22,8 @@ import { googleProblem, walletProblem, type SignInProblem } from "./errors";
 import { closeAccountSheet, openAccountSheet, useAccountSheetOpen } from "./sheet-state";
 
 const WalletSignIn = lazy(() => import("./wallet-sign-in"));
+/** Quick play pulls in near-connect for wallet players: load it only once a signed-in sheet opens. */
+const QuickPlaySection = lazy(() => import("./quick-play"));
 
 /** The NEAR Auth client is heavy (Auth0, near-api-js): load it only when the sheet opens. */
 const nearAuth = () => import("@/lib/near/near-auth");
@@ -81,6 +84,17 @@ function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
         </Row>
         <Row label="Signed in with">{AUTH_LABEL[me.player.authKind] ?? me.player.authKind}</Row>
       </dl>
+      {dev ? null : (
+        <Suspense
+          fallback={
+            <p role="status" className="rounded-[26px] border-2 border-game-ink bg-game-paper-2 px-4 py-3 text-[14px] leading-5 text-game-muted">
+              Checking quick play…
+            </p>
+          }
+        >
+          <QuickPlaySection me={me} />
+        </Suspense>
+      )}
       <div className="flex flex-col gap-1.5">
         <StickerMeter label="Ranked runs today" value={used} max={limit} fill="bg-game-gold" />
         <p className="text-[13px] leading-5 text-game-muted">

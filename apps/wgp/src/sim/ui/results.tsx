@@ -9,8 +9,9 @@
  * passes no `onFinish`, the hero as they were before the night (`before`, for the
  * level-up) and its ranking panel as `children`.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { playSfx } from "@/audio/player";
 import { StickerButton, StickerEyebrow, StickerLink, StickerPanel } from "@/components/game/kit";
 import { Check, Sparkles, Target } from "@/components/icons";
 import { castById } from "@wgp/game-core/cast";
@@ -108,6 +109,12 @@ export function Results({
   if (quest?.paid) loot[quest.quest.rewardItem] = (loot[quest.quest.rewardItem] ?? 0) + 1;
   const knockout = p.results.find((r) => r.kind === "fight" && r.outcome === "lost");
   const leveled = done && before && hero.level > before.level ? before : null;
+  const leveledUp = !!leveled;
+
+  // The level-up lands with a fanfare of its own, over the night's.
+  useEffect(() => {
+    if (leveledUp) playSfx("level-up", { delay: 0.6 });
+  }, [leveledUp]);
 
   function finish() {
     setBefore({ level: hero.level, maxHp: hero.maxHp });
