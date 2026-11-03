@@ -165,7 +165,7 @@ export function Results({
           ) : null}
 
           <section aria-labelledby="stops-title" className="flex flex-col gap-3">
-            <h2 id="stops-title" className="text-[16px] font-bold leading-5">
+            <h2 id="stops-title" className="text-[16px] font-bold leading-5 text-game-ink">
               Stop by stop
             </h2>
             <ol className="flex flex-col gap-2">
@@ -215,7 +215,7 @@ export function Results({
           </dl>
 
           <section aria-labelledby="loot-title" className="flex flex-col gap-2.5">
-            <h2 id="loot-title" className="text-[16px] font-bold leading-5">
+            <h2 id="loot-title" className="text-[16px] font-bold leading-5 text-game-ink">
               Loot
             </h2>
             {Object.keys(loot).length ? <Loot loot={loot} /> : <p className="text-[14px] leading-5 text-game-muted">Nothing tonight. Villains drop loot when you catch them.</p>}
