@@ -53,7 +53,7 @@ export function MarketMovers() {
       </SectionHead>
       {movers.length === 0 ? (
         <div className="flex flex-col gap-1">
-          <h3 className="font-display text-[22px] font-bold uppercase leading-6 tracking-[-0.02em] [text-wrap:balance]">{FLAT_MARKET.headline}</h3>
+          <h3 className="font-display text-[22px] font-bold uppercase leading-6 tracking-[-0.02em] text-game-ink [text-wrap:balance]">{FLAT_MARKET.headline}</h3>
           <p className="text-[13px] leading-[18px] text-game-muted">{FLAT_MARKET.footnote}</p>
         </div>
       ) : (
@@ -62,7 +62,7 @@ export function MarketMovers() {
             const h = moverHeadline(m.item, m.name, m.change24h!);
             return (
               <li key={m.item} className="flex min-w-0 flex-col gap-2">
-                <h3 className="font-display text-[20px] font-bold uppercase leading-[22px] tracking-[-0.02em] [overflow-wrap:anywhere] [text-wrap:balance]">{h.headline}</h3>
+                <h3 className="font-display text-[20px] font-bold uppercase leading-[22px] tracking-[-0.02em] text-game-ink [overflow-wrap:anywhere] [text-wrap:balance]">{h.headline}</h3>
                 <div className="flex items-center gap-2.5">
                   <MiniAvatar id={ITEM_SOURCE[m.item]} className="size-8 rounded-[9px]" />
                   <p className="num flex min-w-0 flex-1 flex-col text-[13px] leading-[18px]">
