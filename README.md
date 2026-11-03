@@ -9,16 +9,16 @@ A 3D web-swinging superhero parody game on NEAR. You swing through a comic-book 
 
 ## For judges: 5-minute check
 
-Every check below is read-only: no sign-in, no wallet and no transaction. Commands A–C need `curl` and `jq` ([near-cli-rs](https://github.com/near/near-cli-rs) works too); D needs git, Node ≥ 22 and pnpm 10 (`corepack enable`).
+Every check below is read-only: no sign-in, no wallet and no transaction. Commands A–E need `curl` and `jq` ([near-cli-rs](https://github.com/near/near-cli-rs) works for A and B too); F needs git, Node ≥ 22 and pnpm 10 (`corepack enable`).
 
 | # | Claim | Do | See |
 |---|---|---|---|
 | 1 | The game runs in a browser, no install | Open https://www.wgponnear.fun/play, press **Get bitten**, pick a name, a suit and three powers, then press **Swing out** | A 3D night of four stops (two fights, two errands). It ends on a card saying **Banked. Get some sleep.** with an **Unranked score**. Guest nights stay in your browser and are never ranked. |
-| 2 | The contract is live on mainnet | Open https://nearblocks.io/address/game.wgpnear.near | `mint_rewards` from `operator.wgpnear.near`, a `market_buy` from a player account, `set_market_params` and the deploy. The links are in [Proven on mainnet](#proven-on-mainnet). |
+| 2 | The contract is live on mainnet | Open https://nearblocks.io/address/game.wgpnear.near, or run command D (NearBlocks' site shows scripts a bot check; its API doesn't) | `mint_rewards` from `operator.wgpnear.near`, a `market_buy` from a player account, `set_market_params` and the deploy. The first deploy attempt failed on a wasm import and was redeployed (fixed in `d7b88b0`). Command E prints one trade's NEP-245 events. The links are in [Proven on mainnet](#proven-on-mainnet). |
 | 3 | The market lives in the contract | Run command A below | `{"open":true,"fee_bps":200,"pools":8,"prices_milli":[…]}`. Each price is in thousandths of a Bit, and the first one has moved off its starting 12000 since a player traded. |
 | 4 | Players hold their items on chain | Run command B below | A player's NEP-245 tokens from verified nights: `item:bits`, loot such as `item:fee-bomb`, and the soulbound `trophy:badge:day-one`. |
 | 5 | The game reads the market from the chain | Run command C below | `{"onChain":true,"network":"mainnet","contractId":"game.wgpnear.near",…}` |
-| 6 | Ranked scores are reproducible | Run command D below | One `OK` line per run, then `N/N runs reproduced from https://www.wgponnear.fun` |
+| 6 | Ranked scores are reproducible | Run command F below | One `OK` line per run, then `N/N runs reproduced from https://www.wgponnear.fun` |
 | 7 | Prices move without a patch | Open https://www.wgponnear.fun/lab/economy, choose **Instant** and press **Run 21 days** | **Day 21 / 21**, then the counters (Bits in play, Gwei's till, Bits burned, suits crafted, trades) and a price chart for each item, with some prices up and some down. It runs bot players on the market's own pricing code, in your browser. |
 | 8 | The simulation is deterministic | Open https://www.wgponnear.fun/lab/determinism | **✓ All 4 replays match Node**: this browser replays four recorded nights and gets the same state hashes as Node. Checked in Chromium and WebKit. |
 
@@ -43,13 +43,22 @@ curl -s https://rpc.mainnet.near.org -H 'Content-Type: application/json' \
 # C. The live game's view of the market
 curl -s https://www.wgponnear.fun/api/market | jq -c '{onChain, network, contractId, till}'
 
-# D. Replay the All-time top 5 yourself (downloads each run's seed, start save and input log)
+# D. The contract's transactions (NearBlocks API)
+curl -s 'https://api.nearblocks.io/v1/account/game.wgpnear.near/txns?per_page=25' \
+  | jq -r '.txns[] | "\(.transaction_hash)  \(.predecessor_account_id) → \(.receiver_account_id)  \([.actions[]? | .method // .action] | join(","))"'
+
+# E. One relayed session-key trade's events (NEAR JSON-RPC): mt_transfer, mt_burn of the fee, market_trade
+curl -s https://rpc.mainnet.near.org -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tx","params":{"tx_hash":"GxuFQYCX7DzCFRXenpQuhfxz1hUekf9t2FapLjCUeMXn","sender_account_id":"relayer.wgpnear.near","wait_until":"FINAL"}}' \
+  | jq -r '.result.receipts_outcome[].outcome.logs[]'
+
+# F. Replay the All-time top 5 yourself (downloads each run's seed, start save and input log)
 git clone https://github.com/71Labs/WithGreatPower && cd WithGreatPower
 pnpm install --frozen-lockfile
 pnpm --filter wgp exec tsx ../../scripts/verify-run.ts
 ```
 
-Command D prints, for example:
+Command F prints, for example:
 
 ```
 OK    ee083ed4 hero-180a59: score 6315 vs 6315, ticks 6565 vs 6565, hash 5c1548b5 vs 5c1548b5
