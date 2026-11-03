@@ -14,8 +14,9 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ set: (name: string, value: string) => jar.set(name, value) }),
 }));
 
-// The NEP-413 check reads the key from chain; here every signature is good.
-vi.mock("near-api-js/nep413", () => ({ verifyMessage: async () => {} }));
+// The NEP-413 check reads the key from chain; here every signature is good unless a test says otherwise.
+const verifyMessage = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("near-api-js/nep413", () => ({ verifyMessage }));
 
 import { POST } from "@/app/api/auth/wallet/route";
 
@@ -62,6 +63,17 @@ describe("wallet sign-in", () => {
     const res = await post(POST, verify(token), "text/plain");
     expect(res.status).toBe(415);
     expect(jar.size).toBe(0);
+  });
+
+  it("doesn't echo why the check failed: an RPC error can name a keyed RPC URL", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    verifyMessage.mockRejectedValueOnce(new Error("https://rpc.example/v1/SECRET-KEY unavailable"));
+    const { token } = await challenge();
+    const res = await post(POST, verify(token));
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toContain("SECRET-KEY");
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it("refuses a signed challenge replayed on another server instance", async () => {

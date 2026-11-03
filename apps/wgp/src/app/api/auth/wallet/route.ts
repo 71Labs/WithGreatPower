@@ -63,7 +63,9 @@ export const POST = handle("auth/wallet", (request: Request) =>
       try {
         await verifyWalletSignature({ accountId: input.accountId, publicKey: input.publicKey, signature: input.signature, nonce, recipient });
       } catch (error) {
-        throw unauthorized(`Signature rejected: ${(error as Error).message}`);
+        // Logged, not echoed: a failed RPC call's message can name the RPC URL, API key included.
+        console.error(`[auth/wallet] signature for ${input.accountId}: ${(error as Error).message}`);
+        throw unauthorized("Signature rejected: sign in with a full-access key of that account");
       }
       const db = await getDb();
       if (!(await burnChallenge(db, input.token))) throw unauthorized("Sign-in challenge rejected: Challenge already used");
