@@ -3,13 +3,15 @@
 # It spends real NEAR from PAYER and signs with the owner's key, so the owner runs it in their
 # own terminal and confirms each spending step.
 #
-#   PAYER=you.near scripts/near/setup-mainnet.sh
+#   scripts/near/setup-mainnet.sh                 # pays from the generated payer
+#   PAYER=you.near scripts/near/setup-mainnet.sh  # or from your own wallet in near-cli
 #
-# Before running: put PAYER's key in near-cli, e.g.
-#   near account import-account using-web-wallet network-config mainnet
-# (it opens your wallet in the browser to approve a key; nothing secret is typed here).
-# If PAYER's key is in the key files rather than the macOS keychain, set
-# PAYER_SIGN=sign-with-legacy-keychain (or sign-with-ledger for a Ledger).
+# Easiest: run scripts/near/keys-mainnet.ts first. It generates every key (including a payer,
+# an implicit account), and you just send ~12.5 NEAR to the payer's 64-hex id. Accounts are then
+# created with those keys. Otherwise PAYER can be any funded account whose key near-cli has,
+# e.g. after `near account import-account using-web-wallet network-config mainnet`; set
+# PAYER_SIGN to how near-cli holds its key (sign-with-keychain, sign-with-legacy-keychain or
+# sign-with-ledger).
 #
 # 1. Creates wgpnear.near funded by PAYER (FUND_PARENT, default 12 NEAR), then game., relayer.
 #    and operator.wgpnear.near funded from it. New keys are saved as files in
@@ -25,8 +27,15 @@
 set -euo pipefail
 
 NETWORK=mainnet
-PAYER="${PAYER:?Set PAYER to the funded mainnet account that pays, e.g. PAYER=you.near}"
-PAYER_SIGN="${PAYER_SIGN:-sign-with-keychain}"
+CREDS="$HOME/.near-credentials/mainnet"
+GENERATED_PAYER="$(cat "$CREDS/wgpnear-payer.id" 2>/dev/null || true)"
+PAYER="${PAYER:-$GENERATED_PAYER}"
+[[ -n "$PAYER" ]] || { echo "Set PAYER, or run scripts/near/keys-mainnet.ts first" >&2; exit 1; }
+if [[ -f "$CREDS/$PAYER.json" ]]; then
+  PAYER_SIGN="${PAYER_SIGN:-sign-with-legacy-keychain}"
+else
+  PAYER_SIGN="${PAYER_SIGN:-sign-with-keychain}"
+fi
 PARENT=wgpnear.near
 CONTRACT=game.wgpnear.near
 RELAYER=relayer.wgpnear.near
@@ -40,7 +49,6 @@ FUND_CONTRACT="${FUND_CONTRACT:-5.5 NEAR}"
 FUND_RELAYER="${FUND_RELAYER:-3 NEAR}"
 FUND_OPERATOR="${FUND_OPERATOR:-1.5 NEAR}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CREDS="$HOME/.near-credentials/$NETWORK"
 WASM="$ROOT/contracts/wgp/target/near/wgp.wasm"
 RPC=https://rpc.mainnet.fastnear.com
 
@@ -61,6 +69,15 @@ confirm() { # prompt
   read -r -p "$1 Type yes to continue: " answer
   [[ "$answer" == yes ]] || { echo "Stopped."; exit 1; }
 }
+# How to give a new account its key: the one keys-mainnet.ts generated, else a fresh pair
+# saved to near-cli's key files.
+key_args() {
+  if [[ -f "$CREDS/$1.json" ]]; then
+    echo "use-manually-provided-public-key $(jq -r '.public_key' "$CREDS/$1.json")"
+  else
+    echo "autogenerate-new-keypair save-to-legacy-keychain"
+  fi
+}
 key_of() { # account → its private key from near-cli's key files
   local f="$CREDS/$1.json"
   [[ -f "$f" ]] || f="$(ls "$CREDS/$1"/*.json 2>/dev/null | head -1)"
@@ -68,7 +85,7 @@ key_of() { # account → its private key from near-cli's key files
   jq -r '.private_key' "$f"
 }
 
-exists "$PAYER" || { echo "$PAYER doesn't exist on mainnet" >&2; exit 1; }
+exists "$PAYER" || { echo "$PAYER doesn't exist on mainnet yet: send it ~12.5 NEAR first, then re-run." >&2; exit 1; }
 echo "Payer $PAYER has $(balance_near "$PAYER") NEAR."
 
 echo
@@ -77,8 +94,9 @@ if exists "$PARENT"; then
   echo "$PARENT exists ($(balance_near "$PARENT") NEAR)"
 else
   confirm "Create $PARENT, paid by $PAYER with $FUND_PARENT (real NEAR)?"
+  # shellcheck disable=SC2046 # key_args is two words on purpose
   near account create-account fund-myself "$PARENT" "$FUND_PARENT" \
-    autogenerate-new-keypair save-to-legacy-keychain sign-as "$PAYER" \
+    $(key_args "$PARENT") sign-as "$PAYER" \
     network-config "$NETWORK" "$PAYER_SIGN" send
   wait_for "$PARENT"
 fi
@@ -88,8 +106,9 @@ create_sub() { # account amount
     echo "$1 exists ($(balance_near "$1") NEAR)"
     return
   fi
+  # shellcheck disable=SC2046 # key_args is two words on purpose
   near account create-account fund-myself "$1" "$2" \
-    autogenerate-new-keypair save-to-legacy-keychain sign-as "$PARENT" \
+    $(key_args "$1") sign-as "$PARENT" \
     network-config "$NETWORK" sign-with-legacy-keychain send
   wait_for "$1"
 }
