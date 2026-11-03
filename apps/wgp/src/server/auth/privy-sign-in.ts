@@ -94,7 +94,7 @@ export async function privySignIn(
 ): Promise<PrivySignIn> {
   const { identity } = input;
 
-  const found = await findPlayerForLogin(db, { authSub: identity.userId, email: identity.email });
+  const found = await findPlayerForLogin(db, { authSub: identity.userId, authKind: "privy", email: identity.email });
   if (found) {
     assertNotBanned(found.player);
     const player = await rememberEmail(db, found.player, identity.email);

@@ -72,7 +72,7 @@ export const POST = handle("auth/near-auth", (request: Request) =>
     // Known by this Google sub, or by the verified email of a player who signed up
     // through Privy: the same person keeps the same hero whichever service signs them in.
     const email = identity.emailVerified ? normalizeEmail(identity.email) : null;
-    const found = await findPlayerForLogin(db, { authSub: identity.sub, email });
+    const found = await findPlayerForLogin(db, { authSub: identity.sub, authKind: "near_auth", email });
     const existing = found ? await rememberEmail(db, found.player, email) : null;
 
     if (input.mode === "verify") {
