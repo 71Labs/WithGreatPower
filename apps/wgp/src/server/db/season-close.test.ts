@@ -162,22 +162,28 @@ describe("closing a season", () => {
     const row = await season();
     const standings = row.standings as SeasonStanding[];
 
-    // The board.json the script documents: rank, accountId and score per row.
     const dir = await mkdtemp(path.join(tmpdir(), "wgp-season-"));
+    const script = path.resolve(process.cwd(), "../../scripts/near/record-season.ts");
+    const tsx = path.resolve(process.cwd(), "node_modules/.bin/tsx");
+    const runScript = async (input: string, out: string) => {
+      const { stdout } = await promisify(execFile)(tsx, [script, "s1", input, "--out", out], { cwd: process.cwd(), env: { ...process.env, NEAR_NETWORK: "", WGP_CONTRACT_ID: "" } });
+      const field = (name: string) => stdout.match(new RegExp(`^${name}\\s+(.+)$`, "m"))?.[1]?.trim() ?? "";
+      return { root: field("root"), digest: field("digest").split(/\s+/)[0], top10: field("top 10").split(", "), file: await readFile(path.join(out, "season-s1.json"), "utf8") };
+    };
     try {
+      // The board.json the script documents: rank, accountId and score per row.
       const board = path.join(dir, "board.json");
       await writeFile(board, JSON.stringify(standings.map((s) => ({ rank: s.rank, accountId: s.nearAccountId, score: s.score }))));
-      const script = path.resolve(process.cwd(), "../../scripts/near/record-season.ts");
-      const tsx = path.resolve(process.cwd(), "node_modules/.bin/tsx");
-      const { stdout } = await promisify(execFile)(tsx, [script, "s1", board, "--out", dir], { cwd: process.cwd(), env: { ...process.env, NEAR_NETWORK: "", WGP_CONTRACT_ID: "" } });
-      const field = (name: string) => stdout.match(new RegExp(`^${name}\\s+(.+)$`, "m"))?.[1]?.trim() ?? "";
-      expect(field("root")).toBe(row.root);
-      expect(field("digest").split(/\s+/)[0]).toBe(row.digest);
-      expect(field("top 10").split(", ")).toEqual(row.top10);
+      const fromBoard = await runScript(board, path.join(dir, "a"));
+      expect(fromBoard).toMatchObject({ root: row.root, digest: row.digest, top10: row.top10 });
+      expect(createHash("sha256").update(fromBoard.file).digest("hex")).toBe(row.digest);
 
-      const file = await readFile(path.join(dir, "season-s1.json"), "utf8");
-      expect(createHash("sha256").update(file).digest("hex")).toBe(row.digest);
-      expect(file).toBe(commitSeason("s1", seasonLeaves(standings)).file);
+      // The file the server publishes (GET /api/seasons/s1/results) is the script's file, and feeds it back.
+      const published = commitSeason("s1", seasonLeaves(standings)).file;
+      expect(published).toBe(fromBoard.file);
+      const results = path.join(dir, "results.json");
+      await writeFile(results, published);
+      expect(await runScript(results, path.join(dir, "b"))).toMatchObject({ root: row.root, digest: row.digest, top10: row.top10, file: published });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
