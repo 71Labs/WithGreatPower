@@ -204,16 +204,17 @@ export class MotionLayer {
   /**
    * Lay the blend over the rig's bones by `amount`, scaled per bone by `mask` (1 if omitted).
    * The hips take the clips' own height where their legs are used (`absolute` 1), or just
-   * their move (a dip, a sway) on top of the pose's where the legs are the pose's (0).
+   * their move (a dip, a sway) on top of the pose's where the legs are the pose's (0); or stay
+   * put (`hips` false: a pass for some limbs only).
    */
-  apply(amount: number, mask?: Float32Array, absolute = 1): void {
+  apply(amount: number, mask?: Float32Array, absolute = 1, hips = true): void {
     if (amount <= 1e-4) return;
     const bones = this.rig.bones;
     for (let i = 0; i < bones.length; i++) {
       const w = Math.min(1, this.w[i]) * amount * (mask ? mask[i] : 1);
       if (w > 1e-4) bones[i].quaternion.slerp(this.q[i], w);
     }
-    if (this.pelvisW > 0) {
+    if (hips && this.pelvisW > 0) {
       const p = bones[this.pelvisIndex].position;
       _v.copy(p).add(this.pelvisMove).lerp(this.pelvis, absolute);
       p.lerp(_v, Math.min(1, this.pelvisW) * amount);

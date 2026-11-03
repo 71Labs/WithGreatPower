@@ -9,8 +9,12 @@
  * - Air: the pose follows vertical velocity (a reach on the rise, an arched dive, a
  *   brace for landing), limbs on springs. A perfect release somersaults at a spin rate
  *   fitted to the release speed.
- * - Ground: a run cycle whose phase advances by distance travelled, so planted feet never
- *   slide; feet IK onto the roof; landing compression scaled by the impact; breathing.
+ * - Ground: the body faces where it's going (a fast yaw spring onto the velocity, never a
+ *   run backwards or sideways); a sharp start or a reversal is a pivot on the outer foot
+ *   with the torso leading; standing, it turns on the spot in steps, the pelvis held by the
+ *   planted feet so they never cross under him. A run cycle whose phase advances by distance
+ *   travelled, so planted feet never slide; feet IK onto the roof; landing compression
+ *   scaled by the impact; breathing.
  * - Climb: hands and feet planted on the wall in alternation, the web hand on the line.
  * - Dash, slam (a dive, then the impact crouch), held (struggling), hurt (a kick into the
  *   spine and head springs) and KO (a Verlet ragdoll).
@@ -33,7 +37,7 @@ import type { HeroAction, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contr
 import { Spring, Spring3 } from "../physics/spring";
 import { FixedStepper } from "../physics/stepper";
 import { type Rig } from "../rig";
-import { angleTo, bodyPoint, clamp, frameQuat, lerp, Orient, Plant, smoothstep, Turn, UP, yawOf, yawQuat } from "./common";
+import { angleTo, bodyPoint, clamp, frameQuat, lerp, Orient, Plant, smoothstep, Turn, UP, withYaw, yawOf, yawQuat } from "./common";
 import type { HeroClips } from "../hero-asset";
 import { worldPos } from "../rig";
 import { Mocap } from "./mocap";
@@ -54,6 +58,22 @@ const _d = new Vector3();
 
 /** Hip joint to ankle on the procedural hero, which the feet's targets were tuned on. */
 const TUNED_LEG = 39.5;
+/** On his feet the body turns to its heading on a critically damped spring of this frequency
+ *  (rad/s): most of the way round in about 0.12 s. */
+const YAW_W = 28;
+/** Turning on the spot the pelvis comes round more gently, with the steps. */
+const STAND_YAW_W = 14;
+/** Turns sharper than this (rad) are a pivot: from a standstill, or on the run (a reversal). */
+const START_PIVOT = 1;
+const REVERSE_PIVOT = 2.1;
+/** A pivot's length: this, plus PIVOT_PER_PI for a half turn (seconds). */
+const PIVOT_TIME = 0.1;
+const PIVOT_PER_PI = 0.08;
+/** How low the hips sink through a pivot (units). */
+const PIVOT_DIP = 3.5;
+/** The torso leads a turn by this share of what's left of it, up to TWIST_MAX (rad). */
+const TWIST = 0.55;
+const TWIST_MAX = 0.5;
 
 export class HeroAnimator {
   readonly pose: Pose = newPose();
@@ -73,12 +93,18 @@ export class HeroAnimator {
   private readonly lift = new Spring(16, 0.9);
   private readonly squash = new Spring(15, 0.42);
   private readonly lean = new Spring(9, 0.8);
+  /** Leaning into a start and back against a stop (the clips don't). */
+  private readonly push = new Spring(10, 0.9);
   private readonly spineP = new Spring(11, 0.42);
   private readonly spineR = new Spring(11, 0.5);
   private readonly headP = new Spring(12, 0.38);
   private readonly headY = new Spring(10, 0.8);
   private readonly hands = [new Spring3(15, 0.62), new Spring3(15, 0.62)];
   private readonly feet = [new Spring3(13, 0.6), new Spring3(13, 0.6)];
+  private readonly limbs = [...this.hands, ...this.feet];
+  /** The body's rotation the limb springs were last carried round to, and the turn since. */
+  private readonly limbQ = new Quaternion();
+  private readonly limbTurn = new Quaternion();
   private readonly groundW = new Spring(16, 1);
   private readonly gripW = new Spring(34, 1);
   /** Motion capture (the MPFB hero), once its clips have loaded. */
@@ -118,6 +144,11 @@ export class HeroAnimator {
   private readonly look = new Vector3();
   private hasLook = false;
   private time = 0;
+  /** On his feet: the heading he holds while standing, and the sim's facing last frame. */
+  private holdYaw = 0;
+  private lastFac = Number.NaN;
+  /** What's left of the turn for the torso to lead (rad). */
+  private twist = 0;
 
   private readonly aim = new Vector3();
   private readonly sa = new Vector3();
@@ -254,14 +285,18 @@ export class HeroAnimator {
       this.wallD = hit ?? clamp(d, 20, 60);
     }
 
-    // The yaw the body wants.
+    // The yaw the body wants. On his feet: where he's going, else the heading he holds (which
+    // the sim may turn on the spot); in the air the sim's facing, else the motion.
     let yaw = this.turn.value;
     const hs = Math.hypot(h.vel.x, h.vel.z);
     const fac = this.fac;
-    if (fac && Math.abs(fac.x) + Math.abs(fac.z) > 0.1) yaw = yawOf(fac.x, fac.z);
-    else if (base === "climb") yaw = yawOf(-this.wallN.x, -this.wallN.z);
-    else if (hs > (grounded ? 30 : 70)) yaw = yawOf(h.vel.x, h.vel.z);
+    const facing = fac && Math.abs(fac.x) + Math.abs(fac.z) > 0.1 ? yawOf(fac.x, fac.z) : Number.NaN;
+    if (grounded) yaw = this.groundYaw(h, hs, facing);
+    else if (!Number.isNaN(facing)) yaw = facing;
+    else if (hs > 70) yaw = yawOf(h.vel.x, h.vel.z);
     if (base === "climb") yaw = yawOf(-this.wallN.x, -this.wallN.z);
+    if (!grounded) this.holdYaw = this.turn.value;
+    this.lastFac = facing;
 
     const ground = ctx.ground(P.x, P.z, P.y + 4);
     const rig = this.rig;
@@ -291,12 +326,19 @@ export class HeroAnimator {
     if (mc) {
       const wasMoving = mc.isMoving;
       const air = base === "air" && this.flipT < 0 && h.vel.y > -250;
-      mc.step(dt, { ground: grounded && this.impactT <= 0 && !held, air, speed: grounded ? Math.hypot(this.vel.x, this.vel.z) : 0, moved: grounded ? moved : 0 });
+      const onFeet = grounded && this.impactT <= 0 && !held && mc.dying < 0;
+      const project = (p: Vector3) => ((p.y = ctx.ground(p.x, p.z, ground + 20) + rig.spec.ankle), p);
+      if (onFeet && !mc.stand.pivoting) this.maybePivot(mc, h.vel, ground, project);
+      if (!onFeet) mc.stand.cancelPivot();
+      mc.step(dt, { ground: grounded && this.impactT <= 0 && !held, air, pivot: mc.stand.pivoting, speed: grounded ? Math.hypot(this.vel.x, this.vel.z) : 0, moved: grounded ? moved : 0 });
       // A stride's end: the feet stay where it left them, then square up.
-      if (wasMoving && !mc.isMoving) mc.plantWhereTheyAre(ground, rig.spec.ankle, this.turn.value);
-      if (grounded) mc.stand.update(dt, _c.set(P.x, ground + rig.spec.ankle, P.z), this.turn.value, (p) => ((p.y = ctx.ground(p.x, p.z, ground + 20) + rig.spec.ankle), p));
+      if (wasMoving && !mc.isMoving && !mc.stand.pivoting) mc.plantWhereTheyAre(ground, rig.spec.ankle, this.turn.value, true);
+      if (grounded) mc.stand.update(dt, _c.set(P.x, ground + rig.spec.ankle, P.z), this.turn.value, project, yaw, !mc.isMoving || mc.stand.pivoting);
+      if (!grounded) mc.stand.airborne();
     }
     this.clock.advance(dt, (step) => this.substep(step, f, pb, yaw, ground, runW, held));
+    // The torso leads what's left of the turn (the pelvis is held by the feet or the spring).
+    this.twist = grounded && mc ? clamp(angleTo(this.turn.value, mc.stand.pivoting ? mc.stand.pivotEnd : yaw) * TWIST, -TWIST_MAX, TWIST_MAX) : 0;
     if (this.flipT >= 0) {
       // Caught by the next web, a wall or the roof mid-somersault: finish the turn quickly.
       this.flipT += dt * (base === "air" || base === "dash" ? 1 : 3.5);
@@ -304,9 +346,45 @@ export class HeroAnimator {
     }
     this.compose(f, pb, ground, runW, L, ctx);
     applyPose(rig, this.group, this.pose, this.solved);
-    if (mc && !this.ragdolled) mc.layer(this.pose, this.gripW.lerp(this.clock.alpha), this.headY.lerp(this.clock.alpha) + this.lead * 0.6, 0, ctx.ground, ground);
+    if (mc && !this.ragdolled) mc.layer(this.pose, this.gripW.lerp(this.clock.alpha), this.headY.lerp(this.clock.alpha) + (this.lead - this.twist) * 0.7, 0, ctx.ground, ground, this.twist);
     // The fist: the rig's grip point in the right hand.
     this.grip.copy(rig.grip).applyMatrix4(rig.arms[1].end.matrixWorld);
+  }
+
+  /**
+   * Where the body heads on its feet: the way it's moving, once it's moving at all; standing,
+   * the heading it holds, which the sim can turn on the spot by turning its facing (unless the
+   * player isn't steering: then he just waits).
+   */
+  private groundYaw(h: RenderFrame3D["hero"], hs: number, facing: number): number {
+    if (hs > 20) this.holdYaw = yawOf(h.vel.x, h.vel.z);
+    else if (!Number.isNaN(facing) && !Number.isNaN(this.lastFac) && Math.abs(angleTo(this.lastFac, facing)) > 1e-3 && h.controlled !== false) this.holdYaw = facing;
+    return this.holdYaw;
+  }
+
+  /**
+   * A turn too sharp to run round (setting off the other way, a reversal): pivot on the outer
+   * foot, the torso leading, then run. Turning left pivots on the right foot and the other
+   * way about, so the foot he turns on is never the one crossing under him; straight back,
+   * he turns on whichever foot is down.
+   */
+  private maybePivot(mc: Mocap, v: Vec3, ground: number, project: (p: Vector3) => Vector3): void {
+    if (Math.hypot(v.x, v.z) < 20) return;
+    const d = angleTo(this.turn.value, yawOf(v.x, v.z));
+    if (Math.abs(d) < (mc.moveW.value < 0.5 ? START_PIVOT : REVERSE_PIVOT)) return;
+    const rig = this.rig;
+    let outer = d > 0 ? 1 : 0;
+    // Off the cycle: the feet start from where the clip has them.
+    if (mc.legsMove > 0.05) mc.plantWhereTheyAre(ground, rig.spec.ankle, this.turn.value);
+    if (Math.abs(d) > 2.8) {
+      // Straight back: turn on the foot nearer under the hips (either way round will do).
+      const fx = Math.sin(this.turn.value);
+      const fz = Math.cos(this.turn.value);
+      const along = (i: number) => Math.abs((mc.stand.foot[i].x - this.P.x) * fx + (mc.stand.foot[i].z - this.P.z) * fz);
+      outer = along(0) <= along(1) ? 0 : 1;
+    }
+    const turn = (outer === 1) === d > 0 ? d : d - Math.sign(d) * Math.PI * 2;
+    mc.stand.startPivot(outer, this.turn.value, turn, PIVOT_TIME + (PIVOT_PER_PI * Math.abs(turn)) / Math.PI, _c.set(this.P.x, ground + rig.spec.ankle, this.P.z), project);
   }
 
   /** Hand the body to the ragdoll from the pose it's in (its joints read off the bones). */
@@ -353,7 +431,10 @@ export class HeroAnimator {
     this.acc.snap(0, 0, 0);
     const yaw = Math.hypot(h.vel.x, h.vel.z) > 40 ? yawOf(h.vel.x, h.vel.z) : this.fac ? yawOf(this.fac.x, this.fac.z) : this.turn.value;
     this.turn.snap(yaw);
+    this.holdYaw = yaw;
+    this.lastFac = Number.NaN;
     this.orient.snap(yawQuat(yaw, _q));
+    this.limbQ.copy(_q);
     const ground = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 4);
     this.lift.snap(h.grounded ? ground + this.rig.hipHeight - 1.2 - h.pos.y : 0);
     this.squash.snap(0);
@@ -400,11 +481,14 @@ export class HeroAnimator {
         return frameQuat(_b.copy(dir).addScaledVector(UP, 0.45).normalize(), _d.set(0, -1, 0), out);
       }
       case "slam":
-        return frameQuat(_b.copy(this.fwd).multiplyScalar(0.35).addScaledVector(UP, -1).normalize(), this.fwd, out);
+        // Head first: pitched forward over (the chest turns to face back), never rolled, so
+        // left stays left and the legs come down uncrossed for the impact.
+        return frameQuat(_b.copy(this.fwd).multiplyScalar(0.35).addScaledVector(UP, -1).normalize(), _c.copy(this.fwd).negate(), out);
       case "ground": {
         if (this.impactT > 0) return out.multiply(_q2.setFromAxisAngle(X, 0.12));
-        // The clips lean on their own.
-        return out.multiply(_q2.setFromAxisAngle(X, this.lean.value * (1 - 0.85 * (this.mocap?.clipW.value ?? 0))));
+        // The clips lean with the speed on their own, but not into a start or against a stop.
+        const cw = this.mocap?.clipW.value ?? 0;
+        return out.multiply(_q2.setFromAxisAngle(X, this.lean.value * (1 - 0.85 * cw) + this.push.value * cw));
       }
       default:
         return out;
@@ -415,11 +499,24 @@ export class HeroAnimator {
     const h = f.hero;
     this.vel.step(h.vel.x, h.vel.y, h.vel.z, step);
     this.acc.step(this.vel.vx, this.vel.vy, this.vel.vz, step);
-    this.turn.step(yaw, step);
     const grounded = base === "ground";
+    const mc = grounded ? this.mocap : null;
+    if (mc?.stand.pivoting) this.turn.follow(mc.stand.pivotYaw, step);
+    else if (mc) {
+      this.turn.spring(yaw, step, mc.standing > 0.5 ? STAND_YAW_W : YAW_W);
+      // Planted feet hold the pelvis (about where the hips are: over the weighted leg); the
+      // torso leads the rest of the turn.
+      if (mc.standing > 0.5) {
+        const lean = mc.stand.weight.value * 1.2 * mc.standing;
+        const hips = _c.set(h.pos.x + Math.cos(this.turn.value) * lean, 0, h.pos.z - Math.sin(this.turn.value) * lean).add(mc.stand.shift);
+        this.turn.hold(mc.stand.clampYaw(this.turn.value, hips));
+      }
+    } else this.turn.step(yaw, step);
     const hs = Math.hypot(this.vel.x, this.vel.z);
     this.lean.step(grounded ? clamp(hs / 390, 0, 1.3) * 0.2 + clamp(this.accFwd() * 0.00005, -0.12, 0.15) : 0, step);
-    const k = base === "swing" ? 11 : base === "air" ? 6.5 : base === "dash" || base === "slam" ? 16 : base === "climb" ? 12 : 15;
+    this.push.step(grounded ? clamp(this.accFwd() * 0.00005, -0.1, 0.1) : 0, step);
+    // A slam's impact snaps him up off the dive onto his feet for the crouch.
+    const k = base === "swing" ? 11 : base === "air" ? 6.5 : base === "dash" || base === "slam" ? 16 : base === "climb" ? 12 : this.impactT > 0 ? 45 : 15;
     this.orient.step(this.bodyTarget(base, _q), step, k);
     const hipH = this.rig.hipHeight;
     this.lift.step(grounded || base === "climb" ? (grounded ? ground + hipH - 1.2 - h.pos.y : 0) : 0, step);
@@ -436,7 +533,22 @@ export class HeroAnimator {
 
     // Limb springs ride the body: targets in the body frame, offsets kept relative to the
     // hips, pulled by gravity and pushed by the body's own acceleration (the arc's load).
+    // They turn with the body (they lag its motion, not its turning): left behind by a quick
+    // turn (the swing's about-face at each end of the arc, a somersault) they'd swing
+    // through each other and cross.
     const Q = this.flipQuat(this.orient.q, _q);
+    const turned = this.limbTurn.copy(this.limbQ).invert().premultiply(Q);
+    this.limbQ.copy(Q);
+    for (const sp of this.limbs) {
+      _c.set(sp.x, sp.y, sp.z).applyQuaternion(turned);
+      _d.set(sp.vx, sp.vy, sp.vz).applyQuaternion(turned);
+      sp.x = _c.x;
+      sp.y = _c.y;
+      sp.z = _c.z;
+      sp.vx = _d.x;
+      sp.vy = _d.y;
+      sp.vz = _d.z;
+    }
     const g = _b.set(-this.acc.vx, -1750 - this.acc.vy, -this.acc.vz).multiplyScalar(0.5);
     const gl = g.length();
     if (gl > 3200) g.multiplyScalar(3200 / gl);
@@ -560,7 +672,8 @@ export class HeroAnimator {
       default: {
         const rise = smoothstep(80, 600, vy);
         const dive = smoothstep(-250, -900, vy) * smoothstep(250, 700, Math.hypot(this.vel.x, this.vel.z));
-        out.set(s * 5.5, -28, 9);
+        // Dropping, the feet come in under him to land on.
+        out.set(s * 5.5, -28, lerp(9, 2, smoothstep(-150, -600, vy)));
         out.lerp(i === 0 ? _d.set(5, -35, -6) : _d.set(-5, -25, 8), rise);
         return out.lerp(_d.set(s * 8, -33, -10), dive);
       }
@@ -593,7 +706,11 @@ export class HeroAnimator {
       this.collectTargets();
       return;
     }
-    const Q = this.flipQuat(this.orient.lerp(a, this.Q), _q);
+    // On his feet the yaw is the turn's own (the feet and the stance are placed by it); the
+    // orientation's easing is for the lean and for settling out of a tilted landing.
+    const O = this.orient.lerp(a, this.Q);
+    if (base === "ground") withYaw(O, this.turn.lerp(a), O);
+    const Q = this.flipQuat(O, _q);
     this.Q.copy(Q);
     // The hips (centre of mass): the sim's point, lifted onto the legs when standing.
     const H = this.H.set(h.pos.x, h.pos.y + this.lift.lerp(a) + this.squash.lerp(a), h.pos.z);
@@ -604,12 +721,16 @@ export class HeroAnimator {
     // straight, the weight on one leg), or where the moving clips carry them.
     const mc = base === "ground" ? this.mocap : null;
     const cw = mc ? mc.clipW.value : 0;
-    const standing = mc ? mc.standing : 0;
+    // Standing still (the hips over one leg, the weight shifting): not mid-pivot.
+    const standing = mc ? mc.standing * (1 - mc.pivotW.value) : 0;
     const weight = mc ? mc.stand.weight.value : 0;
     if (mc && cw > 0.001) {
       const standY = ground + rig.hipHeight - 0.5 - 0.4 * Math.abs(weight);
       const moveY = ground + rig.hipHeight - mc.floor;
-      H.y = lerp(H.y, lerp(standY, moveY, mc.moveW.value), cw);
+      H.y = lerp(H.y, lerp(standY, moveY, mc.legsMove), cw);
+      // A pivot sinks the hips and carries them round the planted foot.
+      if (mc.stand.pivoting) H.y -= PIVOT_DIP * Math.sin(Math.PI * mc.stand.pivotU) * cw;
+      H.addScaledVector(mc.stand.shift, cw);
       const yawD = this.turn.lerp(a);
       H.addScaledVector(_b.set(Math.cos(yawD), 0, -Math.sin(yawD)), weight * 1.2 * standing);
     }
@@ -674,6 +795,14 @@ export class HeroAnimator {
         pose.hand[1].copy(fist);
       }
     }
+    // Never through the roof: coming down onto it, the feet stop on it and the knees take the
+    // landing (in the air the hips ride the sim's body, lower than standing).
+    if (base !== "climb") {
+      for (let i = 0; i < 2; i++) {
+        const f = pose.foot[i];
+        f.y = Math.max(f.y, ctx.ground(f.x, f.z, H.y) + spec.ankle);
+      }
+    }
     // Climbing: left hand and both feet planted on the wall, alternating.
     if (base === "climb") {
       const wallX = h.pos.x - this.wallN.x * (this.wallD - 3);
@@ -684,10 +813,12 @@ export class HeroAnimator {
         return p;
       };
       const left = _b.set(1, 0, 0).applyQuaternion(yawQ);
+      // The left hand, then the left and right feet (each on its own side), the right foot
+      // moving with the left hand.
       const limbs: [number, number, number][] = [
         [5, 21, 0],
-        [-5.5, -30, 0.5],
-        [5.5, -30, 0],
+        [5.5, -30, 0.5],
+        [-5.5, -30, 0],
       ];
       for (let k = 0; k < 3; k++) {
         const [x, y, ph] = limbs[k];

@@ -60,6 +60,39 @@ export class Turn {
     this.value += this.vel * h;
   }
 
+  /**
+   * Turn toward `target` on a critically damped spring of angular frequency `w` (rad/s): no
+   * rate cap and no overshoot, most of the way there in about 3/w seconds. Exact for any h.
+   */
+  spring(target: number, h: number, w: number): void {
+    if (!this.started) this.snap(target);
+    this.prev = this.value;
+    // x: how far past the target; x(t) = (x₀ + (v₀ + w·x₀)·t)·e^(−w·t).
+    const x = angleTo(target, this.value);
+    const e = Math.exp(-w * h);
+    const c = (this.vel + w * x) * h;
+    const nx = (x + c) * e;
+    this.vel = (this.vel - w * c) * e;
+    this.value += nx - x;
+  }
+
+  /** Be at `a` now (a turn driven by something else, like a pivot's feet), keeping its speed. */
+  follow(a: number, h: number): void {
+    if (!this.started) this.snap(a);
+    this.prev = this.value;
+    const d = angleTo(this.value, a);
+    this.value += d;
+    this.vel = d / Math.max(h, 1e-6);
+  }
+
+  /** Hold the yaw at `a` (a limit reached): what's left of the turn's speed into it is lost. */
+  hold(a: number): void {
+    const d = angleTo(this.value, a);
+    if (d === 0) return;
+    this.value += d;
+    if (Math.sign(this.vel) === -Math.sign(d)) this.vel = 0;
+  }
+
   lerp(alpha: number): number {
     return this.prev + angleTo(this.prev, this.value) * alpha;
   }
@@ -112,6 +145,19 @@ export function frameQuat(up: Vector3, fwd: Vector3, out: Quaternion): Quaternio
 
 export function yawQuat(yaw: number, out: Quaternion): Quaternion {
   return out.setFromAxisAngle(UP, yaw);
+}
+
+const _t = new Quaternion();
+
+/**
+ * Give rotation q the yaw `yaw` (about world +y) and keep the rest of it (a lean, a tilt):
+ * q's turn about +y (its twist) is swapped for the one wanted.
+ */
+export function withYaw(q: Quaternion, yaw: number, out: Quaternion): Quaternion {
+  const l = Math.hypot(q.y, q.w);
+  if (l < 1e-6) return out.copy(q);
+  _t.set(0, q.y / l, 0, q.w / l).invert();
+  return out.copy(q).premultiply(_t).premultiply(yawQuat(yaw, _t));
 }
 
 /** Body-frame offset (x left, y up, z forward) to world, by rotation q, added to `base`. */

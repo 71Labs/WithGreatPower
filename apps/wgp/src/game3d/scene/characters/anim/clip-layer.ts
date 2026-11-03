@@ -33,7 +33,7 @@ export interface ClipShot {
 export class ClipLayer {
   readonly motion: MotionLayer;
   /** Per-bone masks: the trunk and up (the pelvis's turn included, which the spine's
-   *  turns lean on); the arms; every bone; the legs. */
+   *  turns lean on); the arms; every bone but the root; the legs. */
   readonly upper: Float32Array;
   readonly arms: Float32Array;
   readonly full: Float32Array;
@@ -58,7 +58,9 @@ export class ClipLayer {
     const leg = rig.bones.map((_, i) => /^(thigh|calf|foot|ball)_/.test(name(i)));
     this.upper = new Float32Array(rig.bones.map((_, i) => (leg[i] || i === 0 ? 0 : 1)));
     this.arms = new Float32Array(rig.bones.map((_, i) => (/^(clavicle|upperarm|lowerarm|hand)_/.test(name(i)) ? 1 : 0)));
-    this.full = new Float32Array(rig.bones.length).fill(1);
+    // Every bone but the root, which carries the body's turn (applyPose writes it there; the
+    // clips' root is only their rest pose, and would turn him back to face one way).
+    this.full = new Float32Array(rig.bones.map((_, i) => (i === 0 ? 0 : 1)));
     this.legs = new Float32Array(rig.bones.map((_, i) => (leg[i] ? 1 : 0)));
   }
 
