@@ -15,8 +15,9 @@
 #   near account create-account fund-myself game.wgp.testnet '4 NEAR' autogenerate-new-keypair save-to-keychain sign-as wgp.testnet network-config testnet sign-with-keychain send
 #   (and relayer.wgp.testnet, operator.wgp.testnet the same way; see the Chain report)
 #
-# Needs cargo-near 0.22, near-cli-rs, jq and pnpm, with CONTRACT_ID's key (and, for an
-# upgrade, OWNER_ID's key) in your keychain. KEYCHAIN=legacy signs with the key files in
+# Needs cargo-near 0.22, near-cli-rs, jq and pnpm, with CONTRACT_ID's key and OWNER_ID's
+# key (the owner upgrades and opens the Mempool Market) in your keychain.
+# KEYCHAIN=legacy signs with the key files in
 # ~/.near-credentials instead (as scripts/near/setup-testnet.sh saves them), and
 # CONFIRM=<contract id> answers the confirmation prompt up front.
 set -euo pipefail
@@ -80,6 +81,16 @@ fi
 echo
 echo "Checking get_config…"
 near contract call-function as-read-only "$CONTRACT_ID" get_config json-args '{}' network-config "$NETWORK" now
+
+# The Mempool Market opens (or takes the current curves) with set_market_params. Seeds
+# are minted to the vendor only for pools that are new, so re-running it is safe.
+echo
+echo "Opening the Mempool Market…"
+MARKET_ARGS=$(cd "$ROOT/apps/wgp" && pnpm exec tsx ../../scripts/near/market-args.ts)
+near contract call-function as-transaction "$CONTRACT_ID" set_market_params json-args "$MARKET_ARGS" \
+  prepaid-gas '100.0 Tgas' attached-deposit '1 yoctoNEAR' \
+  sign-as "$OWNER_ID" network-config "$NETWORK" "$SIGN" send
+near contract call-function as-read-only "$CONTRACT_ID" market_state json-args '{}' network-config "$NETWORK" now
 
 cat <<EOF
 

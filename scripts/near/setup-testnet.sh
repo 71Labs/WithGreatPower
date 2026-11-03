@@ -21,8 +21,8 @@ PARENT=wgp.testnet
 CONTRACT=game.wgp.testnet
 RELAYER=relayer.wgp.testnet
 OPERATOR=operator.wgp.testnet
-# NEAR each sub-account gets from the parent: the contract's code needs ~2.8, plus player storage.
-FUND_CONTRACT='3.5 NEAR'
+# NEAR each sub-account gets from the parent: the contract's code needs ~3.6, plus player storage.
+FUND_CONTRACT='4.5 NEAR'
 FUND_RELAYER='1.5 NEAR'
 FUND_OPERATOR='0.5 NEAR'
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

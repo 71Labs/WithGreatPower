@@ -15,8 +15,9 @@
 #    and operator.wgpnear.near funded from it. New keys are saved as files in
 #    ~/.near-credentials/mainnet/, never the repo. Accounts that exist are skipped.
 # 2. Builds the contract and deploys and initialises it on game.wgpnear.near, with
-#    wgpnear.near as owner and operator.wgpnear.near as operator. (The build is not
-#    reproducible: Cargo.toml's reproducible_build has no image digest yet.)
+#    wgpnear.near as owner and operator.wgpnear.near as operator, then opens the Mempool
+#    Market (set_market_params from scripts/near/market-args.ts, 1 yoctoNEAR). (The build
+#    is not reproducible: Cargo.toml's reproducible_build has no image digest yet.)
 # 3. Writes the account ids and the three private keys to the Vercel project's production
 #    environment, straight from the key files; nothing prints them.
 #
@@ -32,8 +33,9 @@ CONTRACT=game.wgpnear.near
 RELAYER=relayer.wgpnear.near
 OPERATOR=operator.wgpnear.near
 FUND_PARENT="${FUND_PARENT:-7.5 NEAR}"
-# From the parent: the contract's code needs ~2.8 NEAR of storage, plus sponsored player storage.
-FUND_CONTRACT='3.5 NEAR'
+# From the parent: the contract's code (with the Mempool Market, ~360 KB) needs ~3.6 NEAR of
+# storage, plus sponsored player storage and open listings.
+FUND_CONTRACT='4.5 NEAR'
 FUND_RELAYER='2 NEAR'
 FUND_OPERATOR='0.5 NEAR'
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -114,6 +116,12 @@ else
     prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
     network-config "$NETWORK" sign-with-legacy-keychain send
   near contract call-function as-read-only "$CONTRACT" get_config json-args '{}' network-config "$NETWORK" now
+  MARKET_ARGS=$(cd "$ROOT/apps/wgp" && pnpm exec tsx ../../scripts/near/market-args.ts)
+  echo "$MARKET_ARGS" | jq -e '.pools | length > 0' >/dev/null
+  confirm "Open the Mempool Market on $CONTRACT (set_market_params, 1 yoctoNEAR from $PARENT)?"
+  near contract call-function as-transaction "$CONTRACT" set_market_params json-args "$MARKET_ARGS" \
+    prepaid-gas '100.0 Tgas' attached-deposit '1 yoctoNEAR' \
+    sign-as "$PARENT" network-config "$NETWORK" sign-with-legacy-keychain send
 fi
 
 echo
