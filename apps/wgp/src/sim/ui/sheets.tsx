@@ -196,9 +196,10 @@ const SWINGING: Record<"2d" | "3d", string[]> = {
   "3d": [
     "Hold Space, the left mouse button, or the right side of a touch screen to shoot a web at a building ahead. Let go to fly.",
     "Let go while you’re rising fast and forward for a perfect swing: a boost and +1 combo.",
-    "You head for the next stop on your own. To steer, use WASD or the arrow keys, or drag on the left side of a touch screen; directions follow the camera.",
+    "Your webs aim for the next stop. To run and steer, use WASD or the arrow keys, or drag on the left side of a touch screen; directions follow the camera.",
     "Click into the game to look around with the mouse (Esc frees the cursor), or drag with two fingers on a touch screen. The camera settles back behind you.",
     "The pin over the next stop (or the arrow at the edge of the screen) and the dotted line on the minimap show the way. Press M, or tap the minimap, for the whole city.",
+    "Gold tokens along the streets are a Bit each; cyan rings boost your swing. Both feed your combo, and its multiplier raises what they score. It runs down faster while you stand on a roof.",
     "Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.",
   ],
 };
