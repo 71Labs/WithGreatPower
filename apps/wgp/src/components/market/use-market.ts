@@ -8,13 +8,24 @@
  *   session cookie; the answer carries the new save, which the game store adopts.
  * - On chain: trades are session-key calls (no popup, no deposit) relayed by our
  *   relayer; the server mirrors the change into the save, so the store refreshes.
+ *
+ * Either way the answer to a trade carries the market as it stands right after it
+ * (MarketSnapshot, read past the server's 10-second cache), and the screen adopts it, so
+ * a trader never sees the price, stock or listing from before their own trade.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { adoptServerSave, refreshAccount, useAccount } from "@/game/store";
-import { getListings, getMarket, getMarketMe, postSimTrade, type ListingView, type MarketMe, type MarketView, type SimTradeRequest } from "@/lib/market/api";
+import { getListings, getMarket, getMarketMe, postSimTrade, type ListingView, type MarketMe, type MarketSnapshot, type MarketView, type SimTradeRequest } from "@/lib/market/api";
+import { chainCall } from "@/lib/market/chain-calls";
+import { marketProblem } from "@/lib/market/refusal";
+import type { RelayResponse } from "@/lib/near/session-key";
 
 const POLL_MS = 20_000;
+/** While a night's Bits are on their way, look more often so they show up as they land. */
+const PENDING_POLL_MS = 5_000;
+/** After adopting a trade's snapshot, check once more: another RPC node may have lagged a block. */
+const SETTLE_MS = 3_000;
 
 export type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
 
@@ -25,6 +36,8 @@ export interface MarketData {
   me: MarketMe | null;
   signedIn: boolean;
   refresh(): Promise<void>;
+  /** Shows the market a trade's answer carried, then checks it again shortly after. */
+  adopt(snapshot: MarketSnapshot): void;
 }
 
 /** Prices, listings and (signed in) the wallet, fetched together. */
@@ -39,6 +52,8 @@ export function useMarketData(): MarketData {
   const [listings, setListings] = useState<ListingView[] | null>(null);
   const [me, setMe] = useState<MarketMe | null>(null);
   const inflight = useRef<AbortController | null>(null);
+  const settle = useRef<number | null>(null);
+  const pending = (me?.pendingBits ?? 0) > 0;
 
   const load = useCallback(
     (onto: AbortController) =>
@@ -48,7 +63,8 @@ export function useMarketData(): MarketData {
         // Keep the last good prices on a failed refresh; only a first failure shows.
         else setMarket((prev) => (prev.state === "ready" ? prev : { state: "error", message: m?.message ?? "The market didn’t load. Check your connection and try again." }));
         if (l?.ok) setListings(l.data.listings);
-        setMe(w?.ok ? w.data : null);
+        // A failed wallet read keeps the last one (a 401 means signed out: drop it).
+        setMe((prev) => (w?.ok ? w.data : w && w.status === 401 ? null : prev));
       }),
     [signedIn],
   );
@@ -60,22 +76,43 @@ export function useMarketData(): MarketData {
     await load(controller);
   }, [load]);
 
+  const adopt = useCallback(
+    (snapshot: MarketSnapshot) => {
+      // A poll that left before the trade would answer with the market from before it.
+      inflight.current?.abort();
+      setMarket({ state: "ready", data: snapshot.view });
+      setListings(snapshot.listings);
+      setMe(snapshot.me);
+      if (settle.current !== null) window.clearTimeout(settle.current);
+      settle.current = window.setTimeout(() => void refresh(), SETTLE_MS);
+    },
+    [refresh],
+  );
+
   useEffect(() => {
     if (account.status === "loading") return;
     const controller = new AbortController();
     inflight.current = controller;
     void load(controller);
-    const id = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, POLL_MS);
     return () => {
-      window.clearInterval(id);
       controller.abort();
       inflight.current?.abort();
+      if (settle.current !== null) window.clearTimeout(settle.current);
     };
-  }, [account.status, load, refresh]);
+  }, [account.status, load]);
 
-  return { market, listings, me, signedIn, refresh };
+  useEffect(() => {
+    if (account.status === "loading") return;
+    const id = window.setInterval(
+      () => {
+        if (document.visibilityState === "visible") void refresh();
+      },
+      pending ? PENDING_POLL_MS : POLL_MS,
+    );
+    return () => window.clearInterval(id);
+  }, [account.status, pending, refresh]);
+
+  return { market, listings, me, signedIn, refresh, adopt };
 }
 
 /* ------------------------------------------------------------------ quick play */
@@ -109,51 +146,62 @@ export const askToSignIn = () => window.dispatchEvent(new CustomEvent("wgp:sign-
 
 /* ------------------------------------------------------------------ trading */
 
-export type TradeOutcome = { ok: true } | { ok: false; code: string; message: string };
+export type TradeOutcome =
+  | { ok: true; snapshot: MarketSnapshot | null }
+  | {
+      ok: false;
+      /** "quick_play": the session key is missing or refused; "busy": another trade is on its way. */
+      code: string;
+      message: string;
+      /** The market as the server saw it when it refused, when it said. */
+      snapshot: MarketSnapshot | null;
+      /** The trade may have landed after all (the answer was lost): reload before trying again. */
+      unsure?: boolean;
+    };
 
-const CHAIN_CALL = {
-  buy: (r: Extract<SimTradeRequest, { action: "buy" }>) => ["market_buy", { item: r.item, amount: r.amount, max_bits: String(r.maxBits) }] as const,
-  sell: (r: Extract<SimTradeRequest, { action: "sell" }>) => ["market_sell", { item: r.item, amount: r.amount, min_bits: String(r.minBits) }] as const,
-  list: (r: Extract<SimTradeRequest, { action: "list" }>) => ["list_item", { item: r.item, amount: r.amount, price_bits: String(r.price) }] as const,
-  fill: (r: Extract<SimTradeRequest, { action: "fill" }>) => ["buy_listing", { listing_id: r.listingId }] as const,
-  cancel: (r: Extract<SimTradeRequest, { action: "cancel" }>) => ["cancel_listing", { listing_id: r.listingId }] as const,
-};
-
-/** The contract's own words from a relayed failure ("Smart contract panicked: …"). */
-export function panicText(message: string | undefined): string | null {
-  const m = /panicked: ([^"\\]+)/.exec(message ?? "");
-  return m ? m[1]!.trim() : null;
+function failed(status: number, code: string, message: string | undefined, snapshot: MarketSnapshot | null = null): TradeOutcome {
+  const p = marketProblem(status, code, message);
+  return { ok: false, code: p.code, message: p.text, snapshot, unsure: p.unsure };
 }
 
-function problem(status: number, code: string, message?: string): TradeOutcome {
-  if (status === 0) return { ok: false, code: "network", message: "Couldn’t reach the market. Check your connection and try again." };
-  if (code === "run_active") return { ok: false, code, message: "Finish or abandon your patrol first, then trade." };
-  if (status === 401) return { ok: false, code: "signed_out", message: "Sign in again to trade." };
-  if (status === 429) return { ok: false, code, message: "That’s a lot of trades at once. Wait a moment and try again." };
-  return { ok: false, code, message: message ?? "The market couldn’t do that. Try again." };
-}
+const isSnapshot = (v: unknown): v is MarketSnapshot => typeof v === "object" && v !== null && "view" in v && "me" in v && "listings" in v;
+
+/** One trade at a time from this tab: a second tap while one is on its way is refused, never sent. */
+let trading = false;
 
 /** One trade on whichever market is live. Never throws. */
 export async function trade(onChain: boolean, req: SimTradeRequest): Promise<TradeOutcome> {
-  if (!onChain) {
-    const res = await postSimTrade(req);
-    if (!res.ok) return problem(res.status, res.error, res.message);
-    adoptServerSave(res.data.save, res.data.rev);
-    return { ok: true };
+  if (trading) return { ok: false, code: "busy", message: "Your last trade is still going through. Give it a moment.", snapshot: null };
+  trading = true;
+  try {
+    return await (onChain ? tradeOnChain(req) : tradeSimulated(req));
+  } finally {
+    trading = false;
   }
+}
+
+async function tradeSimulated(req: SimTradeRequest): Promise<TradeOutcome> {
+  const res = await postSimTrade(req);
+  if (!res.ok) return failed(res.status, res.error, res.message);
+  adoptServerSave(res.data.save, res.data.rev);
+  return { ok: true, snapshot: res.data.market ?? null };
+}
+
+async function tradeOnChain(req: SimTradeRequest): Promise<TradeOutcome> {
+  let res: RelayResponse & { market?: unknown };
   try {
     const { callGame } = await import("@/lib/near/session-key");
-    const [method, args] = (CHAIN_CALL[req.action] as (r: SimTradeRequest) => readonly [Parameters<typeof callGame>[0], Record<string, unknown>])(req);
-    const res = await callGame(method, args);
-    if (!res.ok) {
-      if (res.error === "unknown_key" || res.error === "revoked_key") return { ok: false, code: "quick_play", message: "Turn on quick play to trade without popups." };
-      return problem(422, res.error ?? "call_failed", panicText(res.message) ?? res.message);
-    }
-    await refreshAccount();
-    return { ok: true };
+    const { method, args } = chainCall(req);
+    res = await callGame(method, args);
   } catch (error) {
-    const text = (error as Error).message;
-    if (/session key/i.test(text)) return { ok: false, code: "quick_play", message: "Turn on quick play to trade without popups." };
-    return { ok: false, code: "network", message: "Couldn’t reach NEAR. Check your connection and try again." };
+    // Nothing was sent: no key on this device yet, or NEAR couldn't be asked for the next nonce.
+    const text = error instanceof Error ? error.message : String(error);
+    if (/session key/i.test(text)) return failed(403, "unknown_key", text);
+    return { ok: false, code: "network", message: "Couldn’t reach NEAR, so nothing was sent. Check your connection and try again.", snapshot: null };
   }
+  const snapshot = isSnapshot(res.market) ? res.market : null;
+  // The server mirrors a trade into the save (bought loot is there to craft with).
+  if (res.ok || res.status === 0) void refreshAccount();
+  if (!res.ok) return failed(res.status, res.error ?? `http_${res.status}`, res.message, snapshot);
+  return { ok: true, snapshot };
 }

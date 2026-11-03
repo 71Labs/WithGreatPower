@@ -12,7 +12,7 @@ import { createElement, useState } from "react";
 import { StickerButton, StickerFrame, StickerPanel } from "@/components/game/kit";
 import { StickerTabs, tabPanelProps, type StickerTab } from "@/components/game/ui";
 import { AVATARS } from "@/components/cast";
-import { CircleAlert, Coins, ExternalLink, KeyRound, LogIn, Store, Tag } from "@/components/icons";
+import { CircleAlert, Coins, ExternalLink, Hourglass, KeyRound, LogIn, Store, Tag } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { showToast } from "@/game/store";
 import { RARITY_LABEL } from "@wgp/game-core/data";
@@ -49,10 +49,23 @@ function Vendor({ view, me, signedIn, quickPlay, line }: { view: MarketView; me:
       </div>
       <div className="flex shrink-0 flex-col gap-3 border-t-2 border-dashed border-game-ink/20 pt-3 sm:min-w-[210px] sm:border-l-2 sm:border-t-0 sm:pl-5 sm:pt-0">
         <div className="flex items-end justify-between gap-4 sm:flex-col sm:items-start sm:gap-1">
-          <p className="flex flex-col">
-            <span className="text-[12px] font-semibold leading-4 text-game-muted">Your Bits</span>
-            <span className="num text-[30px] font-bold leading-9 tracking-[-0.02em]">{me ? formatBits(me.bits) : "—"}</span>
-          </p>
+          <div className="flex flex-col">
+            <p className="flex flex-col">
+              <span className="text-[12px] font-semibold leading-4 text-game-muted">Your Bits</span>
+              <span className="num text-[30px] font-bold leading-9 tracking-[-0.02em]">{me ? formatBits(me.bits) : "—"}</span>
+            </p>
+            {/* A night's Bits between the results screen and the wallet: say so, never let them look lost. */}
+            <p role="status" className="empty:hidden">
+              {me && me.pendingBits > 0 ? (
+                <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-semibold leading-4 text-game-muted">
+                  <Hourglass aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+                  <span>
+                    <span className="num">+{formatBits(me.pendingBits)}</span> on the way
+                  </span>
+                </span>
+              ) : null}
+            </p>
+          </div>
           <p className="num text-right text-[12px] leading-4 text-game-muted sm:text-left">
             Gwei’s till: {formatBits(view.till)} Bits
             <br />
@@ -141,7 +154,7 @@ function ItemCard({ item, me, canTrade, onTrade }: { item: MarketItemView; me: M
 
 /* ------------------------------------------------------------------ listings */
 
-function ListingRow({ listing, mine, canTrade, onBuy, onCancel }: { listing: ListingView; mine: boolean; canTrade: boolean; onBuy(): void; onCancel(): void }) {
+function ListingRow({ listing, mine, canTrade, cancelling, onBuy, onCancel }: { listing: ListingView; mine: boolean; canTrade: boolean; cancelling: boolean; onBuy(): void; onCancel(): void }) {
   const seller = listing.seller.split(".")[0];
   const vs = listing.vsSpot - 1;
   return (
@@ -162,8 +175,9 @@ function ListingRow({ listing, mine, canTrade, onBuy, onCancel }: { listing: Lis
       </span>
       {canTrade ? (
         mine ? (
-          <StickerButton size="sm" onClick={onCancel} className="max-sm:w-full">
-            Cancel listing
+          // aria-disabled, not disabled: focus stays on the button while it works.
+          <StickerButton size="sm" onClick={() => !cancelling && onCancel()} aria-disabled={cancelling || undefined} aria-busy={cancelling || undefined} className="max-sm:w-full">
+            {cancelling ? "Taking it down…" : "Take it down"}
           </StickerButton>
         ) : (
           <StickerButton size="sm" onClick={onBuy} className="max-sm:w-full">
@@ -175,7 +189,25 @@ function ListingRow({ listing, mine, canTrade, onBuy, onCancel }: { listing: Lis
   );
 }
 
-function Listings({ listings, me, view, canTrade, onList, onBuy, onCancel }: { listings: ListingView[] | null; me: MarketMe | null; view: MarketView; canTrade: boolean; onList(): void; onBuy(l: ListingView): void; onCancel(l: ListingView): void }) {
+function Listings({
+  listings,
+  me,
+  view,
+  canTrade,
+  cancelling,
+  onList,
+  onBuy,
+  onCancel,
+}: {
+  listings: ListingView[] | null;
+  me: MarketMe | null;
+  view: MarketView;
+  canTrade: boolean;
+  cancelling: number | null;
+  onList(): void;
+  onBuy(l: ListingView): void;
+  onCancel(l: ListingView): void;
+}) {
   const mine = new Set(me?.open ?? []);
   return (
     <div className="flex flex-col gap-2">
@@ -207,7 +239,15 @@ function Listings({ listings, me, view, canTrade, onList, onBuy, onCancel }: { l
       ) : (
         <ul aria-label="Open listings" className="flex flex-col divide-y-2 divide-dashed divide-game-ink/10">
           {listings.map((l) => (
-            <ListingRow key={l.id} listing={l} mine={mine.has(l.id) || l.seller === me?.accountId} canTrade={canTrade} onBuy={() => onBuy(l)} onCancel={() => onCancel(l)} />
+            <ListingRow
+              key={l.id}
+              listing={l}
+              mine={mine.has(l.id) || l.seller === me?.accountId}
+              canTrade={canTrade}
+              cancelling={cancelling === l.id}
+              onBuy={() => onBuy(l)}
+              onCancel={() => onCancel(l)}
+            />
           ))}
         </ul>
       )}
@@ -256,7 +296,7 @@ function Header({ view }: { view: MarketView | null }) {
 }
 
 export function MarketScreen() {
-  const { market, listings, me, signedIn, refresh } = useMarketData();
+  const { market, listings, me, signedIn, refresh, adopt } = useMarketData();
   const view = market.state === "ready" ? market.data : null;
   const quickPlay = useQuickPlay(!!view?.onChain, me?.accountId ?? null);
   const [tab, setTab] = useState<Tab>("vendor");
@@ -264,6 +304,7 @@ export function MarketScreen() {
   const [listing, setListing] = useState(false);
   const [filling, setFilling] = useState<ListingView | null>(null);
   const [after, setAfter] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<number | null>(null);
   // Gwei's line changes daily; the day comes from the server's answer, not the render.
   const day = view ? Math.floor(Date.parse(view.updatedAt) / 86_400_000) : 0;
 
@@ -271,17 +312,30 @@ export function MarketScreen() {
 
   async function run(req: SimTradeRequest) {
     const res = await trade(!!view?.onChain, req);
+    // The answer carries the market right after the trade (or the price that refused it).
+    if (res.snapshot) adopt(res.snapshot);
+    else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     if (res.ok) {
       setAfter(VENDOR_AFTER[req.action]);
       showToast(
-        req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Listing cancelled. Your items are back.",
+        req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Taken down. Your items are back.",
         "success",
       );
-      await refresh();
     } else if (res.code === "quick_play") {
       askToSignIn();
     }
+    // An unsure answer reloads the wallet at once, so the player can see whether it landed.
+    if (!res.ok && res.unsure) void refresh();
     return res;
+  }
+
+  /** Taking a listing down has no sheet, so its outcome is a toast. */
+  async function cancel(l: ListingView) {
+    if (cancelling !== null) return;
+    setCancelling(l.id);
+    const res = await run({ action: "cancel", listingId: l.id });
+    setCancelling(null);
+    if (!res.ok && res.code !== "quick_play") showToast(res.message, "error");
   }
 
   const tabs: StickerTab<Tab>[] = [
@@ -333,9 +387,10 @@ export function MarketScreen() {
                 me={me}
                 view={view}
                 canTrade={canTrade}
+                cancelling={cancelling}
                 onList={() => setListing(true)}
                 onBuy={setFilling}
-                onCancel={(l) => void run({ action: "cancel", listingId: l.id })}
+                onCancel={(l) => void cancel(l)}
               />
             </StickerPanel>
           )}
