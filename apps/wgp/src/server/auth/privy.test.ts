@@ -114,6 +114,7 @@ describe("identityFromUser", () => {
     const withKey = (public_key: string) => user({ linked_accounts: [{ type: "wallet", chain_type: "near", address: IMPLICIT, connector_type: "embedded", public_key, verified_at: 1 }] });
     expect(identityFromUser(withKey(NEAR_KEY)).near?.implicitAccountId).toBe(IMPLICIT);
     expect(identityFromUser(withKey(`0x${IMPLICIT}`)).near?.publicKey).toBe(NEAR_KEY);
+    expect(identityFromUser(withKey(`00${IMPLICIT}`)).near?.publicKey).toBe(NEAR_KEY);
     const other = KeyPair.fromRandom("ed25519").getPublicKey().toString();
     expect(() => identityFromUser(withKey(other))).toThrow(PrivyAuthError);
   });

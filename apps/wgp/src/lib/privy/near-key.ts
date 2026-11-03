@@ -32,10 +32,16 @@ export function implicitToPublicKey(implicitAccountId: string): string {
   return `ed25519:${baseEncode(hexToBytes(implicitAccountId))}`;
 }
 
-/** The 32 key bytes from "ed25519:<base58>", bare base58, or (0x-)hex. Throws on anything else. */
+/**
+ * The 32 key bytes from "ed25519:<base58>", bare base58, or (0x-)hex. Privy reports its
+ * NEAR wallets' keys as hex with a leading 00 key-type byte (ed25519), which is dropped.
+ * Throws on anything else.
+ */
 export function publicKeyBytes(raw: string): Uint8Array {
   const value = raw.trim();
   if (/^(0x)?[0-9a-fA-F]{64}$/.test(value)) return hexToBytes(value);
+  const flagged = /^(?:0x)?00([0-9a-fA-F]{64})$/.exec(value);
+  if (flagged) return hexToBytes(flagged[1]);
   const b58 = value.startsWith("ed25519:") ? value.slice("ed25519:".length) : value;
   if (!/^[1-9A-HJ-NP-Za-km-z]{32,50}$/.test(b58)) throw new NearKeyError("Not an ed25519 public key");
   let bytes: Uint8Array;
