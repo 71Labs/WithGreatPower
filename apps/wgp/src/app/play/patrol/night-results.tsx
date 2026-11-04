@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from "react";
 
 import { StickerButton, StickerLink } from "@/components/game/kit";
 import { BadgeCheck, CircleAlert, Coins, Medal } from "@/components/icons";
+import { ShareOnX } from "@/components/social/share-on-x";
+import { runShareText } from "@/lib/social/share";
 import { useAccount } from "@/game/store";
 import type { NightOutcome, NightSession } from "@/game3d/session";
 import { isUnclaimed } from "@/lib/near/policy";
@@ -121,9 +123,12 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
             ) : null}
           </div>
           <EarnedBits bits={o.bits} />
-          <StickerLink href="/play/leaderboard" size="md" className="w-full sm:w-auto sm:self-start">
-            See tonight’s board
-          </StickerLink>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {o.ranked ? <ShareOnX text={runShareText(o.score, o.runId)} className="w-full sm:w-auto" /> : null}
+            <StickerLink href="/play/leaderboard" size="md" className="w-full sm:w-auto">
+              See tonight’s board
+            </StickerLink>
+          </div>
         </Panel>
       );
     case "rejected":
@@ -143,9 +148,11 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
       return (
         <Panel>
           <Score label="Unranked score" value={o.score} />
-          <p className="text-[14px] leading-5 text-pretty">Guest nights are saved in this browser and stay off the boards. Sign in and the server checks every night you play.</p>
+          <p className="text-[14px] leading-5 text-pretty">
+            Guest nights are saved in this browser and stay off the boards. Sign in and the server checks every night you play, and a ranked night gets a link you can share on X.
+          </p>
           <StickerButton variant="ink" size="md" onClick={() => window.dispatchEvent(new CustomEvent("wgp:sign-in"))} className="w-full sm:w-auto sm:self-start">
-            Sign in to rank your nights
+            Sign in to rank and share
           </StickerButton>
         </Panel>
       );

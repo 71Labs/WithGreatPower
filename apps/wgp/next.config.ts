@@ -40,6 +40,11 @@ const nextConfig: NextConfig = {
     // The licensed webfonts are copied in at deploy (scripts/deploy-prod.sh), never committed.
     WGP_NEUE_MONTREAL: existsSync(join(PUBLIC, "fonts", "NeueMontreal-Regular.woff2")) ? "1" : "",
   },
+  // The card images read Neue Montreal from public/fonts when a deploy copied it in
+  // (src/server/social/fonts.ts): ship those files with the functions that draw them.
+  outputFileTracingIncludes: {
+    "/api/social/card/**": ["./public/fonts/NeueMontreal-*"],
+  },
   images: {
     // AVIF where the browser takes it (about a fifth smaller than WebP for the landing's stills).
     formats: ["image/avif", "image/webp"],
