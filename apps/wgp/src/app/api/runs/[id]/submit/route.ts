@@ -14,7 +14,7 @@ import { refreshBoards } from "@/server/db/leaderboard-cache";
 import { submitRun } from "@/server/db/runs";
 import { HttpError, clientIp, handle, json, notFound, readJson } from "@/server/http";
 import { RATE_LIMITS, rateLimiter } from "@/server/rate-limit";
-import { sendMintsSoon, sweepSoon } from "@/server/background";
+import { draftSocialSoon, sendMintsSoon, sweepSoon } from "@/server/background";
 import { VERIFY_RULES } from "@/server/verify";
 
 const MAX_LOG_BASE64 = Math.ceil(VERIFY_RULES.maxLogBytes / 3) * 4;
@@ -42,7 +42,11 @@ export const POST = handle("runs/submit", async (request: Request, { params }: {
   const outcome = await submitRun(await getDb(), { playerId: session.playerId, runId: id, log, clientHash: input.clientHash });
   sweepSoon();
   if (outcome.status === "verified") {
-    if (outcome.tags.length > 0) refreshBoards(outcome.tags);
+    if (outcome.tags.length > 0) {
+      refreshBoards(outcome.tags);
+      // The boards moved: maybe a new #1. Drafts wait in the admin queue; nothing posts.
+      draftSocialSoon();
+    }
     // The run's reward was queued with it: send it now rather than on a schedule.
     sendMintsSoon();
     return json({ ...outcome, tags: undefined });

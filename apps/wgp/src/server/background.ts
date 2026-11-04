@@ -13,6 +13,9 @@
  * - Seasons (src/server/db/season-close.ts): every trigger above, plus leaderboard and
  *   season reads, may run the season pass, at most once a minute and only once a start
  *   or a freeze is due. The first one after a season's freeze time closes it.
+ * - Social drafts (src/server/social/queue.ts): after a verified ranked run, at most once
+ *   every 2 minutes; an admin opening the queue also drafts, in its own request. Drafts
+ *   only: nothing is ever posted from the server.
  *
  * Every job is idempotent, and the windows are rows in budget_counters, so they hold
  * across serverless instances. The /api/cron/* routes stay as manual triggers, guarded by
@@ -29,12 +32,14 @@ import { chainEnv, operatorEnv } from "@/server/near/env";
 import { drainRewards } from "@/server/near/mint-worker";
 import { sendSeasonRecords } from "@/server/near/season-record";
 import { reserveBudget } from "@/server/rate-limit";
+import { syncDrafts } from "@/server/social/queue";
 
 export const WINDOWS = {
   mint: 15_000,
   sweep: 10 * 60_000,
   marketSnapshot: 30 * 60_000,
   seasons: 60_000,
+  social: 2 * 60_000,
 } as const;
 
 export type BackgroundJob = keyof typeof WINDOWS;
@@ -103,6 +108,14 @@ export function snapshotMarketSoon(): void {
   whenDue("marketSnapshot", async (db) => {
     const source = await marketSource();
     await recordSnapshots(db, source.onChain, poolsOf(source).pools);
+  });
+}
+
+/** Drafts any social posts the last run made true (a new #1, last night's top 3), after this request, when due. */
+export function draftSocialSoon(): void {
+  whenDue("social", async (db) => {
+    const report = await syncDrafts(db);
+    for (const e of report.errors) console.error(`[background] social: ${e}`);
   });
 }
 
