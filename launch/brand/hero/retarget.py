@@ -206,7 +206,10 @@ def retarget(clips):
     return made
 
 
-def export(made, out):
+def export(made, out, step=1, lean=False):
+    """Write `made` on the hero's armature alone; `step`: keep every step-th frame (the
+    crowd's clips, seen from afar, keep half); `lean`: only the bones the clips key (the
+    rest would be a still channel each, per clip)."""
     sc = bpy.context.scene
     tgt = bpy.data.objects["NodeRig"]
     for a in list(bpy.data.actions):
@@ -228,9 +231,9 @@ def export(made, out):
         export_animations=True,
         export_animation_mode="ACTIONS",
         export_force_sampling=True,
-        export_frame_step=1,
+        export_frame_step=step,
         export_optimize_animation_size=True,
-        export_optimize_animation_keep_anim_armature=True,
+        export_optimize_animation_keep_anim_armature=not lean,
         export_anim_single_armature=True,
         export_reset_pose_bones=True,
         export_def_bones=False,
