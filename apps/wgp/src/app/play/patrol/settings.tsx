@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The 3D night's settings: sound and its two volumes (src/audio/player), the quality tier (picked from the GPU, then the frame rate,
- * until you choose one), whether the minimap keeps north up, and the steady camera (no roll, no shake, a fixed field of view:
+ * The 3D night's settings: sound and its two volumes (src/audio/player), the graphics (Auto: picked from the GPU, then the frame
+ * rate; or a tier you pin: Low, Medium, High), whether the minimap keeps north up, and the steady camera (no roll, no shake, a fixed field of view:
  * on by default when the device asks for reduced motion). Remembered in this browser;
  * `?tier=low|medium|high` overrides the tier for testing. The pause sheet shows them.
  */
@@ -43,21 +43,28 @@ export function initialSettings(): PlaySettings {
   };
 }
 
-/** Remember a choice the player made (the probe's own tier changes aren't saved). */
-export function rememberSettings(next: { tier?: QualityTier; steady?: boolean; northUp?: boolean }) {
+/** Remember a choice the player made (the probe's own tier changes aren't saved). `tier: null` forgets the pick (Auto). */
+export function rememberSettings(next: { tier?: QualityTier | null; steady?: boolean; northUp?: boolean }) {
   try {
     const prev = JSON.parse(window.localStorage.getItem(KEY) ?? "{}") ?? {};
-    window.localStorage.setItem(KEY, JSON.stringify({ ...prev, ...next }));
+    const merged = { ...prev, ...next };
+    if (merged.tier === null) delete merged.tier;
+    window.localStorage.setItem(KEY, JSON.stringify(merged));
   } catch {
     // Not remembered, but applied for this visit.
   }
 }
 
-const TIER_LABEL: Record<QualityTier, string> = { low: "Smooth", medium: "Balanced", high: "Sharp" };
+/** The graphics choice: Auto (the device's guess, then the frame rate) or a pinned tier. */
+export type GraphicsChoice = QualityTier | "auto";
+
+const TIER_NAME: Record<QualityTier, string> = { low: "Low", medium: "Medium", high: "High" };
+const GRAPHICS: { value: GraphicsChoice; label: string }[] = [{ value: "auto", label: "Auto" }, ...TIERS.map((t) => ({ value: t, label: TIER_NAME[t] }))];
 
 /** Quality and comfort, for the pause sheet. */
-export function SettingsPanel({ settings, onTier, onSteady }: { settings: PlaySettings; onTier(t: QualityTier): void; onSteady(on: boolean): void }) {
+export function SettingsPanel({ settings, onTier, onSteady }: { settings: PlaySettings; onTier(t: GraphicsChoice): void; onSteady(on: boolean): void }) {
   const id = useId();
+  const choice: GraphicsChoice = settings.adaptive ? "auto" : settings.tier;
   return (
     <div className="flex flex-col gap-4 rounded-[16px] border-2 border-game-ink bg-game-paper-2 p-3">
       <SoundSliders toggle />
@@ -65,23 +72,29 @@ export function SettingsPanel({ settings, onTier, onSteady }: { settings: PlaySe
         <p id={`${id}-q`} className="text-[13px] font-bold leading-4">
           Graphics
         </p>
-        <div role="radiogroup" aria-labelledby={`${id}-q`} className="grid grid-cols-3 gap-1 rounded-[12px] border-2 border-game-ink bg-game-paper p-[3px]">
-          {TIERS.map((t) => (
+        <div role="radiogroup" aria-labelledby={`${id}-q`} aria-describedby={`${id}-qh`} className="grid grid-cols-4 gap-1 rounded-[12px] border-2 border-game-ink bg-game-paper p-[3px]">
+          {GRAPHICS.map(({ value, label }) => (
             <button
-              key={t}
+              key={value}
               type="button"
               role="radio"
-              aria-checked={settings.tier === t}
-              onClick={() => onTier(t)}
-              className={`h-11 whitespace-nowrap rounded-[8px] px-2 text-[14px] font-semibold focus-visible:outline-offset-2 motion-safe:transition-[background-color,color] motion-safe:duration-150 ${
-                settings.tier === t ? "bg-game-ink text-game-paper" : "text-game-ink pointer-fine:hover:bg-game-paper-2"
+              aria-checked={choice === value}
+              onClick={() => onTier(value)}
+              className={`h-11 whitespace-nowrap rounded-[9px] px-1 text-[14px] font-semibold focus-visible:outline-offset-2 motion-safe:transition-[background-color,color] motion-safe:duration-150 ${
+                choice === value ? "bg-game-ink text-game-paper" : "text-game-ink pointer-fine:hover:bg-game-paper-2"
               }`}
             >
-              {TIER_LABEL[t]}
+              {label}
             </button>
           ))}
         </div>
-        <p className="text-[12px] leading-4 text-game-muted">{settings.adaptive ? "Set from your device until you pick one." : "Smooth runs best on older phones."}</p>
+        <p id={`${id}-qh`} className="text-[12px] leading-4 text-game-muted text-pretty">
+          {settings.adaptive
+            ? `Auto picked ${TIER_NAME[settings.tier]} for this device, and steps down if frames run slow.`
+            : settings.tier === "high"
+              ? "High adds moon shadows and glow. Pick Low on older phones."
+              : "Low runs best on older phones; High adds moon shadows and glow."}
+        </p>
       </div>
       <label htmlFor={`${id}-s`} className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
