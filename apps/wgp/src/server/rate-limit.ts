@@ -40,6 +40,10 @@ export const RATE_LIMITS = {
   migratePerPlayer: { limit: 5, windowMs: 10 * 60_000 },
   /** POST /api/auth/dev. */
   devAuthPerIp: { limit: 20, windowMs: 60_000 },
+  /** PUT and DELETE /api/me/social: the player's X handle. */
+  socialPerPlayer: { limit: 20, windowMs: 60_000 },
+  /** GET /api/social/card/run/:id (public; cached by the CDN once drawn). */
+  cardPerIp: { limit: 60, windowMs: 60_000 },
 } satisfies Record<string, RateLimit>;
 
 const MAX_KEYS = 50_000;

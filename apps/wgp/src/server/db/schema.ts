@@ -74,6 +74,13 @@ export const players = pgTable(
      * by one, inside the transaction that queues the mint (src/server/db/outbox.ts).
      */
     nextRewardNonce: integer("next_reward_nonce").notNull().default(1),
+    /**
+     * The player's X handle, without the @ (1–15 of A–Z, a–z, 0–9 and _). Self-reported and
+     * unverified: nothing proves the account is theirs (src/server/social/players.ts).
+     */
+    xHandle: text("x_handle"),
+    /** Opt-in to being tagged on X when they place on a board. Off by default; drafts use the in-game handle otherwise. */
+    xTagOk: boolean("x_tag_ok").notNull().default(false),
   },
   (t) => [
     uniqueIndex("players_near_account_id_key").on(t.nearAccountId),
@@ -347,7 +354,69 @@ export const marketSim = pgTable("market_sim", {
   updatedAt: at("updated_at").notNull().defaultNow(),
 });
 
+/* ------------------------------------------------------------------ social */
+
+export const socialDraftStatus = pgEnum("social_draft_status", ["pending", "approved", "rejected", "posted", "expired"]);
+
+/**
+ * Drafted X posts waiting for the owner (src/server/social). Nothing here is ever posted
+ * by the server: an admin approves a draft, opens it as an X intent link and posts it from
+ * their own browser, then marks it posted. `source_event` names the fact a draft is about
+ * ("tonight_top3:2026-11-04"), unique, so generating twice never drafts twice.
+ */
+export const socialDrafts = pgTable(
+  "social_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** "tonight_top3", "new_leader", "season_countdown", … (src/server/social/drafts.ts). */
+    kind: text("kind").notNull(),
+    /** The text as generated, from real data only. */
+    text: text("text").notNull(),
+    /** The admin's edit, if any; what gets posted when set. */
+    editedText: text("edited_text"),
+    /** The card image to attach, a path on this site. */
+    mediaUrl: text("media_url"),
+    /** A post this one replies to, if any. */
+    replyTo: text("reply_to"),
+    /** Every @mention and #hashtag in the text, at most three. */
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    sourceEvent: text("source_event").notNull(),
+    /** Where each number came from: `DraftSource[]` (run ids, tx links, price rows). */
+    sources: jsonb("sources").notNull().default(sql`'[]'::jsonb`),
+    status: socialDraftStatus("status").notNull().default("pending"),
+    createdAt: at("created_at").notNull().defaultNow(),
+    /** 24 hours after creation; a pending or approved draft past it is expired. */
+    expiresAt: at("expires_at").notNull(),
+    /** The admin's NEAR account that approved or rejected it. */
+    decidedBy: text("decided_by"),
+    decidedAt: at("decided_at"),
+    postedAt: at("posted_at"),
+  },
+  (t) => [uniqueIndex("social_drafts_source_event_key").on(t.sourceEvent), index("social_drafts_created_idx").on(t.createdAt)],
+);
+
+/** Who did what to a draft, and when: one row per edit, approval, rejection or post. */
+export const socialDraftLog = pgTable(
+  "social_draft_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => socialDrafts.id, { onDelete: "cascade" }),
+    at: at("at").notNull().defaultNow(),
+    /** The admin's NEAR account id. */
+    actor: text("actor").notNull(),
+    /** "edit", "approve", "reject" or "posted". */
+    action: text("action").notNull(),
+    /** The status before and after, and the text when it changed. */
+    detail: jsonb("detail"),
+  },
+  (t) => [index("social_draft_log_draft_idx").on(t.draftId, t.at)],
+);
+
 export type Player = typeof players.$inferSelect;
+export type SocialDraft = typeof socialDrafts.$inferSelect;
+export type SocialDraftStatus = (typeof socialDraftStatus.enumValues)[number];
 export type Run = typeof runs.$inferSelect;
 export type ChainOp = typeof chainOps.$inferSelect;
 export type Season = typeof seasons.$inferSelect;
