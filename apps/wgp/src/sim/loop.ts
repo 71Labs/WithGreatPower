@@ -58,7 +58,11 @@ export interface HudSnapshot {
   progress: number;
   abilities: AbilityHud[];
   gwei: { left: number; ready: boolean };
-  villain: { kind: VillainId; name: string; hits: number; hitsMax: number; open: boolean; boss: boolean; quest: boolean } | null;
+  /**
+   * `open`: a direct hit would land now. 3D (ruleset 4) adds `opening` (Gas Goblin's stall or
+   * Sandwich Man's stumble, through his guard) and `guard` (blocking after a hit).
+   */
+  villain: { kind: VillainId; name: string; hits: number; hitsMax: number; open: boolean; opening?: boolean; guard?: boolean; boss: boolean; quest: boolean } | null;
   buffs: { shield: boolean; cloak: boolean; finality: boolean; fork: boolean; slowmo: boolean };
   /** True until the first web of the session. */
   hint: boolean;
