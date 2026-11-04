@@ -35,11 +35,12 @@ export function inOpening(v: Villain): boolean {
 }
 
 /**
- * Hits to catch a villain: 6 + level / 2, and 3 more for a boss (v4; v3: 3 + level / 2, and 2,
- * when most hits were slams from the air). A strike, a sling or a slam is one hit.
+ * Hits to catch a villain: 6 + level / 2 (at most 9), and 3 more for a boss (v4; v3: 3 + level
+ * / 2, and 2, when most hits were slams from the air). A strike, a sling or a slam is one hit.
+ * Later levels get harder through the attack rate instead.
  */
 export function villainHits(level: number, boss: boolean): number {
-  return 6 + Math.floor(level / 2) + (boss ? 3 : 0);
+  return 6 + Math.min(3, Math.floor(level / 2)) + (boss ? 3 : 0);
 }
 
 export const villainName = (id: VillainId) => VILLAINS[id].name;
