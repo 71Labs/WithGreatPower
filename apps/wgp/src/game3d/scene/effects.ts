@@ -27,6 +27,7 @@ import { CITY, INK, PAPER } from "@/game/style";
 import { inked, resolveFont, sparkle, starburst } from "@/sim/render/draw";
 
 import type { SharedUniforms } from "./city/materials";
+import { rgb, type RGB } from "./palette";
 
 /** Words in the atlas, with the 2D renderer's colours (burst fill, letter fill). */
 export const BURST_WORDS = {
@@ -252,6 +253,225 @@ export class Bursts {
     this.geo.dispose();
     this.material.dispose();
     this.texture.dispose();
+    this.mesh.dispose();
+  }
+}
+
+/* ------------------------------------------------------------------ sparks */
+
+const SPARK_VERTEX = /* glsl */ `
+attribute vec3 aCenter;
+attribute vec3 aVel;
+attribute vec4 aParams;  // half size (CSS px), kind (0 shard, 1 star, 2 web splat), scale, turn
+attribute vec3 aColor;
+uniform float uPxScale;
+varying vec2 vP;
+varying vec3 vColor;
+flat varying float vKind;
+void main() {
+  vec4 view = viewMatrix * vec4(aCenter, 1.0);
+  float depth = max(1.0, -view.z);
+  float s = aParams.x * depth * uPxScale * aParams.z;
+  vec2 dir = vec2(cos(aParams.w), sin(aParams.w));
+  if (aParams.y < 0.5) {
+    // Shards point along their flight on screen.
+    vec2 v = (viewMatrix * vec4(aVel, 0.0)).xy;
+    if (length(v) > 1e-3) dir = normalize(v);
+  }
+  vec2 n = vec2(-dir.y, dir.x);
+  float stretch = aParams.y < 0.5 ? 2.6 : 1.0;
+  view.xy += (dir * position.x * stretch + n * position.y) * s * 2.0;
+  vP = position.xy * 2.0;
+  vColor = aColor;
+  vKind = aParams.y;
+  gl_Position = projectionMatrix * view;
+}
+`;
+
+const SPARK_FRAGMENT = /* glsl */ `
+uniform vec3 uInk;
+uniform vec3 uPaper;
+varying vec2 vP;
+varying vec3 vColor;
+flat varying float vKind;
+void main() {
+  vec2 p = vP;
+  float d;
+  vec3 fill = vColor;
+  float glow = 0.4;
+  if (vKind < 0.5) {
+    // A shard: a long thin diamond.
+    d = abs(p.y) - (1.0 - abs(p.x)) * 0.42;
+  } else if (vKind < 1.5) {
+    // A four-point sparkle.
+    vec2 a = abs(p);
+    d = (sqrt(a.x) + sqrt(a.y) - 1.0) * 0.5;
+    glow = 0.55;
+  } else {
+    // A web splat: eight spokes and two rings, white over ink.
+    float r = length(p);
+    if (r > 1.0) discard;
+    float ang = atan(p.y, p.x);
+    float k = fract(ang / 0.785398 + 0.5) - 0.5;
+    float spoke = abs(k) * 0.785398 * r;
+    float ring = min(abs(r - 0.45), abs(r - 0.82));
+    float w = min(spoke, ring);
+    float pxw = fwidth(r);
+    if (w > 0.12 + pxw && r > 0.2) discard;
+    gl_FragColor = (w < 0.06 || r < 0.15) ? vec4(uPaper, 0.6) : vec4(uInk, 1.0);
+    return;
+  }
+  float pxw = max(fwidth(d), 1e-4);
+  if (d > pxw) discard;
+  // Ink rim, a pixel and a half wide whatever the size.
+  gl_FragColor = d > -1.5 * pxw ? vec4(uInk, 1.0) : vec4(fill, 1.0 - glow);
+}
+`;
+
+interface Spark {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  t: number;
+  life: number;
+  size: number;
+  kind: number;
+  turn: number;
+  color: RGB;
+}
+
+const MAX_SPARKS = 96;
+const SPARK_GRAVITY = 900;
+const IMPACTS: Record<string, string> = { "POW!": CITY.windowLit, "WHAM!": CITY.windowLit, "ZAP!": CITY.neonMint, "OOF!": CITY.neonRed, "SPLASH!": PAPER };
+
+/**
+ * Comic impact debris, one instanced draw: a hit throws ink-rimmed shards in the burst's
+ * colour and a few paper sparkles, which fly out, fall and shrink; a web that sticks leaves a
+ * white web splat that pops and fades on the wall. Off (no draw call) on the low tier and
+ * under reduced motion, apart from the splat, which then just appears.
+ */
+export class Sparks {
+  readonly mesh: InstancedMesh;
+  private readonly geo: BufferGeometry;
+  private readonly quad: PlaneGeometry;
+  private readonly material: ShaderMaterial;
+  private readonly center = new Float32Array(MAX_SPARKS * 3);
+  private readonly vel = new Float32Array(MAX_SPARKS * 3);
+  private readonly params = new Float32Array(MAX_SPARKS * 4);
+  private readonly colors = new Float32Array(MAX_SPARKS * 3);
+  private readonly attrs: InstancedBufferAttribute[];
+  private live: Spark[] = [];
+  private seed = 0x9e3779b9;
+  enabled = true;
+  reducedMotion = false;
+
+  constructor(shared: SharedUniforms) {
+    this.quad = new PlaneGeometry(1, 1);
+    this.geo = new BufferGeometry();
+    this.geo.setAttribute("position", this.quad.getAttribute("position"));
+    this.geo.setIndex(this.quad.getIndex());
+    this.attrs = [
+      new InstancedBufferAttribute(this.center, 3).setUsage(DynamicDrawUsage),
+      new InstancedBufferAttribute(this.vel, 3).setUsage(DynamicDrawUsage),
+      new InstancedBufferAttribute(this.params, 4).setUsage(DynamicDrawUsage),
+      new InstancedBufferAttribute(this.colors, 3).setUsage(DynamicDrawUsage),
+    ];
+    ["aCenter", "aVel", "aParams", "aColor"].forEach((name, i) => this.geo.setAttribute(name, this.attrs[i]));
+    this.material = new ShaderMaterial({
+      name: "wgp-sparks",
+      vertexShader: SPARK_VERTEX,
+      fragmentShader: SPARK_FRAGMENT,
+      depthTest: false,
+      depthWrite: false,
+      uniforms: { uPxScale: shared.uPxScale, uInk: { value: rgb(INK) }, uPaper: { value: rgb(PAPER) } },
+    });
+    this.mesh = new InstancedMesh(this.geo, this.material, MAX_SPARKS);
+    this.mesh.name = "sparks";
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 19;
+    this.mesh.count = 0;
+    this.mesh.visible = false;
+  }
+
+  private rnd(): number {
+    this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0;
+    return this.seed / 4294967296;
+  }
+
+  private add(s: Spark) {
+    if (this.live.length >= MAX_SPARKS) this.live.shift();
+    this.live.push(s);
+  }
+
+  /** Debris for a burst word that marks a hit (POW!, WHAM!, ZAP!, OOF!, SPLASH!); other words throw nothing. */
+  impact(word: string, at: Vec3): void {
+    const hex = IMPACTS[word];
+    if (!hex || !this.enabled || this.reducedMotion) return;
+    const color = rgb(hex);
+    // The burst sits 60 above what it marks; the debris comes from a little under it.
+    const y = at.y - 36;
+    const shards = word === "SPLASH!" ? 8 : 11;
+    for (let i = 0; i < shards; i++) {
+      const a = (i / shards) * Math.PI * 2 + this.rnd() * 0.5;
+      const up = 0.15 + this.rnd() * 0.75;
+      const speed = 260 + this.rnd() * 300;
+      const flat = Math.sqrt(1 - up * up);
+      this.add({ x: at.x, y, z: at.z, vx: Math.cos(a) * flat * speed, vy: up * speed, vz: Math.sin(a) * flat * speed, t: 0, life: 0.38 + this.rnd() * 0.22, size: 9 + this.rnd() * 6, kind: 0, turn: 0, color: word === "SPLASH!" ? rgb(CITY.cable) : color });
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = this.rnd() * Math.PI * 2;
+      const speed = 120 + this.rnd() * 160;
+      this.add({ x: at.x, y, z: at.z, vx: Math.cos(a) * speed, vy: 160 + this.rnd() * 200, vz: Math.sin(a) * speed, t: 0, life: 0.5 + this.rnd() * 0.25, size: 9 + this.rnd() * 6, kind: 1, turn: this.rnd() * 0.6, color: rgb(PAPER) });
+    }
+  }
+
+  /** A web splat where the hero's web just stuck. */
+  splat(at: Vec3): void {
+    if (!this.enabled) return;
+    this.add({ x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, t: 0, life: 0.5, size: 20, kind: 2, turn: this.rnd() * Math.PI, color: rgb(PAPER) });
+  }
+
+  update(dt: number): void {
+    for (const s of this.live) {
+      s.t += dt;
+      if (s.kind === 2) continue;
+      s.vy -= SPARK_GRAVITY * dt;
+      const drag = Math.exp(-dt * 2.2);
+      s.vx *= drag;
+      s.vz *= drag;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.z += s.vz * dt;
+    }
+    if (this.live.some((s) => s.t >= s.life)) this.live = this.live.filter((s) => s.t < s.life);
+    let n = 0;
+    for (const s of this.live) {
+      const u = s.t / s.life;
+      // Shards and sparkles shrink away; the splat pops past full size, settles, then fades.
+      const scale = s.kind === 2 ? (this.reducedMotion ? 1 : u < 0.15 ? 0.5 + (u / 0.15) * 0.65 : u < 0.3 ? 1.15 - ((u - 0.15) / 0.15) * 0.15 : 1) * (u > 0.7 ? 1 - (u - 0.7) / 0.3 : 1) : 1 - u * u;
+      if (scale <= 0.02) continue;
+      this.center.set([s.x, s.y, s.z], n * 3);
+      this.vel.set([s.vx, s.vy, s.vz], n * 3);
+      this.params.set([s.size, s.kind, scale, s.turn], n * 4);
+      this.colors.set(s.color, n * 3);
+      n++;
+    }
+    this.mesh.count = n;
+    this.mesh.visible = n > 0;
+    for (const a of this.attrs) a.needsUpdate = true;
+  }
+
+  clear(): void {
+    this.live = [];
+  }
+
+  dispose(): void {
+    this.quad.dispose();
+    this.geo.dispose();
+    this.material.dispose();
     this.mesh.dispose();
   }
 }
