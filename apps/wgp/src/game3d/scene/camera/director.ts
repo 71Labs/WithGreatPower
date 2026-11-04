@@ -48,6 +48,9 @@ export const DIRECTOR_TUNING = {
   /** An errand: eased in when there was no cut (s), out when it's done (s). */
   errandIn: 0.5,
   errandOut: 1.8,
+  /** Handing an errand's camera back while the hero is already off (faster than `leaveSpeed`, units/s): over this instead (s). */
+  errandOutMoving: 0.6,
+  leaveSpeed: 200,
   /** The two-shot: yaw off the hero → ally line (radians: 0 is behind the hero), pitch, the push in (start share, s), the arm's range. */
   errandAngle: 1.05,
   errandPitch: 0.24,
@@ -161,6 +164,9 @@ export class CameraDirector {
   private fadeFrom = 0;
   private fadeAt = 0;
   private fadeTime = 0;
+  /** The hero's position last frame and his speed (units/s), to see him leave an errand. */
+  private readonly lastHero: MutableVec3 = { x: 0, y: 0, z: 0 };
+  private heroSpeed = 0;
   /** Easing in: over `riseTime` (0 snaps). */
   private riseTime = 0;
   private cutPending = false;
@@ -237,6 +243,17 @@ export class CameraDirector {
     if (this.beat === "intro" && i.cue && i.cue.status !== "intro" && !this.fading) this.fadeOut(t.skipTime);
 
     this.time += step;
+    const h = i.hero;
+    this.heroSpeed = step > 0 ? Math.hypot(h.x - this.lastHero.x, h.y - this.lastHero.y, h.z - this.lastHero.z) / step : 0;
+    this.lastHero.x = h.x;
+    this.lastHero.y = h.y;
+    this.lastHero.z = h.z;
+    // Handing an errand back while the hero is already swinging off: the slow hand-back would
+    // trail him off the frame, so it finishes quickly from wherever it has got to.
+    if (this.beat === "errand" && this.fading && this.heroSpeed > t.leaveSpeed && this.heroSpeed < 5000) {
+      const left = this.fadeTime - (this.time - this.fadeAt);
+      if (left > t.errandOutMoving) this.fadeOut(t.errandOutMoving);
+    }
     if (this.beat === "none") return chase;
 
     // The weight: rising, held, or falling.

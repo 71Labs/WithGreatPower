@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { City } from "@wgp/game-core/sim3d/contract";
 
-import { TRAVEL_TUNING, TravelFraming, bearing, halfWidth, portraitShare, sphereCast } from "./framing";
+import { TRAVEL_TUNING, TravelFraming, bearing, guardEdges, halfWidth, portraitShare, sphereCast } from "./framing";
 import { createLocalRaycast } from "./raycast";
 import { Smoothed, SmoothedVec3 } from "./springs";
 
@@ -111,6 +111,33 @@ describe("the travel framing", () => {
     // A fight's end: the plain chase, then the shots again somewhere open.
     f.plain(0, { dist: 420, pitch: 0.2, deadZone: 0.35, settle: 0.07, yawTime: 0.45, maxRate: Math.PI / 2, fov: 55, pivotLift: 0.086, frameLift: 0.12 });
     expect(f.climbFor(null, pivot, Math.PI / 2, 0.2, 420, 24, 1 / 60)).toBeLessThan(0.001);
+  });
+
+  it("keeps a diving hero from slipping past the frame's top or bottom edge, and leaves the rest of the frame alone", () => {
+    const fov = 60;
+    const tanV = Math.tan((fov * Math.PI) / 360);
+    /** The hero's place up and down the frame (shares of the half height) from a camera at (0, 500, −300). */
+    const across = (target: { x: number; y: number; z: number }, hero: { x: number; y: number; z: number }) => {
+      const cam = { x: 0, y: 500, z: -300 };
+      const f = { x: target.x - cam.x, y: target.y - cam.y, z: target.z - cam.z };
+      const fl = Math.hypot(f.x, f.y, f.z);
+      const pitch = Math.asin(f.y / fl);
+      const h = { x: hero.x - cam.x, y: hero.y - cam.y, z: hero.z - cam.z };
+      const toHero = Math.atan2(h.y, Math.hypot(h.x, h.z));
+      return Math.tan(toHero - pitch) / tanV;
+    };
+    const cam = { x: 0, y: 500, z: -300 };
+    // The hero dived far below the view: brought up inside the hard edge.
+    const target = { x: 0, y: 420, z: 0 };
+    const hero = { x: 0, y: 150, z: 0 };
+    expect(across(target, hero)).toBeLessThan(-1);
+    guardEdges(cam, target, hero, fov);
+    expect(across(target, hero)).toBeGreaterThan(-TRAVEL_TUNING.edgeHard);
+    expect(across(target, hero)).toBeLessThan(-TRAVEL_TUNING.edgeSoft);
+    // Well inside the frame: untouched.
+    const calm = { x: 0, y: 420, z: 0 };
+    guardEdges(cam, calm, { x: 0, y: 400, z: 0 }, fov);
+    expect(calm.y).toBe(420);
   });
 
   /** One frame of the travel shot on a screen of this aspect. */

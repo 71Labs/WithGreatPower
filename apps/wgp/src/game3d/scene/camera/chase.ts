@@ -56,7 +56,7 @@
  */
 import type { Vec3, Zone } from "@wgp/game-core/sim3d/contract";
 
-import { TravelFraming } from "./framing";
+import { TravelFraming, guardEdges } from "./framing";
 import { Smoothed, SmoothedVec3, angleDelta, type MutableVec3 } from "./springs";
 
 export const CHASE_TUNING = {
@@ -693,7 +693,10 @@ export class ChaseCamera {
     if (first) this.look.snap(this.lookWant);
     this.look.step(this.lookWant, t.targetTime, t.targetTimeY, step, p.target);
     clampLag(this.look, p.target, this.lookWant, Math.min(t.lagMax, t.lagArm * arm), t.lagArmY * arm);
-    if (shots) this.travel.tighten(this.look, p.target, this.lookWant, yaw, Math.min(t.lagMax, t.lagArm * arm));
+    if (shots) {
+      this.travel.tighten(this.look, p.target, this.lookWant, yaw, Math.min(t.lagMax, t.lagArm * arm));
+      guardEdges(p.position, p.target, hero, this.fov.value);
+    }
     // Boxed in (the arm well short of what the two-shot wants): widen a little instead.
     const squeeze = arena && !input.reducedMotion ? clamp((want - arm) / want, 0, 0.5) * 2 * t.arenaSqueeze : 0;
     p.fov = this.fov.step(fovWant + squeeze, t.fovTime, step);

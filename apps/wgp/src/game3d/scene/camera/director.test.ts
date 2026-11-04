@@ -170,6 +170,33 @@ describe("camera beats", () => {
     expect(d.beat).toBe("none");
   });
 
+  it("hands an errand's camera back quickly when the hero swings straight off, keeping him in frame", () => {
+    const { chase, input, beat, cue } = standing();
+    cue.status = "live";
+    beat.mode = "errand";
+    beat.ally = { x: 0, y: 300, z: 120 };
+    input.goal = null;
+    const d = new CameraDirector();
+    d.cut();
+    for (let t = 0; t < 1.5; t += DT) d.update(chase.update(input, DT), beat, DT);
+    // "Swing on", and he's off at once: away and down at swing speed.
+    beat.mode = "travel";
+    beat.ally = null;
+    input.grounded = false;
+    input.vel = { x: 900, y: -300, z: 0 };
+    let t = 0;
+    for (; t < 3 && d.beat !== "none"; t += DT) {
+      input.hero = { x: input.hero.x + 900 * DT, y: input.hero.y - 300 * DT, z: 0 };
+      beat.hero = input.hero;
+      const pose = d.update(chase.update(input, DT), beat, DT);
+      const p = ndc(input.hero, pose, 1920, 1080);
+      expect(p.behind).toBe(false);
+      expect(Math.abs(p.x)).toBeLessThan(1);
+      expect(Math.abs(p.y)).toBeLessThan(1);
+    }
+    expect(t).toBeLessThan(T.errandOutMoving + 0.15);
+  });
+
   it("ends the night with a slow crane up and back that starts on the chase's own pose", () => {
     const { chase, input, beat, cue } = standing();
     cue.status = "live";

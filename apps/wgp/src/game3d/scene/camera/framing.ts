@@ -111,6 +111,13 @@ export const TRAVEL_TUNING = {
    */
   narrowRef: 0.925,
   narrowMin: 0.4,
+  /**
+   * The frame's top and bottom edges, a last-resort net (shares of the half height): past `edgeSoft`
+   * the view tilts after the hero along a smooth curve, never letting him past `edgeHard`. Only
+   * a dive while the arm is short ever reaches it.
+   */
+  edgeSoft: 0.88,
+  edgeHard: 0.97,
 };
 
 export type TravelTuning = typeof TRAVEL_TUNING;
@@ -524,6 +531,41 @@ export class TravelFraming {
     this.climbAvg += (climbWant - this.climbAvg) * lowPass(dt, t.climbSmooth);
     return Math.max(0, this.climb.step(this.climbAvg, t.climbTime, dt));
   }
+}
+
+/**
+ * The last-resort net at the frame's top and bottom: once the hero sits past `edgeSoft` of the
+ * half height, the view tilts toward him so he's squeezed (tanh, no corner) short of `edgeHard`.
+ * Moves `target` up or down only.
+ */
+export function guardEdges(position: Vec3, target: MutableVec3, hero: Vec3, fov: number, t: TravelTuning = TRAVEL_TUNING): void {
+  let fx = target.x - position.x;
+  let fy = target.y - position.y;
+  let fz = target.z - position.z;
+  const flat = Math.hypot(fx, fz);
+  const fl = Math.hypot(flat, fy);
+  if (flat < 1e-3) return;
+  fx /= fl;
+  fy /= fl;
+  fz /= fl;
+  // Right = forward × up, up' = right × forward.
+  const rl = Math.hypot(fz, fx);
+  const rx = -fz / rl;
+  const rz = fx / rl;
+  const hx = hero.x - position.x;
+  const hy = hero.y - position.y;
+  const hz = hero.z - position.z;
+  const depth = hx * fx + hy * fy + hz * fz;
+  if (depth < 1) return;
+  const tanV = Math.tan((fov * Math.PI) / 360);
+  const y = (hx * -rz * fy + hy * (rz * fx - rx * fz) + hz * rx * fy) / (depth * tanV);
+  const ay = Math.abs(y);
+  if (ay <= t.edgeSoft) return;
+  const room = t.edgeHard - t.edgeSoft;
+  const want = Math.sign(y) * (t.edgeSoft + room * Math.tanh((ay - t.edgeSoft) / room));
+  // Tilt the view by the difference in angle: down (further below the horizon) to lift a hero who sits too low.
+  const down = Math.atan2(-fy, Math.hypot(fx, fz)) + Math.atan(want * tanV) - Math.atan(y * tanV);
+  target.y = position.y - Math.tan(clamp(down, -1.4, 1.4)) * flat;
 }
 
 /** Whether the player is holding the stick past its dead zone. */
