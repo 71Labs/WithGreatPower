@@ -20,7 +20,7 @@ import { writeFileSync } from "node:fs";
 import { HP_PER_LEVEL } from "@wgp/game-core/data";
 import { newSave, reduce, seedOf } from "@wgp/game-core/engine";
 import { chooseErrand, needsErrand, startRun, stepRun } from "@wgp/game-core/replay";
-import { botFrame, fillRenderFrame, newBotMemory, newRenderFrame } from "@wgp/game-core/sim3d";
+import { botFrame, fillRenderFrame, newBotMemory, newRenderFrame, quantizeStick } from "@wgp/game-core/sim3d";
 import type { City, InputFrame, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 import type { PowerId, Save } from "@wgp/game-core/types";
 
@@ -29,7 +29,7 @@ import type { ChasePose } from "../../src/game3d/scene/camera/chase";
 import { citySolids, raycastSolids, type CitySolids } from "../../src/game3d/scene/camera/raycast";
 import { inBox, project, waypointLayout, type Rect } from "../../src/game3d/nav/waypoint";
 import { copyFrame, teleported } from "../../src/game3d/session/blend";
-import { stickInput, viewFromPose, type Stick } from "../../src/game3d/input/stick";
+import type { Stick } from "../../src/game3d/input/stick";
 
 const args = process.argv.slice(2);
 const opt = (name: string, def: string) => {
@@ -57,6 +57,8 @@ interface Viewport {
   touch: boolean;
   /** The HUD's boxes in live play, CSS px (measured on the page: launch/brand/hero/camera-shoot.mjs hud). */
   hud: Rect[];
+  /** Those of them shown only while there's swinging or fighting to do (the powers): not over an errand or after the night. */
+  powers: Rect[];
   /** What the errand sheet covers. */
   sheet: Rect;
 }
@@ -81,7 +83,8 @@ const VIEWPORTS: Viewport[] = [
       { x0: 0, y0: 856, x1: 224, y1: 1080 },
       { x0: 1580, y0: 960, x1: 1920, y1: 1080 },
     ],
-    sheet: { x0: 666, y0: 640, x1: 1254, y1: 1080 },
+    powers: [{ x0: 1580, y0: 960, x1: 1920, y1: 1080 }],
+    sheet: { x0: 690, y0: 720, x1: 1230, y1: 1064 },
   },
   {
     name: "phone",
@@ -93,7 +96,8 @@ const VIEWPORTS: Viewport[] = [
       { x0: 250, y0: 215, x1: 390, y1: 345 },
       { x0: 188, y0: 608, x1: 390, y1: 800 },
     ],
-    sheet: { x0: 0, y0: 400, x1: 390, y1: 844 },
+    powers: [{ x0: 188, y0: 608, x1: 390, y1: 800 }],
+    sheet: { x0: 12, y0: 476, x1: 378, y1: 818 },
   },
 ];
 
@@ -144,6 +148,8 @@ interface Sample {
   travelAngle: number;
   allySeen: number;
   pairClear: number;
+  /** Errands: the two bodies apart on screen (neither hides the other). */
+  pairApart: number;
 }
 
 /** Distance from p to an axis-aligned box (0 inside). */
@@ -199,7 +205,9 @@ function score(pose: ChasePose, f: RenderFrame3D, city: City, solids: CitySolids
   const hy = pr.behind ? NaN : 1 - (pr.y / h) * 2;
   // The comfortable box: the middle 60% across, the lower-middle of the frame up and down.
   const offCentre = !onScreen || Math.abs(hx) > 0.3 || hy > 0.2 || hy < -0.6;
-  const hudClip = !onScreen || vp.hud.some((r) => overlaps(r, body));
+  // The HUD as it is in this phase: the powers only while playing; nothing once the night's over (the results).
+  const hud = phase === "outro" ? [] : phase === "errand" ? vp.hud.filter((r) => !vp.powers.includes(r)) : vp.hud;
+  const hudClip = !onScreen || hud.some((r) => overlaps(r, body));
   const cam = pose.position;
   const near = nearestSolid(solids, cam);
   const inside = near <= 0;
@@ -241,19 +249,26 @@ function score(pose: ChasePose, f: RenderFrame3D, city: City, solids: CitySolids
   // Errands: the ally on screen, and both bodies clear of the sheet and the HUD.
   let allySeen = NaN;
   let pairClear = NaN;
+  let pairApart = NaN;
   if (phase === "errand" && zone?.allyAt) {
     const a = project({ x: zone.allyAt.x, y: zone.allyAt.y + 44, z: zone.allyAt.z }, pose, w, h);
     const aOn = !a.behind && a.x > 0 && a.x < w && a.y > 0 && a.y < h;
     allySeen = aOn ? 1 : 0;
-    const clear = (x: number, y: number) => !within(vp.sheet, x, y) && !vp.hud.some((r) => within(r, x, y));
+    const clear = (x: number, y: number) => !within(vp.sheet, x, y) && !hud.some((r) => within(r, x, y));
     pairClear = aOn && onScreen && clear(a.x, a.y) && clear(pr.x, pr.y) ? 1 : 0;
+    // Apart: the ally's middle outside the hero's body box (from this camera, one would hide the other).
+    pairApart = aOn && onScreen && !within(body, a.x, a.y) ? 1 : 0;
   }
-  return { hx, hy, onScreen, offCentre, hudClip, inside, insideBuilding, skim, blocked, yaw, pitch, fov: pose.fov, arm: Math.hypot(cam.x - hero.x, cam.y - hero.y, cam.z - hero.z), stopPin, stopSeen, stopDist, stopBearing, anchorSeen, travelAngle, allySeen, pairClear };
+  return { hx, hy, onScreen, offCentre, hudClip, inside, insideBuilding, skim, blocked, yaw, pitch, fov: pose.fov, arm: Math.hypot(cam.x - hero.x, cam.y - hero.y, cam.z - hero.z), stopPin, stopSeen, stopDist, stopBearing, anchorSeen, travelAngle, allySeen, pairClear, pairApart };
 }
 
 /* ------------------------------------------------------------------ one night */
 
-/** After GO and after each errand the player stands still this long; then holds the stick right (camera-relative) for SIDE seconds. */
+/**
+ * After GO and after each errand the player stands still this long; then, once, holds the
+ * stick right for SIDE seconds. The run goes 90° right of the way the hero faces at GO, in the
+ * world (not from the camera), so every camera plays the same night.
+ */
 const STAND = 3;
 const STAND_AFTER_ERRAND = 2;
 const SIDE = 0.9;
@@ -277,8 +292,8 @@ function playNight(night: number, vp: Viewport): Sample[] {
   let pose: ChasePose | null = null;
   let steer: Stick = { x: 0, y: 0 };
 
-  const frame = (status: RigStatus) => {
-    pose = rig.update(curr, status, vp.w, vp.h, DT, steer);
+  const frame = (status: RigStatus, introLeft = 0) => {
+    pose = rig.update(curr, status, vp.w, vp.h, DT, steer, introLeft);
     const f = curr;
     const mode = f.mode;
     const speed = Math.hypot(f.hero.vel.x, f.hero.vel.z);
@@ -319,11 +334,14 @@ function playNight(night: number, vp: Viewport): Sample[] {
     frame("live");
   };
 
-  for (let t = 0; t < INTRO; t += DT) frame("intro");
+  for (let t = 0; t < INTRO; t += DT) frame("intro", INTRO - t);
   rig.event({ type: "go" });
-  // Stand still after GO, then run right (camera-relative) for a moment, then the bot.
+  // Stand still after GO, then run right for a moment, then the bot.
   let still = STAND;
   let side = SIDE;
+  const fx = curr.hero.facing?.x ?? 1;
+  const fz = curr.hero.facing?.z ?? 0;
+  const right = quantizeStick(-fz, fx);
   let guard = 0;
   while (!run.over && !run.error && guard++ < 60 * 900) {
     if (needsErrand(run)) {
@@ -341,8 +359,7 @@ function playNight(night: number, vp: Viewport): Sample[] {
     } else if (side > 0) {
       side -= DT;
       steer = { x: 1, y: 0 };
-      const { dir, mag } = stickInput(steer, viewFromPose(pose));
-      tick({ dir, mag, web: false, shot: 0 });
+      tick({ dir: right.dir, mag: right.mag, web: false, shot: 0 });
     } else {
       steer = { x: 0, y: 0 };
       tick(botFrame(run.sim, mem));
@@ -508,6 +525,8 @@ function summarize(samples: Sample[]) {
       frames: errand.length,
       allySeenPct: 100 * mean(errand.map((s) => s.allySeen)),
       pairClearPct: 100 * mean(errand.map((s) => s.pairClear)),
+      pairApartPct: 100 * mean(errand.map((s) => s.pairApart)),
+      pairShownPct: 100 * mean(errand.map((s) => s.pairClear * s.pairApart)),
     },
   };
 }
@@ -541,5 +560,5 @@ for (const vp of VIEWPORTS) {
   console.log(`motion: yaw°/s p50 ${f1(m.yawRateDeg.p50)} p95 ${f1(m.yawRateDeg.p95)} max ${f1(m.yawRateDeg.max)} · pitch°/s p95 ${f1(m.pitchRateDeg.p95)} max ${f1(m.pitchRateDeg.max)} · acc°/s² p95 ${f1(m.accDeg.p95)} · jerk°/s³ p95 ${f1(m.jerkDeg.p95)} max ${f1(m.jerkDeg.max)} · fov°/s max ${f1(m.fovRate.max)} · arm u/s p95 ${f1(m.armRate.p95)} max ${f1(m.armRate.max)} · pops ${m.pops} · flips ${m.flips}`);
   const a = r.ahead;
   console.log(`ahead: pin ${f1(a.stopPinPct)}% · stop seen ${f1(a.stopSeenPct)}% (<1500 ${f1(a.stopSeenByDist.under1500)}%, 1500–3000 ${f1(a.stopSeenByDist["1500to3000"])}%, >3000 ${f1(a.stopSeenByDist.over3000)}%) · arriving ${f1(a.arrivingStopSeenPct)}% · anchor ${f1(a.anchorSeenPct)}% · view vs travel ${f1(a.travelAngleDeg.mean)}° (p95 ${f1(a.travelAngleDeg.p95)}°) · view vs stop ${f1(a.stopBearingDeg.mean)}° (p95 ${f1(a.stopBearingDeg.p95)}°)`);
-  console.log(`stand: ${r.stand.frames} frames · stop seen ${f1(r.stand.stopSeenPct)}% · view vs stop ${f1(r.stand.stopBearingDeg.mean)}° · errand: ally ${f1(r.errand.allySeenPct)}% · pair clear of sheet+HUD ${f1(r.errand.pairClearPct)}%`);
+  console.log(`stand: ${r.stand.frames} frames · stop seen ${f1(r.stand.stopSeenPct)}% · view vs stop ${f1(r.stand.stopBearingDeg.mean)}° · errand: ally ${f1(r.errand.allySeenPct)}% · pair clear of sheet+HUD ${f1(r.errand.pairClearPct)}% · apart ${f1(r.errand.pairApartPct)}% · both ${f1(r.errand.pairShownPct)}%`);
 }
