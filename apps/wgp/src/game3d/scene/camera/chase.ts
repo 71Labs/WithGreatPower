@@ -25,6 +25,10 @@
  *   way, the arm eases in fast (0.08 s, no snap), holds a moment once clear, then eases
  *   back out. The city shader fades whatever still sits between the camera and the hero,
  *   including a wall the camera is still easing out of.
+ * - Travel shots (framing.ts): standing still, a calm shot over the shoulder toward the next
+ *   stop; moving, a lean toward the stop, lower and wider at speed with a subtle FOV kick;
+ *   a dead zone that fits the screen; the camera easing behind a run on a roof while the
+ *   stick keeps its heading; and a sphere-cast arm that never ends inside the city.
  * - Arenas: a two-shot of both fighters.
  *   - Candidate sides around the fighters' line (low-passed, and held while they're close)
  *     are scored by their room: the arena bounds plus some slack, and the buildings.
@@ -48,6 +52,7 @@
  */
 import type { Vec3, Zone } from "@wgp/game-core/sim3d/contract";
 
+import { TravelFraming, guardFrame } from "./framing";
 import { Smoothed, SmoothedVec3, angleDelta, type MutableVec3 } from "./springs";
 
 export const CHASE_TUNING = {
@@ -187,6 +192,9 @@ export interface ChaseInput {
   /** Viewport width / height. */
   aspect: number;
   reducedMotion: boolean;
+  /** Travel: where the hero is headed (the next stop), and whether he stands or runs on something. */
+  goal?: Vec3 | null;
+  grounded?: boolean;
 }
 
 export interface ChasePose {
@@ -200,6 +208,8 @@ export interface ChasePose {
   want: number;
   /** Heading the arm points along (radians, atan2(x, z) convention). */
   yaw: number;
+  /** The ground heading the stick is resolved against while it's held on a roof (a unit xz vector), or null for the view's. */
+  steer?: { fx: number; fz: number } | null;
 }
 
 export function createChaseInput(): ChaseInput {
@@ -217,6 +227,8 @@ export function createChaseInput(): ChaseInput {
     steer: null,
     aspect: 16 / 9,
     reducedMotion: false,
+    goal: null,
+    grounded: false,
   };
 }
 
@@ -337,6 +349,8 @@ export class ChaseCamera {
   private fitAvg = 0;
   private inArena = false;
   private started = false;
+  /** The travel shots (standing, the lean toward the stop, the held steering, collision). */
+  readonly travel = new TravelFraming();
   // Scratch.
   private readonly pivotWant: MutableVec3 = { x: 0, y: 0, z: 0 };
   private readonly lookWant: MutableVec3 = { x: 0, y: 0, z: 0 };
@@ -351,6 +365,7 @@ export class ChaseCamera {
     { x: 0, y: 0, z: 0 },
     { x: 0, y: 0, z: 0 },
   ];
+  private readonly travelBase = { dist: 0, pitch: 0, deadZone: 0, settle: 0, yawTime: 0, maxRate: 0, fov: 0 };
 
   constructor(
     private raycast: Raycast | null = null,
@@ -364,6 +379,7 @@ export class ChaseCamera {
   /** Jump straight to the wanted pose on the next update (a cut, or a new run). */
   reset(): void {
     this.started = false;
+    this.travel.reset();
   }
 
   update(input: ChaseInput, dt: number): ChasePose {
@@ -394,7 +410,7 @@ export class ChaseCamera {
 
     // Manual control: looking or steering by hand holds auto-follow off for a while.
     const moved = input.orbitYaw !== 0 || input.orbitPitch !== 0;
-    if (moved || input.orbiting || steersByHand(input.steer, t)) this.sinceManual = 0;
+    if (moved || input.orbiting || this.travel.manualSteer(steersByHand(input.steer, t), !!input.grounded, !!(input.rival && input.arena))) this.sinceManual = 0;
     else this.sinceManual += step;
     const auto = smoothstep(t.manualHold, t.manualHold + t.manualEaseIn, this.sinceManual);
 
@@ -463,8 +479,26 @@ export class ChaseCamera {
       }
       yawTarget = this.arenaYaw;
     } else {
-      this.pivotWant.x = hero.x;
-      this.pivotWant.z = hero.z;
+      // Travel: the shot (framing.ts) over the chase's own heading, distance, pitch and FOV.
+      const b = this.travelBase;
+      b.dist = distWant;
+      b.pitch = pitchWant;
+      b.deadZone = t.followDeadZone;
+      b.settle = t.followSettle;
+      b.yawTime = t.followYawTime;
+      b.maxRate = t.followMaxRate;
+      b.fov = this.started ? this.fov.value : t.fovSlow;
+      const shot = this.travel.update(input, this.travelYaw, this.speedAvg, clamp((this.speedAvg - t.speedSlow) / (t.speedFast - t.speedSlow), 0, 1), b, this.pose, step);
+      yawTarget = shot.yaw;
+      distWant = shot.dist;
+      pitchWant = shot.pitch;
+      fovBoost = shot.fovKick;
+      // Standing, the heading is wherever the camera looks, so moving off starts from there.
+      if (shot.stand > 0.5 && this.started) this.travelYaw = wrapAngle(this.yawS.value);
+      // The shoulder: the pivot sits right of the hero across the view, (−cos, sin) of the yaw.
+      const yawNow = this.started ? this.yawS.value : yawTarget;
+      this.pivotWant.x = hero.x - Math.cos(yawNow) * shot.side;
+      this.pivotWant.z = hero.z + Math.sin(yawNow) * shot.side;
     }
     this.inArena = !!arena;
 
@@ -497,15 +531,16 @@ export class ChaseCamera {
     // Yaw: manual turns apply directly; auto-follow turns past a dead zone on a capped spring.
     const ys = this.yawS;
     const e = angleDelta(ys.value, yawTarget);
-    const deadZone = arena ? t.arenaDeadZone : t.followDeadZone;
-    const settle = arena ? t.arenaSettle : t.followSettle;
-    const canFollow = !!arena || hs > t.minHeadingSpeed;
+    const ts = this.travel.shot;
+    const deadZone = arena ? t.arenaDeadZone : ts.deadZone;
+    const settle = arena ? t.arenaSettle : ts.settle;
+    const canFollow = !!arena || (hs > t.minHeadingSpeed && !ts.hold) || ts.follow;
     if (!this.following && Math.abs(e) > deadZone && canFollow) this.following = true;
     else if (this.following && (Math.abs(e) < settle || !canFollow)) this.following = false;
     // Not following, the goal is where the yaw is: a turn in progress comes to a soft stop.
     const before = ys.value;
-    ys.step(before + (this.following ? e * auto : 0), arena ? t.arenaYawTime : t.followYawTime, step);
-    const maxTurn = (arena ? t.arenaMaxRate : t.followMaxRate) * step;
+    ys.step(before + (this.following ? e * auto : 0), arena ? t.arenaYawTime : ts.yawTime, step);
+    const maxTurn = (arena ? t.arenaMaxRate : ts.maxRate) * step;
     if (Math.abs(ys.value - before) > maxTurn) {
       ys.value = before + Math.sign(ys.value - before) * maxTurn;
       ys.velocity = Math.sign(ys.velocity) * Math.min(Math.abs(ys.velocity), maxTurn / Math.max(step, 1e-6));
@@ -523,6 +558,7 @@ export class ChaseCamera {
     const want = this.dist.step(distWant, arena && distWant > this.dist.value ? t.arenaDistOutTime : t.distTime, step);
     const pivot = this.pivot.step(this.pivotWant, t.followTime, t.followTimeY, step, this.pivotNow);
     clampLag(this.pivot, pivot, this.pivotWant, Math.min(t.lagMax, t.lagArm * this.arm.value), t.lagArmY * this.arm.value);
+    if (!arena) this.travel.clearPivot(this.raycast, hero, pivot);
 
     // Arenas: when the room behind is short, climb a little (never toward top-down) and let the
     // arm shorten. The climb eases in and out on its own spring: the room can change in a step
@@ -538,6 +574,8 @@ export class ChaseCamera {
     }
     if (first) this.climb.snap(climbWant);
     pitch += Math.max(0, this.climb.step(climbWant, t.arenaClimbTime, step));
+    // Travel: in a tight spot, climb for room rather than close right in on the hero.
+    if (!arena) pitch += this.travel.climbFor(this.raycast, pivot, yaw, pitch, want, t.probePad, step);
 
     // The arm points back along the yaw and up by the pitch.
     const cp = Math.cos(pitch);
@@ -553,6 +591,9 @@ export class ChaseCamera {
     let limit = reach;
     const hit = this.raycast ? this.raycast(pivot, d, reach + t.probePad) : null;
     if (hit !== null && Number.isFinite(hit)) limit = Math.max(minArm, Math.min(reach, hit - t.probePad));
+    // Travel: the ray from the pivot cleared of the city, now and a moment ahead (framing.ts).
+    const room = arena ? null : this.travel.collide(this.raycast, pivot, d, reach, vel, t.probePad);
+    if (room !== null) limit = room;
     if (limit < this.arm.value - 0.5) {
       this.clearFor = 0;
       this.arm.step(limit, t.armInTime, step);
@@ -595,12 +636,14 @@ export class ChaseCamera {
     if (first) this.look.snap(this.lookWant);
     this.look.step(this.lookWant, t.targetTime, t.targetTimeY, step, p.target);
     clampLag(this.look, p.target, this.lookWant, Math.min(t.lagMax, t.lagArm * arm), t.lagArmY * arm);
+    if (!arena) guardFrame(p.position, p.target, hero, this.fov.value, input.aspect);
     // Boxed in (the arm well short of what the two-shot wants): widen a little instead.
     const squeeze = arena && !input.reducedMotion ? clamp((want - arm) / want, 0, 0.5) * 2 * t.arenaFovBoost : 0;
     p.fov = this.fov.step(fovWant + squeeze, t.fovTime, step);
     p.arm = arm;
     p.want = want;
     p.yaw = wrapAngle(yaw);
+    p.steer = arena ? null : this.travel.steerView();
     return p;
   }
 
