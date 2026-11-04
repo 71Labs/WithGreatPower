@@ -271,6 +271,9 @@ export const ZIP_CD = 1.1;
  * staggered for HURT_STAGGER, no running), never a launch (v3 threw you 420 back and 120–420 up).
  * In the air, the hit pushes you sideways and stops a rise past HURT_AIR_VY.
  */
+/** v4: on the first nights (combat.ts mercy()), up to this share off every hit, and this many more seconds untouchable after one. */
+export const MERCY_DAMAGE = 0.1;
+export const MERCY_GUARD = 1;
 export const HURT_SHOVE = 380;
 export const HURT_FRICTION = 900;
 export const HURT_STAGGER = 0.3;

@@ -6,7 +6,7 @@
 import { VILLAINS, damageScale } from "../rules/data";
 import type { VillainId } from "../rules/types";
 
-import { HURT_AIR_VY, HURT_INVULN, HURT_SHOVE, HURT_STAGGER, KO_SECONDS, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
+import { HURT_AIR_VY, HURT_INVULN, HURT_SHOVE, HURT_STAGGER, KO_SECONDS, MERCY_DAMAGE, MERCY_GUARD, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
 import { len2, len3 } from "./dmath";
 import type { HitSource, SimState, Villain } from "./types";
 
@@ -14,6 +14,16 @@ import type { HitSource, SimState, Villain } from "./types";
 export function moveDamage(v: Villain, label: string): number {
   const base = VILLAINS[v.kind].moves.find((m) => m.label === label)?.value ?? 10;
   return Math.round(base * damageScale(v.level));
+}
+
+/**
+ * v4: how forgiving a fight is to a new player, from 1 at level 1 (nights 1–2) down to 0 from
+ * level 4 (night 7) on. Early fights hurt less (MERCY_DAMAGE off every hit at level 1) and give
+ * longer to get clear after one (MERCY_GUARD more seconds untouchable), so a player who doesn't
+ * dodge yet still wins most of them; later nights are as hard as ever.
+ */
+export function mercy(level: number): number {
+  return Math.max(0, Math.min(1, (4 - level) / 3));
 }
 
 /**
@@ -114,10 +124,12 @@ export function hurtHero(s: SimState, damage: number, source: string, fromX: num
     s.events.push({ type: "shield-pop", x: h.x, y: h.y, z: h.z });
     return false;
   }
-  const dmg = Math.round(damage);
+  // v4: early nights hurt less, and give longer to get clear after a hit (mercy()).
+  const m = s.villain ? mercy(s.villain.level) : 0;
+  const dmg = Math.max(1, Math.round(damage * (1 - MERCY_DAMAGE * m)));
   s.hp = Math.max(0, s.hp - dmg);
   s.fluid = Math.max(0, s.fluid - burn);
-  h.invuln = HURT_INVULN;
+  h.invuln = HURT_INVULN + MERCY_GUARD * m;
   h.hurtT = 0.35;
   // Knocked off a wall too, and out of a strike.
   h.climbing = false;
@@ -191,7 +203,8 @@ export function hitVillain(s: SimState, body: number, n: number, by: HitSource):
     v.hits = Math.max(0, v.hits - count);
   }
   // After a hit he guards for a moment (and counters), so a fight has a rhythm.
-  v.invuln = VILLAIN_GUARD[v.kind] ?? VILLAIN_HIT_INVULN;
+  // (Doc guards a little less on the first nights, so his opening there takes two blows.)
+  v.invuln = (VILLAIN_GUARD[v.kind] ?? VILLAIN_HIT_INVULN) - (v.kind === "doc-octochain" ? 0.4 * mercy(v.level) : 0);
   v.fleeT = 1.8;
   s.events.push({ type: "villain-hit", x: at.x, y: at.y, z: at.z, hits: v.hits, hitsMax: v.hitsMax, by, double, copy });
   if (v.hits <= 0) winFight(s);

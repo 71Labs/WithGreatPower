@@ -3,29 +3,29 @@
   "cases": {
     "night-1-standard": {
       "ok": true,
-      "hash": "b9bce814",
+      "hash": "cc529d56",
       "checkpoints": [
         "371e780a",
         "e452bd7d",
         "d6427050",
-        "b9bce814"
+        "cc529d56"
       ],
-      "score": 8235,
-      "ticks": 4047,
-      "bytes": 2003
+      "score": 8245,
+      "ticks": 3776,
+      "bytes": 1785
     },
     "night-4-heavy": {
       "ok": true,
-      "hash": "946c462d",
+      "hash": "7b27f2c4",
       "checkpoints": [
         "07180621",
         "a743ba16",
-        "42ce349c",
-        "946c462d"
+        "7bf77de3",
+        "7b27f2c4"
       ],
-      "score": 8475,
-      "ticks": 3946,
-      "bytes": 1655
+      "score": 8350,
+      "ticks": 3993,
+      "bytes": 1695
     },
     "night-9-mixed": {
       "ok": true,
@@ -42,13 +42,13 @@
     },
     "night-2-knockout": {
       "ok": true,
-      "hash": "4d9e7083",
+      "hash": "acd2c622",
       "checkpoints": [
         "a0f054bf",
-        "4d9e7083"
+        "acd2c622"
       ],
-      "score": 3915,
-      "ticks": 5597,
+      "score": 3625,
+      "ticks": 7375,
       "bytes": 254
     }
   }

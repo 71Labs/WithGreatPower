@@ -479,6 +479,8 @@ export function duelStops(villain: VillainId, night: number, boss = false): Stop
 }
 
 export const BALANCE_NIGHTS = [1, 5, 9];
+/** The first nights a newcomer plays (villain levels 1–3). */
+export const NEW_PLAYER_NIGHTS = [1, 3, 5];
 export const BALANCE_SEEDS = [11, 23, 37, 41, 59, 67];
 
 /** Every villain, at nights 1, 5 and 9, warm-up and boss, over the seeds, with one policy (the bot plays the other fight). */
@@ -651,5 +653,10 @@ export function fightReport(): string {
   }
   parts.push("\nBALANCE by villain x player", table(byKey(all, (f) => `${f.villain} ${f.policy}`)));
   parts.push("\nBALANCE by night x player", table(byKey(all, (f) => `L${f.level} ${f.policy}`)));
+  // First-timers: nights 1, 3 and 5, warm-up and boss apart, for the players who don't dodge yet and those who do.
+  for (const policy of ["simple", "average"] as FightPolicy[]) {
+    const early = balanceFights(policy, NEW_PLAYER_NIGHTS);
+    parts.push(`\nNEW PLAYERS, ${policy}: nights ${NEW_PLAYER_NIGHTS.join(", ")}`, table([["all", summarizeFights(early)], ...byKey(early, (f) => `${f.villain}${f.boss ? " boss" : ""}`)]));
+  }
   return parts.join("\n");
 }

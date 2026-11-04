@@ -11,13 +11,13 @@ import { VILLAINS } from "../src/rules/data";
 import { reduce } from "../src/rules/engine";
 import type { Stop, VillainId } from "../src/rules/types";
 import { CityIndex, generateCity, groundBelow } from "../src/sim3d/city";
-import { hurtHero } from "../src/sim3d/combat";
+import { hurtHero, mercy } from "../src/sim3d/combat";
 import { DECK_HALF, HERO_RADIUS, STAGE_H, STRIKE_STEP, ZIP_RANGE } from "../src/sim3d/constants";
 import type { InputFrame } from "../src/sim3d/contract";
 import { len2 } from "../src/sim3d/dmath";
 import { createSim, IDLE_FRAME, stepSim } from "../src/sim3d/sim";
 import type { SimEvent, SimState } from "../src/sim3d/types";
-import { balanceFights, nightFights, summarizeFights } from "./fight-metrics";
+import { balanceFights, NEW_PLAYER_NIGHTS, nightFights, summarizeFights, VILLAIN_IDS } from "./fight-metrics";
 import { heroSave, STANDARD } from "./helpers";
 
 const stops = (villain: VillainId): Stop[] => [
@@ -197,5 +197,18 @@ describe("real fights stay on the ground and come out balanced (fight-metrics.ts
     const simple = summarizeFights(balanceFights("simple", nights, seeds));
     expect(simple.winRate).toBeGreaterThan(0.3);
     expect(simple.meanDamageShare).toBeGreaterThan(avg.meanDamageShare);
+  }, 300_000);
+
+  it("is forgiving on the first nights: a player who never dodges wins most warm-ups and half the bosses", () => {
+    const fs = balanceFights("simple", NEW_PLAYER_NIGHTS, [11, 23, 37]);
+    for (const v of VILLAIN_IDS) {
+      for (const boss of [false, true]) {
+        const s = summarizeFights(fs.filter((f) => f.villain === v && f.boss === boss));
+        expect(s.winRate, `${v}${boss ? " boss" : ""}`).toBeGreaterThanOrEqual(boss ? 0.5 : 0.75);
+      }
+    }
+    // Later nights aren't softened (mercy is 0 from level 4).
+    expect(mercy(4)).toBe(0);
+    expect(mercy(1)).toBe(1);
   }, 300_000);
 });

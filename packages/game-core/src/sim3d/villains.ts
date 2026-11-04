@@ -71,7 +71,7 @@ import {
   SYBIL_CENTER_ACCEL,
   SYBIL_CENTER_SPEED,
 } from "./constants";
-import { docVulnerable, hitVillain, hurtHero, moveDamage, villainHits, villainTargets } from "./combat";
+import { docVulnerable, hitVillain, hurtHero, mercy, moveDamage, villainHits, villainTargets } from "./combat";
 import type { Zone } from "./contract";
 import { clamp, datan2, dcos, dsin, len2, len3, PI } from "./dmath";
 import { roll } from "./rng";
@@ -537,7 +537,8 @@ function stepGoblin(s: SimState, v: Villain, dt: number, zone: Zone) {
   if (v.attack2T <= 0 && v.phase === "idle") {
     v.attack2T = (5.5 + roll(s) * 2) / v.rate;
     v.phase = "telegraph";
-    v.phaseT = 0.8;
+    // A longer wind-up on the first nights (mercy()).
+    v.phaseT = 0.8 + 0.3 * mercy(v.level);
     s.events.push({ type: "villain-attack", label: "Glider dive", x: v.x, y: v.y, z: v.z });
   }
 }
@@ -831,7 +832,8 @@ function stepSandwich(s: SimState, v: Villain, dt: number, zone: Zone) {
   if (v.attackT <= 0 && v.phase === "idle" && v.grounded && len3(h.x - v.x, h.y - v.y, h.z - v.z) < 700) {
     v.attackT = (3.8 + roll(s) * 1.5) / v.rate;
     v.phase = "telegraph";
-    v.phaseT = 0.6;
+    // A longer crouch on the first nights (mercy()).
+    v.phaseT = 0.6 + 0.25 * mercy(v.level);
     s.events.push({ type: "villain-attack", label: "Front-run", x: v.x, y: v.y, z: v.z });
   }
 }
@@ -928,17 +930,20 @@ function stepDoc(s: SimState, v: Villain, dt: number, zone: Zone) {
   }
   const stunned = v.stun > 0;
   v.phaseT -= stunned ? 0 : dt;
+  // v4: on the first nights his arms stay in a second longer, and the slam winds up longer (mercy()).
+  const m = mercy(v.level);
+  const open = 1.9 + m;
   if (!stunned && v.phaseT <= 0) {
     switch (v.phase) {
       case "sweep":
         v.cycle += 1;
         if (v.cycle % (v.boss ? 2 : 3) === 0) {
           v.phase = "slam-wind";
-          v.phaseT = 0.85;
+          v.phaseT = 0.85 + 0.35 * m;
           s.events.push({ type: "villain-attack", label: "Cross-chain slam", x: v.x, y: v.y, z: v.z });
         } else {
           v.phase = "retract";
-          v.phaseT = 1.9;
+          v.phaseT = open;
         }
         break;
       case "slam-wind":
@@ -947,7 +952,7 @@ function stepDoc(s: SimState, v: Villain, dt: number, zone: Zone) {
         break;
       case "slam":
         v.phase = "retract";
-        v.phaseT = 1.9;
+        v.phaseT = open;
         break;
       default:
         v.phase = "sweep";
@@ -993,8 +998,8 @@ function stepDoc(s: SimState, v: Villain, dt: number, zone: Zone) {
         const damage = moveDamage(v, slam ? "Cross-chain slam" : "Eight-arm flurry");
         const along = (h.x - v.x) * v.ax + (h.z - v.z) * v.az >= 0 ? 1 : -1;
         const hurt = hurtHero(s, slam ? damage : Math.round(damage * 0.7), slam ? "Cross-chain slam" : "a chain arm", h.x - v.ax * along * 100, tip.y, h.z - v.az * along * 100, 0, DOC_SWAT);
-        // Swatted, a moment longer to get clear before the next chain counts.
-        if (hurt) h.invuln = Math.max(h.invuln, 1.5);
+        // Swatted, a moment longer to get clear before the next chain counts (up to 1.5 s more on the first nights).
+        if (hurt) h.invuln = Math.max(h.invuln, 1.5 + 1.5 * mercy(v.level));
         break;
       }
     }
@@ -1280,11 +1285,13 @@ export function stepHazards(s: SimState, dt: number) {
   const slow = s.slowmo > 0 ? SLOWMO_FACTOR : 1;
   const hdt = dt * slow;
   const h = s.hero;
+  // v4: fee bombs fall a little slower on the first nights, a beat more to see them coming.
+  const bombG = 900 * (1 - 0.3 * (s.villain ? mercy(s.villain.level) : 0));
   for (const z of s.hazards) {
     if (z.dead) continue;
     z.t += hdt;
     if (z.kind === "bomb") {
-      z.vy -= 900 * hdt;
+      z.vy -= bombG * hdt;
       z.x += z.vx * hdt;
       z.y += z.vy * hdt;
       z.z += z.vz * hdt;
@@ -1294,7 +1301,9 @@ export function stepHazards(s: SimState, dt: number) {
         z.dead = true;
         // v4: a 70 blast (v3: 80).
         s.events.push({ type: "blast", x: z.x, y: Math.max(z.y, ground + z.r), z: z.z, r: 70, kind: "bomb" });
-        if (hitHero || len3(h.x - z.x, h.y - z.y, h.z - z.z) < 70 + HERO_RADIUS * 0.5) hurtHero(s, z.damage, "a fee bomb", z.x, z.y, z.z, z.burn);
+        // On the first nights a fee bomb is mostly the fee: it burns all its fluid but hurts less (mercy()).
+        const m = s.villain ? mercy(s.villain.level) : 0;
+        if (hitHero || len3(h.x - z.x, h.y - z.y, h.z - z.z) < 70 + HERO_RADIUS * 0.5) hurtHero(s, Math.round(z.damage * (1 - 0.5 * m)), "a fee bomb", z.x, z.y, z.z, z.burn);
       }
     } else if (z.kind === "goo") {
       z.vy -= 120 * hdt;

@@ -8,7 +8,7 @@
  * pickup when one is close and on the way, else at the next stop.
  */
 import { abilityBlocked, gweiBlocked } from "./abilities";
-import { docVulnerable, isVulnerable, nearestTarget, takesHit } from "./combat";
+import { docVulnerable, isVulnerable, mercy, nearestTarget, takesHit } from "./combat";
 import { DT } from "./constants";
 import type { InputFrame } from "./contract";
 import { DIR64, dirIndex, len2, len3 } from "./dmath";
@@ -258,9 +258,10 @@ function fightFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"], dt: n
             break;
           }
         } else if (z.kind === "bomb") {
-          // Where it lands: a fall under the bombs' 900 u/s².
+          // Where it lands: a fall under the bombs' 900 u/s² (less on the first nights).
           const fall = Math.max(0, z.y - h.y);
-          const tl = (z.vy + Math.sqrt(z.vy * z.vy + 1800 * fall)) / 900;
+          const g = 900 * (1 - 0.3 * mercy(v.level));
+          const tl = (z.vy + Math.sqrt(z.vy * z.vy + 2 * g * fall)) / g;
           const lx = z.x + z.vx * tl - h.x;
           const lz = z.z + z.vz * tl - h.z;
           if (len2(lx, lz) < 130) {
