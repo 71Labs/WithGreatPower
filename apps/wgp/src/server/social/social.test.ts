@@ -119,6 +119,21 @@ describe("draft generators", () => {
     expect((await drafts()).some((x) => x.sourceEvent.startsWith("new_leader:tonight"))).toBe(false);
   });
 
+  it("shout out once for a run that tops several boards, and never again for those boards", async () => {
+    const tonight = new Date("2026-11-04T00:30:00Z");
+    await night("ben", 5000, tonight);
+    const run = await night("ana", 9000, tonight);
+    await syncDrafts(db, { now: NOV4_EARLY });
+    const leaders = (await drafts()).filter((d) => d.kind === "new_leader");
+    expect(leaders.map((d) => d.sourceEvent)).toEqual([`new_leader:tonight:2026-11-04:${ids.ana}+new_leader:alltime:all:${ids.ana}`]);
+    expect(leaders[0]!.text).toContain(`you just banked a 9,000 night and took #1 on the Tonight and All-time boards. Nothing for you to sign. wgponnear.fun/r/${run}`);
+
+    // A better night by the same leader is no news on those boards.
+    await night("ana", 9900, new Date("2026-11-04T01:00:00Z"));
+    await syncDrafts(db, { now: new Date("2026-11-04T01:40:00Z") });
+    expect((await drafts()).filter((d) => d.kind === "new_leader")).toHaveLength(1);
+  });
+
   it("count Season 1 down at 48 and 24 hours, with the standings at the halfway mark", async () => {
     await night("ana", 5000, new Date("2026-11-10T20:00:00Z"));
     await night("ben", 4000, new Date("2026-11-10T21:00:00Z"));

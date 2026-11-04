@@ -9,7 +9,7 @@
  *
  * Times are UTC: Tonight resets at 00:00 UTC (01:00 in Lagos).
  */
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, like, lt, lte, sql } from "drizzle-orm";
 
 import { ITEMS } from "@wgp/game-core/data";
 import type { Edition, ItemId, Save } from "@wgp/game-core/types";
@@ -23,7 +23,7 @@ import { utcDay } from "@/server/rate-limit";
 import type { Db } from "../db/client";
 import { ALLTIME_PERIOD, countEntries, topEntries, type BoardRow } from "../db/leaderboard";
 import { TROPHY_PLACES, recordSeasonKey, type SeasonStanding } from "../db/season-close";
-import { chainOps, marketPrices, runs, saves, seasons, type Board } from "../db/schema";
+import { chainOps, marketPrices, runs, saves, seasons, socialDrafts, type Board } from "../db/schema";
 import type { Tagger } from "./compose";
 import { nameables, type Nameable } from "./players";
 
@@ -110,12 +110,20 @@ export async function tonightTop3({ db, now }: GenContext): Promise<DraftPlan[]>
 
 /* ------------------------------------------------------------------ a new #1 */
 
+/** "Tonight", "Tonight and All-time", "Tonight, Season 1 and All-time". */
+const listed = (names: string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 /**
  * A shout-out to whoever holds #1 on Tonight, the live season or All time, once per
  * player per board and period. Only when they beat someone (two or more on the board)
- * and took it in the last 24 hours, so an old record doesn't read as news.
+ * and took it in the last 24 hours, so an old record doesn't read as news. One run that
+ * tops several boards gets one shout-out naming them all; its source event joins each
+ * board's key with "+", and a board already shouted out about is never drafted again.
  */
 export async function newLeaders({ db, now }: GenContext): Promise<DraftPlan[]> {
+  const drafted = new Set(
+    (await db.select({ e: socialDrafts.sourceEvent }).from(socialDrafts).where(like(socialDrafts.sourceEvent, "new_leader:%"))).flatMap((r) => r.e.split("+")),
+  );
   const [live] = await db
     .select({ id: seasons.id, name: seasons.name })
     .from(seasons)
@@ -126,10 +134,12 @@ export async function newLeaders({ db, now }: GenContext): Promise<DraftPlan[]> 
     ...(live ? [{ board: "season" as const, period: live.id, name: live.name }] : []),
     { board: "alltime", period: ALLTIME_PERIOD, name: boardName("alltime", null) },
   ];
-  const plans: DraftPlan[] = [];
+  const groups = new Map<string, { top: BoardRow; score: number; night: number; keys: string[]; names: string[]; sources: DraftSource[] }>();
   for (const b of boards) {
     const [top] = await topEntries(db, b.board, b.period, 1);
     if (!top?.runId || now.getTime() - Date.parse(top.updatedAt) > DAY_MS) continue;
+    const key = `new_leader:${b.board}:${b.period}:${top.playerId}`;
+    if (drafted.has(key)) continue;
     const total = await countEntries(db, b.board, b.period);
     if (total < 2) continue;
     const [run] = await db
@@ -138,20 +148,23 @@ export async function newLeaders({ db, now }: GenContext): Promise<DraftPlan[]> 
       .where(and(eq(runs.id, top.runId), eq(runs.status, "verified")))
       .limit(1);
     if (run?.score == null) continue;
-    const runId = top.runId;
-    const runScore = run.score;
-    const person = fallback(await nameables(db, [top.playerId]), top);
+    const group = groups.get(`${top.playerId}:${top.runId}`) ?? { top, score: run.score, night: run.night, keys: [], names: [], sources: [] };
+    group.keys.push(key);
+    group.names.push(b.name);
+    group.sources.push({ label: `#1 on ${b.name}`, value: `${b.period}, of ${fmt(total)} heroes${b.board === "season" ? `, season total ${fmt(top.score)}` : ""}`, href: null });
+    groups.set(`${top.playerId}:${top.runId}`, group);
+  }
+  const plans: DraftPlan[] = [];
+  for (const g of groups.values()) {
+    const runId = g.top.runId!;
+    const person = fallback(await nameables(db, [g.top.playerId]), g.top);
     plans.push({
       kind: "new_leader",
-      sourceEvent: `new_leader:${b.board}:${b.period}:${top.playerId}`,
+      sourceEvent: g.keys.join("+"),
       mediaUrl: `/api/social/card/run/${runId}`,
-      sources: [
-        { label: "Board", value: `${b.name} (${b.period}), #1 of ${fmt(total)}`, href: null },
-        { label: "Run", value: `${fmt(runScore)}, night ${run.night}, by ${top.handle}`, href: `/r/${runId}` },
-        ...(b.board === "season" ? [{ label: "Season total", value: fmt(top.score), href: null }] : []),
-      ],
+      sources: [...g.sources, { label: "Run", value: `${fmt(g.score)}, night ${g.night}, by ${g.top.handle}`, href: `/r/${runId}` }],
       compose: (t) =>
-        `Hey ${t.name(person)}, you just banked a ${fmt(runScore)} night and took #1 on the ${b.name} board. Nothing for you to sign. ${runLink(runId)}`,
+        `Hey ${t.name(person)}, you just banked a ${fmt(g.score)} night and took #1 on the ${listed(g.names)} ${g.names.length > 1 ? "boards" : "board"}. Nothing for you to sign. ${runLink(runId)}`,
     });
   }
   return plans;
