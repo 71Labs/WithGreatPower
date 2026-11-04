@@ -365,8 +365,19 @@ export class Sparks {
   private readonly attrs: InstancedBufferAttribute[];
   private live: Spark[] = [];
   private seed = 0x9e3779b9;
-  enabled = true;
+  private on = true;
+  /** Draw once, empty, as soon as sparks are on: the program compiles then, not on the night's first hit. */
+  private warm = true;
   reducedMotion = false;
+
+  get enabled(): boolean {
+    return this.on;
+  }
+
+  set enabled(on: boolean) {
+    if (on && !this.on) this.warm = true;
+    this.on = on;
+  }
 
   constructor(shared: SharedUniforms) {
     this.quad = new PlaneGeometry(1, 1);
@@ -436,8 +447,10 @@ export class Sparks {
 
   update(dt: number): void {
     if (this.live.length === 0) {
+      // Nothing flying: no draw (an empty instanced draw compiles the program but issues no call).
       this.mesh.count = 0;
-      this.mesh.visible = false;
+      this.mesh.visible = this.warm && this.on;
+      if (this.on) this.warm = false;
       return;
     }
     for (const s of this.live) {
