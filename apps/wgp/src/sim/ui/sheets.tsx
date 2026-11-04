@@ -186,6 +186,20 @@ const VILLAIN_TIPS = [
   { id: "sybil" as const, tip: "Copies orbit and shoot goo. Every hit pops a copy; the real one is last." },
 ];
 
+/** The 3D night's fights (ruleset 4): on the roof, with openings. */
+const VILLAIN_TIPS_3D = [
+  {
+    id: "gas-goblin" as const,
+    tip: "Glides over the roof dropping fee bombs that hurt and burn your web fluid, then dives at you: run sideways to dodge. Pulling out of the dive, he sputters low: that’s your opening.",
+  },
+  {
+    id: "sandwich-man" as const,
+    tip: "Runs the roof, lunges at where you’re about to be, and leaves bread traps that clap shut. Sidestep the lunge and hit him while he stumbles. He hops over webs he sees coming.",
+  },
+  { id: "doc-octochain" as const, tip: "Four chain arms sweep his bridge, and he follows you along it. When they pull in and he sags low, he’s open: zip in and hit him, or stun him with a yank." },
+  { id: "sybil" as const, tip: "Hides in a ring of copies that shoot goo. Every hit pops a copy; the real one is last, and takes a few more." },
+];
+
 const SWINGING: Record<"2d" | "3d", string[]> = {
   "2d": [
     "Hold Space, the mouse, or the left two-thirds of a touch screen to shoot a web at the ringed anchor above you. Let go to fly.",
@@ -231,11 +245,13 @@ export function HowToPlay({ loadout, mode = "2d", touch = false }: { loadout: Po
         <h3 className="text-[15px] font-bold text-game-ink">Fighting</h3>
         <p>
           {thumbs
-            ? "Slam into a villain at speed to land a hit, or tap a power by your right thumb. After a hit he guards for a moment. If Gwei Stacy is with you tonight, her face joins the powers in a fight: tap it to call her."
-            : "Slam into a villain at speed to land a hit, or use your powers (keys 1–4). After a hit he guards for a moment. G calls Gwei Stacy if she’s with you tonight."}
+            ? "Fights are on the roof. Tap the right side beside a villain to punch; further out, the web zips you in to punch. Run sideways to dodge his wind-ups, and tap a power by your right thumb. After a hit he guards: wait for an opening. If Gwei Stacy is with you tonight, her face joins the powers: tap it to call her."
+            : mode === "3d"
+              ? "Fights are on the roof. Press Space or click beside a villain to punch; further out, the web zips you in to punch. Run sideways to dodge his wind-ups, and use your powers (keys 1–4). After a hit he guards: wait for an opening. G calls Gwei Stacy if she’s with you tonight."
+              : "Slam into a villain at speed to land a hit, or use your powers (keys 1–4). After a hit he guards for a moment. G calls Gwei Stacy if she’s with you tonight."}
         </p>
         <ul className="flex flex-col gap-2">
-          {VILLAIN_TIPS.map((v) => (
+          {(mode === "3d" ? VILLAIN_TIPS_3D : VILLAIN_TIPS).map((v) => (
             <li key={v.id} className="flex items-start gap-2.5">
               <Face id={v.id} className="size-8" />
               <p>

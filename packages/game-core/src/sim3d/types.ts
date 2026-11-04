@@ -64,6 +64,18 @@ export interface Hero {
   latched: boolean;
   /** v3: the last web let go by itself with the button held (or a mantle): the next waits for the top of the arc. */
   rewebWait: boolean;
+  /** v4: seconds into the current strike (the web button in reach of a villain), or −1. */
+  strike: number;
+  /** v4: seconds into the current web-zip (pulled at a villain further out, into a strike), or −1. */
+  zip: number;
+  /** v4: until the next strike, and the next zip, may start. */
+  strikeCd: number;
+  zipCd: number;
+  /** v4: the body the strike or zip is aimed at (Sybil's index, or −1 for the villain), and whether its blow has connected. */
+  strikeBody: number;
+  strikeDone: boolean;
+  /** v4: the strike came out of a zip. */
+  zipped: boolean;
 }
 
 /* ------------------------------------------------------------------ pickups (v3) */
@@ -240,12 +252,17 @@ export interface SwingTally {
   miss: number;
 }
 
-export type HitSource = "slam" | "dash" | "sling" | "web-bomb" | "validator-slam" | "gwei";
+/** v4 adds "strike": a blow from the web button in reach (or at the end of a web-zip). */
+export type HitSource = "slam" | "dash" | "sling" | "web-bomb" | "validator-slam" | "gwei" | "strike";
 
 /** The 2D event union with z added. The scene animates from these; the bridge turns some into engine actions. */
 export type SimEvent =
   | { type: "thwip"; x: number; y: number; z: number; ax: number; ay: number; az: number }
   | { type: "fizzle"; x: number; y: number; z: number }
+  /** v4: a strike begins (a blow at a villain in reach, or the end of a zip); `zip` when the web pulled you in first. */
+  | { type: "strike"; x: number; y: number; z: number; zip: boolean }
+  /** v4: a web-zip begins, pulling the hero at the villain body at (tx, ty, tz). */
+  | { type: "zip"; x: number; y: number; z: number; tx: number; ty: number; tz: number }
   /** v3: `auto` when the web let go by itself at the end of a held (or tapped) swing. */
   | { type: "release"; grade: "perfect" | "good" | null; x: number; y: number; z: number; combo: number; auto?: boolean }
   | { type: "miss"; x: number; y: number; z: number; damage: number; water: boolean }

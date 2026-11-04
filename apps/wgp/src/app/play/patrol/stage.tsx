@@ -60,12 +60,15 @@ export interface StageProps {
 export default function Stage({ loop, city, handle, quality, heroColors, cast, reducedMotion, onStats, onTierSuggest, onContextStalled, tap, paused = false }: StageProps) {
   // The scene reads the loop's view through a ref; the view object never changes.
   const frame = useMemo<RefObject<RenderFrame3D | null>>(() => ({ current: loop.view }), [loop]);
+  // The camera's beats read the loop's status and countdown the same way (the loop keeps it current).
+  const cue = useMemo(() => ({ current: loop.cue }), [loop]);
   const onFrame = useCallback((pose: ChasePose | null, width: number, height: number) => tap?.run(loop.view, pose, width, height), [tap, loop]);
   return (
     <SceneCanvas
       className="absolute inset-0"
       city={city}
       frame={frame}
+      cue={cue}
       quality={quality}
       handle={handle}
       heroColors={heroColors}

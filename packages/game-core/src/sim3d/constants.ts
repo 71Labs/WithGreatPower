@@ -2,8 +2,8 @@
  * Every tunable number in the 3D swing sim, in world units (1 unit ≈ 1 CSS px at 1×, the
  * hero ~88 tall), seconds and units per second. Y is up; the street is y = 0. Most of the
  * 2D sim's numbers carried over; the 3D additions are marked, and ruleset 2's physics pass
- * is marked "v2" (with the v1 value where one changed), and ruleset 3's controls and feel pass
- * "v3" (with the v2 value).
+ * is marked "v2" (with the v1 value where one changed), ruleset 3's controls and feel pass
+ * "v3" (with the v2 value), and ruleset 4's grounded fights "v4" (with the v3 value).
  */
 
 /**
@@ -11,7 +11,7 @@
  * the sim, the city, the engine or the scoring and bump it: old logs are then refused
  * instead of being mis-scored.
  */
-export const RULESET_VERSION = 3;
+export const RULESET_VERSION = 4;
 
 /** The sim steps at a fixed rate, whatever the display does. */
 export const SIM_HZ = 60;
@@ -236,6 +236,59 @@ export const KO_SECONDS = 2.8;
 export const SLOWMO_FACTOR = 0.35;
 /** 3D: nobody flies above this inside an arena. */
 export const ARENA_CEILING = 1020;
+
+/**
+ * v4, the web button in a fight (ruleset 3 only swung, so the only free hit was a slam at
+ * SLAM_SPEED, which kept the hero in the air 97% of a fight):
+ * - With a villain body in reach (its surface within STRIKE_STEP, and its centre no more than
+ *   STRIKE_RISE above or below), a press is a strike: a step in at up to STRIKE_LUNGE and a blow
+ *   that connects across STRIKE_REACH between STRIKE_HIT_FROM and STRIKE_HIT_TO into it. The
+ *   next can start STRIKE_CD after the last.
+ * - Further out (within ZIP_RANGE, no more than ZIP_RISE above, in plain sight) it is a web-zip:
+ *   the web pulls you at him at ZIP_SPEED (along the roof if he's down there, up to him if he
+ *   flies low) for at most ZIP_TIME, into a strike. Once every ZIP_CD.
+ * - With a body within ZIP_RANGE across the roof the web never swings: a press waits out a
+ *   cooldown, and fizzles at a flyer over your head. Further out it is the web as ever, a swing.
+ * A strike that lands knocks the villain back at STRIKE_KNOCK and flinches him for STRIKE_FLINCH.
+ */
+export const STRIKE_STEP = 130;
+export const STRIKE_RISE = 150;
+export const STRIKE_REACH = 64;
+export const STRIKE_LUNGE = 560;
+export const STRIKE_TIME = 0.26;
+export const STRIKE_HIT_FROM = 0.05;
+export const STRIKE_HIT_TO = 0.17;
+export const STRIKE_CD = 0.36;
+export const STRIKE_KNOCK = 300;
+export const STRIKE_FLINCH = 0.3;
+export const ZIP_RANGE = 660;
+export const ZIP_RISE = 200;
+export const ZIP_SPEED = 1050;
+export const ZIP_TIME = 0.55;
+export const ZIP_CD = 1.1;
+/**
+ * v4: getting hurt is a shove along the ground (HURT_SHOVE, sliding out at HURT_FRICTION while
+ * staggered for HURT_STAGGER, no running), never a launch (v3 threw you 420 back and 120–420 up).
+ * In the air, the hit pushes you sideways and stops a rise past HURT_AIR_VY.
+ */
+/** v4: on the first nights (combat.ts mercy()), up to this share off every hit, and this many more seconds untouchable after one. */
+export const MERCY_DAMAGE = 0.1;
+export const MERCY_GUARD = 1;
+export const HURT_SHOVE = 380;
+export const HURT_FRICTION = 900;
+export const HURT_STAGGER = 0.3;
+export const HURT_AIR_VY = 80;
+/**
+ * v4: a fight's stage. Fight arenas are one flat roof (v3: five low roofs at four heights with
+ * 70-unit alleys and the streets between, which the hero fell into 17–25 times a minute) at
+ * STAGE_H, the block inset by STAGE_INSET, with STAGE_TOWER-wide towers at its corners; Doc's
+ * bridge deck is DECK_HALF either side of its line (v3: 90). In a fight the hero (and Sandwich
+ * Man) stay on the stage; the flyers stay over it.
+ */
+export const STAGE_H = 240;
+export const STAGE_INSET = 30;
+export const STAGE_TOWER = 100;
+export const DECK_HALF = 120;
 
 /* ------------------------------------------------------------------ the city (3D) */
 

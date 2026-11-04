@@ -23,9 +23,15 @@ export interface View {
 /** With no camera yet, forward is −z (three.js's default camera looks that way). */
 export const DEFAULT_VIEW: View = { fx: 0, fz: -1 };
 
-/** The camera's ground heading from a chase pose (position → target), or null when it looks straight down. */
-export function viewFromPose(pose: { position: Vec3; target: Vec3 } | null | undefined): View | null {
+/**
+ * The camera's ground heading from a chase pose (position → target), or null when it looks
+ * straight down. While the pose holds a steering heading (the stick held on a roof, the
+ * camera easing behind the run) the stick goes by that instead, so the camera turning never
+ * turns the steering under the thumb.
+ */
+export function viewFromPose(pose: { position: Vec3; target: Vec3; steer?: View | null } | null | undefined): View | null {
   if (!pose) return null;
+  if (pose.steer) return pose.steer;
   const dx = pose.target.x - pose.position.x;
   const dz = pose.target.z - pose.position.z;
   const d = Math.sqrt(dx * dx + dz * dz);

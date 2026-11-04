@@ -2,7 +2,7 @@
  * The frozen v1 contract between the 3D sim (game-core), the 3D scene (apps/wgp/src/game3d)
  * and the server verifier. Add fields freely; never rename or remove them without updating
  * every consumer in the same PR. v1.3 (ruleset 3) added the pickups, the combo, the route and
- * the hero's `controlled`.
+ * the hero's `controlled`; v1.4 (ruleset 4) a fight zone's `stage`.
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
@@ -78,6 +78,12 @@ export interface Zone {
   ally: "aunt-mainnet" | "uncle-gen" | "mary-jpeg" | "bearson" | "gwei" | null;
   /** Errands: where the ally stands (on the roof, or on the water tower for Gwei). Added in v1.1. */
   allyAt?: Vec3 | null;
+  /**
+   * Fights: the flat floor the fight happens on (the arena's roof, or Doc's deck between his
+   * towers) and its height. The hero stays on it during the fight; `bounds` stays the wider box
+   * the camera works in. Added in v1.4 (ruleset 4).
+   */
+  stage?: { x0: number; z0: number; x1: number; z1: number; y: number } | null;
 }
 
 export interface Bridge {

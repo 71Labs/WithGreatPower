@@ -20,6 +20,8 @@ import type { InputFrame, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 
 import { EventBus, HudStore, type LoopStatus } from "@/sim/loop";
 
+import type { SceneCue } from "@/game3d/scene/camera/director";
+
 import { blendFrame, copyFrame, teleported } from "./blend";
 import { hudSnapshot, LegTracker, routeProgress } from "./hud";
 
@@ -35,6 +37,12 @@ export type LoopEvent3D =
 
 /** At most this many ticks per animation frame (a 12 fps frame still runs in real time). */
 export const MAX_STEPS = 5;
+/**
+ * Hit-stop (ruleset 4): the world holds still a beat on impact, seconds: a blow that lands, the
+ * one that wins the fight, and getting hurt. The sim just waits (its log is per tick, so a
+ * replay never sees it); game time falls a little behind the wall, never ahead.
+ */
+export const HIT_STOP = { hit: 0.06, last: 0.15, hurt: 0.045 };
 /** A frame longer than this (a stall, a resumed tab) counts as this long. */
 const MAX_FRAME_SECONDS = 0.25;
 const HUD_INTERVAL_MS = 100;
@@ -69,6 +77,18 @@ export interface LoopOptions {
   hud?: HudStore;
   /** Wall clock for HUD throttling, ms (tests pass a fake). */
   now?: () => number;
+  /** Hold still on impact (HIT_STOP); on unless false. */
+  hitStop?: boolean;
+}
+
+/** How long a tick's events hold the world still (HIT_STOP), or 0. */
+export function impact(events: readonly SimEvent[]): number {
+  let hold = 0;
+  for (const e of events) {
+    if (e.type === "villain-hit") hold = Math.max(hold, e.hits === 0 ? HIT_STOP.last : HIT_STOP.hit);
+    else if (e.type === "hero-hurt") hold = Math.max(hold, HIT_STOP.hurt);
+  }
+  return hold;
 }
 
 export class RunLoop {
@@ -77,6 +97,8 @@ export class RunLoop {
   /** What the scene draws: the blend of the last two ticks. Mutated in place. */
   readonly view: RenderFrame3D;
   status: LoopStatus = "loading";
+  /** The status and the countdown, for the camera's beats (the countdown's establishing shot, the outro). Kept current. */
+  readonly cue: SceneCue;
   /** One input per tick: the latch, or the autopilot (setSource). */
   private source: (run: Run) => InputFrame = () => ({ dir: 0, mag: 0, web: false, shot: 0 });
 
@@ -94,6 +116,9 @@ export class RunLoop {
   private disposed = false;
   private readonly leg = new LegTracker();
   private readonly now: () => number;
+  private readonly hitStop: boolean;
+  /** Seconds of hit-stop left. */
+  private hold = 0;
 
   constructor(
     readonly run: Run,
@@ -102,8 +127,10 @@ export class RunLoop {
     this.hud = opts.hud ?? new HudStore();
     this.introTotal = opts.introSeconds ?? INTRO_SECONDS;
     this.introLeft = this.introTotal;
+    this.cue = { status: this.status, introLeft: this.introTotal, introTotal: this.introTotal };
     this.outroLeft = opts.outroSeconds ?? OUTRO_SECONDS;
     this.now = opts.now ?? (() => performance.now());
+    this.hitStop = opts.hitStop !== false;
     this.curr = fillRenderFrame(run.sim, newRenderFrame());
     this.prev = copyFrame(this.curr, newRenderFrame());
     this.view = copyFrame(this.curr, newRenderFrame());
@@ -176,6 +203,8 @@ export class RunLoop {
     }
     const live = this.status === "live" && runActive(this.run);
     blendFrame(this.prev, this.curr, live ? this.acc / DT : 1, this.view);
+    this.cue.status = this.status;
+    this.cue.introLeft = this.status === "intro" ? Math.max(0, this.introLeft) : this.status === "loading" ? this.introTotal : 0;
     this.publish();
   }
 
@@ -211,6 +240,13 @@ export class RunLoop {
   }
 
   private tickLive(dt: number) {
+    if (this.hold > 0) {
+      // Hit-stop: the world waits; what's left of this frame after it runs on.
+      this.hold -= dt;
+      if (this.hold > 0) return;
+      dt = -this.hold;
+      this.hold = 0;
+    }
     this.acc += dt;
     let steps = 0;
     while (this.acc >= DT && steps < MAX_STEPS) {
@@ -228,6 +264,14 @@ export class RunLoop {
       if (teleported(this.prev, this.curr)) this.bus.emit({ type: "teleport" });
       this.emit(events);
       if (this.checkOver()) return;
+      const stop = this.hitStop ? impact(events) : 0;
+      if (stop > 0) {
+        // Hold on the impact tick itself (the blend all the way to it), dropping the rest of the
+        // backlog; the next tick runs as soon as the hold is over.
+        this.hold = stop;
+        this.acc = DT * 0.999;
+        break;
+      }
     }
     // Too far behind: drop the backlog instead of fast-forwarding.
     if (this.acc >= DT) this.acc = DT * 0.999;

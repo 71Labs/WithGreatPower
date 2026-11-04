@@ -142,6 +142,7 @@ export class CharacterSystem {
   private built = false;
   private wantFlip = false;
   private wantMiss = false;
+  private wantPunch = false;
   reducedMotion = false;
 
   constructor(
@@ -447,6 +448,11 @@ export class CharacterSystem {
     this.wantMiss = true;
   }
 
+  /** A strike (the web button in reach of a villain, ruleset 4): the hero throws a jab or a cross. */
+  punch(): void {
+    this.wantPunch = true;
+  }
+
   /** Where the hero's web is stuck (after the shot lands), for the sparkle. */
   get stuck(): Vec3 | null {
     return this.shot.stuck;
@@ -566,6 +572,8 @@ export class CharacterSystem {
     ctx.secondary = true;
     if (this.wantFlip) ha.flip(this.reducedMotion);
     this.wantFlip = false;
+    if (this.wantPunch) ha.punch();
+    this.wantPunch = false;
     const rival = frame.mode === "fight" ? (frame.villains.find((v) => !v.copy) ?? frame.villains[0]) : undefined;
     ha.lookAt(rival ? rival.pos : null);
     ha.update(frame, dt, ctx);

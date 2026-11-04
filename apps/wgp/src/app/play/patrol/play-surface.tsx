@@ -340,6 +340,22 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     };
   }, [latch, loop, autopilot, togglePause, closeMap, toggleMap]);
 
+  // During the countdown any key or press skips the camera's establishing shot: it eases
+  // straight down behind the hero (the controls themselves wait for GO).
+  useEffect(() => {
+    if (hudStatus !== "intro") return;
+    const skip = (e: Event) => {
+      if (e instanceof KeyboardEvent && (e.repeat || e.metaKey || e.ctrlKey || e.altKey)) return;
+      handle.current?.skip?.();
+    };
+    window.addEventListener("keydown", skip);
+    window.addEventListener("pointerdown", skip);
+    return () => {
+      window.removeEventListener("keydown", skip);
+      window.removeEventListener("pointerdown", skip);
+    };
+  }, [hudStatus]);
+
   // A hidden tab (a phone locked, an app switch) or a lost focus pauses (not the autopilot,
   // which a headless check drives), and lets go of every thumb and key, whose lifts the page
   // will never hear. Coming back shows the pause sheet; Resume carries on from there.
