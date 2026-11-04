@@ -175,6 +175,9 @@ interface Sample {
   pairClear: number;
   /** Errands: the two bodies apart on screen (neither hides the other). */
   pairApart: number;
+  /** A fight live (mode "fight"): both fighters on screen (NaN otherwise), and the camera's height. */
+  bothOn: number;
+  camY: number;
 }
 
 /** Distance from p to an axis-aligned box (0 inside). */
@@ -275,6 +278,13 @@ function score(pose: ChasePose, f: RenderFrame3D, city: City, solids: CitySolids
   let allySeen = NaN;
   let pairClear = NaN;
   let pairApart = NaN;
+  // A fight live: both fighters inside the frame (as the fight camera report counts them).
+  let bothOn = NaN;
+  if (f.mode === "fight") {
+    const rival = f.villains.find((v) => !v.copy) ?? f.villains[0];
+    const on = (q: { x: number; y: number; behind: boolean }) => !q.behind && q.x >= 0 && q.x <= w && q.y >= 0 && q.y <= h;
+    bothOn = rival && on(pr) && on(project(rival.pos, pose, w, h)) ? 1 : 0;
+  }
   if (phase === "errand" && zone?.allyAt) {
     const a = project({ x: zone.allyAt.x, y: zone.allyAt.y + 44, z: zone.allyAt.z }, pose, w, h);
     const aOn = !a.behind && a.x > 0 && a.x < w && a.y > 0 && a.y < h;
@@ -284,7 +294,7 @@ function score(pose: ChasePose, f: RenderFrame3D, city: City, solids: CitySolids
     // Apart: the ally's middle outside the hero's body box (from this camera, one would hide the other).
     pairApart = aOn && onScreen && !within(body, a.x, a.y) ? 1 : 0;
   }
-  return { hx, hy, onScreen, offCentre, hudClip, inside, insideBuilding, skim, blocked, yaw, pitch, fov: pose.fov, arm: Math.hypot(cam.x - hero.x, cam.y - hero.y, cam.z - hero.z), stopPin, stopSeen, stopDist, stopBearing, anchorSeen, travelAngle, allySeen, pairClear, pairApart };
+  return { hx, hy, onScreen, offCentre, hudClip, inside, insideBuilding, skim, blocked, yaw, pitch, fov: pose.fov, arm: Math.hypot(cam.x - hero.x, cam.y - hero.y, cam.z - hero.z), stopPin, stopSeen, stopDist, stopBearing, anchorSeen, travelAngle, allySeen, pairClear, pairApart, bothOn, camY: cam.y };
 }
 
 /* ------------------------------------------------------------------ one night */
@@ -517,6 +527,24 @@ function summarize(samples: Sample[]) {
   const arriving = samples.filter((s) => s.arriving);
   const stand = by("stand");
   const errand = by("errand");
+  // Fights live: both fighters in frame, the camera inside a building, and its bob (its height
+  // less its own 1-second moving average, over each run of live fight frames).
+  const live = samples.filter((s) => Number.isFinite(s.bothOn));
+  const bob: number[] = [];
+  for (let i = 0; i < samples.length; ) {
+    if (!Number.isFinite(samples[i].bothOn)) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < samples.length && Number.isFinite(samples[j].bothOn) && (j === i || !samples[j].cut)) j++;
+    for (let k = i + 30; k < j - 30; k++) {
+      let m = 0;
+      for (let q = -30; q <= 30; q++) m += samples[k + q].camY;
+      bob.push(Math.abs(samples[k].camY - m / 61));
+    }
+    i = j;
+  }
   const allTravel = travel;
   const band = (lo: number, hi: number) => pct(allTravel.filter((s) => s.stopDist >= lo && s.stopDist < hi).map((s) => s.stopSeen));
   return {
@@ -546,6 +574,12 @@ function summarize(samples: Sample[]) {
       frames: stand.length,
       stopSeenPct: pct(stand.map((s) => s.stopSeen)),
       stopBearingDeg: { mean: deg(mean(stand.map((s) => s.stopBearing))), p95: deg(quantile(stand.map((s) => s.stopBearing), 0.95)) },
+    },
+    fightLive: {
+      frames: live.length,
+      bothFramedPct: 100 * mean(live.map((s) => s.bothOn)),
+      insideBuildingPct: pct(live.map((s) => s.insideBuilding)),
+      bobP95: quantile(bob, 0.95),
     },
     errand: {
       frames: errand.length,
