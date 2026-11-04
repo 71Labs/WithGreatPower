@@ -40,10 +40,10 @@ export function mergeCrowdClips(hero: HeroClips, crowd: HeroClips): HeroClips {
   return out;
 }
 
-/** Fetch every body (full ones too when `full`) and the clips; bodies that fail are left out. */
-export async function loadCrowd(full: boolean): Promise<CrowdFiles | null> {
+/** Fetch the bodies (`ids`, all by default; full ones too when `full`) and the clips; bodies that fail are left out. */
+export async function loadCrowd(full: boolean, ids: readonly CivilianId[] = CIVILIANS): Promise<CrowdFiles | null> {
   const clipsP = Promise.all([loadHeroClips(HERO_ANIMS), loadHeroClips(CROWD_ANIMS)]);
-  const bodies = await Promise.allSettled(CIVILIANS.map((id) => loadCastAsset(civilianUrl(id, full))));
+  const bodies = await Promise.allSettled(ids.map((id) => loadCastAsset(civilianUrl(id, full))));
   let clips: HeroClips;
   try {
     const [hero, crowd] = await clipsP;

@@ -12,12 +12,15 @@
  *   out right in front of the camera, where the hero lands among them, and wherever they
  *   stand between the camera and the hero (or his rival in a fight).
  */
-import type { QualityTier } from "../quality";
 import { FOG } from "../palette";
+import type { QualityTier } from "../quality";
+import type { CivilianId } from "./civilians";
 import type { Density } from "./placement";
 
 export interface CrowdTier {
   density: Density;
+  /** Which bodies it loads (all of them if unset): each one costs two draw calls when drawn. */
+  bodies?: readonly CivilianId[];
   /** Load the full bodies, for the people nearest the camera. */
   near: boolean;
   /** Most people drawn as full bodies, and in all. */
@@ -29,7 +32,7 @@ export interface CrowdTier {
 }
 
 export const CROWD_TIERS: Record<QualityTier, CrowdTier> = {
-  low: { density: { roofGroups: 3, fight: 4, errand: 2, walkers: 0 }, near: false, nearMax: 0, max: 10, nearDist: 0, farDist: 1400 },
+  low: { density: { roofGroups: 3, fight: 4, errand: 2, walkers: 0 }, bodies: ["civ-office", "civ-jogger", "civ-auntie", "civ-kid"], near: false, nearMax: 0, max: 10, nearDist: 0, farDist: 1400 },
   medium: { density: { roofGroups: 9, fight: 9, errand: 3, walkers: 44 }, near: false, nearMax: 0, max: 32, nearDist: 0, farDist: 1900 },
   high: { density: { roofGroups: 16, fight: 14, errand: 4, walkers: 96 }, near: true, nearMax: 16, max: 72, nearDist: 720, farDist: 2600 },
 };

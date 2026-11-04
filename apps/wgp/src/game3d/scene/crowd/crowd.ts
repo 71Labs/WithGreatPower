@@ -6,8 +6,9 @@
  *
  * - Bodies: eight MPFB civilians (crowd/civilians.ts) dressed per person from their files'
  *   colour lists (crowd/looks.ts), in the cast's shading (crowd/shaders.ts).
- * - Drawing: one instanced fill and hull per level of detail for everyone (crowd/batch.ts):
- *   two draw calls on the low and medium tiers, four on high (full bodies near the camera).
+ * - Drawing (crowd/batch.ts): an instanced fill and hull per body with anyone drawn, on two
+ *   shared materials: at most 8 draw calls on low (four bodies), 16 on medium, 32 on high
+ *   (full bodies near the camera, light ones further out).
  * - Motion: shared pose blocks per body and channel (crowd/clips.ts), posed by plain
  *   forward kinematics (crowd/skeleton.ts) at 30, 15 or 8 Hz by distance (crowd/lod.ts).
  * - Budget by tier: a handful at the stops and on the roofs on low, sidewalk walkers from
@@ -24,9 +25,9 @@ import type { City, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 import { UNITS_PER_METRE } from "../characters/cast-asset";
 import type { SharedUniforms } from "../city/materials";
 import type { QualityTier } from "../quality";
-import { CrowdBatch, CrowdMaterials, CrowdPoses, mergeBodies } from "./batch";
+import { CrowdBatch, CrowdMaterials, CrowdPoses } from "./batch";
 import { CHANNEL, CHANNELS, crowdClips, newSample, type ClipSample, type CrowdClip } from "./clips";
-import { loadCrowd, type CrowdFiles } from "./civilians";
+import { CIVILIANS, loadCrowd, type CrowdFiles } from "./civilians";
 import { animInterval, CROWD_TIERS, distanceFade, fogFor, heroFade, lineFade, REACT_HOLD, splitBands, wantsReaction, type CrowdTier } from "./lod";
 import { LOOKS_PER_BODY, lookRows, lookTexture } from "./looks";
 import { planCrowd, walkAt, type SpotKind, type WalkPath } from "./placement";
@@ -128,6 +129,8 @@ export class CrowdSystem {
   private readonly samplePool: ClipSample[] = [];
   private readonly sampledAt = new Float32Array(CHANNELS.length).fill(-1);
   private readonly debug = typeof location !== "undefined" && /[?&]debug=1\b/.test(location.search);
+  /** `?crowd=0`: the night without its people (to compare, on the same build). */
+  private readonly off = typeof location !== "undefined" && /[?&]crowd=0\b/.test(location.search);
 
   constructor(
     private readonly city: City,
@@ -145,25 +148,30 @@ export class CrowdSystem {
     return { ...this.spec, nearMax: 0 };
   }
 
+  /** Which files a tier draws: full bodies or not, and which bodies. */
+  private filesKey(t: CrowdTier = this.spec): string {
+    return `${t.near}:${(t.bodies ?? CIVILIANS).join()}`;
+  }
+
   setTier(tier: QualityTier): void {
     if (tier === this.tier) return;
-    const fullBefore = this.spec.near;
+    const before = this.filesKey();
     this.tier = tier;
-    if (!this.built) return;
-    if (this.spec.near !== fullBefore) {
-      // Another set of files: drop these and load the tier's.
+    if (this.filesKey() !== before) {
+      // Another set of files: drop these and load the tier's (on the next frames).
       this.teardown();
       this.loading = null;
     } else this.plan();
   }
 
-  /** Start fetching (once). */
+  /** Start fetching (once per set of files). */
   private load(): void {
-    if (this.loading) return;
+    if (this.loading || this.off) return;
+    const key = this.filesKey();
     const full = this.spec.near;
-    this.loading = loadCrowd(full).then(
+    this.loading = loadCrowd(full, this.spec.bodies).then(
       (files) => {
-        if (this.disposed || !files || this.spec.near !== full || this.built) return;
+        if (this.disposed || !files || this.filesKey() !== key || this.built) return;
         this.build(files, full);
       },
       () => {
@@ -181,8 +189,8 @@ export class CrowdSystem {
     const materials = new CrowdMaterials(this.shared, files.assets[0], k, poses, looks);
     const parts = (lod: "hi" | "lo") => files.assets.map((asset, v) => ({ asset, geometry: lod === "hi" ? (asset.hi ?? asset.lo) : asset.lo, skeleton: skeletons[v] }));
     const spec = this.spec;
-    const near = full ? new CrowdBatch(mergeBodies(parts("hi"), k), materials, Math.max(1, CROWD_TIERS.high.nearMax), "crowd-near") : null;
-    const far = new CrowdBatch(mergeBodies(parts("lo"), k), materials, Math.max(CROWD_TIERS.high.max, spec.max), "crowd-far");
+    const near = full ? new CrowdBatch(parts("hi"), k, materials, Math.max(1, CROWD_TIERS.high.nearMax), "crowd-near") : null;
+    const far = new CrowdBatch(parts("lo"), k, materials, Math.max(CROWD_TIERS.high.max, spec.max), "crowd-far");
     const blocks = files.assets.length * CHANNELS.length;
     this.built = { files, full, skeletons, clips, poses, materials, near, far, looks, due: new Float32Array(blocks), need: new Float32Array(blocks) };
     if (near) this.root.add(near.group);
@@ -346,7 +354,8 @@ export class CrowdSystem {
     b.poses.commit();
 
     const place = (batch: CrowdBatch, list: number[]) => {
-      list.forEach((i, k) => {
+      batch.begin();
+      for (const i of list) {
         const p = people[i];
         const ch = CHANNELS[p.channel];
         const floor = b.skeletons[p.body].floor(b.clips.get(ch.clip)!, this.measure);
@@ -355,17 +364,16 @@ export class CrowdSystem {
           fade = Math.max(fade, heroFade(Math.hypot(hero.x - p.x, hero.z - p.z), hero.y - p.y), lineFade(p.x, p.y + 50, p.z, cam.x, cam.y, cam.z, hero.x, hero.y, hero.z));
           if (rival) fade = Math.max(fade, lineFade(p.x, p.y + 50, p.z, cam.x, cam.y, cam.z, rival.pos.x, rival.pos.y, rival.pos.z));
         }
-        batch.set(k, p.x, p.y - floor, p.z, p.yaw, p.body * C + p.channel, p.body, p.look, fade, fogFor(dist[i]));
-      });
-      batch.commit(list.length);
+        batch.add(p.x, p.y - floor, p.z, p.yaw, p.body * C + p.channel, p.body, p.look, fade, fogFor(dist[i]));
+      }
+      return batch.commit();
     };
-    if (b.near) place(b.near, this.nearList);
-    place(b.far, this.farList);
+    const calls = (b.near ? place(b.near, this.nearList) : 0) + place(b.far, this.farList);
 
     const s = this.stats;
     s.near = this.nearList.length;
     s.far = this.farList.length;
-    s.calls = (s.near ? 2 : 0) + (s.far ? 2 : 0);
+    s.calls = calls;
     s.blocks = refreshed;
     s.ms = performance.now() - t0;
     if (this.debug) (window as Window & { __wgpCrowd?: CrowdStats }).__wgpCrowd = s;

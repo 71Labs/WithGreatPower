@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CIVILIANS } from "./civilians";
 import { animInterval, CROWD_TIERS, distanceFade, fogFor, heroFade, lineFade, REACT_IN, REACT_OUT, splitBands, wantsReaction } from "./lod";
 
 describe("crowd tiers", () => {
@@ -12,6 +13,14 @@ describe("crowd tiers", () => {
     expect(high.near).toBe(true);
     expect(high.nearMax).toBeLessThan(high.max);
     for (const t of [low, medium, high]) expect(t.farDist).toBeGreaterThan(t.nearDist);
+  });
+
+  it("bound the crowd's draw calls: two per body drawn, per level of detail", () => {
+    const calls = (t: (typeof CROWD_TIERS)[keyof typeof CROWD_TIERS]) => 2 * (t.bodies ?? CIVILIANS).length * (t.near ? 2 : 1);
+    expect(calls(CROWD_TIERS.low)).toBeLessThanOrEqual(8);
+    expect(calls(CROWD_TIERS.medium)).toBeLessThanOrEqual(16);
+    expect(calls(CROWD_TIERS.high)).toBeLessThanOrEqual(32);
+    for (const id of CROWD_TIERS.low.bodies ?? []) expect(CIVILIANS).toContain(id);
   });
 });
 

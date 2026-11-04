@@ -1,16 +1,16 @@
 /**
- * The crowd on the GPU: every civilian body in one geometry per level of detail, drawn as one
- * instanced fill and one instanced ink hull (the cast's two passes), whoever is on screen.
+ * The crowd on the GPU: per level of detail, one instanced fill and one instanced ink hull
+ * (the cast's two passes) for each civilian body that has anyone on screen, all on two shared
+ * materials, so a draw after the first switches nothing but its buffers.
  *
  * - Skinning reads a bone texture of pose blocks, a row each: one per body and channel
  *   (crowd/clips.ts), written by plain forward kinematics (crowd/skeleton.ts). Only the rows
  *   that changed go up each frame (texture update ranges).
- * - Each instance says which body, which pose block, which look (a row of the looks
- *   texture), and its own dither fade and fog; its matrix places and turns it.
- * - Both levels of detail share the materials, so the second draw switches nothing but the
- *   buffers.
+ * - Each instance says which pose block and which look (a row of the looks texture), with its
+ *   own dither fade and fog; its matrix places and turns it.
+ * - A body's instances draw its own mesh only: no vertex is processed for anyone else.
  *
- * Draw calls: two per level of detail with anyone in it (fill and hull); none when empty.
+ * Draw calls: two per body with someone drawn in that level of detail; none when it's empty.
  */
 import { BackSide, BufferAttribute, BufferGeometry, DataTexture, DynamicDrawUsage, FloatType, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, NearestFilter, RGBAFormat, ShaderMaterial, Vector3, type IUniform } from "three";
 
@@ -18,9 +18,9 @@ import type { SharedUniforms } from "../city/materials";
 import { castGeometry, type CastAsset } from "../characters/cast-asset";
 import { castMaterial } from "../characters/cast-model";
 import { C } from "../palette";
+import type { ClipSample } from "./clips";
 import { CROWD_FRAGMENT, CROWD_HULL_FRAGMENT, CROWD_HULL_VERTEX, CROWD_VERTEX } from "./shaders";
 import { BLOCK_FLOATS, CROWD_BONE_COUNT, type CrowdSkeleton } from "./skeleton";
-import type { ClipSample } from "./clips";
 
 /** The hull sits this far behind the body along the view (metres): the cast's (cast-model.ts). */
 const HULL_BACK = 0.014;
@@ -117,63 +117,27 @@ export class CrowdMaterials {
 }
 
 /**
- * Every body's mesh at one level of detail in one geometry, in game units, each vertex
- * tagged with its body (`aVariant`) and skinned to the crowd's 23 bones.
+ * One body's mesh at one level of detail in game units, with what the cast shader reads,
+ * skinned to the crowd's 23 bones and tagged with its body (`aVariant`).
  */
-export function mergeBodies(parts: { asset: CastAsset; geometry: BufferGeometry; skeleton: CrowdSkeleton }[], k: number): BufferGeometry {
-  const geos = parts.map((p) => castGeometry(p.asset, p.geometry, k));
-  const total = geos.reduce((s, g) => s + g.getAttribute("position").count, 0);
-  const indices = geos.reduce((s, g) => s + g.getIndex()!.count, 0);
-  const out = new BufferGeometry();
-  const take = (name: string, size: number) => {
-    const a = new Float32Array(total * size);
-    let at = 0;
-    for (const g of geos) {
-      const src = g.getAttribute(name);
-      for (let i = 0; i < src.count; i++) for (let c = 0; c < size; c++) a[(at + i) * size + c] = src.getComponent(i, c);
-      at += src.count;
-    }
-    out.setAttribute(name, new BufferAttribute(a, size));
-  };
-  take("position", 3);
-  take("normal", 3);
-  take("skinWeight", 4);
-  take("aPal", 1);
-  take("aFace", 3);
-  take("aAO", 1);
-  take("aHull", 4);
-  const skin = new Uint16Array(total * 4);
-  const variant = new Float32Array(total);
-  const index = total > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
-  let at = 0;
-  let ia = 0;
-  geos.forEach((g, v) => {
-    const src = g.getAttribute("skinIndex");
-    const remap = parts[v].skeleton.remap;
-    for (let i = 0; i < src.count; i++) {
-      for (let c = 0; c < 4; c++) skin[(at + i) * 4 + c] = remap[src.getComponent(i, c)] ?? 0;
-      variant[at + i] = v;
-    }
-    const idx = g.getIndex()!;
-    for (let i = 0; i < idx.count; i++) index[ia + i] = idx.getX(i) + at;
-    ia += idx.count;
-    at += src.count;
-    g.dispose();
-  });
-  out.setAttribute("skinIndex", new BufferAttribute(skin, 4));
-  out.setAttribute("aVariant", new BufferAttribute(variant, 1));
-  out.setIndex(new BufferAttribute(index, 1));
-  return out;
+export function bodyGeometry(asset: CastAsset, src: BufferGeometry, skeleton: CrowdSkeleton, body: number, k: number): BufferGeometry {
+  const g = castGeometry(asset, src, k);
+  const si = g.getAttribute("skinIndex");
+  const skin = new Uint16Array(si.count * 4);
+  for (let i = 0; i < si.count; i++) for (let c = 0; c < 4; c++) skin[i * 4 + c] = skeleton.remap[si.getComponent(i, c)] ?? 0;
+  g.setAttribute("skinIndex", new BufferAttribute(skin, 4));
+  g.setAttribute("aVariant", new BufferAttribute(new Float32Array(si.count).fill(body), 1));
+  return g;
 }
 
-/** One level of detail's instanced fill and hull. */
-export class CrowdBatch {
-  readonly group = new Group();
+/** One body's instanced fill and hull, and how many it draws this frame. */
+class BodyDraw {
   readonly fill: InstancedMesh;
   readonly hull: InstancedMesh;
-  private readonly pose: InstancedBufferAttribute;
-  private readonly crowd: InstancedBufferAttribute;
-  count = 0;
+  readonly pose: InstancedBufferAttribute;
+  readonly crowd: InstancedBufferAttribute;
+  readonly triangles: number;
+  n = 0;
 
   constructor(
     readonly geometry: BufferGeometry,
@@ -200,13 +164,35 @@ export class CrowdBatch {
     }
     this.fill.name = `${name}-fill`;
     this.hull.name = `${name}-ink`;
+    this.triangles = (geometry.getIndex()?.count ?? 0) / 3;
+  }
+}
+
+/** One level of detail: a fill and a hull per body. */
+export class CrowdBatch {
+  readonly group = new Group();
+  private readonly draws: BodyDraw[];
+
+  constructor(parts: { asset: CastAsset; geometry: BufferGeometry; skeleton: CrowdSkeleton }[], k: number, materials: CrowdMaterials, max: number, name: string) {
     this.group.name = name;
-    this.group.add(this.fill, this.hull);
+    this.draws = parts.map((p, v) => {
+      const d = new BodyDraw(bodyGeometry(p.asset, p.geometry, p.skeleton, v, k), materials, max, `${name}-${p.asset.meta.who}`);
+      this.group.add(d.fill, d.hull);
+      return d;
+    });
   }
 
-  /** Place instance `i`: feet at (x, y, z), facing yaw (0 is +z), on pose block `block`. */
-  set(i: number, x: number, y: number, z: number, yaw: number, block: number, body: number, look: number, fade: number, fog: number): void {
-    const e = this.fill.instanceMatrix.array as Float32Array;
+  /** Start a frame's instances. */
+  begin(): void {
+    for (const d of this.draws) d.n = 0;
+  }
+
+  /** Add someone: feet at (x, y, z), facing yaw (0 is +z), on pose block `block`. */
+  add(x: number, y: number, z: number, yaw: number, block: number, body: number, look: number, fade: number, fog: number): void {
+    const d = this.draws[body];
+    if (!d || d.n >= d.max) return;
+    const i = d.n++;
+    const e = d.fill.instanceMatrix.array as Float32Array;
     const c = Math.cos(yaw);
     const s = Math.sin(yaw);
     const o = i * 16;
@@ -226,35 +212,52 @@ export class CrowdBatch {
     e[o + 13] = y;
     e[o + 14] = z;
     e[o + 15] = 1;
-    (this.pose.array as Float32Array)[i] = block;
-    const a = this.crowd.array as Float32Array;
+    (d.pose.array as Float32Array)[i] = block;
+    const a = d.crowd.array as Float32Array;
     a[i * 4] = body;
     a[i * 4 + 1] = look;
     a[i * 4 + 2] = fade;
     a[i * 4 + 3] = fog;
   }
 
-  /** Draw the first `n` instances set this frame. */
-  commit(n: number): void {
-    this.count = n;
-    this.fill.count = this.hull.count = n;
-    this.fill.visible = this.hull.visible = n > 0;
-    if (!n) return;
-    const m = this.fill.instanceMatrix;
-    m.clearUpdateRanges();
-    m.addUpdateRange(0, n * 16);
-    m.needsUpdate = true;
-    this.pose.clearUpdateRanges();
-    this.pose.addUpdateRange(0, n);
-    this.pose.needsUpdate = true;
-    this.crowd.clearUpdateRanges();
-    this.crowd.addUpdateRange(0, n * 4);
-    this.crowd.needsUpdate = true;
+  /** Draw what was added since `begin`. Returns the draw calls it makes. */
+  commit(): number {
+    let calls = 0;
+    for (const d of this.draws) {
+      const n = d.n;
+      d.fill.count = d.hull.count = n;
+      d.fill.visible = d.hull.visible = n > 0;
+      if (!n) continue;
+      calls += 2;
+      const m = d.fill.instanceMatrix;
+      m.clearUpdateRanges();
+      m.addUpdateRange(0, n * 16);
+      m.needsUpdate = true;
+      d.pose.clearUpdateRanges();
+      d.pose.addUpdateRange(0, n);
+      d.pose.needsUpdate = true;
+      d.crowd.clearUpdateRanges();
+      d.crowd.addUpdateRange(0, n * 4);
+      d.crowd.needsUpdate = true;
+    }
+    return calls;
+  }
+
+  /** Triangles drawn this frame (fills; the hulls double it). */
+  get triangles(): number {
+    return this.draws.reduce((s, d) => s + d.n * d.triangles, 0);
+  }
+
+  /** People drawn this frame. */
+  get count(): number {
+    return this.draws.reduce((s, d) => s + d.n, 0);
   }
 
   dispose(): void {
-    this.geometry.dispose();
-    this.fill.dispose();
-    this.hull.dispose();
+    for (const d of this.draws) {
+      d.geometry.dispose();
+      d.fill.dispose();
+      d.hull.dispose();
+    }
   }
 }
