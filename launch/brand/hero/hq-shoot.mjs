@@ -6,6 +6,7 @@
  *   node launch/brand/hero/hq-shoot.mjs moments  --label before --tier high --viewport desktop
  *   node launch/brand/hero/hq-shoot.mjs perf     --label before --tier high --viewport desktop [--cpu 1] [--gl metal|swiftshader]
  *   node launch/brand/hero/hq-shoot.mjs compare  --a before --b after
+ *   node launch/brand/hero/hq-shoot.mjs table    --a before --b after
  *
  * - discover: plays a night with the autopilot and logs the sim every few ticks (mode, rope,
  *   grounded, where the hero is, over the bridge or not) and every event with its tick, to
@@ -20,6 +21,11 @@
  *   debug stats), and GPU memory: every buffer, texture and renderbuffer the page allocates
  *   (counted from the WebGL calls) plus the canvas's own drawing buffer.
  * - compare: side-by-side sheets of two labels' moments (needs python3 with Pillow).
+ * - table: the two labels' whole-night perf runs side by side, as perf-table.md.
+ *
+ * GPU time on Apple silicon is measured at whatever clock the GPU chose: under a 60 Hz cap it
+ * clocks down while it has headroom, so a light frame can read slower than a heavy one. Read
+ * it with the frame times, and use SwiftShader runs (a fixed-speed software GPU) to compare work.
  *
  * Viewports: desktop (1440×900 at DPR 2, a laptop or desktop browser) and portrait (390×844 at
  * DPR 3, a phone, touch and a phone's user agent). SwiftShader (a software GPU) stands in for a
@@ -27,7 +33,7 @@
  * and launch/out/saves; from a worktree without them, WGP_LAUNCH=<a checkout's launch/>.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -242,15 +248,18 @@ async function discover() {
 
 /* ------------------------------------------------------------------ moments */
 
-/** Ticks of the night-b autopilot run (see discover.json): the moments to compare. */
+/**
+ * Ticks of the night-b autopilot run (see discover.json): the moments to compare, in tick
+ * order (the night only runs forward), with an optional settle time, ms.
+ */
 const MOMENTS = JSON.parse(opt("moments", "null")) ?? [
   ["1-stand", -1],
   ["2-swing", 66],
   ["3-bridge", 372],
   ["4-fight-bridge", 744],
-  ["5-fight-roof", 2470],
   // A hit on the bridge (blast + villain-hit at 836), caught before its burst and debris fade.
   ["6-impact", 838, 140],
+  ["5-fight-roof", 2470],
 ];
 
 async function moments() {
@@ -399,8 +408,47 @@ for n in names:
   console.log(execFileSync("python3", ["-c", py, join(ROOT, a), join(ROOT, b), dir]).toString());
 }
 
+/* ------------------------------------------------------------------ table */
+
+/** The before/after perf table (perf-table.md) from two labels' perf-*.json. */
+function table() {
+  const a = opt("a", "before");
+  const b = opt("b", "after");
+  const read = (l) => {
+    const dir = join(ROOT, l);
+    const files = existsSync(dir) ? readdirSync(dir).filter((f) => /^perf-.*\.json$/.test(f) && !/-ab|-port|-before|-after|-e\d/.test(f)) : [];
+    return Object.fromEntries(files.map((f) => [f.replace(/\.json$/, ""), JSON.parse(readFileSync(join(dir, f), "utf8"))]));
+  };
+  const A = read(a);
+  const B = read(b);
+  const runs = Object.keys(B).filter((k) => A[k]).sort();
+  const f1 = (x) => (x == null ? "–" : (+x).toFixed(1));
+  const row = (r) => [
+    `${r.fps}`,
+    `${f1(r.frameMs.p50)} / ${f1(r.frameMs.p95)} / ${f1(r.frameMs.p99)}`,
+    `${r.over33}%`,
+    r.gpuMs ? `${f1(r.gpuMs.p50)} / ${f1(r.gpuMs.p95)}` : "–",
+    r.calls ? `${Math.round(r.calls.mean)} (max ${r.calls.max})` : "–",
+    r.dpr ? `${(+r.dpr.mean).toFixed(2)}` : "–",
+    `${f1(r.gpuMemory.peak.totalMB)}`,
+  ];
+  const lines = [
+    `| run | | fps | frame ms p50 / p95 / p99 | frames > 33 ms | GPU ms p50 / p95 | draw calls mean (max) | DPR | GPU MB |`,
+    `|---|---|---|---|---|---|---|---|---|`,
+  ];
+  for (const k of runs) {
+    const name = k.replace(/^perf-/, "");
+    lines.push(`| ${name} | ${a} | ${row(A[k]).join(" | ")} |`);
+    lines.push(`| | ${b} | ${row(B[k]).join(" | ")} |`);
+  }
+  const text = `${lines.join("\n")}\n`;
+  writeFileSync(join(ROOT, "perf-table.md"), text);
+  console.log(text);
+}
+
 if (mode === "discover") await discover();
 else if (mode === "moments") await moments();
 else if (mode === "perf") await perf();
 else if (mode === "compare") compare();
+else if (mode === "table") table();
 else throw new Error(`unknown mode ${mode}`);
