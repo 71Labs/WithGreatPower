@@ -66,7 +66,7 @@ SKIP  b5f4b1ef sele71: recorded under ruleset 2; replay it from the tag (git che
 1/1 runs reproduced from https://www.wgponnear.fun (1 from another ruleset skipped).
 ```
 
-`SKIP` marks a run played under an older ruleset. To replay it, run `git checkout ruleset-v2 && pnpm install --frozen-lockfile`, then pass the full run id from `GET /api/leaderboard?board=alltime`, for example `pnpm --filter wgp exec tsx ../../scripts/verify-run.ts b5f4b1ef-64b2-419d-8887-80e27b24acef`. The 8-character prefix the script prints won't work.
+`SKIP` marks a run played under an older ruleset. To replay it, check out the tag the note names (`ruleset-v3` for runs from ruleset 3, `ruleset-v2` for older ones), for example `git checkout ruleset-v3 && pnpm install --frozen-lockfile`, then pass the full run id from `GET /api/leaderboard?board=alltime`, for example `pnpm --filter wgp exec tsx ../../scripts/verify-run.ts b5f4b1ef-64b2-419d-8887-80e27b24acef`. The 8-character prefix the script prints won't work.
 
 ## Screenshots
 
@@ -125,7 +125,7 @@ All steps work on the live site, with no install.
    pnpm --filter wgp exec tsx ../../scripts/verify-run.ts --board tonight  # Tonight's board (also --top N, --base <url>)
    ```
    - **See:** `OK <run> <player>: score … vs …, ticks … vs …, hash … vs …` for each run and `N/N runs reproduced`. The script downloads the run's seed, start save and input log from `GET /api/runs/<id>/replay` and replays it locally with `@wgp/game-core`. It exits non-zero if any run doesn't reproduce.
-   - **Older runs:** a run recorded under an older ruleset is skipped with a note. To replay it, check out that ruleset's tag: runs from before ruleset 3 need `git checkout ruleset-v2`.
+   - **Older runs:** a run recorded under an older ruleset is skipped with a note. To replay it, check out that ruleset's tag: runs from ruleset 3 need `git checkout ruleset-v3`, and runs from before it `git checkout ruleset-v2`.
 5. **Trade in the Mempool Market.**
    - **Do:** open https://www.wgponnear.fun/play/market.
    - **See:**

@@ -5,7 +5,7 @@
  * is left.
  */
 import { MAX_FLUID, POWERS, VILLAINS } from "@wgp/game-core/data";
-import { abilityBlocked, gweiBlocked, isVulnerable, len2, stopTarget } from "@wgp/game-core/sim3d";
+import { abilityBlocked, gweiBlocked, inOpening, len2, stopTarget, takesHit } from "@wgp/game-core/sim3d";
 import type { SimState } from "@wgp/game-core/sim3d";
 
 import type { HudSnapshot, LoopStatus } from "@/sim/loop";
@@ -73,7 +73,17 @@ export function hudSnapshot(s: SimState, opts: { status: LoopStatus; countdown: 
     gwei: { left: s.gweiLeft, ready: !gweiBlocked(s) },
     villain:
       v && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko")
-        ? { kind: v.kind, name: VILLAINS[v.kind].name, hits: v.hits, hitsMax: v.hitsMax, open: isVulnerable(v) && v.invuln <= 0, boss: v.boss, quest: v.quest }
+        ? {
+            kind: v.kind,
+            name: VILLAINS[v.kind].name,
+            hits: v.hits,
+            hitsMax: v.hitsMax,
+            open: takesHit(v),
+            opening: inOpening(v),
+            guard: v.invuln > 0 && !inOpening(v),
+            boss: v.boss,
+            quest: v.quest,
+          }
         : null,
     buffs: { shield: h.shieldT > 0, cloak: h.cloakT > 0, finality: h.finalityT > 0, fork: h.forked, slowmo: s.slowmo > 0 },
     hint: !opts.hinted && s.index === 0 && s.mode === "travel",

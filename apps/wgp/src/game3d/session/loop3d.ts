@@ -35,6 +35,12 @@ export type LoopEvent3D =
 
 /** At most this many ticks per animation frame (a 12 fps frame still runs in real time). */
 export const MAX_STEPS = 5;
+/**
+ * Hit-stop (ruleset 4): the world holds still a beat on impact, seconds: a blow that lands, the
+ * one that wins the fight, and getting hurt. The sim just waits (its log is per tick, so a
+ * replay never sees it); game time falls a little behind the wall, never ahead.
+ */
+export const HIT_STOP = { hit: 0.06, last: 0.15, hurt: 0.045 };
 /** A frame longer than this (a stall, a resumed tab) counts as this long. */
 const MAX_FRAME_SECONDS = 0.25;
 const HUD_INTERVAL_MS = 100;
@@ -69,6 +75,18 @@ export interface LoopOptions {
   hud?: HudStore;
   /** Wall clock for HUD throttling, ms (tests pass a fake). */
   now?: () => number;
+  /** Hold still on impact (HIT_STOP); on unless false. */
+  hitStop?: boolean;
+}
+
+/** How long a tick's events hold the world still (HIT_STOP), or 0. */
+export function impact(events: readonly SimEvent[]): number {
+  let hold = 0;
+  for (const e of events) {
+    if (e.type === "villain-hit") hold = Math.max(hold, e.hits === 0 ? HIT_STOP.last : HIT_STOP.hit);
+    else if (e.type === "hero-hurt") hold = Math.max(hold, HIT_STOP.hurt);
+  }
+  return hold;
 }
 
 export class RunLoop {
@@ -94,6 +112,9 @@ export class RunLoop {
   private disposed = false;
   private readonly leg = new LegTracker();
   private readonly now: () => number;
+  private readonly hitStop: boolean;
+  /** Seconds of hit-stop left. */
+  private hold = 0;
 
   constructor(
     readonly run: Run,
@@ -104,6 +125,7 @@ export class RunLoop {
     this.introLeft = this.introTotal;
     this.outroLeft = opts.outroSeconds ?? OUTRO_SECONDS;
     this.now = opts.now ?? (() => performance.now());
+    this.hitStop = opts.hitStop !== false;
     this.curr = fillRenderFrame(run.sim, newRenderFrame());
     this.prev = copyFrame(this.curr, newRenderFrame());
     this.view = copyFrame(this.curr, newRenderFrame());
@@ -211,6 +233,13 @@ export class RunLoop {
   }
 
   private tickLive(dt: number) {
+    if (this.hold > 0) {
+      // Hit-stop: the world waits; what's left of this frame after it runs on.
+      this.hold -= dt;
+      if (this.hold > 0) return;
+      dt = -this.hold;
+      this.hold = 0;
+    }
     this.acc += dt;
     let steps = 0;
     while (this.acc >= DT && steps < MAX_STEPS) {
@@ -228,6 +257,14 @@ export class RunLoop {
       if (teleported(this.prev, this.curr)) this.bus.emit({ type: "teleport" });
       this.emit(events);
       if (this.checkOver()) return;
+      const stop = this.hitStop ? impact(events) : 0;
+      if (stop > 0) {
+        // Hold on the impact tick itself (the blend all the way to it), dropping the rest of the
+        // backlog; the next tick runs as soon as the hold is over.
+        this.hold = stop;
+        this.acc = DT * 0.999;
+        break;
+      }
     }
     // Too far behind: drop the backlog instead of fast-forwarding.
     if (this.acc >= DT) this.acc = DT * 0.999;

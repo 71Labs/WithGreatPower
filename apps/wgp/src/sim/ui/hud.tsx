@@ -161,6 +161,11 @@ function VillainBar({ hud }: { hud: HudSnapshot }) {
         <span className={`ml-1 whitespace-nowrap rounded-full border-2 border-game-ink px-2 text-[11px] font-bold leading-5 ${v.open ? "bg-game-gold" : "bg-game-paper-2 text-game-muted"}`}>
           {v.open ? "Open: hit him" : "Arms out"}
         </span>
+      ) : v.opening ? (
+        // 3D: Gas Goblin's stall, Sandwich Man's stumble.
+        <span className="ml-1 whitespace-nowrap rounded-full border-2 border-game-ink bg-game-gold px-2 text-[11px] font-bold leading-5">Open: hit him</span>
+      ) : v.guard ? (
+        <span className="ml-1 whitespace-nowrap rounded-full border-2 border-game-ink bg-game-paper-2 px-2 text-[11px] font-bold leading-5 text-game-muted">Guarding</span>
       ) : null}
     </StickerPanel>
   );
