@@ -173,6 +173,9 @@ export const CHASE_TUNING = {
   arenaYTimeSteady: 0.45,
   /** In an arena a wall may pull the arm in this close (under `arenaMinArm`) rather than leave the camera inside it. */
   arenaWallArm: 180,
+  /** Held short by a wall: how much of the climb to `arenaPitchMax` to take (0–1), and the most extra FOV (degrees; never under reduced motion). */
+  arenaBoxedClimb: 0.5,
+  arenaSqueeze: 14,
 };
 
 export type ChaseTuning = typeof CHASE_TUNING;
@@ -570,7 +573,7 @@ export class ChaseCamera {
       if (room < want * Math.cos(pitch)) climbWant = Math.max(0, Math.min(t.arenaPitchMax, Math.acos(clamp(room / want, 0, 1))) - pitch);
       // A wall held the arm short last frame: look for a side with room now, and climb over it meanwhile.
       if (this.boxed) {
-        climbWant = Math.max(climbWant, t.arenaPitchMax - pitch);
+        climbWant = Math.max(climbWant, t.arenaBoxedClimb * (t.arenaPitchMax - pitch));
         this.arenaPickIn = Math.min(this.arenaPickIn, 0);
       }
     }
@@ -637,7 +640,7 @@ export class ChaseCamera {
     this.look.step(this.lookWant, t.targetTime, t.targetTimeY, step, p.target);
     clampLag(this.look, p.target, this.lookWant, Math.min(t.lagMax, t.lagArm * arm), t.lagArmY * arm);
     // Boxed in (the arm well short of what the two-shot wants): widen a little instead.
-    const squeeze = arena && !input.reducedMotion ? clamp((want - arm) / want, 0, 0.5) * 2 * t.arenaFovBoost : 0;
+    const squeeze = arena && !input.reducedMotion ? clamp((want - arm) / want, 0, 0.5) * 2 * t.arenaSqueeze : 0;
     p.fov = this.fov.step(fovWant + squeeze, t.fovTime, step);
     p.arm = arm;
     p.want = want;
