@@ -76,7 +76,8 @@ void main() {
     vec2 a = abs(vUv);
     if (sqrt(a.x) + sqrt(a.y) < 0.64) c = uPaper;
   }
-  gl_FragColor = vec4(c, 1.0);
+  // The gold glows a little (alpha: the bloom's inverted glow, render/post-shaders.ts).
+  gl_FragColor = vec4(c, c == uInk ? 1.0 : 0.62);
 }
 `;
 
@@ -101,7 +102,7 @@ void main() {
   float facing = abs(dot(n, normalize(-vView)));
   // A broad ink band where the tube turns away (about a sixth of its width each side), so the hoop reads as inked at any distance.
   vec3 c = n.y > 0.2 ? uColor : uColor * 0.8;
-  gl_FragColor = vec4(facing < 0.56 ? uInk : c, 1.0);
+  gl_FragColor = facing < 0.56 ? vec4(uInk, 1.0) : vec4(c, 0.55);
 }
 `;
 

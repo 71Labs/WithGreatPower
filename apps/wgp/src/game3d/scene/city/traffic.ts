@@ -271,6 +271,8 @@ void main() {
   vec3 n = normalize(vWN);
   float tint = n.y > 0.5 ? 1.0 : abs(n.x) > abs(n.z) ? (n.x > 0.0 ? 0.92 : 0.76) : 0.84;
   vec3 col = vColor * tint;
+  // Head and tail lights glow (alpha: the bloom's inverted glow, render/post-shaders.ts).
+  float glow = 0.0;
   if (body) {
     if (abs(vN.x) > 0.5) {
       // Sides: a taxi's checker band, and the wheels.
@@ -285,13 +287,17 @@ void main() {
       // Front: headlights.
       for (int i = 0; i < 2; i++) {
         vec2 c = vec2(i == 0 ? S.z * 0.2 : S.z * 0.8, S.y * 0.6);
-        col = mix(col, uLit, fillOf(length((uv - c) / vec2(1.0, 0.7)) - 3.4, aa));
+        float lamp = fillOf(length((uv - c) / vec2(1.0, 0.7)) - 3.4, aa);
+        col = mix(col, uLit, lamp);
+        glow = max(glow, lamp);
       }
     } else if (vN.z < -0.5) {
       // Back: tail lights.
       for (int i = 0; i < 2; i++) {
         vec2 c = vec2(i == 0 ? S.z * 0.18 : S.z * 0.82, S.y * 0.62);
-        col = mix(col, uRed, fillOf(max(abs(uv.x - c.x) - 3.5, abs(uv.y - c.y) - 2.0), aa));
+        float lamp = fillOf(max(abs(uv.x - c.x) - 3.5, abs(uv.y - c.y) - 2.0), aa);
+        col = mix(col, uRed, lamp);
+        glow = max(glow, lamp * 0.85);
       }
     }
   } else if (abs(vN.y) < 0.5) {
@@ -303,14 +309,18 @@ void main() {
     col = mix(col, mix(uDark, uPaper, 0.7), fillOf(glint, aa) * fillOf(d + 1.0, aa));
   } else if (vTaxi > 0.5) {
     // A taxi light on the roof.
-    col = mix(col, uPaper, fillOf(max(abs(uv.x - dims.x * 0.5) - 6.0, abs(uv.y - dims.y * 0.5) - 3.0), aa));
+    float roofLight = fillOf(max(abs(uv.x - dims.x * 0.5) - 6.0, abs(uv.y - dims.y * 0.5) - 3.0), aa);
+    col = mix(col, uPaper, roofLight);
+    glow = roofLight * 0.6;
   }
   // Creases.
   vec2 e = min(uv, dims - uv) / fw;
   float creasePx = uCrease * uDpr;
-  col = mix(col, uInk, 1.0 - smoothstep(creasePx - 0.5, creasePx + 0.5, min(e.x, e.y)));
-  col = mix(col, uFog, fogAmount(vBand, uFogAmt));
-  gl_FragColor = vec4(col, 1.0);
+  float ink = 1.0 - smoothstep(creasePx - 0.5, creasePx + 0.5, min(e.x, e.y));
+  col = mix(col, uInk, ink);
+  float f = fogAmount(vBand, uFogAmt);
+  col = mix(col, uFog, f);
+  gl_FragColor = vec4(col, 1.0 - glow * (1.0 - ink) * (1.0 - 0.5 * f));
 }
 `;
 

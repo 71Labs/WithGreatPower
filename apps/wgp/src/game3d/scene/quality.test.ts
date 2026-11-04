@@ -106,4 +106,22 @@ describe("the starting tier", () => {
     // A low-density phone isn't pushed past its own screen.
     expect(sceneDpr(360, 780, 1.5, QUALITY_PRESETS.high)).toBe(1.5);
   });
+
+  it("keeps the low tier drawing straight to the canvas, and spends more on the higher tiers", () => {
+    const { low, medium, high } = QUALITY_PRESETS;
+    // Low: no offscreen pass, no shadow map, no material lights, no canvas multisampling.
+    expect(low.post).toBeNull();
+    expect(low.shadowMap).toBe(0);
+    expect(low.lights).toBe(false);
+    expect(low.antialias).toBe(false);
+    // Medium: the post pass with FXAA (no multisampled target) and a quarter-size bloom, no shadows.
+    expect(medium.post).toMatchObject({ msaa: 0, bloomScale: 4 });
+    expect(medium.shadowMap).toBe(0);
+    // High: multisampled in the target (so the canvas isn't), a half-size bloom and moon shadows.
+    expect(high.post).toMatchObject({ msaa: 4, bloomScale: 2 });
+    expect(high.antialias).toBe(false);
+    expect(high.shadowMap).toBeGreaterThan(0);
+    // Every tier shares one canvas configuration, so switching tiers never rebuilds the canvas.
+    expect(new Set([low, medium, high].map((p) => p.antialias)).size).toBe(1);
+  });
 });

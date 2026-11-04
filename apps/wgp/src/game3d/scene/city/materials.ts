@@ -4,9 +4,11 @@
  * per city and tier (fog, the halftone switch), and each material references the same
  * uniform objects, so the frame loop updates them once.
  */
-import { BackSide, FrontSide, ShaderMaterial, Texture, Vector2, Vector3, Vector4, type IUniform } from "three";
+import { BackSide, FrontSide, Matrix4, ShaderMaterial, Texture, Vector2, Vector3, Vector4, type IUniform } from "three";
 
-import { C, FOG, HALFTONE, INK_PX, type RGB } from "../palette";
+import { CITY } from "@/game/style";
+
+import { C, FOG, HALFTONE, INK_PX, moonDirection, rgb, type RGB } from "../palette";
 import { BILLBOARD_GRID } from "./billboard-atlas";
 import { GROUND_FRAGMENT, GROUND_VERTEX, HULL_FRAGMENT, HULL_VERTEX, TOON_FRAGMENT, TOON_VERTEX } from "./shaders";
 import { OCCLUSION } from "./occlusion";
@@ -38,6 +40,13 @@ export interface SharedUniforms {
   uHalftone: IUniform<number>;
   uHalftoneCell: IUniform<number>;
   uHalftoneDots: IUniform<Vector4>;
+  /** Moon shadows (render/shadows.ts): the depth map, world → shadow uv and depth. */
+  uShadowMap: IUniform<Texture | null>;
+  uShadowMatrix: IUniform<Matrix4>;
+  /** On (1) or off (0), depth bias (map depth units), normal offset (world units), one texel (uv). */
+  uShadowParams: IUniform<Vector4>;
+  /** The tier's material lights (QualityPreset.lights): 1 on, 0 off. */
+  uLights: IUniform<number>;
 }
 
 export function createSharedUniforms(): SharedUniforms {
@@ -60,6 +69,10 @@ export function createSharedUniforms(): SharedUniforms {
     uHalftone: { value: 1 },
     uHalftoneCell: { value: HALFTONE.cell },
     uHalftoneDots: { value: new Vector4(HALFTONE.shadow, HALFTONE.side, HALFTONE.far[0], HALFTONE.far[1]) },
+    uShadowMap: { value: null },
+    uShadowMatrix: { value: new Matrix4() },
+    uShadowParams: { value: new Vector4() },
+    uLights: { value: 0 },
   };
 }
 
@@ -139,6 +152,10 @@ export function groundMaterial(shared: SharedUniforms, streets: StreetGrid, boun
       uFoam: { value: v3(C.cable) },
       uLamps: { value: new Vector3(LAMP.spacing, LAMP.curb, LAMP.pool) },
       uLampOrigin: { value: new Vector2(origin.x, origin.z) },
+      uMoonDir: { value: v3(moonDirection()) },
+      uMoonColor: { value: v3(rgb(CITY.moon)) },
+      uLit: { value: v3(C.windowLit) },
+      uWarm: { value: v3(C.windowWarm) },
     },
   });
 }

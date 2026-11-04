@@ -26,7 +26,7 @@ import { holdAudioLoads, playSfx, setAmbience, setAudioPaused, stopMusic } from 
 import { attachControls, InputLatch, STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
 import { FrameTap } from "@/game3d/nav/tap";
 import { queueSettled } from "@/game3d/scene/characters/files";
-import { QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
+import { detectTier, QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
 import { nightAudio, RunLoop, RunRecorder, sceneEffects, stopPositions, type LoopEvent3D, type NightSession } from "@/game3d/session";
 import { HudStore } from "@/sim/loop";
@@ -37,7 +37,7 @@ import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sh
 import { CityMap, stopName } from "./city-map";
 import { ComboMeter } from "./combo";
 import { Minimap } from "./minimap";
-import { initialSettings, rememberSettings, SettingsPanel, type PlaySettings } from "./settings";
+import { initialSettings, rememberSettings, SettingsPanel, type GraphicsChoice, type PlaySettings } from "./settings";
 import { Loading } from "./status";
 import { Waypoint } from "./waypoint";
 
@@ -411,9 +411,15 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   }, []);
 
   const onTierSuggest = useCallback((t: QualityTier) => setSettings((s) => (s.adaptive ? { ...s, tier: t } : s)), []);
-  const pickTier = (tier: QualityTier) => {
-    rememberSettings({ tier });
-    setSettings((s) => ({ ...s, tier, adaptive: false }));
+  const pickTier = (choice: GraphicsChoice) => {
+    if (choice === "auto") {
+      // Back to the device's guess; the frame-rate probe may step it down again.
+      rememberSettings({ tier: null });
+      setSettings((s) => (s.adaptive ? s : { ...s, tier: detectTier(), adaptive: true }));
+      return;
+    }
+    rememberSettings({ tier: choice });
+    setSettings((s) => ({ ...s, tier: choice, adaptive: false }));
   };
   const setSteady = (steady: boolean) => {
     rememberSettings({ steady });

@@ -34,7 +34,7 @@ import {
 import { CITY, INK, LINE } from "@/game/style";
 import { hash01, mix } from "@/sim/render/draw";
 
-import { C, FOG, type RGB } from "./palette";
+import { C, FOG, MOON, moonDirection, rgb, type RGB } from "./palette";
 
 const v3 = (c: RGB) => new Vector3(c[0], c[1], c[2]);
 const _fwd = new Vector3();
@@ -60,10 +60,24 @@ uniform vec3 uLow;
 uniform vec2 uCuts;
 uniform float uHorizon;   // the horizon's height on screen, NDC
 uniform float uHeight;    // drawing-buffer height, px
+uniform float uLights;
+uniform vec3 uMoonDir;
+uniform vec3 uMoonColor;
+uniform vec3 uHalo;       // the halo rings' radii, radians
 varying vec3 vDir;
 void main() {
   float above = ((gl_FragCoord.y / uHeight) * 2.0 - 1.0 - uHorizon) * 0.5;
-  gl_FragColor = vec4(above < uCuts.x ? uLow : above < uCuts.y ? uMid : uTop, 1.0);
+  vec3 c = above < uCuts.x ? uLow : above < uCuts.y ? uMid : uTop;
+  float glow = 0.0;
+  if (uLights > 0.5) {
+    // The moon's halo: three flat rings of moonlight on the band behind them, and a soft glow.
+    float a = acos(clamp(dot(normalize(vDir), uMoonDir), -1.0, 1.0));
+    if (a < uHalo.z) {
+      c = mix(c, uMoonColor, a < uHalo.x ? 0.15 : a < uHalo.y ? 0.085 : 0.04);
+      glow = 0.16 * (1.0 - a / uHalo.z);
+    }
+  }
+  gl_FragColor = vec4(c, 1.0 - glow);
 }
 `;
 
@@ -92,11 +106,12 @@ varying float vBig;
 void main() {
   // No stars in the low band, like the 2D sky.
   if (((gl_FragCoord.y / uHeight) * 2.0 - 1.0 - uHorizon) * 0.5 < uLowCut) discard;
-  if (vBig < 0.5) { gl_FragColor = vec4(uStar, 1.0); return; }
+  // Stars glow a little for the bloom; the sparkles more, the ink rim not at all.
+  if (vBig < 0.5) { gl_FragColor = vec4(uStar, 0.6); return; }
   vec2 p = abs(gl_PointCoord * 2.0 - 1.0);
   float s = sqrt(p.x) + sqrt(p.y);
   if (s > 1.0) discard;
-  gl_FragColor = vec4(s > 0.78 ? uInk : uStar, 1.0);
+  gl_FragColor = s > 0.78 ? vec4(uInk, 1.0) : vec4(uStar, 0.25);
 }
 `;
 
@@ -104,10 +119,13 @@ const SPRITE_VERTEX = /* glsl */ `
 attribute vec4 aSky;    // azimuth, elevation, drift (rad/s), width (rad)
 attribute vec4 aRect;   // uv rect: x, y, w, h
 attribute float aAspect;
+attribute float aGlow;
 uniform float uTime;
 uniform float uRadius;
 varying vec2 vUv;
+varying float vGlow;
 void main() {
+  vGlow = aGlow;
   float az = aSky.x + uTime * aSky.z;
   float el = aSky.y;
   vec3 dir = vec3(sin(az) * cos(el), sin(el), cos(az) * cos(el));
@@ -124,10 +142,13 @@ void main() {
 const SPRITE_FRAGMENT = /* glsl */ `
 uniform sampler2D uMap;
 varying vec2 vUv;
+varying float vGlow;
 void main() {
   vec4 c = texture2D(uMap, vUv);
   if (c.a < 0.5) discard;
-  gl_FragColor = vec4(c.rgb, 1.0);
+  // The moon glows where it's light (its face and white border), not its ink.
+  float glow = vGlow * smoothstep(0.55, 0.85, dot(c.rgb, vec3(0.333)));
+  gl_FragColor = vec4(c.rgb, 1.0 - glow);
 }
 `;
 
@@ -148,7 +169,9 @@ varying vec2 vUv;
 void main() {
   vec4 c = texture2D(uMap, vUv * uRepeat);
   if (c.a < 0.5) discard;
-  gl_FragColor = vec4(mix(c.rgb, uFog, uFogAmt), 1.0);
+  // The far windows glitter (yellow on the far blues).
+  float glow = 0.35 * smoothstep(0.25, 0.45, c.r - c.b);
+  gl_FragColor = vec4(mix(c.rgb, uFog, uFogAmt), 1.0 - glow);
 }
 `;
 
@@ -191,6 +214,62 @@ function drawMoon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.lineCap = "round";
   ctx.stroke();
   ctx.restore();
+}
+
+/**
+ * A thin streak of cloud, the kind that crosses a comic moon: a long flat-bottomed capsule
+ * with a low hump or two, a thinner ink line than the puffy clouds, and a moonlit top edge.
+ */
+function drawStreak(ctx: CanvasRenderingContext2D, seed: number, x: number, y: number, w: number, h: number, lw: number) {
+  const r = (h - 2 * lw) * 0.36;
+  const base = y + h - lw;
+  const humps: [number, number, number][] = [];
+  const n = 1 + Math.floor(hash01(seed) * 2);
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const hr = r * (1.25 + 0.35 * hash01(seed + i * 7));
+    humps.push([x + w * (0.22 + 0.56 * t + (hash01(seed + i * 3) - 0.5) * 0.12), base - hr * 0.95, hr]);
+  }
+  const shape = () => {
+    ctx.beginPath();
+    ctx.moveTo(x + lw + r, base);
+    ctx.arc(x + lw + r, base - r, r, Math.PI / 2, Math.PI * 1.5);
+    ctx.lineTo(x + w - lw - r, base - 2 * r);
+    ctx.arc(x + w - lw - r, base - r, r, -Math.PI / 2, Math.PI / 2);
+    ctx.closePath();
+    for (const [hx, hy, hr] of humps) {
+      ctx.moveTo(hx + hr, hy);
+      ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+    }
+  };
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, base - y + lw * 0.5);
+  ctx.clip();
+  shape();
+  ctx.lineWidth = lw * 2;
+  ctx.strokeStyle = INK;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  shape();
+  ctx.fillStyle = CITY.cloud;
+  ctx.fill();
+  // Moonlight along the top.
+  ctx.beginPath();
+  ctx.moveTo(x + lw + r * 1.6, base - 2 * r + lw * 1.4);
+  ctx.lineTo(x + w * 0.62, base - 2 * r + lw * 1.4);
+  ctx.lineWidth = lw * 0.9;
+  ctx.strokeStyle = mix(CITY.cloud, CITY.moon, 0.42);
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(x + r, base);
+  ctx.lineTo(x + w - r, base);
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = INK;
+  ctx.lineCap = "round";
+  ctx.stroke();
 }
 
 /** An outlined cloud with a flat bottom (render/city.ts cloudArt), inside (x, y, w, h). */
@@ -266,6 +345,16 @@ function skyAtlas(): SkyAtlas {
   ];
   clouds.forEach(([x, y, w, h], i) => {
     drawCloud(ctx, 101 + i * 37, x, y, w, h, 7);
+    add(x, y, w, h);
+  });
+  // Cells 4–6: thin streaks, in the space beside the second cloud.
+  const streaks = [
+    [645, 345, 372, 72],
+    [645, 430, 372, 70],
+    [645, 515, 372, 84],
+  ];
+  streaks.forEach(([x, y, w, h], i) => {
+    drawStreak(ctx, 211 + i * 53, x, y, w, h, 5);
     add(x, y, w, h);
   });
   const texture = new CanvasTexture(c);
@@ -348,6 +437,8 @@ export interface Sky {
   skyline: Mesh;
   starMaterial: ShaderMaterial;
   setStars(count: number): void;
+  /** The tier's material lights: the moon's halo rings. */
+  setLights(on: boolean): void;
   /** Per frame: follow the camera and find the horizon line on screen. */
   update(camera: PerspectiveCamera, time: number, dpr: number, bufferHeight: number): void;
   dispose(): void;
@@ -373,6 +464,11 @@ export function buildSky(center: { x: number; z: number }, horizon: number, far:
       uCuts: { value: new Vector2(SKY_CUTS[0], SKY_CUTS[1]) },
       uHorizon: { value: 0 },
       uHeight: { value: 1 },
+      uLights: { value: 0 },
+      uMoonDir: { value: v3(moonDirection()) },
+      uMoonColor: { value: v3(rgb(CITY.moon)) },
+      // The disc is 131/320 of the sticker's width; rings at 1.45, 2 and 2.8 disc radii.
+      uHalo: { value: new Vector3(1.45, 2, 2.8).multiplyScalar(MOON.width * 0.5 * (131 / 160)) },
     },
   });
   const domeMesh = new Mesh(domeGeo, domeMat);
@@ -381,15 +477,17 @@ export function buildSky(center: { x: number; z: number }, horizon: number, far:
   dome.add(domeMesh);
   materials.push(domeMat);
 
-  // Stars: up to 240 directions above the low band; the tier shows a prefix of them.
-  const MAX_STARS = 240;
+  // Stars: up to 480 directions above the low band; the tier shows a prefix of them. Past the
+  // first 240 (the low and medium skies) they're fainter dust, so a fuller sky isn't busier.
+  const MAX_STARS = 480;
   const pos = new Float32Array(MAX_STARS * 3);
   const star = new Float32Array(MAX_STARS * 3);
   for (let i = 0; i < MAX_STARS; i++) {
     const az = hash01(i * 7 + 1) * Math.PI * 2;
     const el = Math.asin(0.05 + 0.95 * Math.pow(hash01(i * 11 + 3), 1.6));
     pos.set([Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)], i * 3);
-    star.set([1.5 + hash01(i * 5) * 1.8, i % 9 === 0 ? 1 : 0, hash01(i * 3) * 6.28], i * 3);
+    const dust = i >= 240;
+    star.set([dust ? 1.1 + hash01(i * 5) * 0.8 : 1.5 + hash01(i * 5) * 1.8, !dust && i % 9 === 0 ? 1 : 0, hash01(i * 3) * 6.28], i * 3);
   }
   const starGeo = new BufferGeometry();
   starGeo.setAttribute("position", new BufferAttribute(pos, 3));
@@ -423,8 +521,13 @@ export function buildSky(center: { x: number; z: number }, horizon: number, far:
   spriteGeo.setAttribute("position", quad.getAttribute("position"));
   spriteGeo.setIndex(quad.getIndex());
   const sprites = [
-    // azimuth, elevation, drift, width (radians), atlas cell (0 the moon, 1–3 clouds)
-    [2.3, 0.3, 0, 0.17, 0],
+    // azimuth, elevation, drift, width (radians), atlas cell (0 the moon, 1–3 clouds, 4–6 streaks)
+    [MOON.azimuth, MOON.elevation, 0, MOON.width, 0],
+    // Streaks: one across the moon's lower half, drifting off it slowly, and a few more.
+    [MOON.azimuth - 0.03, MOON.elevation - 0.045, 0.0006, 0.27, 4],
+    [MOON.azimuth + 0.2, MOON.elevation + 0.07, 0.0009, 0.2, 5],
+    [-1.1, 0.34, 0.0012, 0.24, 6],
+    [0.55, 0.38, 0.001, 0.22, 4],
     [2.0, 0.2, 0.004, 0.3, 1],
     [-0.4, 0.26, 0.003, 0.27, 2],
     [0.9, 0.16, 0.0025, 0.34, 3],
@@ -437,14 +540,17 @@ export function buildSky(center: { x: number; z: number }, horizon: number, far:
   const sky = new Float32Array(n * 4);
   const rect = new Float32Array(n * 4);
   const aspect = new Float32Array(n);
+  const glow = new Float32Array(n);
   sprites.forEach(([az, el, drift, width, cell], i) => {
     sky.set([az, el, drift, width], i * 4);
     rect.set(atlas.rects[cell].rect, i * 4);
     aspect[i] = atlas.rects[cell].aspect;
+    glow[i] = cell === 0 ? 0.55 : 0;
   });
   spriteGeo.setAttribute("aSky", new InstancedBufferAttribute(sky, 4));
   spriteGeo.setAttribute("aRect", new InstancedBufferAttribute(rect, 4));
   spriteGeo.setAttribute("aAspect", new InstancedBufferAttribute(aspect, 1));
+  spriteGeo.setAttribute("aGlow", new InstancedBufferAttribute(glow, 1));
   const spriteMat = new ShaderMaterial({
     vertexShader: SPRITE_VERTEX,
     fragmentShader: SPRITE_FRAGMENT,
@@ -484,6 +590,9 @@ export function buildSky(center: { x: number; z: number }, horizon: number, far:
     starMaterial,
     setStars(count: number) {
       starGeo.setDrawRange(0, Math.max(0, Math.min(MAX_STARS, count)));
+    },
+    setLights(on: boolean) {
+      domeMat.uniforms.uLights.value = on ? 1 : 0;
     },
     update(camera, time, dpr, bufferHeight) {
       dome.position.copy(camera.position);

@@ -283,6 +283,7 @@ void main() {
   vec3 n = normalize(vNormalW);
   vec3 v = normalize(cameraPosition - vWorld);
   float l = dot(n, uLight);
+  float glow = 0.0;
   if (!isFlat) {
     l -= (1.0 - vAO) * uAo;
     vec3 shade = vec3(1.0);
@@ -297,6 +298,10 @@ void main() {
     col = min(col * shade, vec3(1.0));
     float rim = smoothstep(0.62, 0.7, 1.0 - abs(dot(n, v))) * step(0.25, dot(n, uLight));
     col = mix(col, vec3(1.0, 0.93, 0.82), rim * 0.28);
+    // A cool moonlit edge on the shadow side, so the body separates from the night.
+    float back = smoothstep(0.68, 0.78, 1.0 - abs(dot(n, v))) * (1.0 - step(0.25, dot(n, uLight)));
+    col = mix(col, vec3(0.62, 0.74, 1.0), back * 0.36);
+    glow = rim * 0.2 + back * 0.25;
     if (gloss) {
       // A hard white streak where the key light glances off (the sticker's highlights).
       float s = dot(reflect(-uLight, n), v);
@@ -326,6 +331,7 @@ void main() {
   }
 
   col = mix(col, vec3(1.0), uFlash);
-  gl_FragColor = vec4(mix(col, uFog, uFogMix), 1.0);
+  // Alpha: the bloom's inverted glow (render/post-shaders.ts).
+  gl_FragColor = vec4(mix(col, uFog, uFogMix), 1.0 - glow * (1.0 - uFogMix));
 }
 `;

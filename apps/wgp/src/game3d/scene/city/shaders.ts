@@ -19,7 +19,78 @@
  * inside is dropped.
  *
  * Colours are display sRGB throughout (see palette.ts).
+ *
+ * Light, where the tier has post-processing (render/post.ts): every fragment writes how much
+ * it glows into alpha, inverted (1 is no glow, what the canvas ignores on the low tier):
+ * lit windows by a per-window strength, lamps, signals, the antenna lights, billboards, and the
+ * river's reflections. On high, moon shadows (render/shadows.ts) darken what faces the key
+ * light into the shadow side's band through Ben-Day dots, and leave lit windows lit.
  */
+import { KEY_LIGHT } from "../characters/materials";
+
+const glslVec3 = (v: { x: number; y: number; z: number }) => `vec3(${v.x.toFixed(5)}, ${v.y.toFixed(5)}, ${v.z.toFixed(5)})`;
+
+/**
+ * Vertex side of the moon shadows: the shadow map's coordinate, pushed out along the normal.
+ * Compiled in only with MOON_SHADOWS (the high tier; city-meshes.ts setShadows), so the other
+ * tiers run exactly the shaders they did.
+ */
+export const SHADOW_VERTEX = /* glsl */ `
+#ifdef MOON_SHADOWS
+uniform mat4 uShadowMatrix;
+uniform vec4 uShadowParams;   // on, depth bias, normal offset (world), one texel (uv)
+varying vec3 vShadow;
+void shadowCoord(vec3 world, vec3 n) {
+  vShadow = (uShadowMatrix * vec4(world + n * uShadowParams.z, 1.0)).xyz;
+}
+#else
+void shadowCoord(vec3 world, vec3 n) {}
+#endif
+`;
+
+/**
+ * Fragment side: how much key light a point misses (0 lit … 1 in shadow), five hardware PCF
+ * taps, faded out toward the edge of the shadow square; and the cast shadow's look, the
+ * shadow side's cool band reached through Ben-Day dots that grow with the shade (needs
+ * SCREEN_FRAGMENT's benDay).
+ */
+export const SHADOW_FRAGMENT = /* glsl */ `
+#ifdef MOON_SHADOWS
+uniform sampler2DShadow uShadowMap;
+uniform vec4 uShadowParams;
+varying vec3 vShadow;
+const vec3 KEY = ${glslVec3(KEY_LIGHT)};
+const vec3 SHADOW_TINT = vec3(0.7, 0.72, 0.86);
+
+float moonShadow(vec3 n) {
+  if (uShadowParams.x < 0.5 || dot(n, KEY) < 0.02) return 0.0;
+  vec2 e = abs(vShadow.xy - 0.5) * 2.0;
+  float edge = max(e.x, e.y);
+  if (edge >= 1.0 || vShadow.z >= 1.0) return 0.0;
+  float z = vShadow.z - uShadowParams.y;
+  vec2 t = vec2(uShadowParams.w);
+  float lit = texture(uShadowMap, vec3(vShadow.xy, z)) * 0.36;
+  lit += texture(uShadowMap, vec3(vShadow.xy + t, z)) * 0.16;
+  lit += texture(uShadowMap, vec3(vShadow.xy - t, z)) * 0.16;
+  lit += texture(uShadowMap, vec3(vShadow.xy + vec2(t.x, -t.y), z)) * 0.16;
+  lit += texture(uShadowMap, vec3(vShadow.xy + vec2(-t.x, t.y), z)) * 0.16;
+  return (1.0 - lit) * (1.0 - smoothstep(0.75, 1.0, edge));
+}
+
+vec3 castShadow(vec3 c, float sh) {
+  if (sh < 0.002) return c;
+  vec3 dark = c * SHADOW_TINT;
+  if (uHalftone < 0.5) return mix(c, dark, sh);
+  // The shadow side's sparse dots inside, a growing dot screen across the soft edge.
+  dark = mix(dark, dark * 0.84, benDay(uHalftoneDots.x * 0.8, uHalftoneCell));
+  float cover = max(benDay(sqrt(sh) * 0.74, uHalftoneCell), step(0.97, sh));
+  return mix(c, dark, cover);
+}
+#else
+float moonShadow(vec3 n) { return 0.0; }
+vec3 castShadow(vec3 c, float sh) { return c; }
+#endif
+`;
 
 /** Shared GLSL: the 2D renderer's hash01 (integer exact), banded fog, a box SDF. */
 export const COMMON = /* glsl */ `
@@ -128,6 +199,7 @@ void occDiscard(float occ) {
 export const TOON_VERTEX = /* glsl */ `
 ${COMMON}
 ${OCC_VERTEX}
+${SHADOW_VERTEX}
 attribute vec3 aColor;
 attribute vec4 aInfo;   // kind, seed, window style, atlas cell
 attribute vec2 aRef;    // fog reference point (xz)
@@ -160,6 +232,7 @@ void main() {
   vBand = fogBand(aRef, uFogBands);
   vOcc = occlusion(instanceMatrix);
   vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  shadowCoord(world.xyz, vWNormal);
   vec4 view = viewMatrix * world;
   vDepth = -view.z;
   gl_Position = projectionMatrix * view;
@@ -200,6 +273,11 @@ flat varying vec3 vColor;
 flat varying vec4 vInfo;
 flat varying float vBand;
 flat varying float vOcc;
+
+${SHADOW_FRAGMENT}
+
+// How much this fragment glows (written to alpha, inverted, for the bloom).
+float gGlow = 0.0;
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
@@ -308,7 +386,8 @@ vec3 windows(vec3 base, vec2 uv, vec2 dims, float seed, float style, float scale
   }
   vec3 fill = on ? (warm ? uWarm : uLit) : uDark;
   // A television's cool flicker in a few dark rooms.
-  if (!on && hash01(k + 53.0) < 0.05) fill = mix(uDark, uMint, 0.28 + 0.08 * sin(uTime * 7.0 + k));
+  bool tv = !on && hash01(k + 53.0) < 0.05;
+  if (tv) fill = mix(uDark, uMint, 0.28 + 0.08 * sin(uTime * 7.0 + k));
   // How much detail the window gets: outlines fade out once a window is a few pixels wide,
   // and the far bands keep only flat lit windows, like the 2D far layers.
   float detail = smoothstep(2.5, 6.0, m.x / px) * (vBand < 1.5 ? 1.0 : 0.0);
@@ -329,6 +408,10 @@ vec3 windows(vec3 base, vec2 uv, vec2 dims, float seed, float style, float scale
     }
     c = mix(c, w, inner);
     lit = max(lit, outer);
+    // Each room its own brightness: warm lamps glow more than the cold overheads.
+    gGlow = max(gGlow, inner * (warm ? 0.78 : 0.62) * (0.5 + 0.5 * hash01(k + 61.0)));
+  } else if (tv) {
+    gGlow = max(gGlow, inner * 0.3);
   }
   return c;
 }
@@ -494,6 +577,7 @@ void main() {
     bool on = sin(uTime * 3.0 + seed * 0.01) > -0.2;
     col = on ? uRed : mix(uRed, uInk, 0.55);
     lit = on ? 1.0 : 0.0;
+    gGlow = lit;
   } else if (kind < 5.5) {
     // Billboard: the text atlas on the front, paper sides, a dark back.
     if (faceId == 0.0) {
@@ -504,6 +588,8 @@ void main() {
       vec2 tex = vec2((cx + t.x) / uAtlasGrid.x, 1.0 - (cy + t.y) / uAtlasGrid.y);
       col = texture2D(uAtlas, tex).rgb;
       lit = 0.6;
+      // A lit sign: its paper glows and its neon strip more, its ink doesn't.
+      gGlow = 0.3 * smoothstep(0.45, 0.8, dot(col, vec3(0.333))) + 0.6 * smoothstep(0.4, 0.6, col.r - col.g);
     } else if (faceId == 2.0) {
       col = uRoof * tint;
     }
@@ -551,8 +637,10 @@ void main() {
     }
   } else if (kind < 9.5) {
     // Street lamp head: a warm glass bowl under a dark cap.
-    col = uv.y < dims.y * 0.35 && !topFace ? uRoof * tint : topFace ? uRoof : uWarm;
+    bool bowl = uv.y >= dims.y * 0.35 && !topFace;
+    col = bowl ? uWarm : topFace ? uRoof : uRoof * tint;
     lit = 1.0;
+    gGlow = bowl ? 1.0 : 0.0;
   } else if (kind < 10.5) {
     // Traffic signal: three lamps on the faces along the street, one lit, the cross street opposite.
     col = uRoof * tint;
@@ -571,6 +659,7 @@ void main() {
         col = mix(col, on ? lamp : mix(lamp, uInk, 0.7), fillOf(d, aa));
         col = mix(col, uInk, strokeOf(d, lw, aa));
         if (on) lit = max(lit, fillOf(d, aa));
+        if (on) gGlow = max(gGlow, fillOf(d, aa) * 0.9);
       }
     }
   } else if (kind < 11.5) {
@@ -585,7 +674,11 @@ void main() {
         float dd = sdRoundBox(uv - vec2(dims.x * 0.5, dims.y - (dims.y - 12.0) * 0.5), vec2(dw, (dims.y - 12.0) * 0.5), 3.0);
         col = mix(col, mix(uDark, uRed, 0.35), fillOf(dd, aa));
         col = mix(col, uInk, strokeOf(dd, lw, aa));
-        col = mix(col, uLit, fillOf(length(uv - vec2(dims.x * 0.5 + dw * 0.6, dims.y * 0.62)) - 1.8, aa));
+        float bulb = fillOf(length(uv - vec2(dims.x * 0.5 + dw * 0.6, dims.y * 0.62)) - 1.8, aa);
+        col = mix(col, uLit, bulb);
+        gGlow = bulb;
+        // The lamp over the door lights its frame.
+        lit = max(lit, bulb);
       }
       if (uv.y < 7.0) col = uRoof * tint;
       col = mix(col, uInk, strokeOf(uv.y - 7.0, lw, aa));
@@ -606,6 +699,9 @@ void main() {
     col = mix(col, uInk, ink);
   }
 
+  // Moon shadows (high tier, the near bands): a lit window stays lit.
+  if (vBand < 1.5) col = castShadow(col, moonShadow(vWNormal) * (1.0 - lit));
+
   float f = fogAmount(vBand, uFogAmt) * (1.0 - 0.55 * lit);
   if (uHalftone > 0.5 && vBand > 1.5) {
     // Far bands print as a dot screen of the sky over a lighter flat fog.
@@ -614,7 +710,8 @@ void main() {
   } else {
     col = mix(col, uFog, f);
   }
-  gl_FragColor = vec4(col, 1.0);
+  // Far windows still glitter; the fog takes some of it.
+  gl_FragColor = vec4(col, 1.0 - gGlow * (1.0 - 0.4 * f));
 }
 `;
 
@@ -664,11 +761,13 @@ void main() {
 `;
 
 export const GROUND_VERTEX = /* glsl */ `
+${SHADOW_VERTEX}
 varying vec3 vWorld;
 varying float vDepth;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vWorld = world.xyz;
+  shadowCoord(world.xyz, vec3(0.0, 1.0, 0.0));
   vec4 view = viewMatrix * world;
   vDepth = -view.z;
   gl_Position = projectionMatrix * view;
@@ -704,9 +803,78 @@ uniform vec4 uHalftoneDots;
 uniform vec3 uLamps;      // spacing along a street, offset from the curb, pool radius
 uniform vec2 uLampOrigin; // where the lamp spacing starts along x and along z
 uniform float uTime;
+uniform float uLights;
+uniform vec3 uMoonDir;
+uniform vec3 uMoonColor;
+uniform vec3 uLit;
+uniform vec3 uWarm;
 
 varying vec3 vWorld;
 varying float vDepth;
+
+${SHADOW_FRAGMENT}
+
+/**
+ * The river's light, as comic strokes rather than a mirror: the moon's reflection, a broken
+ * column of short wavy strokes where the water would show it (narrow far off, wider toward
+ * you), and the far bank's lit windows as columns of short dashes that run from the bank
+ * straight toward you, as a reflection does. Writes the glow. s runs with the flow, t across
+ * it (0 at one bank, width at the other).
+ */
+vec3 riverLight(vec3 col, vec2 p, float s, float t, float width, float px, inout float glow) {
+  float sharp = smoothstep(7.0, 2.5, px);
+  if (sharp <= 0.0) return col;
+  // The moon: where a ray off the water heads for it (the ripples spread it up and down).
+  vec3 v = normalize(vWorld - cameraPosition);
+  vec2 mh = normalize(uMoonDir.xz);
+  vec2 vh = normalize(v.xz);
+  float rise = -v.y;
+  if (dot(vh, mh) > 0.0 && rise > uMoonDir.y - 0.08 && rise < uMoonDir.y + 0.4) {
+    float across = vh.x * mh.y - vh.y * mh.x;
+    float along = dot(p - cameraPosition.xz, mh) / 34.0;
+    float row = floor(along);
+    float flick = hash01(row * 7.0 + floor(uTime * 1.5 + hash01(row) * 3.0) * 131.0);
+    float span = (0.025 + 0.04 * smoothstep(uMoonDir.y, uMoonDir.y + 0.35, rise)) * (0.25 + 0.75 * flick);
+    span *= 1.0 - smoothstep(uMoonDir.y + 0.15, uMoonDir.y + 0.4, rise);
+    // Each stroke wavers a little along its length, like the foam.
+    float wave = 0.09 * sin(across * 140.0 + uTime * 2.0 + row);
+    float wob = 0.01 * sin(uTime * 1.3 + row * 2.1);
+    float fa = max(fwidth(along), 1e-4);
+    float thick = 1.0 - smoothstep(0.08 - fa, 0.08 + fa, abs(fract(along) - 0.5 + wave * 0.5));
+    float fx = max(fwidth(across), 1e-5);
+    float dash = (1.0 - smoothstep(span - fx, span + fx, abs(across - wob))) * thick * sharp * step(0.18, flick);
+    col = mix(col, uMoonColor, dash);
+    glow = max(glow, dash * 0.55);
+  }
+  // City light off the far bank: follow the view ray on across the water to the bank, and if
+  // it lands under a lit cell (some of the 70-unit cells along it), this is that light's streak.
+  bool alongZ = (uRiver.w - uRiver.y) >= (uRiver.z - uRiver.x);
+  vec2 dir = alongZ ? vh.yx : vh;                 // (along s, along t)
+  float camT = alongZ ? cameraPosition.x - uRiver.x : cameraPosition.z - uRiver.y;
+  bool farIsHigh = camT < width * 0.5;
+  float side = farIsHigh ? 1.0 : 0.0;
+  float toBank = ((farIsHigh ? width : 0.0) - t) / (abs(dir.y) > 1e-3 ? dir.y : 1e-3);
+  if (toBank > 12.0) {
+    float sb = s + dir.x * toBank;                 // where the ray meets the far bank
+    float cell = floor(sb / 70.0);
+    float h = hash01(cell * 13.0 + side * 7919.0 + 3.0);
+    float len = 90.0 + 220.0 * hash01(cell * 5.0 + side * 31.0 + 1.0);
+    float taper = 1.0 - toBank / len;
+    if (h < 0.42 && taper > 0.0) {
+      float rowL = toBank / 15.0 + hash01(cell * 19.0 + side);
+      float row = floor(rowL);
+      float on = step(0.22, hash01(row * 3.0 + cell * 17.0 + floor(uTime * 2.0 + hash01(cell) * 5.0) * 7.0));
+      float cs = (cell + 0.5) * 70.0 + (hash01(cell * 3.0 + side) - 0.5) * 36.0 + sin(uTime * 1.8 + row * 1.7 + cell) * 2.5;
+      float hw = (6.0 + 7.0 * hash01(cell * 11.0 + side * 3.0)) * (0.35 + 0.65 * taper) * (0.45 + 0.55 * hash01(row * 5.0 + cell));
+      float fs = max(fwidth(sb), 1e-4);
+      float fr = max(fwidth(rowL), 1e-4);
+      float dash = (1.0 - smoothstep(hw - fs, hw + fs, abs(sb - cs))) * (1.0 - smoothstep(0.17 - fr, 0.17 + fr, abs(fract(rowL) - 0.5))) * on * sharp;
+      col = mix(col, h < 0.16 ? uWarm : uLit, dash * (0.55 + 0.45 * taper));
+      glow = max(glow, dash * 0.45 * taper);
+    }
+  }
+  return col;
+}
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
@@ -720,6 +888,9 @@ void main() {
   float lw = max(1.5, px * uDpr);
   float near = smoothstep(4.0, 1.5, px);   // fine detail fades once it is sub-pixel
   vec3 col = uStreet;
+  // Lamp light (no moon shadow there) and glow.
+  float light = 0.0;
+  float glow = 0.0;
   bool inCity = p.x > uBounds.x && p.x < uBounds.z && p.y > uBounds.y && p.y < uBounds.w;
   if (inCity) {
     float dx = 1e9; float wx = 0.0; float cx = 0.0;
@@ -754,7 +925,9 @@ void main() {
       float lampAlong = (n + 0.5) * uLamps.x + origin;
       vec2 lamp = byZ ? vec2(cx + side * (wx * 0.5 + uLamps.y), lampAlong) : vec2(lampAlong, cz + side * (wz * 0.5 + uLamps.y));
       float pool = length(p - lamp) - uLamps.z * 0.7;
-      col = mix(col, mix(col, uPool, 0.8), 1.0 - smoothstep(-aa, aa, pool));
+      float inPool = 1.0 - smoothstep(-aa, aa, pool);
+      col = mix(col, mix(col, uPool, 0.8), inPool);
+      light = inPool;
     } else {
       bool alongZ = ex <= 0.0 && ez > 0.0;
       bool alongX = ez <= 0.0 && ex > 0.0;
@@ -784,7 +957,9 @@ void main() {
         float lampAlong = (n + 0.5) * uLamps.x + origin;
         vec2 lamp = alongZ ? vec2(cx + side * (wx * 0.5 + uLamps.y), lampAlong) : vec2(lampAlong, cz + side * (wz * 0.5 + uLamps.y));
         float pool = length(p - lamp) - uLamps.z;
-        col = mix(col, mix(col, uPool, 0.55), 1.0 - smoothstep(-aa, aa, pool));
+        float inPool = 1.0 - smoothstep(-aa, aa, pool);
+        col = mix(col, mix(col, uPool, 0.55), inPool);
+        light = inPool * 0.8;
         col = mix(col, uInk, ring * near);
         col = mix(col, uLine, inside * near);
       }
@@ -806,9 +981,14 @@ void main() {
     float stroke = 1.0 - smoothstep(lw * 0.6 - aa, lw * 0.6 + aa, abs(t - wave));
     stroke *= step(seg, 64.0) * step(30.0, t) * step(t, width - 30.0) * smoothstep(6.0, 2.5, px);
     col = mix(col, uFoam, stroke);
+    if (uLights > 0.5) col = riverLight(col, p, s, t, width, px, glow);
     float bank = min(t, width - t);
     col = mix(col, uInk, 1.0 - smoothstep(lw - aa, lw + aa, bank));
+    light = 0.0;
   }
+  col = castShadow(col, moonShadow(vec3(0.0, 1.0, 0.0)) * (1.0 - light) * (1.0 - glow));
+  // A lamp's pool glows a little, so the street reads lit from above.
+  glow = max(glow, light * 0.12 * uLights);
   // The ground's bands are measured per pixel (it has no single centre).
   float band = fogBand(p, uFogBands);
   float f = fogAmount(band, uFogAmt);
@@ -818,6 +998,6 @@ void main() {
   } else {
     col = mix(col, uFog, f);
   }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, 1.0 - glow * (1.0 - f));
 }
 `;
