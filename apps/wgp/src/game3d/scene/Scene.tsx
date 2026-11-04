@@ -22,6 +22,7 @@ import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 import { NODE_COLORS, type SuitColors } from "@/components/cast";
 
 import type { ChasePose, Raycast } from "./camera/chase";
+import type { SceneCue } from "./camera/director";
 import { watchContextRecovery } from "./context-recovery";
 import type { BurstOptions } from "./effects";
 import { ALL_CAST, SceneEngine } from "./engine";
@@ -40,6 +41,8 @@ export interface SceneHandle {
   orbit(dYaw: number, dPitch: number, holding: boolean): void;
   /** Cut the camera to its wanted pose (a teleport, a new stop). */
   cut(): void;
+  /** The player pressed something: a camera beat (the countdown's establishing shot) gives way. */
+  skip?(): void;
   /** The last chase pose, for HUD projection. */
   pose(): ChasePose | null;
 }
@@ -64,6 +67,8 @@ export interface SceneProps {
   city: City;
   /** Written by the game loop every frame; read here in useFrame. Null before a run starts. */
   frame: RefObject<RenderFrame3D | null>;
+  /** The night's loop status and countdown, for the camera's beats (none without it). */
+  cue?: RefObject<SceneCue | null>;
   quality: QualityPreset;
   heroColors?: SuitColors;
   /** Cast members to build bodies for (all of them by default). */
@@ -81,7 +86,7 @@ export interface SceneProps {
   onFrame?(pose: ChasePose | null, width: number, height: number): void;
 }
 
-export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = ALL_CAST, reducedMotion = false, raycast, handle, onStats, onFrame }: SceneProps) {
+export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cast = ALL_CAST, reducedMotion = false, raycast, handle, onStats, onFrame }: SceneProps) {
   const engine = useMemo(() => new SceneEngine(city, raycast ?? null), [city, raycast]);
   const lastPose = useRef<ChasePose | null>(null);
   const meter = useMemo(() => new FpsMeter(), []);
@@ -105,6 +110,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
       punch: () => engine.punch(),
       orbit: (dy, dp, holding) => engine.orbit(dy, dp, holding),
       cut: () => engine.cut(),
+      skip: () => engine.skip(),
       pose: () => lastPose.current,
     }),
     [engine],
@@ -112,7 +118,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.1);
-    lastPose.current = engine.update(frame.current, state.camera as PerspectiveCamera, state.size, state.viewport.dpr, dt, state.clock.elapsedTime);
+    lastPose.current = engine.update(frame.current, state.camera as PerspectiveCamera, state.size, state.viewport.dpr, dt, state.clock.elapsedTime, cue?.current ?? null);
     onFrame?.(lastPose.current, state.size.width, state.size.height);
     meter.push(delta);
     if (onStats && state.clock.elapsedTime - statsAt.current > 0.25) {

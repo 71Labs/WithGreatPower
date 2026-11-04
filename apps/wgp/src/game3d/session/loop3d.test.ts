@@ -88,6 +88,22 @@ describe("the 3D loop", () => {
     expect(run.sim.tick).toBe(6);
   });
 
+  it("keeps the camera's cue current: the status and what's left of the countdown", () => {
+    const run = startRun(heroSave(), SEED);
+    const loop = new RunLoop(run, { introSeconds: 0.3, now: () => 0 });
+    expect(loop.cue).toEqual({ status: "loading", introLeft: 0.3, introTotal: 0.3 });
+    loop.start();
+    loop.advance(0.1);
+    expect(loop.cue.status).toBe("intro");
+    expect(loop.cue.introLeft).toBeCloseTo(0.2, 6);
+    loop.advance(0.25);
+    expect(loop.cue.status).toBe("live");
+    expect(loop.cue.introLeft).toBe(0);
+    loop.setPaused(true);
+    loop.advance(0.1);
+    expect(loop.cue.status).toBe("paused");
+  });
+
   it("writes an interpolated view the scene can read", () => {
     const run = startRun(heroSave(), SEED);
     const loop = new RunLoop(run, { introSeconds: 0, now: () => 0 });
