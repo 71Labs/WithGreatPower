@@ -74,8 +74,9 @@ export interface CrowdPlan {
 /** How many of each, for a tier (crowd/lod.ts). */
 export interface Density {
   roofGroups: number;
-  /** Spectators per fight. */
+  /** Spectators per fight on the sidewalks, and groups on the roofs round it. */
   fight: number;
+  fightRoofs: number;
   /** Onlookers per errand. */
   errand: number;
   walkers: number;
@@ -366,19 +367,23 @@ export function planCrowd(city: City, bodies: BodyInfo[], density: Density, seed
       if (got) group++;
       placed += got;
     }
-    // A group on a roof beside the arena, at the edge that faces it.
+    // Groups on roofs round the arena, at the edges that face it: the fight's two-shot looks
+    // across the arena at the city, so these are the spectators it sees.
     const near = city.buildings.filter((bd) => {
       const d = rectDistance(b, (bd.x0 + bd.x1) / 2, (bd.z0 + bd.z1) / 2);
       return d > CLEAR.arena + 40 && d < 420 && bd.x1 - bd.x0 > 100 && bd.z1 - bd.z0 > 100;
     });
-    if (near.length) {
+    const sidesUsed = new Set<number>();
+    for (let k = 0; k < 12 && sidesUsed.size < density.fightRoofs && near.length; k++) {
       const bd = near[fightRng.int(near.length)];
       const cx = (bd.x0 + bd.x1) / 2;
       const cz = (bd.z0 + bd.z1) / 2;
       const dx = centre.x - cx;
       const dz = centre.z - cz;
       const side = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 1 : 3) : dz > 0 ? 2 : 0;
-      roofGroup(bd, side, Math.max(2, Math.round(want / 3)), fightRng, "fight", zone.index, centre, IDLE, WATCH);
+      // One group per side of the arena, so they ring it.
+      if (sidesUsed.has(side)) continue;
+      if (roofGroup(bd, side, 3 + fightRng.int(2), fightRng, "fight", zone.index, centre, IDLE, WATCH)) sidesUsed.add(side);
     }
   }
 

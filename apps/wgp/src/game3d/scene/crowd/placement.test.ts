@@ -129,7 +129,7 @@ describe.each(cities)("the crowd on a %s city", (name, city) => {
     expect(low.walkers).toHaveLength(0);
     expect(low.spots.length).toBeLessThan(medium.spots.length);
     expect(medium.spots.length + medium.walkers.length).toBeLessThan(high.spots.length + high.walkers.length);
-    expect(low.spots.length).toBeLessThanOrEqual(CROWD_TIERS.low.density.roofGroups * 4 + city.zones.length * 6);
+    expect(low.spots.length).toBeLessThanOrEqual(CROWD_TIERS.low.density.roofGroups * 4 + city.zones.length * 8);
   });
 
   it("gives phone moves only to bodies with a phone in hand", () => {

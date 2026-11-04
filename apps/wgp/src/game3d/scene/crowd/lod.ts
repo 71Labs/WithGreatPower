@@ -32,9 +32,9 @@ export interface CrowdTier {
 }
 
 export const CROWD_TIERS: Record<QualityTier, CrowdTier> = {
-  low: { density: { roofGroups: 3, fight: 4, errand: 2, walkers: 0 }, bodies: ["civ-office", "civ-jogger", "civ-auntie", "civ-kid"], near: false, nearMax: 0, max: 10, nearDist: 0, farDist: 1400 },
-  medium: { density: { roofGroups: 9, fight: 9, errand: 3, walkers: 44 }, near: false, nearMax: 0, max: 32, nearDist: 0, farDist: 1900 },
-  high: { density: { roofGroups: 16, fight: 14, errand: 4, walkers: 96 }, near: true, nearMax: 16, max: 72, nearDist: 720, farDist: 2600 },
+  low: { density: { roofGroups: 3, fight: 3, fightRoofs: 1, errand: 2, walkers: 0 }, bodies: ["civ-office", "civ-jogger", "civ-auntie", "civ-kid"], near: false, nearMax: 0, max: 10, nearDist: 0, farDist: 1400 },
+  medium: { density: { roofGroups: 9, fight: 8, fightRoofs: 2, errand: 3, walkers: 44 }, near: false, nearMax: 0, max: 32, nearDist: 0, farDist: 1900 },
+  high: { density: { roofGroups: 16, fight: 12, fightRoofs: 3, errand: 4, walkers: 96 }, near: true, nearMax: 16, max: 72, nearDist: 720, farDist: 2600 },
 };
 
 /** Seconds between pose refreshes for a block whose nearest user is `d` from the camera. */
