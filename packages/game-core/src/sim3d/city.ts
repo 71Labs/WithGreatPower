@@ -2,7 +2,8 @@
  * The night's city, generated from the patrol seed: a 9 × 9 grid of blocks (600 units,
  * 180-unit streets) with 1–4 lots each, heights by district, setback tops, accent
  * buildings, rooftop props and cranes. The four stops are zones about 3,000 units apart:
- * fight arenas are cleared blocks with four tall corner towers, Doc's arena is a bridge
+ * fight arenas are cleared blocks with four tall corner towers around one flat roof, the
+ * stage (ruleset 4; zone.stage), Doc's arena is a bridge
  * over a river cut along a grid line, and errands are a rooftop with the ally. The hero
  * starts on a central roof.
  *
@@ -29,10 +30,14 @@ import {
   BRIDGE_TOWER,
   CELL,
   COVERAGE_RISE,
+  DECK_HALF,
   GRID,
   HERO_RADIUS,
   PITCH,
   RIVER_WIDTH,
+  STAGE_H,
+  STAGE_INSET,
+  STAGE_TOWER,
   STREET,
   STREET_BOUNCE_TOP,
   STREET_Y,
@@ -494,7 +499,8 @@ export function generateCity(seed: number, stops: Stop[]): City {
       });
       return;
     }
-    if (isDoc(stop) && rp) {
+    // v4: one bridge a night (a second Doc fight, which only tests ask for, gets a rooftop).
+    if (isDoc(stop) && rp && !bridge) {
       // Doc's bridge across the river, his arena along it.
       const alongX = rp.runs === "z";
       const c = rp.c;
@@ -506,19 +512,21 @@ export function generateCity(seed: number, stops: Stop[]): City {
         alongX ? { x0: c + u0, x1: c + u1, z0: across + v0, z1: across + v1 } : { x0: across + v0, x1: across + v1, z0: c + u0, z1: c + u1 };
       const D = BRIDGE_DECK;
       const U = BRIDGE_TOWER;
-      const deck = box(-D, D, -90, 90);
+      // v4: a wider deck (DECK_HALF either side; v3: 90), so a fight has room to sidestep.
+      const W = DECK_HALF;
+      const deck = box(-D, D, -W, W);
       const towers: Vec3[] = [];
       // Legs flush against the deck's sides, so nothing can wedge between them; v2 stands
       // them beyond the reach of Doc's arms, so the fight has room.
       for (const u of [-U, U]) {
-        for (const v of [-90 - half, 90 + half]) {
+        for (const v of [-W - half, W + half]) {
           const t = box(u - half, u + half, v - half, v + half);
           towers.push({ x: (t.x0 + t.x1) / 2, y: towerTop, z: (t.z0 + t.z1) / 2 });
         }
       }
       bridge = { deck: { ...deck, y: deckY }, towers, axis: alongX ? "x" : "z", towerHalf: half };
       const pt = (u: number, y: number, v: number): Vec3 => (alongX ? { x: c + u, y, z: across + v } : { x: across + v, y, z: c + u });
-      for (const v of [-90 - half, 90 + half]) {
+      for (const v of [-W - half, W + half]) {
         cables.push(
           { a: pt(-(D - 20), deckY + 30, v), b: pt(-U, towerTop, v), sag: 40, kind: "bridge" },
           { a: pt(-U, towerTop, v), b: pt(U, towerTop, v), sag: 390, kind: "bridge" },
@@ -527,7 +535,10 @@ export function generateCity(seed: number, stops: Stop[]): City {
       }
       for (const t of towers) anchors.push({ at: { x: t.x, y: towerTop + 8, z: t.z }, kind: "tower" });
       const arena = box(-BRIDGE_HALF, BRIDGE_HALF, -BRIDGE_ACROSS, BRIDGE_ACROSS);
-      docAvoid.push({ x0: arena.x0 - 20, z0: arena.z0 - 20, x1: arena.x1 + 20, z1: arena.z1 + 20 }, { x0: deck.x0 - 60, z0: deck.z0 - 60, x1: deck.x1 + 60, z1: deck.z1 + 60 });
+      // The lots kept clear around the deck are ruleset 3's (a 90-wide deck and 60 more), so the
+      // rest of the city is unchanged; the arena's own margin covers the wider deck's legs.
+      const clear = box(-D - 60, D + 60, -90 - 60, 90 + 60);
+      docAvoid.push({ x0: arena.x0 - 20, z0: arena.z0 - 20, x1: arena.x1 + 20, z1: arena.z1 + 20 }, clear);
       zones.push({
         index,
         kind: "fight",
@@ -537,21 +548,26 @@ export function generateCity(seed: number, stops: Stop[]): City {
         villain: "doc-octochain",
         ally: null,
         allyAt: null,
+        // The deck between his towers is the stage.
+        stage: { ...box(-BRIDGE_HALF, BRIDGE_HALF, -W, W), y: deckY },
       });
       return;
     }
-    // A fight arena: the block cleared, four tall towers at its corners, low roofs inside.
+    // A fight arena: the block cleared, four tall towers at its corners, and between them one
+    // flat roof, the stage (v4; v3 had five low roofs at four heights with alleys between).
     used.add(bi);
     const r = blockRect(p.bx, p.bz);
-    const T = 120;
+    const T = STAGE_TOWER;
     const H = 780;
     const cx = (r.x0 + r.x1) / 2;
     const cz = (r.z0 + r.z1) / 2;
+    const st: Rect = { x0: r.x0 + STAGE_INSET, z0: r.z0 + STAGE_INSET, x1: r.x1 - STAGE_INSET, z1: r.z1 - STAGE_INSET };
+    // The towers stand on the stage's corners, flush with its sides: no pocket to wedge in.
     const corners: [number, number][] = [
-      [r.x0, r.z0],
-      [r.x1 - T, r.z0],
-      [r.x0, r.z1 - T],
-      [r.x1 - T, r.z1 - T],
+      [st.x0, st.z0],
+      [st.x1 - T, st.z0],
+      [st.x0, st.z1 - T],
+      [st.x1 - T, st.z1 - T],
     ];
     const inner: Vec3[] = [];
     for (const [x0, z0] of corners) {
@@ -560,26 +576,28 @@ export function generateCity(seed: number, stops: Stop[]): City {
       const oz = z0 < cz ? 1 : -1;
       // An antenna at the outer corner. The towers' faces take webs anywhere up their walls
       // (v2; v1 hung invisible "flagpole" anchors 34 out from them).
-      antenna(x0 + T / 2 - ox * 30, H, z0 + T / 2 - oz * 30, 90, t.id);
+      antenna(x0 + T / 2 - ox * 25, H, z0 + T / 2 - oz * 25, 90, t.id);
       const fx = ox > 0 ? x0 + T : x0;
       const fz = oz > 0 ? z0 + T : z0;
       inner.push({ x: fx, y: 680, z: fz });
     }
-    // Gaps of ALLEY_MIN or more between them, so a fall goes to the street, not into a crack.
-    const g = ALLEY_MIN;
-    const low: [Rect, number][] = [
-      [{ x0: cx - 80, z0: cz - 80, x1: cx + 80, z1: cz + 80 }, 270],
-      [{ x0: r.x0 + 40, z0: cz - 80, x1: cx - 80 - g, z1: cz + 80 }, 200],
-      [{ x0: cx + 80 + g, z0: cz - 80, x1: r.x1 - 40, z1: cz + 80 }, 220],
-      [{ x0: cx - 80, z0: r.z0 + 40, x1: cx + 80, z1: cz - 80 - g }, 230],
-      [{ x0: cx - 80, z0: cz + 80 + g, x1: cx + 80, z1: r.z1 - 40 }, 210],
+    // The stage itself: a cross of three roofs at one height, flush, between the towers (so no
+    // box overlaps another). The middle stays bare; a little roof clutter sits by the towers.
+    const stage: Rect[] = [
+      { x0: st.x0 + T, z0: st.z0, x1: st.x1 - T, z1: st.z1 },
+      { x0: st.x0, z0: st.z0 + T, x1: st.x0 + T, z1: st.z1 - T },
+      { x0: st.x1 - T, z0: st.z0 + T, x1: st.x1, z1: st.z1 - T },
     ];
-    low.forEach(([lr, h], k) => {
-      const b = addBuilding(lr, h, district, { block: bi });
-      // The centre roof stays bare: the hero starts the next leg standing there.
-      if (k === 1) waterTower((lr.x0 + lr.x1) / 2, h, cz + 20, b.id);
-      else if (k > 1) ac(lr.x0 + 30 + rng.next() * (lr.x1 - lr.x0 - 60), h, lr.z0 + 30 + rng.next() * (lr.z1 - lr.z0 - 60), 34, b.id);
-    });
+    const stageIds = stage.map((sr) => addBuilding(sr, STAGE_H, district, { accent: false, block: bi }).id);
+    // Ruleset 3's five low roofs drew 20 times from the stream, the towers and the stage 7: draw
+    // the rest, so the city outside the arenas comes out exactly as it did.
+    for (let k = 0; k < 13; k++) rng.next();
+    for (const [k, [x0, z0]] of corners.entries()) {
+      if (k % 3 !== 0) continue;
+      const ox = x0 < cx ? 1 : -1;
+      const oz = z0 < cz ? 1 : -1;
+      ac(x0 + T / 2 + ox * (T / 2 + 26), STAGE_H, z0 + T / 2 + oz * 22, 30, stageIds[0]);
+    }
     // Lines between the towers: the four sides and both diagonals.
     const [a, b, c2, d2] = inner;
     for (const [p0, p1] of [
@@ -596,11 +614,12 @@ export function generateCity(seed: number, stops: Stop[]): City {
       index,
       kind: "fight",
       district,
-      center: { x: cx, y: 270, z: cz },
+      center: { x: cx, y: STAGE_H, z: cz },
       bounds: { x0: r.x0 - STREET / 2, z0: r.z0 - STREET / 2, x1: r.x1 + STREET / 2, z1: r.z1 + STREET / 2, h: ARENA_CEILING },
       villain: stop.kind === "fight" ? stop.villain : null,
       ally: null,
       allyAt: null,
+      stage: { ...st, y: STAGE_H },
     });
   });
 

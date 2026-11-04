@@ -8,13 +8,14 @@
  * pickup when one is close and on the way, else at the next stop.
  */
 import { abilityBlocked, gweiBlocked } from "./abilities";
-import { docVulnerable, isVulnerable, nearestTarget } from "./combat";
+import { docVulnerable, isVulnerable, nearestTarget, takesHit } from "./combat";
 import { DT } from "./constants";
 import type { InputFrame } from "./contract";
 import { DIR64, dirIndex, len2, len3 } from "./dmath";
 import { raycastCity } from "./city";
 import { bestAnchor, heroHeading, stopTarget, travelBearing } from "./hero";
 import { nextPickup } from "./pickups";
+import { fightPress } from "./strike";
 import { pickForecast } from "./swing";
 import { IDLE_FRAME } from "./sim";
 import type { SimState } from "./types";
@@ -40,6 +41,10 @@ export interface BotMemory {
   lastZ: number;
   /** How long the web has been held on the ground with nothing taking (then it lets go, to jump). */
   groundT: number;
+  /** v4, fights: a sidestep under way (seconds left, and its DIR64 heading), and which way the bot circles. */
+  dodgeT: number;
+  dodgeDir: number;
+  circle: number;
 }
 
 export const newBotMemory = (): BotMemory => ({
@@ -57,6 +62,9 @@ export const newBotMemory = (): BotMemory => ({
   lastY: 0,
   lastZ: 0,
   groundT: 0,
+  dodgeT: 0,
+  dodgeDir: 0,
+  circle: 1,
 });
 
 /** tan 22° and tan 56°: the bot aims inside the perfect window (15–65°), with a margin, early (where the swing carries furthest). */
@@ -187,6 +195,137 @@ function openestDir(s: SimState, side: number): number {
   return best;
 }
 
+/** v4, fights: the gap the bot keeps from a guarding villain, and from Doc's swinging arms. */
+const SPACING = 300;
+const DOC_CLEAR = 430;
+
+/** The DIR64 heading sideways to (dx, dz), toward the side with more of the stage (or `pref`). */
+function sideways(s: SimState, dx: number, dz: number, pref: number): number {
+  const h = s.hero;
+  const st = s.city.zones[s.index]?.stage;
+  const d = len2(dx, dz) || 1;
+  const px = -dz / d;
+  const pz = dx / d;
+  let side = pref;
+  if (st) {
+    const room = (sx: number, sz: number) => {
+      const x = h.x + sx * 160;
+      const z = h.z + sz * 160;
+      return Math.min(x - st.x0, st.x1 - x, z - st.z0, st.z1 - z);
+    };
+    const a = room(px, pz);
+    const b = room(-px, -pz);
+    if (Math.abs(a - b) > 40) side = a > b ? 1 : -1;
+  }
+  return dirIndex(px * side, pz * side);
+}
+
+/**
+ * v4: the bot in a fight, on its feet. It sidesteps a dive or a lunge as it comes, a shot or a
+ * fee bomb about to land on it, and keeps clear of Doc's arms and bread traps; with the villain
+ * open it runs in and strikes (or zips in from further out), and while he guards it circles at
+ * a distance. It never swings in a fight.
+ */
+function fightFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"], dt: number): InputFrame {
+  const h = s.hero;
+  const v = s.villain!;
+  const frame: InputFrame = { dir: 0, mag: 0, web: false, shot };
+  const t = nearestTarget(s, h.x, h.y, h.z) ?? { x: v.x, y: v.y, z: v.z, r: v.radius, body: -1 };
+  const dx = t.x - h.x;
+  const dz = t.z - h.z;
+  const hd = len2(dx, dz);
+  const gap = len3(dx, t.y - h.y, dz) - t.r - 26;
+  const open = takesHit(v) && s.mode === "fight";
+  mem.dodgeT = Math.max(0, mem.dodgeT - dt);
+
+  // Threats first: a dive or a lunge in flight at us, a shot closing in, a bomb coming down.
+  if (mem.dodgeT <= 0 && s.mode === "fight") {
+    const lunging = (v.kind === "gas-goblin" || v.kind === "sandwich-man") && v.phase === "dash";
+    if (lunging && len3(v.x - h.x, v.y - h.y, v.z - h.z) < 520) {
+      mem.dodgeT = 0.45;
+      mem.dodgeDir = sideways(s, v.vx || -dx, v.vz || -dz, mem.circle);
+    } else {
+      for (const z of s.hazards) {
+        if (z.kind === "goo") {
+          const rx = h.x - z.x;
+          const rz = h.z - z.z;
+          const sp = len2(z.vx, z.vz) || 1;
+          const ahead = (rx * z.vx + rz * z.vz) / sp;
+          const miss = Math.abs(rx * z.vz - rz * z.vx) / sp;
+          if (ahead > 0 && ahead < 240 && miss < 70) {
+            mem.dodgeT = 0.3;
+            mem.dodgeDir = sideways(s, z.vx, z.vz, mem.circle);
+            break;
+          }
+        } else if (z.kind === "bomb") {
+          // Where it lands: a fall under the bombs' 900 u/s².
+          const fall = Math.max(0, z.y - h.y);
+          const tl = (z.vy + Math.sqrt(z.vy * z.vy + 1800 * fall)) / 900;
+          const lx = z.x + z.vx * tl - h.x;
+          const lz = z.z + z.vz * tl - h.z;
+          if (len2(lx, lz) < 130) {
+            mem.dodgeT = 0.35;
+            mem.dodgeDir = dirIndex(-lx || 1, -lz);
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (mem.dodgeT > 0) {
+    frame.dir = mem.dodgeDir;
+    frame.mag = 3;
+    return frame;
+  }
+
+  let dir = dirIndex(dx, dz);
+  let mag = 0;
+  const docArms = v.kind === "doc-octochain" && !docVulnerable(v);
+  if (docArms) {
+    // Out of his arms' reach along the bridge (he follows, so keep moving).
+    const along = (h.x - v.x) * v.ax + (h.z - v.z) * v.az;
+    if (Math.abs(along) < DOC_CLEAR) {
+      const away = along >= 0 ? 1 : -1;
+      const st = s.city.zones[s.index]?.stage;
+      const end = st ? (v.ax ? (away > 0 ? st.x1 - h.x : h.x - st.x0) : away > 0 ? st.z1 - h.z : h.z - st.z0) : 999;
+      // Cornered at the end of the deck: run past him the other way instead.
+      const go = end < 80 ? -away : away;
+      dir = dirIndex(v.ax * go, v.az * go);
+      mag = 3;
+    }
+  } else if (open) {
+    // In for the blow.
+    if (gap > 40) mag = 3;
+  } else if (hd < SPACING) {
+    // He's guarding: circle out to a distance.
+    const out = hd > 1 ? 1 : 0;
+    dir = dirIndex(-dx * out - dz * mem.circle * 0.6, -dz * out + dx * mem.circle * 0.6);
+    mag = 3;
+  } else if (hd > SPACING + 120) mag = 2;
+  // Round an armed bread trap in the way.
+  if (mag > 0) {
+    const [ux, uz] = DIR64[dir];
+    for (const z of s.hazards) {
+      if (z.kind !== "trap" || z.state === "closed") continue;
+      const tx = z.x - h.x;
+      const tz = z.z - h.z;
+      const along = tx * ux + tz * uz;
+      if (along > 0 && along < 150 && Math.abs(tx * uz - tz * ux) < z.r + 40) {
+        dir = dirIndex(-tz * mem.circle, tx * mem.circle);
+        break;
+      }
+    }
+  }
+  frame.dir = mag ? dir : 0;
+  frame.mag = mag;
+  // The web: a strike in reach, a zip from further out, only into an opening; a tap each time.
+  const press = fightPress(s);
+  if (open && (press.kind === "strike" || press.kind === "zip") && !mem.holding) frame.web = true;
+  // Now and then circle the other way.
+  if (s.tick % 300 === 0) mem.circle = -mem.circle;
+  return frame;
+}
+
 /** The bot's input for the next step. */
 export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
   mem.abilityT = Math.max(0, mem.abilityT - dt);
@@ -210,6 +349,14 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
     mem.stuckT = 0;
   } else {
     mem.stuckT += dt;
+  }
+  // v4: fights are fought on foot.
+  if (fight && s.villain) {
+    const f = fightFrame(s, mem, shot, dt);
+    mem.holding = f.web;
+    mem.ropeT = 0;
+    mem.hangT = 0;
+    return f;
   }
 
   const v = s.villain;

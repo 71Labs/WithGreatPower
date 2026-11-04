@@ -6,8 +6,8 @@
 import { VILLAINS, damageScale } from "../rules/data";
 import type { VillainId } from "../rules/types";
 
-import { HURT_INVULN, KO_SECONDS, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
-import { len3 } from "./dmath";
+import { HURT_AIR_VY, HURT_INVULN, HURT_SHOVE, HURT_STAGGER, KO_SECONDS, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
+import { len2, len3 } from "./dmath";
 import type { HitSource, SimState, Villain } from "./types";
 
 /** A villain move's damage at this level, from the content tables. */
@@ -16,17 +16,30 @@ export function moveDamage(v: Villain, label: string): number {
   return Math.round(base * damageScale(v.level));
 }
 
-/** Seconds a villain guards after taking a hit. Doc's arms and Sybil's copies do the rest. */
+/**
+ * Seconds a villain guards after taking a hit. Doc's arms and Sybil's copies do the rest.
+ * v4 (v3: 2.4, 2.2, 1.2, 1.1): longer, so chip shots from range don't decide a fight; the
+ * openings (Gas Goblin's stall after a dive, Sandwich Man's stumble after a lunge) get through
+ * a guard, and end on the hit.
+ */
 const VILLAIN_GUARD: Partial<Record<VillainId, number>> = {
-  "gas-goblin": 2.4,
-  "sandwich-man": 2.2,
+  "gas-goblin": 3,
+  "sandwich-man": 3,
   "doc-octochain": 1.2,
-  sybil: 1.1,
+  sybil: 2,
 };
 
-/** Hits to catch a villain: about 3 + level / 2, and 2 more for a boss. */
+/** v4: a villain in an opening (Gas Goblin's stall, Sandwich Man's stumble) takes a direct hit through his guard. */
+export function inOpening(v: Villain): boolean {
+  return (v.kind === "gas-goblin" || v.kind === "sandwich-man") && v.phase === "recover";
+}
+
+/**
+ * Hits to catch a villain: 6 + level / 2, and 3 more for a boss (v4; v3: 3 + level / 2, and 2,
+ * when most hits were slams from the air). A strike, a sling or a slam is one hit.
+ */
 export function villainHits(level: number, boss: boolean): number {
-  return 3 + Math.floor(level / 2) + (boss ? 2 : 0);
+  return 6 + Math.floor(level / 2) + (boss ? 3 : 0);
 }
 
 export const villainName = (id: VillainId) => VILLAINS[id].name;
@@ -38,6 +51,11 @@ export function docVulnerable(v: Villain): boolean {
 
 export function isVulnerable(v: Villain): boolean {
   return v.kind === "doc-octochain" ? docVulnerable(v) : true;
+}
+
+/** Whether a direct hit (a strike, a sling, a slam) would land on him right now. */
+export function takesHit(v: Villain): boolean {
+  return isVulnerable(v) && (v.invuln <= 0 || inOpening(v));
 }
 
 export interface Target {
@@ -80,7 +98,7 @@ export function nearestTarget(s: SimState, x: number, y: number, z: number, rang
  * Hurt the hero. Shields eat the hit; a cloak, a dash or recent damage makes you
  * untouchable. Returns true if it landed.
  */
-export function hurtHero(s: SimState, damage: number, source: string, fromX: number, fromY: number, fromZ: number, burn = 0): boolean {
+export function hurtHero(s: SimState, damage: number, source: string, fromX: number, fromY: number, fromZ: number, burn = 0, shove = HURT_SHOVE): boolean {
   const h = s.hero;
   if (s.mode !== "fight" || damage <= 0) return false;
   if (h.invuln > 0 || h.dashT > 0) return false;
@@ -100,16 +118,27 @@ export function hurtHero(s: SimState, damage: number, source: string, fromX: num
   s.fluid = Math.max(0, s.fluid - burn);
   h.invuln = HURT_INVULN;
   h.hurtT = 0.35;
-  // Knocked off a wall too.
+  // Knocked off a wall too, and out of a strike.
   h.climbing = false;
-  // Knocked away from the source.
-  const dx = h.x - fromX;
-  const dy = h.y - fromY;
-  const dz = h.z - fromZ;
-  const d = len3(dx, dy, dz) || 1;
-  h.vx += (dx / d) * 420;
-  h.vz += (dz / d) * 420;
-  h.vy += (dy / d) * 300 + 120;
+  h.strike = -1;
+  h.zip = -1;
+  // v4: shoved away from the source along the ground (a stagger that slides out), never
+  // launched; in the air, pushed sideways with any rise cut short. v3 threw you 420 back and
+  // 120–420 up.
+  let dx = h.x - fromX;
+  let dz = h.z - fromZ;
+  const d = len2(dx, dz);
+  if (d > 1) {
+    dx /= d;
+    dz /= d;
+  } else {
+    dx = -h.fx;
+    dz = -h.fz;
+  }
+  h.vx = dx * shove;
+  h.vz = dz * shove;
+  if (!h.grounded) h.vy = Math.min(h.vy, HURT_AIR_VY);
+  h.landT = Math.max(h.landT, HURT_STAGGER);
   s.events.push({ type: "hero-hurt", x: h.x, y: h.y, z: h.z, damage: dmg, source, hp: s.hp });
   if (s.hp <= 0) knockOut(s);
   return true;
@@ -123,13 +152,13 @@ export function hurtHero(s: SimState, damage: number, source: string, fromX: num
 export function hitVillain(s: SimState, body: number, n: number, by: HitSource): boolean {
   const v = s.villain;
   if (!v || s.mode !== "fight" || n <= 0) return false;
-  const direct = by === "slam" || by === "dash" || by === "sling";
+  const direct = by === "slam" || by === "dash" || by === "sling" || by === "strike";
   const at = body >= 0 && v.bodies[body] ? v.bodies[body] : v;
   if (direct && v.kind === "doc-octochain" && !docVulnerable(v)) {
     s.events.push({ type: "clang", x: at.x, y: at.y, z: at.z, reason: "arms" });
     return false;
   }
-  if (direct && v.invuln > 0) {
+  if (direct && v.invuln > 0 && !inOpening(v)) {
     s.events.push({ type: "clang", x: at.x, y: at.y, z: at.z, reason: "guard" });
     return false;
   }
