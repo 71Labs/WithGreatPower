@@ -4,7 +4,7 @@
  * `RenderFrame3D`. No React here; Scene.tsx creates one per city and calls `update` from
  * `useFrame`, so per-frame data never goes through React state.
  */
-import { Group, PerspectiveCamera } from "three";
+import { Group, PerspectiveCamera, Vector2, type ShaderMaterial } from "three";
 
 import type { CastId } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
@@ -16,12 +16,15 @@ import { ChaseCamera, createChaseInput, type ChasePose, type Raycast } from "./c
 import { citySolids, createCityRaycast, type CitySolids } from "./camera/raycast";
 import { SpeedLines } from "./camera/speed-lines";
 import { buildCityMeshes, type CityMeshes } from "./city/city-meshes";
+import { LightPools } from "./city/light-pools";
 import { createSharedUniforms, type SharedUniforms } from "./city/materials";
 import { setOcclusion } from "./city/occlusion";
-import { Bursts, type BurstOptions } from "./effects";
+import { Bursts, Sparks, type BurstOptions } from "./effects";
 import { Hazards } from "./hazards";
 import { Pickups } from "./pickups";
 import type { QualityPreset } from "./quality";
+import type { PostFrame } from "./render/post";
+import { MoonShadows, SHADOW_LAYER } from "./render/shadows";
 import { buildSky, type Sky } from "./sky";
 import { CharacterSystem } from "./characters/characters";
 import type { WebLine } from "./web";
@@ -48,9 +51,17 @@ export class SceneEngine {
   /** Bits and boost rings, when the frame has v1.3 pickups. */
   readonly pickups: Pickups;
   readonly speedLines: SpeedLines;
+  /** Warm light on the roofs (tiers with material lights). */
+  readonly pools: LightPools;
+  /** Impact debris and the web splat. */
+  readonly sparks: Sparks;
+  /** Moon shadows, on tiers with a shadow map (the compositor draws their depth pass). */
+  shadows: MoonShadows | null = null;
   /** Camera far plane, from the city's size. */
   readonly far: number;
   reducedMotion = false;
+  private readonly post: PostFrame = { speed: 0, focus: new Vector2() };
+  private wasStuck = false;
   private readonly input = createChaseInput();
   private orbitYaw = 0;
   private orbitPitch = 0;
@@ -83,7 +94,14 @@ export class SceneEngine {
     this.hazards = new Hazards();
     this.pickups = new Pickups(cityData, this.uniforms);
     this.speedLines = new SpeedLines();
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.characters.root, this.hazards.root, this.pickups.root, this.bursts.mesh, this.speedLines.mesh);
+    this.pools = new LightPools(this.city.layout.boxes, this.uniforms);
+    this.sparks = new Sparks(this.uniforms);
+    // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
+    // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
+    for (const child of this.city.root.children) {
+      if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
+    }
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.hazards.root, this.pickups.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -101,10 +119,21 @@ export class SceneEngine {
     this.uniforms.uHalftone.value = preset.halftone ? 1 : 0;
     this.speedLinesTier = preset.speedLines;
     this.speedLines.enabled = preset.speedLines && !this.reducedMotion;
+    this.uniforms.uLights.value = preset.lights ? 1 : 0;
+    this.sky.setLights(preset.lights);
+    this.pools.setVisible(preset.lights);
+    this.sparks.enabled = preset.lights;
+    if (!preset.lights) this.sparks.clear();
+    if (this.shadows && this.shadows.size !== preset.shadowMap) {
+      this.shadows.dispose();
+      this.shadows = null;
+    }
+    if (!this.shadows && preset.shadowMap > 0) this.shadows = new MoonShadows(preset.shadowMap, this.uniforms);
   }
 
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
+    this.sparks.reducedMotion = on;
     this.bursts.reducedMotion = on;
     this.pickups.reducedMotion = on;
     this.characters.setReducedMotion(on);
@@ -120,6 +149,7 @@ export class SceneEngine {
 
   burst(word: string, at: Vec3, opts?: BurstOptions): void {
     this.bursts.burst(word, at, opts);
+    this.sparks.impact(word, at);
   }
 
   /** Somersault the hero (a perfect release). */
@@ -184,6 +214,12 @@ export class SceneEngine {
       camera.lookAt(s.x, s.y, s.z);
     }
     camera.updateMatrixWorld();
+    if (this.shadows) {
+      // The shadow square follows the hero (the start roof before a run), a little ahead of it.
+      const e = camera.matrixWorld.elements;
+      this.shadows.follow(frame ? frame.hero.pos : this.cityData.start, -e[8], -e[10]);
+      this.shadows.scanCast(this.characters.root);
+    }
     u.uPxScale.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height);
     this.city.updateLod(camera.position.x, camera.position.z);
     // Fade what stands between the camera and the hero (and the rival in a fight); clear the
@@ -199,11 +235,23 @@ export class SceneEngine {
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
       this.hazards.update(frame);
       this.pickups.update(frame, time);
-      // The sparkle shows once the web's shot has reached the anchor.
-      this.bursts.setAnchor(this.characters.stuck);
+      // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
+      const stuck = this.characters.stuck;
+      this.bursts.setAnchor(stuck);
+      if (stuck && !this.wasStuck) this.sparks.splat(stuck);
+      this.wasStuck = !!stuck;
     }
     this.bursts.update(dt, time);
+    this.sparks.update(dt);
     return pose;
+  }
+
+  /** What the post-processing needs from this frame: how fast the shot feels, and where motion points. */
+  postFrame(): PostFrame {
+    const on = this.speedLines.mesh.visible;
+    this.post.speed = on ? this.speedLines.level : 0;
+    if (on) this.post.focus.copy((this.speedLines.mesh.material as ShaderMaterial).uniforms.uFocus.value as Vector2);
+    return this.post;
   }
 
   /** The cast's mean and worst per-frame cost over the last 60 frames, ms. */
@@ -225,6 +273,10 @@ export class SceneEngine {
   }
 
   dispose(): void {
+    this.shadows?.dispose();
+    this.shadows = null;
+    this.pools.dispose();
+    this.sparks.dispose();
     this.speedLines.dispose();
     this.city.dispose();
     this.sky.dispose();

@@ -30,12 +30,72 @@ export interface QualityPreset {
   detail: 1 | 2;
   /** Comic speed lines at high speed (always off under reduced motion). */
   speedLines: boolean;
+  /**
+   * Post-processing (render/post.ts): the scene draws into an offscreen target that bloom,
+   * the grade and the vignette read. Null draws straight to the canvas (the low tier).
+   */
+  post: PostPreset | null;
+  /** Moon shadows (render/shadows.ts): the shadow map's size in texels, 0 for none. */
+  shadowMap: number;
+  /**
+   * Light drawn in the materials: the moon's halo rings, the river's reflections, warm light
+   * pools on the roofs and the cast's cool rim on their shadow side.
+   */
+  lights: boolean;
 }
 
+/** What the post-processing does on a tier (render/post.ts). */
+export interface PostPreset {
+  /** Multisampling of the offscreen target (0: none, and FXAA in the composite instead). */
+  msaa: 0 | 4;
+  /** Bloom: the first level's size as a fraction of the screen (1/2 or 1/4), and how many levels down. */
+  bloomScale: 2 | 4;
+  bloomLevels: number;
+  /** A radial blur toward the frame's edges at full speed, under the speed lines. */
+  speedBlur: boolean;
+}
+
+/**
+ * The low tier draws straight to the canvas as it always has. Medium adds the offscreen
+ * pass (bloom from a quarter-size chain, FXAA, the grade and the vignette) and the material
+ * lights; high multisamples the offscreen target instead of the canvas, blooms from half
+ * size, and adds moon shadows and the speed blur.
+ */
 export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
-  low: { tier: "low", maxDpr: 1, antialias: false, propOutlines: false, stars: 60, skyline: true, pixelBudget: 1_200_000, cars: 0, halftone: false, detail: 1, speedLines: false },
-  medium: { tier: "medium", maxDpr: 1.5, antialias: false, propOutlines: true, stars: 140, skyline: true, pixelBudget: 2_000_000, cars: 120, halftone: true, detail: 2, speedLines: true },
-  high: { tier: "high", maxDpr: 2, antialias: true, propOutlines: true, stars: 220, skyline: true, pixelBudget: 4_000_000, cars: 240, halftone: true, detail: 2, speedLines: true },
+  low: { tier: "low", maxDpr: 1, antialias: false, propOutlines: false, stars: 60, skyline: true, pixelBudget: 1_200_000, cars: 0, halftone: false, detail: 1, speedLines: false, post: null, shadowMap: 0, lights: false },
+  medium: {
+    tier: "medium",
+    maxDpr: 1.5,
+    antialias: false,
+    propOutlines: true,
+    stars: 220,
+    skyline: true,
+    pixelBudget: 2_000_000,
+    cars: 120,
+    halftone: true,
+    detail: 2,
+    speedLines: true,
+    post: { msaa: 0, bloomScale: 4, bloomLevels: 4, speedBlur: false },
+    shadowMap: 0,
+    lights: true,
+  },
+  high: {
+    tier: "high",
+    maxDpr: 2,
+    // Multisampled in the offscreen target, not the canvas.
+    antialias: false,
+    propOutlines: true,
+    stars: 480,
+    skyline: true,
+    pixelBudget: 4_000_000,
+    cars: 240,
+    halftone: true,
+    detail: 2,
+    speedLines: true,
+    post: { msaa: 4, bloomScale: 2, bloomLevels: 5, speedBlur: true },
+    shadowMap: 2048,
+    lights: true,
+  },
 };
 
 export const TIERS: QualityTier[] = ["low", "medium", "high"];

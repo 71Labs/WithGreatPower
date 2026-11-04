@@ -4,9 +4,10 @@
  * The 3D city scene for React Three Fiber.
  *
  * - `<SceneCanvas>` is the whole thing: a Canvas set up for the comic look (flat, linear,
- *   no shadows), the tier's DPR with adaptive resolution, an FPS probe, a context-loss guard
- *   and `<Scene>` inside. Lazy-load it (next/dynamic, ssr: false).
- * - `<Scene>` alone goes inside a Canvas you own.
+ *   none of three's lights or shadow maps), the tier's DPR with adaptive resolution, an FPS
+ *   probe, a context-loss guard and `<Scene>` inside. Lazy-load it (next/dynamic, ssr: false).
+ * - `<Scene>` alone goes inside a Canvas you own. On tiers with post-processing it draws the
+ *   frame itself (`PostPass`: moon shadows, bloom, grade, vignette; render/post.ts).
  *
  * Per-frame data is read from `frame.current` inside `useFrame`; nothing per frame touches
  * React state. Imperative extras (bursts, the flip, a missed web, orbit input, camera cuts)
@@ -25,7 +26,8 @@ import type { ChasePose, Raycast } from "./camera/chase";
 import { watchContextRecovery } from "./context-recovery";
 import type { BurstOptions } from "./effects";
 import { ALL_CAST, SceneEngine } from "./engine";
-import { FpsMeter, FpsProbe, FrameBudget, MIN_FRAME_SCALE, sceneDpr, type QualityPreset, type QualityTier } from "./quality";
+import { FpsMeter, FpsProbe, FrameBudget, MIN_FRAME_SCALE, sceneDpr, type PostPreset, type QualityPreset, type QualityTier } from "./quality";
+import { Compositor } from "./render/post";
 
 export interface SceneHandle {
   /** Pop a comic burst ("THWIP!", "POW!", "WHAM!", "ZAP!", "PERFECT!", "OOF!", "SPLASH!") at a world point. */
@@ -133,7 +135,30 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
     }
   });
 
-  return <primitive object={engine.root} />;
+  return (
+    <>
+      <primitive object={engine.root} />
+      {quality.post ? <PostPass engine={engine} preset={quality.post} /> : null}
+    </>
+  );
+}
+
+/**
+ * Medium and high: this draws the frame instead of the canvas's own render (a useFrame at
+ * priority 1): the moon shadows' depth pass, then the compositor (the scene into its
+ * offscreen target, the bloom, the composite to the canvas). The renderer's counters run over
+ * the whole frame, every pass, so the debug stats count them all.
+ */
+function PostPass({ engine, preset }: { engine: SceneEngine; preset: PostPreset }) {
+  const gl = useThree((s) => s.gl);
+  const compositor = useMemo(() => new Compositor(preset), [preset]);
+  useEffect(() => () => compositor.dispose(gl), [gl, compositor]);
+  useFrame((state) => {
+    compositor.beginFrame(gl);
+    engine.shadows?.render(gl, state.scene);
+    compositor.render(gl, state.scene, state.camera, engine.postFrame());
+  }, 1);
+  return null;
 }
 
 /** Drawing-buffer pixel ratio: the tier and screen allow a DPR, the frame budget scales it. */
