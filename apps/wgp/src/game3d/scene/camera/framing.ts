@@ -42,8 +42,8 @@ export const TRAVEL_TUNING = {
   standDist: 400,
   standPitch: 0.3,
   standShoulder: -0.2,
-  /** On a portrait screen the hero stands nearer the middle (the frame is narrow). */
-  standShoulderPortrait: -0.12,
+  /** On a portrait screen the hero stands a little further out: the waypoint pin is about as wide as he is, and the frame is narrow. */
+  standShoulderPortrait: -0.28,
   /** The standing turn toward the stop: dead zone, settle (radians), spring (s), rate cap (rad/s). */
   standDeadZone: 0.06,
   standSettle: 0.02,
