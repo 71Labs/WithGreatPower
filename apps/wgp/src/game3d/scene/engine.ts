@@ -132,6 +132,11 @@ export class SceneEngine {
     this.characters.fizzle();
   }
 
+  /** A strike at a villain in reach: the hero throws a punch. */
+  punch(): void {
+    this.characters.punch();
+  }
+
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
   cut(): void {
     this.chase.reset();

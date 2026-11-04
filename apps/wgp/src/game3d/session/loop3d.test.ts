@@ -4,7 +4,7 @@ import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
 import type { Save } from "@wgp/game-core/types";
 import { describe, expect, it } from "vitest";
 
-import { RunLoop } from "./loop3d";
+import { HIT_STOP, impact, RunLoop } from "./loop3d";
 
 const heroSave = (): Save => reduce(newSave(), { type: "create-hero", name: "Peter", suit: "classic", powers: ["web-sling", "web-shield", "node-sense"] });
 const SEED = seedOf(1, "Peter");
@@ -100,5 +100,14 @@ describe("the 3D loop", () => {
     expect(Number.isFinite(v.hero.pos.x + v.hero.pos.y + v.hero.pos.z)).toBe(true);
     expect(v.alpha).toBeGreaterThanOrEqual(0);
     expect(v.alpha).toBeLessThanOrEqual(1);
+  });
+
+  it("holds still a beat on impact (hit-stop): longest for the winning blow, none for anything else", () => {
+    const hit = (hits: number) => ({ type: "villain-hit" as const, x: 0, y: 0, z: 0, hits, hitsMax: 6, by: "strike" as const, double: false, copy: false });
+    expect(impact([hit(3)])).toBe(HIT_STOP.hit);
+    expect(impact([hit(0)])).toBe(HIT_STOP.last);
+    expect(impact([{ type: "hero-hurt", x: 0, y: 0, z: 0, damage: 9, source: "Front-run", hp: 80 }])).toBe(HIT_STOP.hurt);
+    expect(impact([{ type: "thwip", x: 0, y: 0, z: 0, ax: 0, ay: 0, az: 0 }])).toBe(0);
+    expect(HIT_STOP.last).toBeLessThan(0.2);
   });
 });

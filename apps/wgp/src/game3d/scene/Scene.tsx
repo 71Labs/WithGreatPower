@@ -34,6 +34,8 @@ export interface SceneHandle {
   flip(): void;
   /** A web that found nothing: the strand flies out from the hand and drops slack. */
   fizzle?(): void;
+  /** A strike at a villain in reach (ruleset 4): the hero throws a punch. */
+  punch?(): void;
   /** Manual camera orbit: radians to add this frame, and whether a pointer holds the camera. */
   orbit(dYaw: number, dPitch: number, holding: boolean): void;
   /** Cut the camera to its wanted pose (a teleport, a new stop). */
@@ -100,6 +102,7 @@ export function Scene({ city, frame, quality, heroColors = NODE_COLORS, cast = A
       burst: (word, at, opts) => engine.burst(word, at, opts),
       flip: () => engine.flip(),
       fizzle: () => engine.fizzle(),
+      punch: () => engine.punch(),
       orbit: (dy, dp, holding) => engine.orbit(dy, dp, holding),
       cut: () => engine.cut(),
       pose: () => lastPose.current,
