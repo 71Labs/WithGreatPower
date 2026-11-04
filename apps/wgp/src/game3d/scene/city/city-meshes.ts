@@ -44,6 +44,12 @@ export interface CityMeshes {
   /** The highest LOD near sectors draw: 1 (rooftop clutter) or 2 (plus street and facade detail). */
   setDetail(level: number): void;
   /**
+   * Compile the moon-shadow lookups into the fills, tanks and ground (render/shadows.ts), or
+   * leave them out entirely: tiers without a shadow map run exactly the shaders they did.
+   * Changing it recompiles those three programs once.
+   */
+  setShadows(on: boolean): void;
+  /**
    * Per-frame LOD from the camera's ground position: sectors past the second fog band draw
    * their buildings and landmarks only (no rooftop clutter, no prop hulls).
    */
@@ -250,6 +256,14 @@ export function buildCityMeshes(city: City, shared: SharedUniforms): CityMeshes 
     setDetail(level: number) {
       detail = Math.max(1, Math.min(2, Math.round(level)));
       apply();
+    },
+    setShadows(on: boolean) {
+      for (const m of [fillMat, tankMat, groundMat]) {
+        if (("MOON_SHADOWS" in m.defines) === on) continue;
+        if (on) m.defines.MOON_SHADOWS = "";
+        else delete m.defines.MOON_SHADOWS;
+        m.needsUpdate = true;
+      }
     },
     updateLod(x: number, z: number) {
       let changed = false;

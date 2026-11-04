@@ -1,8 +1,9 @@
 /**
  * The 3D scene as one plain object: city meshes, sky, the cast (rigged 3D characters and
- * the hero's web), bursts, hazards, pickups and the chase camera, updated once per frame from a
- * `RenderFrame3D`. No React here; Scene.tsx creates one per city and calls `update` from
- * `useFrame`, so per-frame data never goes through React state.
+ * the hero's web), bursts and hit debris, roof light pools, hazards, pickups, the chase camera
+ * and (on high) the moon shadows' camera, updated once per frame from a `RenderFrame3D`. No
+ * React here; Scene.tsx creates one per city and calls `update` from `useFrame`, so per-frame
+ * data never goes through React state. Scene.tsx's post pass reads `shadows` and `postFrame()`.
  */
 import { Group, PerspectiveCamera, Vector2, type ShaderMaterial } from "three";
 
@@ -129,6 +130,7 @@ export class SceneEngine {
       this.shadows = null;
     }
     if (!this.shadows && preset.shadowMap > 0) this.shadows = new MoonShadows(preset.shadowMap, this.uniforms);
+    this.city.setShadows(this.shadows !== null);
   }
 
   setReducedMotion(on: boolean): void {

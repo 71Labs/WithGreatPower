@@ -30,14 +30,22 @@ import { KEY_LIGHT } from "../characters/materials";
 
 const glslVec3 = (v: { x: number; y: number; z: number }) => `vec3(${v.x.toFixed(5)}, ${v.y.toFixed(5)}, ${v.z.toFixed(5)})`;
 
-/** Vertex side of the moon shadows: the shadow map's coordinate, pushed out along the normal. */
+/**
+ * Vertex side of the moon shadows: the shadow map's coordinate, pushed out along the normal.
+ * Compiled in only with MOON_SHADOWS (the high tier; city-meshes.ts setShadows), so the other
+ * tiers run exactly the shaders they did.
+ */
 export const SHADOW_VERTEX = /* glsl */ `
+#ifdef MOON_SHADOWS
 uniform mat4 uShadowMatrix;
 uniform vec4 uShadowParams;   // on, depth bias, normal offset (world), one texel (uv)
 varying vec3 vShadow;
 void shadowCoord(vec3 world, vec3 n) {
   vShadow = (uShadowMatrix * vec4(world + n * uShadowParams.z, 1.0)).xyz;
 }
+#else
+void shadowCoord(vec3 world, vec3 n) {}
+#endif
 `;
 
 /**
@@ -47,6 +55,7 @@ void shadowCoord(vec3 world, vec3 n) {
  * SCREEN_FRAGMENT's benDay).
  */
 export const SHADOW_FRAGMENT = /* glsl */ `
+#ifdef MOON_SHADOWS
 uniform sampler2DShadow uShadowMap;
 uniform vec4 uShadowParams;
 varying vec3 vShadow;
@@ -77,6 +86,10 @@ vec3 castShadow(vec3 c, float sh) {
   float cover = max(benDay(sqrt(sh) * 0.74, uHalftoneCell), step(0.97, sh));
   return mix(c, dark, cover);
 }
+#else
+float moonShadow(vec3 n) { return 0.0; }
+vec3 castShadow(vec3 c, float sh) { return c; }
+#endif
 `;
 
 /** Shared GLSL: the 2D renderer's hash01 (integer exact), banded fog, a box SDF. */

@@ -435,6 +435,11 @@ export class Sparks {
   }
 
   update(dt: number): void {
+    if (this.live.length === 0) {
+      this.mesh.count = 0;
+      this.mesh.visible = false;
+      return;
+    }
     for (const s of this.live) {
       s.t += dt;
       if (s.kind === 2) continue;
