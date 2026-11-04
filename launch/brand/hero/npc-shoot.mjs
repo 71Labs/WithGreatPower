@@ -286,6 +286,13 @@ async function shots() {
     await c.event("fight-live", 1, 300000);
     await sleep(1200);
     await shot(c, dir, "6-fight-crowd-b");
+    // The camera turned round the fight by hand: the spectators on the roofs round the arena.
+    for (let k = 1; k <= 3; k++) {
+      await c.evaluate(`(() => { const h = ${PLAY}.handle(); if (h) h.orbit(${opt("yaw", "1.57")}, 0, true); })()`);
+      await sleep(450);
+      await shot(c, dir, `6-fight-crowd-wide-${k}`);
+    }
+    await c.evaluate(`(() => { const h = ${PLAY}.handle(); if (h) h.orbit(0, 0, false); })()`);
     await c.event("fight-won", 1, 300000);
     await sleep(700);
     await shot(c, dir, "7-won-cheer");
