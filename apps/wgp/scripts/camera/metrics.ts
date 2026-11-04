@@ -14,6 +14,10 @@
  * - standing still, arrivals, errands, the countdown and the outro.
  *
  *   pnpm exec tsx --tsconfig tsconfig.json scripts/camera/metrics.ts [--label after] [--out file.json] [--nights 4,19,7,12] [--steady]
+ *     [--only phone] [--tune "travel.guardSoftPortrait=0.3;director.introDist=900"] [--brief]
+ *
+ * `--tune` tries values without editing the code (travel.* framing.ts, director.* director.ts,
+ * chase.* chase.ts); `--brief` prints only the swing, travel and look-ahead lines.
  */
 import { writeFileSync } from "node:fs";
 
@@ -25,6 +29,9 @@ import type { City, InputFrame, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d
 import type { PowerId, Save } from "@wgp/game-core/types";
 
 import { createCameraRig, type RigStatus } from "./rig";
+import { CHASE_TUNING } from "../../src/game3d/scene/camera/chase";
+import { DIRECTOR_TUNING } from "../../src/game3d/scene/camera/director";
+import { TRAVEL_TUNING } from "../../src/game3d/scene/camera/framing";
 import type { ChasePose } from "../../src/game3d/scene/camera/chase";
 import { citySolids, raycastSolids, type CitySolids } from "../../src/game3d/scene/camera/raycast";
 import { inBox, project, waypointLayout, type Rect } from "../../src/game3d/nav/waypoint";
@@ -40,6 +47,16 @@ const label = opt("label", "current");
 const outFile = opt("out", "");
 const nights = opt("nights", "4,19,7,12,27,33").split(",").map(Number);
 const steady = args.includes("--steady");
+const only = opt("only", "");
+const brief = args.includes("--brief");
+const TUNABLE: Record<string, Record<string, unknown>> = { travel: TRAVEL_TUNING, director: DIRECTOR_TUNING, chase: CHASE_TUNING };
+for (const pair of opt("tune", "").split(";").filter(Boolean)) {
+  const [key, value] = pair.split("=");
+  const [group, name] = key.split(".");
+  const target = TUNABLE[group];
+  if (!target || !(name in target)) throw new Error(`--tune: no ${key}`);
+  target[name] = JSON.parse(value);
+}
 
 const FPS = 60;
 const DT = 1 / FPS;
@@ -66,10 +83,18 @@ interface Viewport {
 /**
  * The HUD at 1920×1080 (mouse) and 390×844 (touch, an iPhone's safe areas), measured from
  * the page during the first leg (camera-shoot.mjs hud), padded a few px: with a mouse the
- * meters and combo, the route bar, pause, the minimap and the powers; on touch the top
- * stack (meters, pause, route bar), the minimap under it and the power arc. The first-leg
- * hint is left out: it goes with the first web.
+ * meters and combo, the route bar, pause, the minimap and the row of powers; on touch the top
+ * stack (meters, pause, route bar), the minimap under it and the power arc's five buttons
+ * (the arc curves: the corner of its bounding box, where the hero often is, is empty). The
+ * first-leg hint is left out: it goes with the first web.
  */
+const ARC: Rect[] = [
+  { x0: 304, y0: 724, x1: 380, y1: 800 },
+  { x0: 190, y0: 730, x1: 254, y1: 794 },
+  { x0: 206, y0: 670, x1: 270, y1: 734 },
+  { x0: 250, y0: 626, x1: 314, y1: 690 },
+  { x0: 310, y0: 610, x1: 374, y1: 674 },
+];
 const VIEWPORTS: Viewport[] = [
   {
     name: "desktop",
@@ -94,9 +119,9 @@ const VIEWPORTS: Viewport[] = [
     hud: [
       { x0: 0, y0: 0, x1: 390, y1: 215 },
       { x0: 250, y0: 215, x1: 390, y1: 345 },
-      { x0: 188, y0: 608, x1: 390, y1: 800 },
+      ...ARC,
     ],
-    powers: [{ x0: 188, y0: 608, x1: 390, y1: 800 }],
+    powers: ARC,
     sheet: { x0: 12, y0: 476, x1: 378, y1: 818 },
   },
 ];
@@ -466,6 +491,7 @@ function summarize(samples: Sample[]) {
     hudClipPct: pct(xs.map((s) => s.hudClip)),
     heroX: { mean: mean(xs.map((s) => Math.abs(s.hx))), p95: quantile(xs.map((s) => Math.abs(s.hx)), 0.95) },
     heroY: { mean: mean(xs.map((s) => s.hy)), p5: quantile(xs.map((s) => s.hy), 0.05), p95: quantile(xs.map((s) => s.hy), 0.95) },
+    stopPinPct: pct(xs.map((s) => s.stopPin)),
     insidePct: pct(xs.map((s) => s.inside)),
     insideBuildingPct: pct(xs.map((s) => s.insideBuilding)),
     skimPct: pct(xs.map((s) => s.skim)),
@@ -534,7 +560,8 @@ function summarize(samples: Sample[]) {
 /* ------------------------------------------------------------------ main */
 
 const report: Record<string, unknown> = { label, steady, nights };
-for (const vp of VIEWPORTS) {
+const viewports = VIEWPORTS.filter((vp) => !only || vp.name === only);
+for (const vp of viewports) {
   const all: Sample[] = [];
   for (const n of nights) all.push(...playNight(n, vp));
   report[vp.name] = summarize(all);
@@ -543,13 +570,13 @@ if (outFile) writeFileSync(outFile, JSON.stringify(report, null, 1));
 
 /* A compact table on stdout. */
 const f1 = (x: number) => (Number.isFinite(x) ? x.toFixed(1) : "–");
-for (const vp of VIEWPORTS) {
+for (const vp of viewports) {
   const r = report[vp.name] as ReturnType<typeof summarize>;
   console.log(`\n${label} · ${vp.name} ${vp.w}×${vp.h}${steady ? " · steady" : ""} · ${r.frames} frames, ${r.cuts} cuts`);
   console.log("phase    frames  offC%  offS%  hud%  in%(bld)   skim%  blk%  |x|   y    pitch↓  arm   fov       yaw°/s p95/max  jerk p95  pops flips");
   for (const p of [...PHASES, "travel"]) {
     const s = r.phases[p];
-    if (!s.frames) continue;
+    if (!s.frames || (brief && p !== "swing" && p !== "air" && p !== "travel")) continue;
     const yr = "yawRateDeg" in s ? `${f1(s.yawRateDeg!.p95)}/${f1(s.yawRateDeg!.max)}` : "";
     const jk = "jerkDeg" in s ? f1(s.jerkDeg!.p95) : "";
     console.log(
@@ -557,8 +584,9 @@ for (const vp of VIEWPORTS) {
     );
   }
   const m = r.motion;
-  console.log(`motion: yaw°/s p50 ${f1(m.yawRateDeg.p50)} p95 ${f1(m.yawRateDeg.p95)} max ${f1(m.yawRateDeg.max)} · pitch°/s p95 ${f1(m.pitchRateDeg.p95)} max ${f1(m.pitchRateDeg.max)} · acc°/s² p95 ${f1(m.accDeg.p95)} · jerk°/s³ p95 ${f1(m.jerkDeg.p95)} max ${f1(m.jerkDeg.max)} · fov°/s max ${f1(m.fovRate.max)} · arm u/s p95 ${f1(m.armRate.p95)} max ${f1(m.armRate.max)} · pops ${m.pops} · flips ${m.flips}`);
+  if (!brief) console.log(`motion: yaw°/s p50 ${f1(m.yawRateDeg.p50)} p95 ${f1(m.yawRateDeg.p95)} max ${f1(m.yawRateDeg.max)} · pitch°/s p95 ${f1(m.pitchRateDeg.p95)} max ${f1(m.pitchRateDeg.max)} · acc°/s² p95 ${f1(m.accDeg.p95)} · jerk°/s³ p95 ${f1(m.jerkDeg.p95)} max ${f1(m.jerkDeg.max)} · fov°/s max ${f1(m.fovRate.max)} · arm u/s p95 ${f1(m.armRate.p95)} max ${f1(m.armRate.max)} · pops ${m.pops} · flips ${m.flips}`);
   const a = r.ahead;
+  if (brief) console.log(`pin by phase: swing ${f1(r.phases.swing.stopPinPct)}% · air ${f1(r.phases.air.stopPinPct)}% · run ${f1(r.phases.run.stopPinPct)}% · stand ${f1(r.phases.stand.stopPinPct)}%`);
   console.log(`ahead: pin ${f1(a.stopPinPct)}% · stop seen ${f1(a.stopSeenPct)}% (<1500 ${f1(a.stopSeenByDist.under1500)}%, 1500–3000 ${f1(a.stopSeenByDist["1500to3000"])}%, >3000 ${f1(a.stopSeenByDist.over3000)}%) · arriving ${f1(a.arrivingStopSeenPct)}% · anchor ${f1(a.anchorSeenPct)}% · view vs travel ${f1(a.travelAngleDeg.mean)}° (p95 ${f1(a.travelAngleDeg.p95)}°) · view vs stop ${f1(a.stopBearingDeg.mean)}° (p95 ${f1(a.stopBearingDeg.p95)}°)`);
   console.log(`stand: ${r.stand.frames} frames · stop seen ${f1(r.stand.stopSeenPct)}% · view vs stop ${f1(r.stand.stopBearingDeg.mean)}° · errand: ally ${f1(r.errand.allySeenPct)}% · pair clear of sheet+HUD ${f1(r.errand.pairClearPct)}% · apart ${f1(r.errand.pairApartPct)}% · both ${f1(r.errand.pairShownPct)}%`);
 }
