@@ -18,6 +18,7 @@ import { SpeedLines } from "./camera/speed-lines";
 import { buildCityMeshes, type CityMeshes } from "./city/city-meshes";
 import { createSharedUniforms, type SharedUniforms } from "./city/materials";
 import { setOcclusion } from "./city/occlusion";
+import { CrowdSystem } from "./crowd/crowd";
 import { Bursts, type BurstOptions } from "./effects";
 import { Hazards } from "./hazards";
 import { Pickups } from "./pickups";
@@ -42,6 +43,8 @@ export class SceneEngine {
   readonly city: CityMeshes;
   readonly sky: Sky;
   readonly characters: CharacterSystem;
+  /** The city's people (render only). */
+  readonly crowd: CrowdSystem;
   readonly bursts: Bursts;
   readonly web: WebLine;
   readonly hazards: Hazards;
@@ -78,12 +81,13 @@ export class SceneEngine {
       this.far,
     );
     this.characters = new CharacterSystem(cityData, this.solids, this.uniforms);
+    this.crowd = new CrowdSystem(cityData, this.uniforms);
     this.bursts = new Bursts(this.uniforms);
     this.web = this.characters.web;
     this.hazards = new Hazards();
     this.pickups = new Pickups(cityData, this.uniforms);
     this.speedLines = new SpeedLines();
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.characters.root, this.hazards.root, this.pickups.root, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -94,6 +98,7 @@ export class SceneEngine {
   setQuality(preset: QualityPreset): void {
     this.city.setPropOutlines(preset.propOutlines);
     this.characters.setTier(preset.tier);
+    this.crowd.setTier(preset.tier);
     this.sky.setStars(preset.stars);
     this.sky.skyline.visible = preset.skyline;
     this.city.setDetail(preset.detail);
@@ -108,6 +113,7 @@ export class SceneEngine {
     this.bursts.reducedMotion = on;
     this.pickups.reducedMotion = on;
     this.characters.setReducedMotion(on);
+    this.crowd.reducedMotion = on;
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
 
@@ -202,6 +208,7 @@ export class SceneEngine {
       // The sparkle shows once the web's shot has reached the anchor.
       this.bursts.setAnchor(this.characters.stuck);
     }
+    this.crowd.update(frame, camera, dt, time);
     this.bursts.update(dt, time);
     return pose;
   }
@@ -229,6 +236,7 @@ export class SceneEngine {
     this.city.dispose();
     this.sky.dispose();
     this.characters.dispose();
+    this.crowd.dispose();
     this.bursts.dispose();
     this.hazards.dispose();
     this.pickups.dispose();
