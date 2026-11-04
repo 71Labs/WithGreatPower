@@ -34,7 +34,7 @@ export function RunView({ run }: { run: PublicRun }) {
         </Link>
         <StickerPanel as="article" aria-labelledby="run-title" className="flex flex-col gap-5 p-5 [--vs-focus:var(--game-hero)] sm:p-7">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-game-ink bg-game-mint px-3 text-[13px] font-semibold text-white shadow-[var(--game-shadow-sm)]">
+            <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-game-ink bg-game-mint px-3 text-[13px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)]">
               <BadgeCheck aria-hidden className="size-4" strokeWidth={2.25} />
               Replay-verified
             </span>
@@ -75,10 +75,13 @@ export function RunView({ run }: { run: PublicRun }) {
             </StickerLink>
             <a
               href={`/api/runs/${run.runId}/replay`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1 text-[14px] font-semibold text-game-ink underline decoration-game-ink/40 underline-offset-4 pointer-fine:hover:decoration-game-ink"
             >
               Get the replay to verify
               <ExternalLink aria-hidden className="size-4" strokeWidth={2} />
+              <span className="sr-only">(opens in a new tab)</span>
             </a>
           </div>
           {run.digest ? (

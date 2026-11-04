@@ -34,7 +34,7 @@ const KIND: Record<DraftKind, string> = {
 
 const STATUS: Record<SocialDraftStatus, { label: string; className: string }> = {
   pending: { label: "To review", className: "bg-game-gold text-game-ink" },
-  approved: { label: "Approved", className: "bg-game-mint text-white" },
+  approved: { label: "Approved", className: "bg-game-mint text-game-ink" },
   posted: { label: "Posted", className: "bg-game-ink text-game-paper" },
   rejected: { label: "Rejected", className: "bg-game-paper-2 text-game-ink" },
   expired: { label: "Expired", className: "bg-game-paper-2 text-game-muted" },
@@ -160,7 +160,7 @@ function DraftCard({ draft, now, onChange }: { draft: DraftView; now: number; on
             }}
             aria-describedby={`${textId}-count`}
             aria-invalid={over || undefined}
-            className="w-full resize-y rounded-[12px] border-2 border-game-ink bg-game-paper px-3 py-2.5 text-[15px] leading-[22px] text-game-ink read-only:bg-game-paper-2"
+            className="w-full resize-y rounded-[12px] border-2 border-game-ink bg-game-paper px-3 py-2.5 text-[15px] leading-[22px] text-game-ink [field-sizing:content] read-only:bg-game-paper-2"
           />
           <div id={`${textId}-count`} className="flex flex-wrap items-center justify-between gap-2 text-[13px] leading-5">
             <span className={`num font-semibold ${over ? "text-game-hero" : "text-game-muted"}`}>
@@ -290,8 +290,9 @@ export function SocialQueue({ admin }: { admin: string }) {
   const drafts = load.state === "ready" ? load.drafts : [];
   const count = (f: Filter) => drafts.filter((d) => FILTERS[f].includes(d.status)).length;
   const tabs: StickerTab<Filter>[] = [
-    { id: "review", label: "To review", badge: count("review") ? { value: count("review"), label: "drafts to review" } : undefined },
-    { id: "approved", label: "Approved", badge: count("approved") ? { value: count("approved"), label: "approved, not posted" } : undefined },
+    // Four tabs share a phone's width, so only the one that needs you carries a count.
+    { id: "review", label: "Review", badge: count("review") ? { value: count("review"), label: "drafts to review" } : undefined },
+    { id: "approved", label: "Approved" },
     { id: "done", label: "Done" },
     { id: "expired", label: "Expired" },
   ];
@@ -326,7 +327,7 @@ export function SocialQueue({ admin }: { admin: string }) {
           ) : null}
         </div>
 
-        <StickerTabs tabs={tabs} value={filter} onChange={setFilter} label="Drafts" idPrefix={ID} className="self-stretch sm:self-start sm:min-w-[480px]" />
+        <StickerTabs tabs={tabs} value={filter} onChange={setFilter} label="Drafts" idPrefix={ID} className="self-stretch sm:self-start sm:min-w-[440px]" />
 
         <section {...tabPanelProps(ID, filter)} className="flex flex-col gap-4 focus-visible:outline-offset-4">
           {load.state === "loading" ? (

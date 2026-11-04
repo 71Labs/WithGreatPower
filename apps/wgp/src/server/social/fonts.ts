@@ -39,7 +39,8 @@ function usable(bytes: Buffer, ext: string): Buffer | null {
 async function fromDisk(file: string, dir: string): Promise<Buffer | null> {
   for (const ext of ["ttf", "otf", "woff", "woff2"]) {
     try {
-      return usable(await readFile(path.join(dir, `${file}.${ext}`)), ext);
+      // Not traced (that would ship the whole project): next.config.ts includes public/fonts with these routes.
+      return usable(await readFile(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ dir, `${file}.${ext}`)), ext);
     } catch {
       // Not there, or not decodable: try the next format.
     }

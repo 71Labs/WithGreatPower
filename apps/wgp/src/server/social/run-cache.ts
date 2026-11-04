@@ -10,7 +10,13 @@ import { publicRun, type PublicRun } from "./runs";
 
 export const runTag = (runId: string) => `run:${runId}`;
 
-export async function cachedPublicRun(runId: string): Promise<PublicRun | null> {
+/** The run, read through the cache. Opens the database first, outside the cache scope: PGlite (local dev) can't start inside one. */
+export async function loadPublicRun(runId: string): Promise<PublicRun | null> {
+  await getDb();
+  return cachedPublicRun(runId);
+}
+
+async function cachedPublicRun(runId: string): Promise<PublicRun | null> {
   "use cache";
   cacheTag(runTag(runId));
   const run = await publicRun(await getDb(), runId);

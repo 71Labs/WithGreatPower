@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { RunView } from "@/components/social/run-view";
 import { SITE_URL, runPath } from "@/lib/site";
-import { cachedPublicRun } from "@/server/social/run-cache";
+import { loadPublicRun } from "@/server/social/run-cache";
 
 /**
  * /r/<runId>: a verified run's public page, what share posts link to, with a card image
@@ -19,7 +19,7 @@ const points = new Intl.NumberFormat("en-US");
 
 export async function generateMetadata({ params }: PageProps<"/r/[runId]">): Promise<Metadata> {
   const { runId } = await params;
-  const run = await cachedPublicRun(runId);
+  const run = await loadPublicRun(runId);
   if (!run) return { title: "Run not found", robots: { index: false } };
   const title = `${run.handle} banked ${points.format(run.score)}`;
   const description = `A replay-verified night ${run.night} in With Great Power, the web-swinging parody on NEAR. Beat it tonight.`;
@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: PageProps<"/r/[runId]">): Pro
 
 export default async function RunPage({ params }: PageProps<"/r/[runId]">) {
   const { runId } = await params;
-  const run = await cachedPublicRun(runId);
+  const run = await loadPublicRun(runId);
   if (!run) notFound();
   return <RunView run={run} />;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 
 import { SocialQueue } from "@/components/social/queue";
 import { sessionCookieName } from "@/server/auth/session";
@@ -19,6 +20,8 @@ export const metadata: Metadata = {
 };
 
 export default async function SocialQueuePage() {
+  // A request-time page: the session check reads the clock.
+  await connection();
   const jar = await cookies();
   const admin = await adminForToken(jar.get(sessionCookieName())?.value);
   if (!admin) notFound();

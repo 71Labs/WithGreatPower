@@ -30,6 +30,9 @@ const IMMUTABLE = [{ key: "Cache-Control", value: "public, max-age=31536000, imm
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@wgp/game-core"],
+  // PGlite (local dev and tests) finds its WASM through file URLs, which break once
+  // bundled into a page render: load it from node_modules as is. Neon is unaffected.
+  serverExternalPackages: ["@electric-sql/pglite"],
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,

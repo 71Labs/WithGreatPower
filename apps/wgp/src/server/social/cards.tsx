@@ -51,7 +51,7 @@ const STARS: [number, number, number][] = [
 
 function Chip({ children, tone = "paper" }: { children: ReactNode; tone?: "paper" | "gold" | "mint" | "ink" | "hero" }) {
   const bg = { paper: C.paper, gold: C.gold, mint: C.mint, ink: C.ink, hero: C.hero }[tone];
-  const fg = tone === "mint" || tone === "ink" || tone === "hero" ? C.white : C.ink;
+  const fg = tone === "ink" || tone === "hero" ? C.white : C.ink;
   return (
     <div style={{ display: "flex", alignItems: "center", height: 46, padding: "0 20px", borderRadius: 999, border: `4px solid ${C.ink}`, backgroundColor: bg, color: fg, fontSize: 22, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>
       {children}
@@ -107,7 +107,7 @@ function Burst({ label, value, size = 250 }: { label: string; value: string; siz
 export function RunCard({ run }: { run: PublicRun }) {
   const score = fmt(run.score);
   return (
-    <Frame badge={<Chip tone="mint">Replay-verified</Chip>} footer={`${SITE_HOST}/r/${run.runId.slice(0, 8)}`}>
+    <Frame badge={<Chip tone="mint">Replay-verified</Chip>} footer={SITE_HOST}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", flexDirection: "column", flexShrink: 1 }}>
           <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: 4, color: C.muted }}>BANKED</span>
@@ -124,21 +124,23 @@ export function RunCard({ run }: { run: PublicRun }) {
 }
 
 export function BoardCard({ title, detail, rows, final }: { title: string; detail: string; rows: Pick<BoardRow, "rank" | "handle" | "score">[]; final: boolean }) {
-  const two = rows.length > 5;
-  const columns = two ? [rows.slice(0, 5), rows.slice(5)] : [rows];
+  // Up to three rows sit large; four or five shrink to fit; more go in two columns of five.
+  const compact = rows.length > 3;
+  const columns = rows.length > 5 ? [rows.slice(0, 5), rows.slice(5)] : [rows];
+  const row = compact ? { h: 50, badge: 44, rank: 21, text: 30 } : { h: 64, badge: 56, rank: 28, text: 38 };
   return (
     <Frame badge={<Chip tone="gold">{final ? "Final" : detail}</Chip>} footer={SITE_HOST}>
-      <span style={{ fontSize: two ? 52 : 60, fontWeight: 700, letterSpacing: -2, lineHeight: 1.05 }}>{title}</span>
-      <div style={{ display: "flex", gap: 40, marginTop: two ? 18 : 24 }}>
+      <span style={{ fontSize: compact ? 48 : 60, fontWeight: 700, letterSpacing: -2, lineHeight: 1.05, marginTop: compact ? 8 : 0 }}>{title}</span>
+      <div style={{ display: "flex", gap: 40, marginTop: compact ? 14 : 24 }}>
         {columns.map((col, c) => (
-          <div key={c} style={{ display: "flex", flexDirection: "column", flexGrow: 1, flexBasis: 0, gap: two ? 6 : 10 }}>
+          <div key={c} style={{ display: "flex", flexDirection: "column", flexGrow: 1, flexBasis: 0, gap: compact ? 6 : 10 }}>
             {col.map((r) => (
-              <div key={r.rank} style={{ display: "flex", alignItems: "center", gap: 18, height: two ? 52 : 64 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: two ? 46 : 56, height: two ? 46 : 56, borderRadius: 999, border: `4px solid ${C.ink}`, backgroundColor: r.rank === 1 ? C.gold : C.paper2, fontSize: two ? 22 : 28, fontWeight: 700 }}>
+              <div key={r.rank} style={{ display: "flex", alignItems: "center", gap: 18, height: row.h }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: row.badge, height: row.badge, borderRadius: 999, border: `4px solid ${C.ink}`, backgroundColor: r.rank === 1 ? C.gold : C.paper2, fontSize: row.rank, fontWeight: 700 }}>
                   {String(r.rank)}
                 </div>
-                <span style={{ fontSize: two ? 28 : 38, fontWeight: 700, flexGrow: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{r.handle}</span>
-                <span style={{ fontSize: two ? 28 : 38, fontWeight: 700 }}>{fmt(r.score)}</span>
+                <span style={{ fontSize: row.text, fontWeight: 700, flexGrow: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{r.handle}</span>
+                <span style={{ fontSize: row.text, fontWeight: 700 }}>{fmt(r.score)}</span>
               </div>
             ))}
           </div>
