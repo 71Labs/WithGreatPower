@@ -287,3 +287,61 @@ character (an eight-angle turntable, two head close-ups, every animator state as
 burst); run it once with the cast's files hidden for `before/` (the procedural bodies) and once
 for `after/`. `cast-moments.mjs` records a full autopilot night's fights, catches, errands and
 Gwei's assist (`moments-a/`, `moments-b/`). `cast-sheet.py` lays them out in `compare/`.
+
+## The city's people (`civilians.py`, `crowd_anims.py`)
+
+Eight civilians, made exactly like the cast (an MPFB body on the same 53-bone skeleton,
+painted, dressed and exported by `build_cast.py`), for the crowds on the roofs, the sidewalks
+and round the stops:
+
+```sh
+launch/brand/hero/make.sh civilians                                   # all eight and crowd-anims.glb, packed (~9 min)
+blender -b -P launch/brand/hero/build_cast.py -- --who civ-office --preview out.png
+blender -b launch/brand/hero/build/hero-base.blend -P launch/brand/hero/crowd_anims.py -- [--preview dir]
+```
+
+| Body | Who | Look |
+|---|---|---|
+| `civ-office` | man, ~32, average | suit jacket, shirt and collar, tie, short hair, a phone |
+| `civ-jogger` | woman, ~28, athletic | tank top (bare shoulders), leggings, sneakers, ponytail, headband |
+| `civ-elder` | man, ~75, paunch | long open coat, scarf, flat cap, glasses, grey at the sides |
+| `civ-teen` | boy, ~16, slim | hoodie with its hood bunched at the neck, jeans, messy hair, a phone |
+| `civ-auntie` | woman, ~55, heavy | blouse, long skirt (flare), bun, a handbag on the forearm |
+| `civ-worker` | man, ~42, big | tee, hi-vis vest with reflective bands, work trousers, boots, hard hat |
+| `civ-student` | woman, ~21, slim | big tee, shorts, long hair (a metaball fall), backpack, a phone |
+| `civ-kid` | girl, ~9 | dress, sneakers, pigtail buns |
+
+- **One palette layout** (`SLOTS`: ink, skin, hair, brow, top, trim, bottom, shoe, accent,
+  accent2, white, mouth, blush, lens, inner, sole), and per body the colours each slot may take
+  (`looks` in the file's extras: skin tones light to deep, natural, grey and dyed hair, the
+  clothes; "#SKIN" means the person's own skin). The game picks a pool of looks per body from
+  the night's seed, so eight bodies make a varied crowd.
+- **One face** for all of them (eyes with a highlight, brows, a small smile, blush), on face
+  coordinates scaled per body so the eyes sit at ±3 cm and the mouth's line at −6.2 cm
+  (`face_sx`, `face_sy_up`, `face_sy_down` in `build_cast.face_coords`).
+- **Budgets:** "Body" 2,400–3,000 triangles, "BodyLo" 900–1,350 (its colour seams no longer
+  locked, its props halved). The fingers' weights fold into the hands, so the crowd skins with
+  23 bones. Packed: `civ-<id>.glb` 86–110 KB, `civ-<id>-lo.glb` 38–47 KB.
+
+**`crowd_anims.py`** retargets UAL clips the cast doesn't use (`Walk_Formal_Loop`,
+`Dance_Loop`) with `retarget.py`, and makes moves on the idle and the walk: each frame of the
+base clip with some bones re-aimed by `posing.py`'s ops in the body's frame. `stand` and
+`stand-talk` bring the UAL idle's wide, staggered fighter's stance in under the hips (each
+thigh turned 7° in, the feet kept level); `wave`, `cheer` (a little hop), `fist-pump`, `point`
+(up and ahead), `photo` (a phone held out at arm's length), `phone` and `walk-phone` (head
+down to it), `clap` and `look-up` ride on that. Every oscillation is a whole number of cycles in
+its loop. Exported at every other frame and only the keyed bones (`retarget.export`'s `step`
+and `lean`): 96 KB packed for 13 clips.
+
+**In the game** (`apps/wgp/src/game3d/scene/crowd/`): `crowd.ts` (the system the engine
+mounts), `placement.ts` (where, from the night's seed), `lod.ts` (budgets, fades, animation
+rates), `batch.ts` (an instanced fill and hull per body and level of detail, on two shared
+materials),
+`shaders.ts` (the cast's shaders, patched), `skeleton.ts` (forward kinematics into the bone
+texture), `clips.ts` (channels), `looks.ts`, `civilians.ts` (the files). `/lab/crowd` stands
+them in a row beside the cast.
+
+**Proof** (`game-shots/npcs/`, git-ignored): `npc-shoot.mjs perf` plays a whole autopilot night
+and records frame times, draw calls and the crowd's own counts (desktop or phone, any tier,
+CPU throttled); `table` lays the before and after runs out; `shots` takes the night's roofs,
+street, fight crowd, win and errand; `lineup` shoots `/lab/crowd`.
