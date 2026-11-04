@@ -19,17 +19,20 @@
  *   camera's heading again. In the air, steering by hand still holds the camera (chase.ts).
  * - Collision: the pivot first (from the hero, who is never inside a solid, out to it: a ray
  *   that starts inside a box misses it, so a lagging pivot cut into a wall let the old arm
- *   through), then the arm: a ray now and from where the pivot will be a moment from now, so
- *   the arm starts shortening before a wall arrives, and a thin sphere cast (five rays) it
- *   never crosses, down to a floor. In a tight spot the camera climbs a little for room
- *   instead of closing right in on the hero.
- * - A soft guard keeps the hero inside the middle of the frame across (tighter on a phone).
+ *   through), then the arm, which changes length no faster than `armRate` (the old 0.08 s
+ *   snap was a pop and a jolt) and so starts in early, from where the pivot is about to be,
+ *   down to a floor. In a tight spot the camera climbs a little for room instead of closing
+ *   right in on the hero.
+ * - Narrow screens (a phone upright): the hero stays near the middle across because the
+ *   camera slides with him (the pivot and the look point trail him less across, the look-ahead
+ *   and the lean toward the anchor shrink across), never because it turns to chase him. The
+ *   standing shot looks more level, so the stop sits below the tall top HUD.
  *
  * Pure: no three.js or React, nothing allocates per frame. Unit tested in chase.test.ts.
  */
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
-import { Smoothed, angleDelta, type MutableVec3 } from "./springs";
+import { Smoothed, angleDelta, type MutableVec3, type SmoothedVec3 } from "./springs";
 
 export const TRAVEL_TUNING = {
   /** Standing: seconds of standing before the shot eases in, and its ease in and out (s). */
@@ -44,6 +47,12 @@ export const TRAVEL_TUNING = {
   standShoulder: -0.2,
   /** On a portrait screen the hero stands a little further out: the waypoint pin is about as wide as he is, and the frame is narrow. */
   standShoulderPortrait: -0.28,
+  /**
+   * On a portrait screen the top HUD stack hides the top third, where a far stop sits when the
+   * camera looks down: standing there, the view looks down at most this much (radians), the
+   * hero lower in the frame instead.
+   */
+  standViewPortrait: 0.12,
   /** The standing turn toward the stop: dead zone, settle (radians), spring (s), rate cap (rad/s). */
   standDeadZone: 0.06,
   standSettle: 0.02,
@@ -72,29 +81,36 @@ export const TRAVEL_TUNING = {
   runCone: 2.1,
   /** The stick counts as turned past this (radians), which picks up the camera's heading again. */
   steerRelatch: 0.5,
-  /** Collision: the sphere's radius (the climb's probes, the pivot's), how far ahead the pivot is predicted (s), the shortest arm. */
+  /**
+   * The arm's length changes no faster than this (units/s). The old arm snapped in on a 0.08 s
+   * spring when a wall cut across it: a pop, and a jolt in the view's pitch (most of the
+   * swing's angular jerk). The city shader fades a wall the arm is still easing past.
+   */
+  armRate: 500,
+  /**
+   * So the capped arm starts in early: the wall is also looked for from where the pivot will
+   * be this far ahead (s) along the hero's velocity, its vertical part weighted by `armAheadY`
+   * (the pivot follows the hero's height softly, so a fall moves it less than the hero).
+   */
+  armAhead: 0.2,
+  armAheadY: 0.5,
+  /** Collision: the sphere's radius (the climb's probes, the pivot's) and the shortest arm. */
   probeRadius: 16,
-  probeAhead: 0.05,
   minArm: 110,
   /** Boxed in (the room under this share of the arm wanted): climb up to `climbMax` radians; the want is low-passed (s), then sprung (s). */
   climbBelow: 0.6,
   climbMax: 0.45,
   climbSmooth: 0.3,
   climbTime: 0.5,
-  /** The guard across, as shares of the half width: eased back past `soft`, never past `hard`; landscape, then portrait. */
-  guardSoft: 0.45,
-  guardHard: 0.62,
-  guardSoftPortrait: 0.26,
-  guardHardPortrait: 0.4,
   /**
-   * The guard up and down (NDC: soft, hard), landscape then portrait: only a safety net at the
-   * frame's edges (any tighter, it tilts the view with every dip of a swing). On a phone held
-   * upright it keeps the hero off the power arc below and the stacked HUD above.
+   * Narrow screens (a phone upright sees about a third as far across as 16:9): the hero is kept
+   * near the middle across by the camera sliding with him, not turning. `narrowRef` is the
+   * tangent of a 16:9 screen's half width at 55° (the share is that over this screen's, never
+   * under `narrowMin`); the lag the pivot and the look point may trail the hero by across, the
+   * look-ahead and the lean toward the anchor across all shrink by it.
    */
-  guardLow: [-0.7, -0.85] as readonly number[],
-  guardHigh: [0.6, 0.75] as readonly number[],
-  guardLowPortrait: [-0.45, -0.55] as readonly number[],
-  guardHighPortrait: [0.42, 0.52] as readonly number[],
+  narrowRef: 0.925,
+  narrowMin: 0.4,
 };
 
 export type TravelTuning = typeof TRAVEL_TUNING;
@@ -186,6 +202,10 @@ export interface TravelShot {
   stand: number;
   /** Running on something with the stick held: the stick keeps its heading, the camera follows the run. */
   steering: boolean;
+  /** How much the look point rises above the chase's (units): a phone's standing shot looks more level. */
+  raise: number;
+  /** How far this screen sees across against 16:9 (1 at 16:9 or wider). */
+  narrow: number;
 }
 
 export interface TravelInput {
@@ -210,6 +230,9 @@ export interface ChaseBase {
   maxRate: number;
   /** The camera's FOV now (degrees). */
   fov: number;
+  /** The pivot's and the look point's heights above the hero, as shares of the arm. */
+  pivotLift: number;
+  frameLift: number;
 }
 
 /**
@@ -217,7 +240,7 @@ export interface ChaseBase {
  * and the steering heading held for the stick.
  */
 export class TravelFraming {
-  readonly shot: TravelShot = { yaw: 0, dist: 0, pitch: 0, side: 0, follow: false, hold: false, deadZone: 0, settle: 0, yawTime: 0, maxRate: 0, fovKick: 0, stand: 0, steering: false };
+  readonly shot: TravelShot = { yaw: 0, dist: 0, pitch: 0, side: 0, follow: false, hold: false, deadZone: 0, settle: 0, yawTime: 0, maxRate: 0, fovKick: 0, stand: 0, steering: false, raise: 0, narrow: 1 };
   private readonly standS = new Smoothed();
   private stoodFor = 0;
   private readonly kick = new Smoothed();
@@ -231,8 +254,8 @@ export class TravelFraming {
   private readonly steerOut = { fx: 0, fz: 1 };
   private started = false;
   // Scratch.
-  private readonly ahead: MutableVec3 = { x: 0, y: 0, z: 0 };
   private readonly ring: MutableVec3 = { x: 0, y: 0, z: 0 };
+  private readonly ahead: MutableVec3 = { x: 0, y: 0, z: 0 };
   private readonly probeDir: MutableVec3 = { x: 0, y: 0, z: 0 };
   private readonly up: MutableVec3 = { x: 0, y: 0, z: 0 };
 
@@ -292,6 +315,11 @@ export class TravelFraming {
     const ndc = t.standShoulder + (t.standShoulderPortrait - t.standShoulder) * portrait;
     const side = goalYaw === null ? 0 : -ndc * Math.tan(half) * dist * Math.cos(pitch) * stand;
 
+    // A phone's standing shot: the look point rises until the view looks down no more than `standViewPortrait`.
+    const camH = (base.pivotLift + Math.sin(pitch)) * dist;
+    const flat = Math.cos(pitch) * dist;
+    const raise = Math.max(0, camH - Math.tan(t.standViewPortrait) * flat - base.frameLift * dist) * stand * portrait;
+
     // The follow: dead zone and settle no wider than a share of the screen; standing, a calm turn to the stop.
     const deadZone = Math.min(base.deadZone, t.deadZoneShare * half);
     const settle = Math.min(base.settle, t.settleShare * half);
@@ -326,6 +354,82 @@ export class TravelFraming {
     s.maxRate = steering ? t.runMaxRate : base.maxRate + (t.standMaxRate - base.maxRate) * stand;
     s.fovKick = i.reducedMotion ? 0 : Math.max(0, this.kick.value);
     s.steering = steering;
+    s.raise = raise;
+    s.narrow = clamp(Math.tan(half) / t.narrowRef, t.narrowMin, 1);
+    return s;
+  }
+
+  /**
+   * Narrow screens: squeeze how far a spring (the pivot's, the look point's) trails its goal
+   * across the view (`yaw` the view's heading) to `leash` × the narrow share, along a smooth
+   * curve (tanh: no corner where the old leash's clamp had one). Both trail together, so the
+   * camera slides with the hero instead of turning to keep him in. In place; none at 16:9.
+   */
+  tighten(spring: SmoothedVec3, now: MutableVec3, want: Vec3, yaw: number, leash: number): void {
+    const k = this.shot.narrow;
+    if (k >= 0.999 || leash <= 0) return;
+    const rx = -Math.cos(yaw);
+    const rz = Math.sin(yaw);
+    const lat = (now.x - want.x) * rx + (now.z - want.z) * rz;
+    const room = leash * k;
+    const move = room * Math.tanh(lat / room) - lat;
+    now.x = spring.x.value = now.x + rx * move;
+    now.z = spring.z.value = now.z + rz * move;
+  }
+
+  /**
+   * Keep the arm's change this frame (from `before`) under `armRate`, along a smooth curve
+   * (tanh), and its spring's velocity to match, so a capped pull-in doesn't overshoot after.
+   */
+  capArm(arm: Smoothed, before: number, dt: number): void {
+    if (!(dt > 0)) return;
+    const most = this.tuning.armRate * dt;
+    const d = arm.value - before;
+    if (Math.abs(d) <= most * 0.5) return;
+    const capped = most * Math.tanh(d / most);
+    arm.value = before + capped;
+    arm.velocity = capped / dt;
+  }
+
+  /** Narrow screens: shrink the across-the-view part of each vector (the look-ahead, the lean toward the anchor) by the narrow share. */
+  narrowAcross(a: MutableVec3, b: MutableVec3, yaw: number): void {
+    const k = this.shot.narrow;
+    if (k >= 0.999) return;
+    const rx = -Math.cos(yaw);
+    const rz = Math.sin(yaw);
+    for (const v of [a, b]) {
+      const lat = v.x * rx + v.z * rz;
+      v.x -= rx * lat * (1 - k);
+      v.z -= rz * lat * (1 - k);
+    }
+  }
+
+  /**
+   * The plain chase's shot (the travel shots off: a fight's encounter, its end, a knockout):
+   * the chase's own heading, distance, pitch and follow, nothing added. The travel state is
+   * left as it was, so the shots ease back in afterwards rather than jump.
+   */
+  plain(travelYaw: number, base: ChaseBase): TravelShot {
+    const s = this.shot;
+    s.yaw = travelYaw;
+    s.dist = base.dist;
+    s.pitch = base.pitch;
+    s.side = 0;
+    s.follow = false;
+    s.hold = false;
+    s.deadZone = base.deadZone;
+    s.settle = base.settle;
+    s.yawTime = base.yawTime;
+    s.maxRate = base.maxRate;
+    s.fovKick = 0;
+    s.stand = 0;
+    s.steering = false;
+    s.raise = 0;
+    s.narrow = 1;
+    this.steerHeld = false;
+    // The plain chase doesn't climb: start the climb from nothing when the shots come back.
+    this.climb.snap(0);
+    this.climbAvg = 0;
     return s;
   }
 
@@ -361,23 +465,30 @@ export class TravelFraming {
   }
 
   /**
-   * How long the arm may be along `dir` (unit) from `pivot`, which the arm eases toward: the
-   * ray now and from where the pivot will be `probeAhead` seconds on, kept `pad` short of what
-   * they meet, so the arm starts shortening before the wall arrives; never under `minArm`
-   * (shorter, the hero fills the frame: the city shader fades the wall instead).
+   * How long the arm may be along `dir` (unit) from `pivot`, which the arm eases toward: rays
+   * from the pivot now and from where it will be half and all of `armAhead` seconds on, kept
+   * `pad` short of what they meet; never under `minArm` (shorter, the hero fills the frame: the
+   * city shader fades the wall instead).
    */
-  collide(cast: Cast | null, pivot: Vec3, dir: Vec3, reach: number, vel: Vec3, pad: number): number {
-    const t = this.tuning;
+  collide(cast: Cast | null, pivot: Vec3, dir: Vec3, reach: number, pad: number, vel: Vec3 | null = null): number {
     if (!cast) return reach;
+    const t = this.tuning;
     const floor = Math.min(t.minArm, reach);
-    const room = (hit: number | null) => (hit === null || !Number.isFinite(hit) ? reach : clamp(hit - pad, floor, reach));
-    const now = room(cast(pivot, dir, reach + pad));
-    if (!(t.probeAhead > 0)) return now;
-    const a = this.ahead;
-    a.x = pivot.x + vel.x * t.probeAhead;
-    a.y = pivot.y + vel.y * t.probeAhead;
-    a.z = pivot.z + vel.z * t.probeAhead;
-    return Math.min(now, room(cast(a, dir, reach + pad)));
+    const room = (o: Vec3) => {
+      const hit = cast(o, dir, reach + pad);
+      return hit === null || !Number.isFinite(hit) ? reach : clamp(hit - pad, floor, reach);
+    };
+    let limit = room(pivot);
+    if (vel && t.armAhead > 0) {
+      const a = this.ahead;
+      for (const k of [0.5, 1]) {
+        a.x = pivot.x + vel.x * t.armAhead * k;
+        a.y = pivot.y + vel.y * t.armAhead * k * t.armAheadY;
+        a.z = pivot.z + vel.z * t.armAhead * k;
+        limit = Math.min(limit, room(a));
+      }
+    }
+    return limit;
   }
 
   /**
@@ -418,99 +529,4 @@ export class TravelFraming {
 /** Whether the player is holding the stick past its dead zone. */
 function stickHeld(steer: { x: number; y: number } | null): boolean {
   return !!steer && steer.x * steer.x + steer.y * steer.y > 0.04;
-}
-
-/** Keep the hero inside the frame's safe middle: across, then up and down (both soft). */
-export function guardFrame(position: Vec3, target: MutableVec3, hero: Vec3, fov: number, aspect: number, t: TravelTuning = TRAVEL_TUNING): void {
-  guardAcross(position, target, hero, fov, aspect, t);
-  guardUpDown(position, target, hero, fov, aspect, t);
-}
-
-/** Squeeze `v` past `soft` toward `hard` (both the same side of 0, |hard| > |soft|): tanh, smooth, never reaching it. */
-function squeeze(v: number, soft: number, hard: number): number {
-  const room = Math.abs(hard - soft);
-  if (room < 1e-6) return soft;
-  const over = Math.abs(v - soft);
-  return soft + Math.sign(hard - soft) * room * Math.tanh(over / room);
-}
-
-/**
- * Keep the hero inside a band up and down (NDC): past a soft edge the view tilts toward him
- * along a smooth curve, never letting him past the hard edge. Moves `target` up or down.
- */
-export function guardUpDown(position: Vec3, target: MutableVec3, hero: Vec3, fov: number, aspect: number, t: TravelTuning = TRAVEL_TUNING): void {
-  let fx = target.x - position.x;
-  let fy = target.y - position.y;
-  let fz = target.z - position.z;
-  const flat = Math.hypot(fx, fz);
-  const fl = Math.hypot(flat, fy);
-  if (flat < 1e-3) return;
-  fx /= fl;
-  fy /= fl;
-  fz /= fl;
-  // Right = forward × up, up' = right × forward.
-  const rl = Math.hypot(fz, fx);
-  const rx = -fz / rl;
-  const rz = fx / rl;
-  const ux = -rz * fy;
-  const uy = rz * fx - rx * fz;
-  const uz = rx * fy;
-  const hx = hero.x - position.x;
-  const hy = hero.y - position.y;
-  const hz = hero.z - position.z;
-  const depth = hx * fx + hy * fy + hz * fz;
-  if (depth < 1) return;
-  const tanV = Math.tan((fov * Math.PI) / 360);
-  const y = (hx * ux + hy * uy + hz * uz) / (depth * tanV);
-  const p = portraitShare(aspect);
-  const low = t.guardLow[0] + (t.guardLowPortrait[0] - t.guardLow[0]) * p;
-  const lowHard = t.guardLow[1] + (t.guardLowPortrait[1] - t.guardLow[1]) * p;
-  const high = t.guardHigh[0] + (t.guardHighPortrait[0] - t.guardHigh[0]) * p;
-  const highHard = t.guardHigh[1] + (t.guardHighPortrait[1] - t.guardHigh[1]) * p;
-  let want = y;
-  if (y < low) want = squeeze(y, low, lowHard);
-  else if (y > high) want = squeeze(y, high, highHard);
-  else return;
-  // Tilt the view by the difference in angle: down (more below the horizon) to lift a hero who sits too low.
-  const turn = Math.atan(want * tanV) - Math.atan(y * tanV);
-  const down = Math.atan2(-fy, Math.hypot(fx, fz)) + turn;
-  target.y = position.y - Math.tan(clamp(down, -1.4, 1.4)) * flat;
-}
-
-/**
- * Keep the hero inside the middle of the frame across: once its offset passes the soft edge
- * (a share of the half width) it's eased back along a smooth curve, never past the hard edge.
- * Tighter on a portrait screen. Moves `target` square to the view; returns how far (units, at
- * the hero's depth).
- */
-export function guardAcross(position: Vec3, target: MutableVec3, hero: Vec3, fov: number, aspect: number, t: TravelTuning = TRAVEL_TUNING): number {
-  const fx = target.x - position.x;
-  const fz = target.z - position.z;
-  const fl = Math.hypot(fx, fz);
-  if (fl < 1e-3) return 0;
-  const nx = fx / fl;
-  const nz = fz / fl;
-  // three.js's lookAt with +y up puts screen right at forward × up: (−nz, 0, nx).
-  const rx = -nz;
-  const rz = nx;
-  const hx = hero.x - position.x;
-  const hz = hero.z - position.z;
-  const depth = hx * nx + hz * nz;
-  if (depth < 1) return 0;
-  const portrait = portraitShare(aspect);
-  const soft = t.guardSoft + (t.guardSoftPortrait - t.guardSoft) * portrait;
-  const hard = t.guardHard + (t.guardHardPortrait - t.guardHard) * portrait;
-  const span = Math.tan(halfWidth(fov, aspect)) * depth;
-  const x = (hx * rx + hz * rz) / span;
-  const ax = Math.abs(x);
-  if (ax <= soft) return 0;
-  // Past the soft edge the offset is squeezed toward the hard edge (tanh: smooth, never reaching it).
-  const room = hard - soft;
-  const squeezed = soft + room * Math.tanh((ax - soft) / room);
-  const move = (ax - squeezed) * span * Math.sign(x);
-  // Turn the view toward the hero by that much at the hero's depth: the target moves by the same angle at its own.
-  const k = fl / depth;
-  target.x += rx * move * k;
-  target.z += rz * move * k;
-  return move;
 }

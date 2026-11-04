@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { City, Vec3 } from "@wgp/game-core/sim3d/contract";
+import type { City } from "@wgp/game-core/sim3d/contract";
 
-import { project } from "@/game3d/nav/waypoint";
-
-import { TRAVEL_TUNING, TravelFraming, bearing, guardAcross, guardUpDown, halfWidth, portraitShare, sphereCast } from "./framing";
+import { TRAVEL_TUNING, TravelFraming, bearing, halfWidth, portraitShare, sphereCast } from "./framing";
 import { createLocalRaycast } from "./raycast";
+import { Smoothed, SmoothedVec3 } from "./springs";
 
 /** One slab, x ∈ [−260, −200], z ∈ [−400, 400], 2000 tall. */
 function wallCity(): City {
@@ -23,8 +22,6 @@ function wallCity(): City {
 }
 
 const cast = createLocalRaycast(wallCity());
-/** A camera at `position` looking at `target`, for the screen checks. */
-const pose = (position: Vec3, target: Vec3, fov = 55) => ({ position, target, fov });
 
 describe("the sphere cast", () => {
   it("stops a radius short of a wall straight ahead", () => {
@@ -72,53 +69,106 @@ describe("the travel framing", () => {
 
   it("shortens the arm before a wall, but never under the floor", () => {
     const f = new TravelFraming();
-    const still = { x: 0, y: 0, z: 0 };
     // The slab 200 behind: the arm stops the pad short of it.
-    expect(f.collide(cast, { x: 0, y: 300, z: 0 }, { x: -1, y: 0, z: 0 }, 420, still, 24)).toBeCloseTo(176, 0);
+    expect(f.collide(cast, { x: 0, y: 300, z: 0 }, { x: -1, y: 0, z: 0 }, 420, 24)).toBeCloseTo(176, 0);
     // 60 behind: the floor holds (the city shader fades the wall instead).
-    expect(f.collide(cast, { x: -140, y: 300, z: 0 }, { x: -1, y: 0, z: 0 }, 420, still, 24)).toBe(TRAVEL_TUNING.minArm);
-    // Moving toward the wall: the prediction eases in early.
-    const now = f.collide(cast, { x: 200, y: 300, z: 0 }, { x: -1, y: 0, z: 0 }, 420, still, 24);
-    const moving = f.collide(cast, { x: 200, y: 300, z: 0 }, { x: -1, y: 0, z: 0 }, 420, { x: -1200, y: 0, z: 0 }, 24);
-    expect(moving).toBeLessThanOrEqual(now);
+    expect(f.collide(cast, { x: -140, y: 300, z: 0 }, { x: -1, y: 0, z: 0 }, 420, 24)).toBe(TRAVEL_TUNING.minArm);
+    // Clear: the whole reach.
+    expect(f.collide(cast, { x: 0, y: 300, z: 0 }, { x: 1, y: 0, z: 0 }, 420, 24)).toBe(420);
   });
 
-  it("guards the hero inside the frame across: untouched in the middle, never past the hard edge", () => {
-    const w = 390;
-    const h = 844;
-    const aspect = w / h;
-    const fov = 69;
-    const cam = { x: 0, y: 400, z: -400 };
-    // In the middle: nothing moves.
-    const centred = { x: 20, y: 400, z: 0 };
-    expect(guardAcross(cam, { x: 0, y: 400, z: 0 }, centred, fov, aspect)).toBe(0);
-    // Far off to the side on a phone: eased back, inside the hard edge.
-    for (const off of [120, 300, 2000]) {
-      const target = { x: 0, y: 400, z: 0 };
-      const hero = { x: -off, y: 400, z: 0 };
-      guardAcross(cam, target, hero, fov, aspect);
-      const p = project(hero, pose(cam, target, fov), w, h);
-      // NDC across is the share of the half width.
-      expect(Math.abs((p.x / w) * 2 - 1)).toBeLessThan(TRAVEL_TUNING.guardHardPortrait + 0.01);
-    }
+  it("changes the arm's length no faster than its rate, smoothly, and leaves small changes alone", () => {
+    const f = new TravelFraming();
+    const dt = 1 / 60;
+    const most = TRAVEL_TUNING.armRate * dt;
+    const arm = new Smoothed(400);
+    // A wall cuts the arm from 400 to 150 in one frame.
+    arm.value = 150;
+    arm.velocity = -9000;
+    f.capArm(arm, 400, dt);
+    expect(400 - arm.value).toBeLessThanOrEqual(most);
+    expect(400 - arm.value).toBeGreaterThan(most * 0.9);
+    // The spring's velocity matches the capped step (no overshoot after).
+    expect(arm.velocity).toBeCloseTo((arm.value - 400) / dt, 6);
+    // A small step goes through untouched.
+    const small = new Smoothed(400);
+    small.value = 398;
+    small.velocity = -120;
+    f.capArm(small, 400, dt);
+    expect(small.value).toBe(398);
+    expect(small.velocity).toBe(-120);
   });
 
-  it("guards the hero up and down: a phone keeps him off the power arc", () => {
-    const w = 390;
-    const h = 844;
-    const fov = 69;
-    const cam = { x: 0, y: 600, z: -400 };
-    // The hero far below the view.
-    const target = { x: 0, y: 600, z: 0 };
-    const hero = { x: 0, y: 250, z: 0 };
-    guardUpDown(cam, target, hero, fov, w / h);
-    const p = project(hero, pose(cam, target, fov), w, h);
-    const y = 1 - (p.y / h) * 2;
-    expect(y).toBeGreaterThan(TRAVEL_TUNING.guardLowPortrait[1] - 0.01);
-    expect(y).toBeLessThan(TRAVEL_TUNING.guardLowPortrait[0]);
-    // Inside the band: nothing moves.
-    const t2 = { x: 0, y: 380, z: 0 };
-    guardUpDown(cam, t2, { x: 0, y: 380, z: 0 }, fov, w / h);
-    expect(t2.y).toBe(380);
+  it("climbs for room in a tight spot, and starts from nothing again after the plain chase", () => {
+    // A low slab right behind, its top just above the pivot: no room straight back, room over the top.
+    const low = createLocalRaycast({ ...wallCity(), buildings: [{ ...wallCity().buildings[0], h: 355 }] });
+    const f = new TravelFraming();
+    const pivot = { x: -150, y: 340, z: 0 };
+    let climb = 0;
+    // Looking along +x (yaw π/2), the arm points back along −x into the slab.
+    for (let t = 0; t < 2; t += 1 / 60) climb = f.climbFor(low, pivot, Math.PI / 2, 0.2, 420, 24, 1 / 60);
+    expect(climb).toBeGreaterThan(0.1);
+    // A fight's end: the plain chase, then the shots again somewhere open.
+    f.plain(0, { dist: 420, pitch: 0.2, deadZone: 0.35, settle: 0.07, yawTime: 0.45, maxRate: Math.PI / 2, fov: 55, pivotLift: 0.086, frameLift: 0.12 });
+    expect(f.climbFor(null, pivot, Math.PI / 2, 0.2, 420, 24, 1 / 60)).toBeLessThan(0.001);
+  });
+
+  /** One frame of the travel shot on a screen of this aspect. */
+  const shot = (aspect: number, standing: boolean) => {
+    const f = new TravelFraming();
+    const input = { hero: { x: 0, y: 300, z: 0 }, vel: { x: 0, y: 0, z: standing ? 0 : 600 }, grounded: standing, goal: { x: 0, y: 300, z: 3000 }, steer: null, orbitYaw: 0, aspect, reducedMotion: false };
+    const base = { dist: 420, pitch: 0.2, deadZone: 0.35, settle: 0.07, yawTime: 0.45, maxRate: Math.PI / 2, fov: aspect < 1 ? 69 : 55, pivotLift: 0.086, frameLift: 0.12 };
+    const view = { position: { x: 0, y: 400, z: -400 }, target: { x: 0, y: 340, z: 0 } };
+    let s = f.update(input, 0, 0, 0, base, view, 1 / 60);
+    for (let t = 0; t < 3; t += 1 / 60) s = f.update(input, 0, 0, 0, base, view, 1 / 60);
+    return { f, s };
+  };
+
+  it("on a phone, looks more level when standing, so the stop sits below the tall top HUD", () => {
+    const phone = shot(390 / 844, true).s;
+    expect(phone.raise).toBeGreaterThan(30);
+    // The view then looks down no more than `standViewPortrait`: the camera's height over the look point, over the flat distance.
+    const camH = (0.086 + Math.sin(phone.pitch)) * phone.dist;
+    const lookH = 0.12 * phone.dist + phone.raise;
+    // (390×844 is 98% portrait, so a hair more.)
+    expect(Math.abs(Math.atan2(camH - lookH, Math.cos(phone.pitch) * phone.dist) - TRAVEL_TUNING.standViewPortrait)).toBeLessThan(0.01);
+    // Not on a wide screen, and not while moving.
+    expect(shot(16 / 9, true).s.raise).toBe(0);
+    expect(shot(390 / 844, false).s.raise).toBe(0);
+  });
+
+  it("on a phone, the pivot and the look point trail the hero less across (the camera slides, it doesn't turn), smoothly; not at 16:9", () => {
+    const { f, s } = shot(390 / 844, false);
+    // A phone upright sees about a third as far across as 16:9; the share floors at `narrowMin`.
+    expect(s.narrow).toBe(TRAVEL_TUNING.narrowMin);
+    // Viewing along +z (yaw 0): across is x. A spring 80 across and 50 along behind its goal.
+    const spring = new SmoothedVec3();
+    const now = { x: 80, y: 300, z: -50 };
+    spring.snap(now);
+    f.tighten(spring, now, { x: 0, y: 300, z: 0 }, 0, 90);
+    expect(Math.abs(now.x)).toBeLessThan(90 * s.narrow);
+    expect(now.x).toBeGreaterThan(0);
+    expect(now.z).toBe(-50);
+    expect(spring.x.value).toBe(now.x);
+    // Smooth: a little more lag across means a little more trail, never a corner.
+    const trail = (lag: number) => {
+      const v = { x: lag, y: 0, z: 0 };
+      f.tighten(new SmoothedVec3(), v, { x: 0, y: 0, z: 0 }, 0, 90);
+      return v.x;
+    };
+    for (let lag = 0; lag < 200; lag += 10) expect(trail(lag + 10)).toBeGreaterThan(trail(lag));
+    // The look-ahead and the lean shrink across, not along.
+    const lead = { x: 60, y: 0, z: 100 };
+    const lean = { x: -30, y: 20, z: 0 };
+    f.narrowAcross(lead, lean, 0);
+    expect(lead.x).toBeCloseTo(60 * s.narrow, 6);
+    expect(lead.z).toBe(100);
+    expect(lean.y).toBe(20);
+    // At 16:9 nothing changes.
+    const wide = shot(16 / 9, false);
+    expect(wide.s.narrow).toBe(1);
+    const w = { x: 80, y: 300, z: -50 };
+    wide.f.tighten(new SmoothedVec3(), w, { x: 0, y: 300, z: 0 }, 0, 90);
+    expect(w.x).toBe(80);
   });
 });

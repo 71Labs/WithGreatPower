@@ -51,6 +51,7 @@ export function createCameraRig(city: City, steady: boolean): CameraRig {
       i.reducedMotion = steady;
       i.goal = frame.mode === "travel" ? (frame.route?.[0] ?? null) : null;
       i.grounded = frame.hero.grounded;
+      i.framing = frame.mode !== "intro" && frame.mode !== "won" && frame.mode !== "ko";
       const pose = chase.update(i, dt);
       cue.status = status;
       cue.introLeft = status === "intro" ? introLeft : 0;

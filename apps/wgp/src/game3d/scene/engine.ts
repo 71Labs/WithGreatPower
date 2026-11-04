@@ -183,6 +183,8 @@ export class SceneEngine {
       // Travel: the next stop, and whether the hero stands or runs on something.
       i.goal = frame.mode === "travel" ? (frame.route?.[0] ?? null) : null;
       i.grounded = frame.hero.grounded;
+      // A fight's encounter, its end and a knockout keep the plain chase: the fight camera's to frame.
+      i.framing = frame.mode !== "intro" && frame.mode !== "won" && frame.mode !== "ko";
       const looked = this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbiting || heldStick.x * heldStick.x + heldStick.y * heldStick.y > 0.04;
       this.orbitYaw = 0;
       this.orbitPitch = 0;

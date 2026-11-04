@@ -476,6 +476,116 @@ describe("travel shots", () => {
     expect(cam.update(input, DT).steer).toBeNull();
   });
 
+  it("keeps the plain chase where the travel shots are off (a fight's encounter, its end, a knockout)", () => {
+    /** Standing facing +z with the next stop off at 60°: where the view ends up looking. */
+    const standing = (framing: boolean | undefined) => {
+      const cam = new ChaseCamera();
+      const input = createChaseInput();
+      input.framing = framing;
+      input.grounded = true;
+      input.facing = { x: 0, y: 0, z: 1 };
+      input.goal = { x: 2600, y: 300, z: 1500 };
+      input.hero = { x: 0, y: 300, z: 0 };
+      return viewYaw(run(cam, input, 4));
+    };
+    // On, it turns to the stop; off, it stays behind the hero's facing.
+    expect(standing(undefined)).toBeGreaterThan(0.9);
+    expect(Math.abs(standing(false))).toBeLessThan(0.01);
+
+    // Off: no held steering heading, and the arm pulls in as fast as the plain chase's.
+    const cam = new ChaseCamera(createCityRaycast(wallCity()));
+    const input = createChaseInput();
+    input.framing = false;
+    input.grounded = true;
+    input.steer = { x: 1, y: 0 };
+    input.vel = { x: 300, y: 0, z: 0 };
+    input.hero = { x: 0, y: 300, z: 900 };
+    let last = run(cam, input, 2).arm;
+    expect(cam.pose.steer).toBeNull();
+    let fastest = 0;
+    for (let t = 0; t < 2; t += DT) {
+      input.hero = { x: 0, y: 300, z: Math.max(0, input.hero.z - 900 * DT) };
+      const arm = cam.update(input, DT).arm;
+      fastest = Math.max(fastest, last - arm);
+      last = arm;
+    }
+    expect(fastest).toBeGreaterThan(TRAVEL_TUNING.armRate * DT * 1.5);
+  });
+
+  it("hands back from the plain chase (a fight's end) without a jump", () => {
+    for (const aspect of [16 / 9, 390 / 844]) {
+      const cam = new ChaseCamera(createCityRaycast(wallCity()));
+      const input = createChaseInput();
+      input.aspect = aspect;
+      // Heading +x close in front of the slab's face (x = −200): the arm behind is boxed in.
+      input.vel = { x: 300, y: 0, z: 0 };
+      input.hero = { x: -150, y: 300, z: 0 };
+      run(cam, input, 3);
+      // A fight's end: the plain chase for a while, the hero moving on.
+      input.framing = false;
+      for (let t = 0; t < 1.5; t += DT) {
+        input.hero = { x: input.hero.x + 300 * DT, y: 300, z: 0 };
+        cam.update(input, DT);
+      }
+      // The shots come back: no step in the view's direction over 2° a frame.
+      input.framing = true;
+      let last = { yaw: viewYaw(cam.pose), pitch: Math.atan2(cam.pose.target.y - cam.pose.position.y, Math.hypot(cam.pose.target.x - cam.pose.position.x, cam.pose.target.z - cam.pose.position.z)) };
+      for (let t = 0; t < 1; t += DT) {
+        input.hero = { x: input.hero.x + 300 * DT, y: 300, z: 0 };
+        const p = cam.update(input, DT);
+        const now = { yaw: viewYaw(p), pitch: Math.atan2(p.target.y - p.position.y, Math.hypot(p.target.x - p.position.x, p.target.z - p.position.z)) };
+        expect(Math.hypot(angleDelta(last.yaw, now.yaw), now.pitch - last.pitch)).toBeLessThan((2 * Math.PI) / 180);
+        last = now;
+      }
+    }
+  });
+
+  it("on a phone, keeps a pendulum-swinging hero near the middle by sliding with him, not turning", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.aspect = 390 / 844;
+    input.hero = { x: 0, y: 400, z: 0 };
+    let worstX = 0;
+    let worstRate = 0;
+    let last: number | null = null;
+    for (let i = 0; i < 6 * 60; i++) {
+      const t = i * DT;
+      // Travelling +x at 700 with a 1.2 s swing: ±650 sideways, ±400 along, ±350 vertical.
+      const w = (2 * Math.PI) / 1.2;
+      input.vel = { x: 700 + 400 * Math.cos(w * t), y: 350 * Math.sin(w * t), z: 650 * Math.sin(w * t) };
+      input.hero = { x: input.hero.x + input.vel.x * DT, y: 400 + (350 / w) * (1 - Math.cos(w * t)), z: input.hero.z + input.vel.z * DT };
+      const pose = cam.update(input, DT);
+      const y = viewYaw(pose);
+      if (t > 1) {
+        worstX = Math.max(worstX, Math.abs(ndc(pose, input.hero, input.aspect)!.x));
+        if (last !== null) worstRate = Math.max(worstRate, Math.abs(angleDelta(last, y)) / DT);
+      }
+      last = y;
+    }
+    // Before, the hero swung out to a third of the half width and the view swung after him at 17°/s.
+    expect(worstX).toBeLessThan(0.2);
+    expect(worstRate).toBeLessThan((8 * Math.PI) / 180);
+  });
+
+  it("never changes the arm's length faster than its rate when a wall cuts across it", () => {
+    const cam = new ChaseCamera(createCityRaycast(wallCity()));
+    const input = createChaseInput();
+    // Heading +x, the camera behind on −x; 600 off the slab's end (z = 400), so clear of it.
+    input.vel = { x: 300, y: 0, z: 0 };
+    input.hero = { x: 0, y: 300, z: 900 };
+    let last = run(cam, input, 2).arm;
+    let shortest = last;
+    // Slide across behind the slab: it cuts the arm to under half.
+    for (let t = 0; t < 2; t += DT) {
+      input.hero = { x: 0, y: 300, z: Math.max(0, input.hero.z - 900 * DT) };
+      const arm = cam.update(input, DT).arm;
+      expect(Math.abs(arm - last)).toBeLessThanOrEqual(TRAVEL_TUNING.armRate * DT + 1e-6);
+      shortest = Math.min(shortest, arm);
+      last = arm;
+    }
+    expect(shortest).toBeLessThan(220);
+  });
+
   it("keeps the camera out of a wall the pivot lags into, and never folds the arm onto the hero", () => {
     // The slab spans x ∈ [−260, −200]; the hero runs along it at x = −170, the camera behind (−z) and to its side.
     const city = wallCity();
