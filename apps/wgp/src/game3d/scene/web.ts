@@ -47,7 +47,8 @@ const FRAGMENT = /* glsl */ `
 uniform vec3 uInk;
 uniform vec3 uWhite;
 varying float vLayer;
-void main() { gl_FragColor = vec4(vLayer < 0.5 ? uInk : uWhite, 1.0); }
+// The white strand glows (alpha is the bloom's inverted glow, post-shaders.ts); its ink doesn't.
+void main() { gl_FragColor = vLayer < 0.5 ? vec4(uInk, 1.0) : vec4(uWhite, 0.5); }
 `;
 
 export class WebLine {

@@ -113,6 +113,7 @@ void main() {
   if (uFade > 0.0 && bayer4(gl_FragCoord.xy) < uFade) discard;
   float kind = vWebR.z;
   vec3 col;
+  float glow = 0.0;
   if (kind > 8.5) col = uInk;
   else if (kind > 7.5) col = uLens;
   else {
@@ -134,8 +135,13 @@ void main() {
     vec3 v = normalize(cameraPosition - vWorld);
     float rim = smoothstep(0.62, 0.7, 1.0 - abs(dot(n, v))) * step(0.25, dot(n, uLight));
     col = mix(col, vec3(1.0, 0.93, 0.82), rim * 0.32);
+    // And a cool moonlit edge on the shadow side, so the suit separates from the night.
+    float back = smoothstep(0.68, 0.78, 1.0 - abs(dot(n, v))) * (1.0 - step(0.25, dot(n, uLight)));
+    col = mix(col, vec3(0.62, 0.74, 1.0), back * 0.4);
+    glow = rim * 0.22 + back * 0.28;
   }
   col = mix(col, vec3(1.0), uFlash);
-  gl_FragColor = vec4(mix(col, uFog, uFogMix), 1.0);
+  // Alpha: the bloom's inverted glow (render/post-shaders.ts).
+  gl_FragColor = vec4(mix(col, uFog, uFogMix), 1.0 - glow * (1.0 - uFogMix));
 }
 `;

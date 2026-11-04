@@ -75,6 +75,18 @@ export function buildingFill(tone: number, accent: boolean): RGB {
 }
 
 /**
+ * The moon sticker on the sky dome (sky.ts): its azimuth (radians from +z toward +x), its
+ * elevation and its width (radians). The river's reflection and the halo read it too.
+ */
+export const MOON = { azimuth: 2.3, elevation: 0.3, width: 0.17 } as const;
+
+/** A unit vector toward the moon. */
+export function moonDirection(): RGB {
+  const { azimuth: a, elevation: e } = MOON;
+  return [Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)];
+}
+
+/**
  * Banded fog: distance thresholds (world units from the camera, measured on the ground plane
  * to each building's centre) and how far each band mixes toward the low sky. Flat steps, never
  * a gradient, so depth reads as the 2D renderer's far / mid / near layers.
