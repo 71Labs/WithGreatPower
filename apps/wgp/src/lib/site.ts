@@ -4,6 +4,15 @@ export const PLAY_URL = process.env.NEXT_PUBLIC_PLAY_URL ?? "/play";
 /** The public repository, linked from the footer and the closing call to action. */
 export const REPO_URL = process.env.NEXT_PUBLIC_REPO_URL ?? "https://github.com/71Labs/WithGreatPower";
 
+/** The production site, for absolute links in metadata, share posts and card images. */
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.wgponnear.fun").replace(/\/+$/, "");
+
+/** The short form drafted posts use ("wgponnear.fun/r/…"): X links it without the scheme. */
+export const SITE_HOST = "wgponnear.fun";
+
+/** A verified run's public page. */
+export const runPath = (runId: string) => `/r/${runId}`;
+
 /** The landing page's sections, in page order. */
 export const NAV = [
   { href: "#night", label: "How it plays" },

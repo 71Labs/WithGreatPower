@@ -30,6 +30,9 @@ const IMMUTABLE = [{ key: "Cache-Control", value: "public, max-age=31536000, imm
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@wgp/game-core"],
+  // PGlite (local dev and tests) finds its WASM through file URLs, which break once
+  // bundled into a page render: load it from node_modules as is. Neon is unaffected.
+  serverExternalPackages: ["@electric-sql/pglite"],
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
@@ -39,6 +42,11 @@ const nextConfig: NextConfig = {
     WGP_MEDIA_V: version("media"),
     // The licensed webfonts are copied in at deploy (scripts/deploy-prod.sh), never committed.
     WGP_NEUE_MONTREAL: existsSync(join(PUBLIC, "fonts", "NeueMontreal-Regular.woff2")) ? "1" : "",
+  },
+  // The card images read Neue Montreal from public/fonts when a deploy copied it in
+  // (src/server/social/fonts.ts): ship those files with the functions that draw them.
+  outputFileTracingIncludes: {
+    "/api/social/card/**": ["./public/fonts/NeueMontreal-*"],
   },
   images: {
     // AVIF where the browser takes it (about a fifth smaller than WebP for the landing's stills).

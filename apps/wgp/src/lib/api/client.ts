@@ -12,6 +12,7 @@ import type { LeaderboardView } from "@/server/db/board-view";
 import type { ImportResult } from "@/server/db/migrate-save";
 import type { StartedRun } from "@/server/db/runs";
 import type { ChainStatus } from "@/server/near/status";
+import type { XProfile } from "@/server/social/players";
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; message?: string; body?: Record<string, unknown> };
 
@@ -22,6 +23,8 @@ export interface Me {
   rev: number;
   activeRun: { runId: string; expiresAt: string; night: number } | null;
   runsToday: { used: number; limit: number };
+  /** The player's X handle (unverified) and whether drafts may tag them; absent from older servers. */
+  social?: XProfile;
 }
 
 export type MeResponse = Me | { signedIn: false };
@@ -98,7 +101,12 @@ export const postAction = (action: Action, rev: number) => call<ActionResponse>(
 /** Once per player, onto an empty server save. */
 export const migrateLocalSave = (save: Save) => call<MigrateResponse>("/api/migrate", { method: "POST", json: { save } });
 
-export type { ChainStatus, ClaimInfo };
+export type { ChainStatus, ClaimInfo, XProfile };
+
+/** 400 with `field` ("xHandle" or "xTagOk") when the handle or the choice is refused. */
+export const saveXProfile = (input: { xHandle: string | null; xTagOk: boolean }) => call<{ social: XProfile }>("/api/me/social", { method: "PUT", json: input });
+
+export const removeXProfile = () => call<{ social: XProfile }>("/api/me/social", { method: "DELETE" });
 
 /** An unclaimed Google player (through Privy): whether "Claim your name" can go through now. */
 export const getClaimInfo = (signal?: AbortSignal) => call<ClaimInfo>("/api/auth/privy/claim", { signal });

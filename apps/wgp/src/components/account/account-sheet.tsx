@@ -4,8 +4,8 @@
  * The account sheet. Signed out, it offers Google, an existing NEAR wallet, and in local
  * development a test player; a new Google player then picks a handle. Signed in, it shows
  * who you are on NEAR, quick play (./quick-play.tsx) or, for a Google player still on
- * their key's address, "Claim your name" (./claim-name.tsx), today's ranked runs and
- * Sign out.
+ * their key's address, "Claim your name" (./claim-name.tsx), an optional X handle with the
+ * opt-in to be tagged (./x-handle.tsx), today's ranked runs and Sign out.
  *
  * Google goes through Privy (a full-page redirect to Google and back; src/lib/privy) or
  * NEAR Auth (a popup; src/lib/near/near-auth.ts), per NEXT_PUBLIC_GOOGLE_SIGN_IN
@@ -28,6 +28,7 @@ import { GOOGLE_SIGN_IN, PRIVY_APP_ID } from "@/lib/privy/config";
 import { googleProblem, walletProblem, type SignInProblem } from "./errors";
 import { HandleField, handleProblem } from "./handle-field";
 import { closeAccountSheet, openAccountSheet, useAccountSheetOpen } from "./sheet-state";
+import { XHandleSection } from "./x-handle";
 
 const WalletSignIn = lazy(() => import("./wallet-sign-in"));
 /** Quick play pulls in near-connect for wallet players: load it only once a signed-in sheet opens. */
@@ -123,6 +124,7 @@ function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
           <QuickPlaySection me={me} />
         </Suspense>
       )}
+      <XHandleSection me={me} />
       <div className="flex flex-col gap-1.5">
         <StickerMeter label="Ranked runs today" value={used} max={limit} fill="bg-game-gold" />
         <p className="text-[13px] leading-5 text-game-muted">

@@ -100,6 +100,8 @@ import {
   FireIcon,
   SmartPhone01Icon,
   ReplayIcon,
+  NewTwitterIcon,
+  Download04Icon,
 } from "@hugeicons/core-free-icons";
 
 export type IconProps = Omit<ComponentProps<"svg">, "ref"> & { strokeWidth?: number; size?: number | string };
@@ -208,6 +210,9 @@ export const Headphones = make(HeadphonesIcon, "Headphones");
 export const Flame = make(FireIcon, "Flame");
 export const Smartphone = make(SmartPhone01Icon, "Smartphone");
 export const Replay = make(ReplayIcon, "Replay");
+/** The X (Twitter) logo. */
+export const XLogo = make(NewTwitterIcon, "XLogo");
+export const Download = make(Download04Icon, "Download");
 
 /** Lucide's `LucideIcon` type, for components that take an icon as a prop. */
 export type LucideIcon = Icon;

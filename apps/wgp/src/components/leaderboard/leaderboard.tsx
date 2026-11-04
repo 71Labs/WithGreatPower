@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { StickerBadge, StickerButton, StickerChip, StickerLink, StickerPanel } from "@/components/game/kit";
 import { HeroTile, StickerTabs, tabPanelProps, type StickerTab } from "@/components/game/ui";
 import { CircleAlert, Clock, Users } from "@/components/icons";
+import { ShareOnXIcon } from "@/components/social/share-on-x";
+import { runShareText, seasonShareText } from "@/lib/social/share";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { BoardRow } from "@/server/db/leaderboard";
 
@@ -66,7 +68,13 @@ function RankBadge({ rank }: { rank: number }) {
 /** Above the dock, like the place notice: the viewer's row sticks here while it's scrolled out of view. */
 const PINNED = "sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-10 sm:bottom-[calc(78px+env(safe-area-inset-bottom))]";
 
-function Row({ row, you, trophy = null }: { row: BoardRow; you: boolean; trophy?: Trophy }) {
+/** What the viewer's own row shares: the run behind it, or for a season total, the board. */
+function shareText(view: View, row: BoardRow): string | null {
+  if (view.board === "season") return seasonShareText(row.score, view.season?.name ?? "this season");
+  return row.runId ? runShareText(row.score, row.runId) : null;
+}
+
+function Row({ row, you, trophy = null, share = null }: { row: BoardRow; you: boolean; trophy?: Trophy; share?: string | null }) {
   return (
     <li
       className={`flex min-h-14 items-center gap-3 rounded-[14px] px-2.5 py-2 sm:px-3 ${you ? `${PINNED} bg-game-gold shadow-[var(--game-shadow-sm)] ring-2 ring-game-ink` : ""}`}
@@ -100,6 +108,7 @@ function Row({ row, you, trophy = null }: { row: BoardRow; you: boolean; trophy?
         {points.format(row.score)}
         <span className="sr-only"> points</span>
       </span>
+      {share ? <ShareOnXIcon text={share} label="Share your score on X" className="-my-1" /> : null}
     </li>
   );
 }
@@ -184,7 +193,7 @@ function Board({ view }: { view: View }) {
             ···
           </li>
         ) : (
-          <Row key={line.row.playerId} row={line.row} you={line.you} trophy={trophyFor(view, line.row.rank)} />
+          <Row key={line.row.playerId} row={line.row} you={line.you} trophy={trophyFor(view, line.row.rank)} share={line.you ? shareText(view, line.row) : null} />
         ),
       )}
     </ol>
