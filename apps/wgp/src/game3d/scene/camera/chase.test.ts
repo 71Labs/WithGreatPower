@@ -6,7 +6,7 @@ import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { arenaFit, CHASE_TUNING, ChaseCamera, chaseDistance, chaseFov, createChaseInput, steersByHand, type ChaseInput, type ChasePose } from "./chase";
 import { TRAVEL_TUNING } from "./framing";
-import { citySolids, createCityRaycast, raycastSolids, surfaceBelow } from "./raycast";
+import { citySolids, createCityRaycast, createLocalRaycast, raycastSolids, surfaceBelow } from "./raycast";
 import { angleDelta, SmoothedAngle } from "./springs";
 
 const DT = 1 / 60;
@@ -789,6 +789,62 @@ describe("arena two-shot", () => {
     };
     expect(progress(true)).toBeLessThan(progress(false) - 0.1);
     expect(progress(true)).toBeGreaterThan(0);
+  });
+
+  it("doesn't bob with a hop: a fighter's small jumps leave the camera and its look point still", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.arena = arena;
+    input.rival = { x: 150, y: 300, z: 0 };
+    input.rivalVel = { x: 0, y: 0, z: 0 };
+    // The hero hops 45 high twice a second beside him (ruleset 3 fights hopped all the time).
+    const at = (time: number) => {
+      const p = (time * 2) % 1;
+      input.hero = { x: -150, y: 266 + 180 * p * (1 - p), z: 0 };
+      input.vel = { x: 0, y: 180 * (1 - 2 * p) * 2, z: 0 };
+    };
+    let time = 0;
+    for (; time < 4; time += DT) {
+      at(time);
+      cam.update(input, DT);
+    }
+    let camLo = Infinity;
+    let camHi = -Infinity;
+    let lookLo = Infinity;
+    let lookHi = -Infinity;
+    for (; time < 8; time += DT) {
+      at(time);
+      const pose = cam.update(input, DT);
+      camLo = Math.min(camLo, pose.position.y);
+      camHi = Math.max(camHi, pose.position.y);
+      lookLo = Math.min(lookLo, pose.target.y);
+      lookHi = Math.max(lookHi, pose.target.y);
+      const p = ndc(pose, input.hero, input.aspect)!;
+      expect(Math.abs(p.y)).toBeLessThan(1);
+    }
+    expect(camHi - camLo).toBeLessThan(2);
+    expect(lookHi - lookLo).toBeLessThan(2);
+    // A real climb (a flyer rising 300) still moves the shot.
+    input.rival = { x: 150, y: 600, z: 0 };
+    const pose = run(cam, input, 3);
+    expect(pose.target.y).toBeGreaterThan(lookHi + 20);
+  });
+
+  it("never sits inside a wall in an arena: the arm comes in past its shortest two-shot instead", () => {
+    // A tall slab 150 behind the pivot, between the fighters' side and the arena's edge.
+    const city = wallCity();
+    const cam = new ChaseCamera(createLocalRaycast(city));
+    const input = createChaseInput();
+    input.arena = { x0: -400, z0: -400, x1: 400, z1: 400, h: 1020 };
+    input.hero = { x: 0, y: 300, z: -60 };
+    input.rival = { x: 0, y: 300, z: 60 };
+    input.facing = { x: 1, y: 0, z: 0 };
+    for (let t = 0; t < 4; t += DT) {
+      const pose = cam.update(input, DT);
+      const p = pose.position;
+      const inside = p.x > -260 && p.x < -200 && p.z > -400 && p.z < 400 && p.y < 2000;
+      expect(inside).toBe(false);
+    }
   });
 
   it("eases into a boxed-in climb instead of stepping the camera up", () => {

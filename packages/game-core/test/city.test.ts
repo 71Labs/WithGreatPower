@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { reduce } from "../src/rules/engine";
 import type { Stop } from "../src/rules/types";
 import { CityIndex, collideSphere, findAnchor, generateCity, groundBelow, raycastCity, type SphereHit } from "../src/sim3d/city";
-import { ALLEY_MIN, ANCHOR_RANGE, GRID, PITCH, STREET_BOUNCE_TOP } from "../src/sim3d/constants";
+import { ALLEY_MIN, ANCHOR_RANGE, DECK_HALF, GRID, PITCH, STREET_BOUNCE_TOP } from "../src/sim3d/constants";
 import { len2 } from "../src/sim3d/dmath";
 import { heroSave, STANDARD } from "./helpers";
 
@@ -139,14 +139,20 @@ describe("generateCity", () => {
         if (p.kind === "water-tower" && c.zones.some((z) => z.allyAt && z.allyAt.x === p.at.x && z.allyAt.z === p.at.z)) continue;
         for (const k of spots) expect(Math.hypot(p.at.x - k.x, p.at.z - k.z), `${p.kind} near a hero spot`).toBeGreaterThanOrEqual(k.r);
       }
-      // Doc's tower legs stand beyond his reach (sway 120, shoulder 28, arm 305) and inside the arena.
+      // Doc's tower legs stand inside the arena, beside the deck: off the stage, and clear of his
+      // arms, which sweep over the deck in the plane he keeps within 30 of its edges (v4).
       if (c.bridge) {
         const doc = c.zones.find((z) => z.villain === "doc-octochain")!;
         const half = c.bridge.towerHalf ?? 25;
+        const st = doc.stage!;
         for (const t of c.bridge.towers) {
           const along = c.bridge.axis === "x" ? Math.abs(t.x - doc.center.x) : Math.abs(t.z - doc.center.z);
-          expect(along - half).toBeGreaterThan(120 + 28 + 305 + 26);
+          const across = c.bridge.axis === "x" ? Math.abs(t.z - doc.center.z) : Math.abs(t.x - doc.center.x);
+          expect(across - half).toBeGreaterThanOrEqual(DECK_HALF);
+          expect(across - half - (DECK_HALF - 30)).toBeGreaterThan(20);
           expect(along + half).toBeLessThan(c.bridge.axis === "x" ? doc.bounds.x1 - doc.center.x : doc.bounds.z1 - doc.center.z);
+          // Not on the stage.
+          expect(t.x > st.x0 && t.x < st.x1 && t.z > st.z0 && t.z < st.z1).toBe(false);
         }
       }
     }

@@ -110,7 +110,11 @@ function placeInZone(s: SimState, z: Zone) {
   if (z.kind === "errand") return; // enterZone puts you beside the ally
   const b = z.bounds;
   const c = z.center;
-  if (s.city.bridge && z.villain === "doc-octochain") {
+  if (z.stage) {
+    // v4: on the stage, near one side.
+    const alongX = !(s.city.bridge && z.villain === "doc-octochain") || s.city.bridge.axis !== "z";
+    standAt(s, alongX ? z.stage.x0 + 150 : c.x, alongX ? c.z : z.stage.z0 + 150, z.stage.y + 60);
+  } else if (s.city.bridge && z.villain === "doc-octochain") {
     // On the deck, near one end.
     const alongX = s.city.bridge.axis !== "z";
     standAt(s, alongX ? b.x0 + 150 : c.x, alongX ? c.z : b.z0 + 150, 400);
@@ -197,7 +201,10 @@ function checkArrival(s: SimState) {
   const h = s.hero;
   const b = z.bounds;
   if (z.kind === "fight") {
-    if (h.x > b.x0 + 70 && h.x < b.x1 - 70 && h.z > b.z0 + 70 && h.z < b.z1 - 70) arrive(s, z);
+    // v4: over the stage, above its floor (the hero is kept on it from here on, so this never
+    // moves him, and never traps him under Doc's deck).
+    const st = z.stage;
+    if (st ? h.x > st.x0 + 40 && h.x < st.x1 - 40 && h.z > st.z0 + 40 && h.z < st.z1 - 40 && h.y - HERO_RADIUS > st.y - 4 : h.x > b.x0 + 70 && h.x < b.x1 - 70 && h.z > b.z0 + 70 && h.z < b.z1 - 70) arrive(s, z);
     return;
   }
   const a = stopTarget(s)!;

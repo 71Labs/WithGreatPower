@@ -44,7 +44,10 @@
  *     ever; the fit only changes how far back it sits. On a portrait screen the fit never
  *     sits further back than the roomy distance the sides are scored for.
  *   - The look point splits the angles down to each fighter, and a big height gap widens the
- *     FOV a little.
+ *     FOV a little. Both take each fighter at a steadied height (a dead band, then a quick
+ *     ease), so a hop or a flyer's bob doesn't move the shot; the fit takes them as they are.
+ *   - A wall closer than the shortest two-shot arm pulls the arm in further at once (never
+ *     inside a tower), and while one holds it short the side is re-picked and the camera climbs.
  *   - Pitch stays low (16°, easing up to 23° at most when boxed in) so the city stays behind
  *     the fighters. The arm shortens (never under 280) rather than climbing to a top-down
  *     view, and the shader fades a corner tower in the way.
@@ -166,6 +169,19 @@ export const CHASE_TUNING = {
   arenaSettle: 0.03,
   arenaYawTime: 0.35,
   arenaMaxRate: 2,
+  /**
+   * The two-shot frames each fighter at a steadied height: a hop or a flyer's bob inside this
+   * dead band (units) moves nothing; past it, the height eases in over `arenaYTime` (s), or
+   * `arenaYTimeSteady` under reduced motion or the steady camera.
+   */
+  arenaYBand: 50,
+  arenaYTime: 0.15,
+  arenaYTimeSteady: 0.45,
+  /** In an arena a wall may pull the arm in this close (under `arenaMinArm`) rather than leave the camera inside it. */
+  arenaWallArm: 180,
+  /** Held short by a wall: how much of the climb to `arenaPitchMax` to take (0–1), and the most extra FOV (degrees; never under reduced motion). */
+  arenaBoxedClimb: 0.5,
+  arenaSqueeze: 14,
 };
 
 export type ChaseTuning = typeof CHASE_TUNING;
@@ -353,6 +369,13 @@ export class ChaseCamera {
   private arenaPickIn = 0;
   /** The two-shot fit, low-passed (widening fast, tightening slowly). */
   private fitAvg = 0;
+  /** Each fighter's steadied height for the two-shot: the dead band's rest, and the eased value. */
+  private readonly heroRestY = { rest: 0, y: 0 };
+  private readonly rivalRestY = { rest: 0, y: 0 };
+  private readonly heroSteady: MutableVec3 = { x: 0, y: 0, z: 0 };
+  private readonly rivalSteady: MutableVec3 = { x: 0, y: 0, z: 0 };
+  /** In an arena, a wall held the arm short of the two-shot last frame. */
+  private boxed = false;
   private inArena = false;
   private started = false;
   /** The travel shots (standing, the lean toward the stop, the held steering, collision). */
@@ -430,9 +453,21 @@ export class ChaseCamera {
     let fovBoost = 0;
     let roomWant = distWant;
     if (arena && input.rival) {
-      const r = input.rival;
+      // Both fighters at steadied heights (a hop, a bob, a step: nothing; a climb or a dive eases in).
+      const fresh = !this.inArena || first;
+      const yTime = input.reducedMotion ? t.arenaYTimeSteady : t.arenaYTime;
+      const hs0 = steadyY(this.heroRestY, hero.y, fresh, t.arenaYBand, lowPass(step, yTime));
+      const rs0 = steadyY(this.rivalRestY, input.rival.y, fresh, t.arenaYBand, lowPass(step, yTime));
+      const heroS = this.heroSteady;
+      heroS.x = hero.x;
+      heroS.y = hs0;
+      heroS.z = hero.z;
+      const r = this.rivalSteady;
+      r.x = input.rival.x;
+      r.y = rs0;
+      r.z = input.rival.z;
       const dx = r.x - hero.x;
-      const dy = r.y - hero.y;
+      const dy = r.y - heroS.y;
       const dz = r.z - hero.z;
       // Vertical separation counts more: the view is wider than it is tall. The sides are
       // scored for this much room (more than the fit asks), so the arm has some to spare.
@@ -441,7 +476,7 @@ export class ChaseCamera {
       pitchWant = t.arenaPitch;
       this.pivotWant.x = (hero.x + r.x) / 2;
       this.pivotWant.z = (hero.z + r.z) / 2;
-      focusY = (hero.y + r.y) / 2;
+      focusY = (heroS.y + r.y) / 2;
       // The arm that fits both, seen the way the camera looks now (the player's own look included).
       const o = this.probe;
       o.x = this.pivotWant.x;
@@ -451,11 +486,12 @@ export class ChaseCamera {
       const fitPitch = this.started ? this.pitch.value + this.manualPitch.value : t.arenaPitch;
       const fitFov = this.started ? this.fov.value : chaseFov(this.speedAvg, input.aspect, input.reducedMotion, t);
       // Where both will be a moment from now counts too, so the shot widens before a fighter leaves it.
+      // The fit takes them where they really are (and a moment on), so a dive or a climb still fits.
       const ahead = this.ahead;
       leadInto(ahead[0], hero, vel, t);
-      leadInto(ahead[1], r, input.rivalVel, t);
+      leadInto(ahead[1], input.rival, input.rivalVel, t);
       const fit = Math.max(
-        arenaFit(hero, r, o, fitYaw, fitPitch, fitFov, input.aspect, t),
+        arenaFit(hero, input.rival, o, fitYaw, fitPitch, fitFov, input.aspect, t),
         arenaFit(ahead[0], ahead[1], o, fitYaw, fitPitch, fitFov, input.aspect, t),
       );
       if (!this.inArena || first) this.fitAvg = fit;
@@ -581,6 +617,11 @@ export class ChaseCamera {
       this.dir.z = -Math.cos(yaw);
       const room = rayExit(pivot, this.dir, arena.x0 - slack, arena.x1 + slack, arena.z0 - slack, arena.z1 + slack);
       if (room < want * Math.cos(pitch)) climbWant = Math.max(0, Math.min(t.arenaPitchMax, Math.acos(clamp(room / want, 0, 1))) - pitch);
+      // A wall held the arm short last frame: look for a side with room now, and climb over it meanwhile.
+      if (this.boxed) {
+        climbWant = Math.max(climbWant, t.arenaBoxedClimb * (t.arenaPitchMax - pitch));
+        this.arenaPickIn = Math.min(this.arenaPickIn, 0);
+      }
     }
     if (first) this.climb.snap(climbWant);
     pitch += Math.max(0, this.climb.step(climbWant, t.arenaClimbTime, step));
@@ -600,7 +641,9 @@ export class ChaseCamera {
     // Collision: ease in fast, hold a moment once clear, then ease back out.
     let limit = reach;
     const hit = this.raycast ? this.raycast(pivot, d, reach + t.probePad) : null;
-    if (hit !== null && Number.isFinite(hit)) limit = Math.max(minArm, Math.min(reach, hit - t.probePad));
+    // In an arena a wall closer than the two-shot's shortest arm pulls it in further: never inside a tower.
+    if (hit !== null && Number.isFinite(hit)) limit = Math.max(arena ? Math.min(minArm, Math.max(t.arenaWallArm, hit - t.probePad)) : minArm, Math.min(reach, hit - t.probePad));
+    this.boxed = !!arena && limit < want - 40;
     // Travel: from the pivot cleared of the city, down to a floor (framing.ts).
     const room = shots ? this.travel.collide(this.raycast, pivot, d, reach, t.probePad, vel) : null;
     if (room !== null) limit = room;
@@ -614,7 +657,8 @@ export class ChaseCamera {
       else this.arm.velocity = 0;
     }
     if (shots && !first) this.travel.capArm(this.arm, armBefore, step);
-    const arm = Math.min(this.arm.value, reach);
+    // In an arena a wall cutting in shortens the arm at once (the spring eases it back out).
+    const arm = Math.min(this.arm.value, reach, arena ? limit : Infinity);
 
     const p = this.pose;
     p.position.x = pivot.x + d.x * arm;
@@ -644,14 +688,14 @@ export class ChaseCamera {
       // Two-shot: aim halfway between the angles down to each fighter, so the nearer one
       // (lower on screen from an over-the-shoulder angle) stays in frame with the other.
       const flat = Math.max(1, Math.hypot(this.lookWant.x - p.position.x, this.lookWant.z - p.position.z));
-      this.lookWant.y = p.position.y - Math.tan((angleDown(p.position, hero) + angleDown(p.position, input.rival)) / 2) * flat;
+      this.lookWant.y = p.position.y - Math.tan((angleDown(p.position, this.heroSteady) + angleDown(p.position, this.rivalSteady)) / 2) * flat;
     }
     if (first) this.look.snap(this.lookWant);
     this.look.step(this.lookWant, t.targetTime, t.targetTimeY, step, p.target);
     clampLag(this.look, p.target, this.lookWant, Math.min(t.lagMax, t.lagArm * arm), t.lagArmY * arm);
     if (shots) this.travel.tighten(this.look, p.target, this.lookWant, yaw, Math.min(t.lagMax, t.lagArm * arm));
     // Boxed in (the arm well short of what the two-shot wants): widen a little instead.
-    const squeeze = arena && !input.reducedMotion ? clamp((want - arm) / want, 0, 0.5) * 2 * t.arenaFovBoost : 0;
+    const squeeze = arena && !input.reducedMotion ? clamp((want - arm) / want, 0, 0.5) * 2 * t.arenaSqueeze : 0;
     p.fov = this.fov.step(fovWant + squeeze, t.fovTime, step);
     p.arm = arm;
     p.want = want;
@@ -722,6 +766,22 @@ export class ChaseCamera {
     }
     return wrapAngle(best);
   }
+}
+
+/**
+ * A fighter's steadied height: `s.rest` follows `y` only past `band` (a dead band), and `s.y`
+ * eases toward it by `k` (a low-pass share). `reset` starts both at `y`.
+ */
+function steadyY(s: { rest: number; y: number }, y: number, reset: boolean, band: number, k: number): number {
+  if (reset || !Number.isFinite(s.y)) {
+    s.rest = y;
+    s.y = y;
+    return y;
+  }
+  if (y > s.rest + band) s.rest = y - band;
+  else if (y < s.rest - band) s.rest = y + band;
+  s.y += (s.rest - s.y) * k;
+  return s.y;
 }
 
 /** Where a fighter will be `arenaLead` seconds on (at most `arenaLeadMax` away), into `out`. */

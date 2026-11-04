@@ -12,6 +12,7 @@
 import { DT } from "./constants";
 import type { HeroAction, RenderFrame3D, Vec3 } from "./contract";
 import { datan2, dcos, dsin, len2 } from "./dmath";
+import { inOpening } from "./combat";
 import { comboMultiplier } from "./pickups";
 import { armShoulder, armTip } from "./villains";
 import type { SimState, Villain } from "./types";
@@ -139,7 +140,8 @@ export function heroAction(s: SimState): HeroAction {
   if (h.heldT > 0) return "held";
   if (h.hurtT > 0) return "hurt";
   if (h.slam > 0) return "slam";
-  if (h.dashT > 0) return "dash";
+  // v4: a web-zip draws as a dash, with the web out to the villain.
+  if (h.dashT > 0 || h.zip >= 0) return "dash";
   if (h.rope) return h.climbing ? "climb" : "swing";
   if (h.grounded) return len2(h.vx, h.vz) > 30 ? "run" : "idle";
   return "air";
@@ -147,11 +149,21 @@ export function heroAction(s: SimState): HeroAction {
 
 /* ------------------------------------------------------------------ villains */
 
+/** The body a zip pulls the hero at (Sybil's copy or the villain), or null. */
+function zipTarget(s: SimState): Vec3 | null {
+  const v = s.villain!;
+  const b = s.hero.strikeBody >= 0 ? v.bodies[s.hero.strikeBody] : null;
+  if (b && b.alive) return b;
+  return b ? null : v;
+}
+
 /** A short state word for a villain, for animation. */
 function villainState(s: SimState): string {
   const v = s.villain!;
   if (s.mode === "won") return "webbed";
   if (v.stun > 0) return "stunned";
+  // v4: Gas Goblin's stall and Sandwich Man's stumble are openings: they read as dazed.
+  if (inOpening(v)) return "stunned";
   if (v.invuln > 0) return "guard";
   if (v.kind === "doc-octochain" && v.phase === "retract") return "open";
   switch (v.phase) {
@@ -241,9 +253,14 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   out.mode = s.mode;
   set(out.hero.pos, h.x, h.y, h.z);
   set(out.hero.vel, h.vx, h.vy, h.vz);
+  const zipTo = h.zip >= 0 && s.villain ? zipTarget(s) : null;
   if (h.rope) {
     out.hero.anchor = out.hero.anchor ?? v3();
     set(out.hero.anchor, h.rope.x, h.rope.y, h.rope.z);
+  } else if (zipTo) {
+    // v4: the zip's web, stuck to the villain it pulls you at.
+    out.hero.anchor = out.hero.anchor ?? v3();
+    set(out.hero.anchor, zipTo.x, zipTo.y, zipTo.z);
   } else out.hero.anchor = null;
   out.hero.grounded = h.grounded;
   out.hero.hp = s.hp;

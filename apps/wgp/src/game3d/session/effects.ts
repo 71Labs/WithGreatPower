@@ -15,7 +15,20 @@ export interface EffectsTarget {
   cut(): void;
   /** A web that found nothing to stick to: the strand flies out and drops. */
   fizzle?(): void;
+  /** A strike at a villain in reach (ruleset 4): the hero throws a punch. */
+  punch?(): void;
 }
+
+/**
+ * Ruleset 4: the big wind-ups get a word over the villain the moment they start, so the rhythm
+ * reads (dodge now), and Sandwich Man's hop over your web gets its joke.
+ */
+const TELEGRAPH: Record<string, string> = {
+  "Glider dive": "DIVE!",
+  "Front-run": "FRONT-RUN!",
+  "Cross-chain slam": "SLAM!",
+  "Front-runs your web": "HOP!",
+};
 
 /** Bursts sit a little above the point they mark, so they don't hide the sticker. */
 const above = (x: number, y: number, z: number, up = 60): Vec3 => ({ x, y: y + up, z });
@@ -35,8 +48,24 @@ export function sceneEffects(target: () => EffectsTarget | null) {
         }
         break;
       case "villain-hit":
-        t.burst(ev.by === "sling" || ev.by === "web-bomb" ? "ZAP!" : ev.by === "gwei" ? "WHAM!" : "POW!", above(ev.x, ev.y, ev.z), { size: ev.double ? 130 : 110 });
+        // The last hit lands biggest.
+        t.burst(ev.by === "sling" || ev.by === "web-bomb" ? "ZAP!" : ev.by === "gwei" ? "WHAM!" : ev.hits === 0 ? "KAPOW!" : "POW!", above(ev.x, ev.y, ev.z), { size: ev.double || ev.hits === 0 ? 130 : 110 });
         break;
+      case "strike":
+        t.punch?.();
+        break;
+      case "zip":
+        t.burst("THWIP!", above(ev.tx, ev.ty, ev.tz, 40), { size: 64, life: 0.5, rise: 20 });
+        break;
+      case "clang":
+        // His guard (or Doc's arms) turned the blow: a small, quick word, so a wasted hit reads.
+        t.burst(ev.reason === "arms" ? "CLANG!" : "BLOCK!", above(ev.x, ev.y, ev.z, 50), { size: 70, life: 0.45, rise: 16 });
+        break;
+      case "villain-attack": {
+        const word = TELEGRAPH[ev.label];
+        if (word) t.burst(word, above(ev.x, ev.y, ev.z, 70), { size: 84, life: 0.7, rise: 24 });
+        break;
+      }
       case "hero-hurt":
         t.burst("OOF!", above(ev.x, ev.y, ev.z), { size: 90, life: 0.8 });
         break;

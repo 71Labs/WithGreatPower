@@ -141,6 +141,13 @@ export function nightScore(stops: readonly Stop[], out: ScoreOut = playerOut) {
       case "thwip":
         out.sfx("thwip", { rate: vary(ev.x + depth(ev)) });
         break;
+      // Ruleset 4: a web-zip at a villain is a quicker thwip; a strike's swing a short whoosh.
+      case "zip":
+        out.sfx("thwip", { rate: 1.15 });
+        break;
+      case "strike":
+        out.sfx("swing", { volume: 0.4, rate: 1.35 });
+        break;
       case "release":
         if (ev.grade === "perfect") {
           out.sfx("release-perfect");
@@ -159,7 +166,7 @@ export function nightScore(stops: readonly Stop[], out: ScoreOut = playerOut) {
         out.sfx("street-thud");
         break;
       case "villain-hit":
-        out.sfx(ev.by === "slam" || ev.by === "dash" ? "pow" : "villain-hit", { rate: vary(ev.x + depth(ev)) });
+        out.sfx(ev.by === "slam" || ev.by === "dash" || ev.by === "strike" ? "pow" : "villain-hit", { rate: vary(ev.x + depth(ev)) });
         if (ev.copy) out.sfx("sybil-pop", { volume: 0.7 });
         break;
       case "hero-hurt":
