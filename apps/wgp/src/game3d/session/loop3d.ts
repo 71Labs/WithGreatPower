@@ -20,6 +20,8 @@ import type { InputFrame, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 
 import { EventBus, HudStore, type LoopStatus } from "@/sim/loop";
 
+import type { SceneCue } from "@/game3d/scene/camera/director";
+
 import { blendFrame, copyFrame, teleported } from "./blend";
 import { hudSnapshot, LegTracker, routeProgress } from "./hud";
 
@@ -77,6 +79,8 @@ export class RunLoop {
   /** What the scene draws: the blend of the last two ticks. Mutated in place. */
   readonly view: RenderFrame3D;
   status: LoopStatus = "loading";
+  /** The status and the countdown, for the camera's beats (the countdown's establishing shot, the outro). Kept current. */
+  readonly cue: SceneCue;
   /** One input per tick: the latch, or the autopilot (setSource). */
   private source: (run: Run) => InputFrame = () => ({ dir: 0, mag: 0, web: false, shot: 0 });
 
@@ -102,6 +106,7 @@ export class RunLoop {
     this.hud = opts.hud ?? new HudStore();
     this.introTotal = opts.introSeconds ?? INTRO_SECONDS;
     this.introLeft = this.introTotal;
+    this.cue = { status: this.status, introLeft: this.introTotal, introTotal: this.introTotal };
     this.outroLeft = opts.outroSeconds ?? OUTRO_SECONDS;
     this.now = opts.now ?? (() => performance.now());
     this.curr = fillRenderFrame(run.sim, newRenderFrame());
@@ -176,6 +181,8 @@ export class RunLoop {
     }
     const live = this.status === "live" && runActive(this.run);
     blendFrame(this.prev, this.curr, live ? this.acc / DT : 1, this.view);
+    this.cue.status = this.status;
+    this.cue.introLeft = this.status === "intro" ? Math.max(0, this.introLeft) : this.status === "loading" ? this.introTotal : 0;
     this.publish();
   }
 
