@@ -22,6 +22,8 @@ export const OCCLUSION = {
   outerEnd: 10,
   innerCam: 40,
   innerEnd: 0,
+  /** In a fight, anything this close to the camera fades (fully inside half of it), so a prop beside a low two-shot never fills a corner. */
+  nearFight: 220,
 } as const;
 
 function setEnd(out: Vector4, cam: Vec3, at: Vec3 | null, pull: number): void {
@@ -41,8 +43,9 @@ function setEnd(out: Vector4, cam: Vec3, at: Vec3 | null, pull: number): void {
   out.set(at.x + dx * k, at.y + dy * k, at.z + dz * k, 1);
 }
 
-/** Point the fade at the camera and up to two targets (null turns that end off). */
-export function setOcclusion(u: SharedUniforms, cam: Vec3, a: Vec3 | null, b: Vec3 | null): void {
+/** Point the fade at the camera and up to two targets (null turns that end off); `near` fades what crowds the lens (fights). */
+export function setOcclusion(u: SharedUniforms, cam: Vec3, a: Vec3 | null, b: Vec3 | null, near = 0): void {
+  u.uOccNear.value = a ? near : 0;
   u.uOccCam.value.set(cam.x, cam.y, cam.z);
   if (a) u.uOccHero.value.set(a.x, a.y, a.z, 1);
   else u.uOccHero.value.w = 0;

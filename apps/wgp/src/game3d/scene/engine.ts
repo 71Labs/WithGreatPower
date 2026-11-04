@@ -17,7 +17,7 @@ import { citySolids, createCityRaycast, type CitySolids } from "./camera/raycast
 import { SpeedLines } from "./camera/speed-lines";
 import { buildCityMeshes, type CityMeshes } from "./city/city-meshes";
 import { createSharedUniforms, type SharedUniforms } from "./city/materials";
-import { setOcclusion } from "./city/occlusion";
+import { OCCLUSION, setOcclusion } from "./city/occlusion";
 import { Bursts, type BurstOptions } from "./effects";
 import { Hazards } from "./hazards";
 import { Pickups } from "./pickups";
@@ -193,7 +193,8 @@ export class SceneEngine {
     this.city.updateLod(camera.position.x, camera.position.z);
     // Fade what stands between the camera and the hero (and the rival in a fight); clear the
     // deck's traffic while a fight is on the bridge.
-    setOcclusion(u, camera.position, frame ? frame.hero.pos : null, frame && frame.mode === "fight" ? this.input.rival : null);
+    const fight = !!frame && frame.mode === "fight";
+    setOcclusion(u, camera.position, frame ? frame.hero.pos : null, fight ? this.input.rival : null, fight ? OCCLUSION.nearFight : 0);
     this.city.traffic.setDeckClear(!!frame && frame.mode !== "travel" && this.onDeck(this.cityData.zones[frame.stop]?.center));
     this.speedLines.update(frame ? frame.hero.vel : null, camera, size.width * dpr, size.height * dpr, dt, time);
 
@@ -202,7 +203,7 @@ export class SceneEngine {
       const t0 = performance.now();
       this.characters.update(frame, camera, size, dt, time);
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
-      this.hazards.update(frame);
+      this.hazards.update(frame, frame.mode === "fight" ? (this.cityData.zones[frame.stop]?.stage?.y ?? null) : null);
       this.pickups.update(frame, time);
       // The sparkle shows once the web's shot has reached the anchor.
       this.bursts.setAnchor(this.characters.stuck);

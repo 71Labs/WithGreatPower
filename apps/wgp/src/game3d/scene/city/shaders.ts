@@ -57,6 +57,7 @@ uniform vec4 uOccA;   // first target end xyz, w: on
 uniform vec4 uOccB;   // second target end xyz, w: on
 uniform vec4 uOccR;   // outer radius at the camera, at the target; inner radius at the camera, at the target
 uniform vec4 uOccHero; // the hero, w: on
+uniform float uOccNear; // fights: fade what's within this of the camera (above the fighters' feet); 0 off
 
 float occCone(vec3 c, vec3 h, vec3 end) {
   vec3 a = uOccCam;
@@ -90,6 +91,8 @@ float occlusion(mat4 inst) {
   if (uOccHero.w > 0.5 && under.x < 24.0 && under.z < 24.0 && uOccHero.y > c.y + h.y - 12.0) return 0.0;
   float f = occCone(c, h, uOccA.xyz);
   if (uOccB.w > 0.5) f = max(f, occCone(c, h, uOccB.xyz));
+  // In a fight, a prop or a wall crowding the lens (a water tower beside the camera) thins out too.
+  if (uOccNear > 0.0 && c.y + h.y > uOccHero.y - 20.0) f = max(f, 1.0 - smoothstep(uOccNear * 0.5, uOccNear, sdBox3(uOccCam, c, h)));
   return f;
 }
 `;
