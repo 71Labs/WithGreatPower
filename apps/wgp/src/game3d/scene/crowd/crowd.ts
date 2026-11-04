@@ -118,6 +118,8 @@ export class CrowdSystem {
   private loading: Promise<void> | null = null;
   private people: Person[] = [];
   private manual: ManualPerson[] | null = null;
+  /** Clip measurements still to make, a couple per frame. */
+  private warm: { body: number; clip: CrowdClip }[] = [];
   private clock = 0;
   private disposed = false;
   private order: number[] = [];
@@ -193,6 +195,9 @@ export class CrowdSystem {
     const far = new CrowdBatch(parts("lo"), k, materials, Math.max(CROWD_TIERS.high.max, spec.max), "crowd-far");
     const blocks = files.assets.length * CHANNELS.length;
     this.built = { files, full, skeletons, clips, poses, materials, near, far, looks, due: new Float32Array(blocks), need: new Float32Array(blocks) };
+    // Each clip measured on each body (its floor, a walk's stride) a couple a frame from now
+    // on, so a whole crowd switching to a cheer at once doesn't measure them all in one frame.
+    this.warm = skeletons.flatMap((_, body) => [...clips.values()].map((clip) => ({ body, clip })));
     if (near) this.root.add(near.group);
     this.root.add(far.group);
     this.plan();
@@ -288,6 +293,11 @@ export class CrowdSystem {
     }
     const b = this.built;
     const spec = this.spec;
+    for (let k = 0; k < 2 && this.warm.length; k++) {
+      const { body, clip } = this.warm.pop()!;
+      b.skeletons[body].floor(clip, this.measure);
+      if (/^walk/.test(clip.name)) b.skeletons[body].stride(clip, this.measure);
+    }
     const cam = camera.position;
     const hero = frame?.hero.pos ?? null;
     const rival = frame && frame.mode === "fight" ? (frame.villains.find((v) => !v.copy) ?? frame.villains[0] ?? null) : null;
@@ -405,6 +415,7 @@ export class CrowdSystem {
     b.looks.dispose();
     this.built = null;
     this.people = [];
+    this.warm = [];
   }
 
   dispose(): void {
