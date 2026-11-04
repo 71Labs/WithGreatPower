@@ -5,7 +5,8 @@ import type { City } from "@wgp/game-core/sim3d/contract";
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { arenaFit, CHASE_TUNING, ChaseCamera, chaseDistance, chaseFov, createChaseInput, steersByHand, type ChaseInput, type ChasePose } from "./chase";
-import { citySolids, createCityRaycast, raycastSolids, surfaceBelow } from "./raycast";
+import { TRAVEL_TUNING } from "./framing";
+import { citySolids, createCityRaycast, createLocalRaycast, raycastSolids, surfaceBelow } from "./raycast";
 import { angleDelta, SmoothedAngle } from "./springs";
 
 const DT = 1 / 60;
@@ -299,6 +300,317 @@ describe("chase camera", () => {
   });
 });
 
+describe("travel shots", () => {
+  /** The view's yaw (atan2(x, z) of position → target). */
+  const viewYaw = (p: ChasePose) => Math.atan2(p.target.x - p.position.x, p.target.z - p.position.z);
+
+  it("stands calmly over the shoulder toward the next stop: the hero left of centre, the stop ahead of the view", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 300, z: 0 };
+    input.vel = { x: 0, y: 0, z: 0 };
+    input.grounded = true;
+    // Facing +z, the next stop off to the side (+x, at 60°).
+    input.facing = { x: 0, y: 0, z: 1 };
+    input.goal = { x: 2600, y: 300, z: 1500 };
+    let lastYaw: number | null = null;
+    let fastest = 0;
+    let pose = cam.update(input, DT);
+    for (let t = 0; t < 5; t += DT) {
+      pose = cam.update(input, DT);
+      const y = viewYaw(pose);
+      if (lastYaw !== null) fastest = Math.max(fastest, Math.abs(angleDelta(lastYaw, y)) / DT);
+      lastYaw = y;
+    }
+    const toStop = Math.atan2(2600, 1500);
+    expect(Math.abs(angleDelta(toStop, viewYaw(pose)))).toBeLessThan(0.05);
+    // Calm: never faster than the standing turn's cap (and a little for the look point).
+    expect(fastest).toBeLessThan(1.1);
+    const hero = ndc(pose, input.hero, input.aspect)!;
+    expect(hero.x).toBeLessThan(-0.12);
+    expect(hero.x).toBeGreaterThan(-0.3);
+    const stop = ndc(pose, input.goal, input.aspect)!;
+    expect(stop.x).toBeGreaterThan(hero.x + 0.1);
+    // A little higher than the travel shot (11.5°): about 17° above.
+    const lift = Math.atan2(pose.position.y - input.hero.y, Math.hypot(pose.position.x - input.hero.x, pose.position.z - input.hero.z));
+    expect(lift).toBeGreaterThan(0.25);
+  });
+
+  it("eases out of the standing shot once the hero moves, without a jump", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 300, z: 0 };
+    input.vel = { x: 0, y: 0, z: 0 };
+    input.grounded = true;
+    input.facing = { x: 0, y: 0, z: 1 };
+    input.goal = { x: 0, y: 300, z: 3000 };
+    let pose = run(cam, input, 3);
+    let last = { ...pose.position };
+    let step = { x: 0, y: 0, z: 0 };
+    let worst = 0;
+    // Runs toward the stop.
+    input.vel = { x: 0, y: 0, z: 390 };
+    for (let t = 0; t < 2; t += DT) {
+      input.hero = { x: 0, y: 300, z: input.hero.z + 390 * DT };
+      pose = cam.update(input, DT);
+      const now = { x: pose.position.x - last.x, y: pose.position.y - last.y, z: pose.position.z - last.z };
+      // The camera's change in velocity, a frame to the next (units a frame, per frame).
+      worst = Math.max(worst, Math.hypot(now.x - step.x, now.y - step.y, now.z - step.z));
+      step = now;
+      last = { ...pose.position };
+    }
+    // The hero goes from still to running in one tick (6.5 units a frame); the camera takes it up gently.
+    expect(worst).toBeLessThan(1.5);
+    // Back behind the hero: centred across.
+    expect(Math.abs(ndc(pose, input.hero, input.aspect)!.x)).toBeLessThan(0.05);
+  });
+
+  it("turns before the way ahead leaves a phone's narrow view (the dead zone fits the screen)", () => {
+    /** The yaw after the heading turns 15°, on a screen of this aspect. */
+    const turned = (aspect: number) => {
+      const cam = new ChaseCamera();
+      const input = createChaseInput();
+      input.aspect = aspect;
+      input.hero = { x: 0, y: 400, z: 0 };
+      input.vel = { x: 0, y: 0, z: 800 };
+      run(cam, input, 3);
+      const a = (15 * Math.PI) / 180;
+      input.vel = { x: 800 * Math.sin(a), y: 0, z: 800 * Math.cos(a) };
+      return run(cam, input, 4).yaw;
+    };
+    // A 16:9 screen sees ±44° across: 15° off is inside its dead zone. A phone sees ±17.5°.
+    expect(Math.abs(turned(16 / 9))).toBeLessThan(0.02);
+    expect(turned(390 / 844)).toBeGreaterThan(0.15);
+  });
+
+  it("leans toward the next stop when it's roughly ahead, more on the last stretch", () => {
+    const lean = (goalDist: number) => {
+      const cam = new ChaseCamera();
+      const input = createChaseInput();
+      input.hero = { x: 0, y: 400, z: 0 };
+      input.vel = { x: 0, y: 0, z: 900 };
+      // The stop 40° off the heading.
+      const a = (40 * Math.PI) / 180;
+      input.goal = { x: goalDist * Math.sin(a), y: 400, z: goalDist * Math.cos(a) };
+      for (let t = 0; t < 4; t += DT) {
+        input.hero = { x: 0, y: 400, z: input.hero.z + 900 * DT };
+        input.goal = { x: input.goal.x, y: 400, z: input.goal.z + 900 * DT };
+        cam.update(input, DT);
+      }
+      return cam.pose.yaw;
+    };
+    const far = lean(5000);
+    const near = lean(600);
+    expect(far).toBeGreaterThan(0.08);
+    expect(far).toBeLessThan(0.45);
+    expect(near).toBeGreaterThan(far + 0.1);
+  });
+
+  it("sits a little lower at speed", () => {
+    const lift = (speed: number) => {
+      const cam = new ChaseCamera();
+      const input = createChaseInput();
+      input.hero = { x: 0, y: 400, z: 0 };
+      input.vel = { x: speed, y: 0, z: 0 };
+      const p = run(cam, input, 4);
+      return Math.atan2(p.position.y - 400, Math.hypot(p.position.x, p.position.z));
+    };
+    expect(lift(1600)).toBeLessThan(lift(200) - 0.03);
+  });
+
+  it("kicks the FOV a little when the speed jumps, never under reduced motion", () => {
+    const peak = (reducedMotion: boolean) => {
+      const cam = new ChaseCamera();
+      const input = createChaseInput();
+      input.reducedMotion = reducedMotion;
+      input.hero = { x: 0, y: 400, z: 0 };
+      input.vel = { x: 500, y: 0, z: 0 };
+      const steady = run(cam, input, 4).fov;
+      // A boost: 500 → 1300 at once.
+      input.vel = { x: 1300, y: 0, z: 0 };
+      let most = 0;
+      for (let t = 0; t < 1; t += DT) most = Math.max(most, cam.update(input, DT).fov);
+      const settled = run(cam, input, 6).fov;
+      return { steady, most, settled };
+    };
+    const on = peak(false);
+    expect(on.most).toBeGreaterThan(on.steady + 1);
+    expect(on.most - on.steady).toBeLessThan(CHASE_TUNING.fovFast - CHASE_TUNING.fovSlow + 4);
+    const off = peak(true);
+    expect(off.most).toBeCloseTo(off.steady, 6);
+    expect(off.settled).toBeCloseTo(off.steady, 6);
+  });
+
+  it("eases behind a run on a roof while the stick keeps the heading it was pushed with", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.hero = { x: 0, y: 300, z: 0 };
+    input.grounded = true;
+    input.vel = { x: 0, y: 0, z: 0 };
+    input.facing = { x: 0, y: 0, z: 1 };
+    run(cam, input, 2);
+    // Stick right: the hero runs right of the view (−x, for a view along +z).
+    input.steer = { x: 1, y: 0 };
+    input.vel = { x: -390, y: 0, z: 0 };
+    const first = cam.update(input, DT);
+    const steer = { ...first.steer! };
+    expect(Math.abs(steer.fx)).toBeLessThan(0.01);
+    expect(steer.fz).toBeCloseTo(1, 3);
+    let pose = first;
+    for (let t = 0; t < 4; t += DT) {
+      input.hero = { x: input.hero.x - 390 * DT, y: 300, z: 0 };
+      pose = cam.update(input, DT);
+      // The stick's heading never moves while it's held.
+      expect(pose.steer!.fx).toBeCloseTo(steer.fx, 6);
+      expect(pose.steer!.fz).toBeCloseTo(steer.fz, 6);
+    }
+    // The camera came round behind the run.
+    expect(Math.abs(angleDelta(-Math.PI / 2, viewYaw(pose)))).toBeLessThan(0.3);
+    // Mouse look still steers.
+    input.orbitYaw = 0.2;
+    pose = cam.update(input, DT);
+    input.orbitYaw = 0;
+    expect(Math.atan2(pose.steer!.fx, pose.steer!.fz)).toBeCloseTo(0.2, 3);
+    // Let go: the stick goes by the view again.
+    input.steer = { x: 0, y: 0 };
+    expect(cam.update(input, DT).steer).toBeNull();
+  });
+
+  it("keeps the plain chase where the travel shots are off (a fight's encounter, its end, a knockout)", () => {
+    /** Standing facing +z with the next stop off at 60°: where the view ends up looking. */
+    const standing = (framing: boolean | undefined) => {
+      const cam = new ChaseCamera();
+      const input = createChaseInput();
+      input.framing = framing;
+      input.grounded = true;
+      input.facing = { x: 0, y: 0, z: 1 };
+      input.goal = { x: 2600, y: 300, z: 1500 };
+      input.hero = { x: 0, y: 300, z: 0 };
+      return viewYaw(run(cam, input, 4));
+    };
+    // On, it turns to the stop; off, it stays behind the hero's facing.
+    expect(standing(undefined)).toBeGreaterThan(0.9);
+    expect(Math.abs(standing(false))).toBeLessThan(0.01);
+
+    // Off: no held steering heading, and the arm pulls in as fast as the plain chase's.
+    const cam = new ChaseCamera(createCityRaycast(wallCity()));
+    const input = createChaseInput();
+    input.framing = false;
+    input.grounded = true;
+    input.steer = { x: 1, y: 0 };
+    input.vel = { x: 300, y: 0, z: 0 };
+    input.hero = { x: 0, y: 300, z: 900 };
+    let last = run(cam, input, 2).arm;
+    expect(cam.pose.steer).toBeNull();
+    let fastest = 0;
+    for (let t = 0; t < 2; t += DT) {
+      input.hero = { x: 0, y: 300, z: Math.max(0, input.hero.z - 900 * DT) };
+      const arm = cam.update(input, DT).arm;
+      fastest = Math.max(fastest, last - arm);
+      last = arm;
+    }
+    expect(fastest).toBeGreaterThan(TRAVEL_TUNING.armRate * DT * 1.5);
+  });
+
+  it("hands back from the plain chase (a fight's end) without a jump", () => {
+    for (const aspect of [16 / 9, 390 / 844]) {
+      const cam = new ChaseCamera(createCityRaycast(wallCity()));
+      const input = createChaseInput();
+      input.aspect = aspect;
+      // Heading +x close in front of the slab's face (x = −200): the arm behind is boxed in.
+      input.vel = { x: 300, y: 0, z: 0 };
+      input.hero = { x: -150, y: 300, z: 0 };
+      run(cam, input, 3);
+      // A fight's end: the plain chase for a while, the hero moving on.
+      input.framing = false;
+      for (let t = 0; t < 1.5; t += DT) {
+        input.hero = { x: input.hero.x + 300 * DT, y: 300, z: 0 };
+        cam.update(input, DT);
+      }
+      // The shots come back: no step in the view's direction over 2° a frame.
+      input.framing = true;
+      let last = { yaw: viewYaw(cam.pose), pitch: Math.atan2(cam.pose.target.y - cam.pose.position.y, Math.hypot(cam.pose.target.x - cam.pose.position.x, cam.pose.target.z - cam.pose.position.z)) };
+      for (let t = 0; t < 1; t += DT) {
+        input.hero = { x: input.hero.x + 300 * DT, y: 300, z: 0 };
+        const p = cam.update(input, DT);
+        const now = { yaw: viewYaw(p), pitch: Math.atan2(p.target.y - p.position.y, Math.hypot(p.target.x - p.position.x, p.target.z - p.position.z)) };
+        expect(Math.hypot(angleDelta(last.yaw, now.yaw), now.pitch - last.pitch)).toBeLessThan((2 * Math.PI) / 180);
+        last = now;
+      }
+    }
+  });
+
+  it("on a phone, keeps a pendulum-swinging hero near the middle by sliding with him, not turning", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.aspect = 390 / 844;
+    input.hero = { x: 0, y: 400, z: 0 };
+    let worstX = 0;
+    let worstRate = 0;
+    let last: number | null = null;
+    for (let i = 0; i < 6 * 60; i++) {
+      const t = i * DT;
+      // Travelling +x at 700 with a 1.2 s swing: ±650 sideways, ±400 along, ±350 vertical.
+      const w = (2 * Math.PI) / 1.2;
+      input.vel = { x: 700 + 400 * Math.cos(w * t), y: 350 * Math.sin(w * t), z: 650 * Math.sin(w * t) };
+      input.hero = { x: input.hero.x + input.vel.x * DT, y: 400 + (350 / w) * (1 - Math.cos(w * t)), z: input.hero.z + input.vel.z * DT };
+      const pose = cam.update(input, DT);
+      const y = viewYaw(pose);
+      if (t > 1) {
+        worstX = Math.max(worstX, Math.abs(ndc(pose, input.hero, input.aspect)!.x));
+        if (last !== null) worstRate = Math.max(worstRate, Math.abs(angleDelta(last, y)) / DT);
+      }
+      last = y;
+    }
+    // Before, the hero swung out to a third of the half width and the view swung after him at 17°/s.
+    expect(worstX).toBeLessThan(0.2);
+    expect(worstRate).toBeLessThan((8 * Math.PI) / 180);
+  });
+
+  it("never changes the arm's length faster than its rate when a wall cuts across it", () => {
+    const cam = new ChaseCamera(createCityRaycast(wallCity()));
+    const input = createChaseInput();
+    // Heading +x, the camera behind on −x; 600 off the slab's end (z = 400), so clear of it.
+    input.vel = { x: 300, y: 0, z: 0 };
+    input.hero = { x: 0, y: 300, z: 900 };
+    let last = run(cam, input, 2).arm;
+    let shortest = last;
+    // Slide across behind the slab: it cuts the arm to under half.
+    for (let t = 0; t < 2; t += DT) {
+      input.hero = { x: 0, y: 300, z: Math.max(0, input.hero.z - 900 * DT) };
+      const arm = cam.update(input, DT).arm;
+      expect(Math.abs(arm - last)).toBeLessThanOrEqual(TRAVEL_TUNING.armRate * DT + 1e-6);
+      shortest = Math.min(shortest, arm);
+      last = arm;
+    }
+    expect(shortest).toBeLessThan(220);
+  });
+
+  it("keeps the camera out of a wall the pivot lags into, and never folds the arm onto the hero", () => {
+    // The slab spans x ∈ [−260, −200]; the hero runs along it at x = −170, the camera behind (−z) and to its side.
+    const city = wallCity();
+    const cam = new ChaseCamera(createCityRaycast(city));
+    const input = createChaseInput();
+    input.hero = { x: 400, y: 300, z: -300 };
+    input.vel = { x: -900, y: 0, z: 300 };
+    const s = citySolids(city, { props: false });
+    const inside = (p: Vec3) => p.x > s.minX[0] && p.x < s.maxX[0] && p.y > s.minY[0] && p.y < s.maxY[0] && p.z > s.minZ[0] && p.z < s.maxZ[0];
+    let insideFrames = 0;
+    let shortest = Infinity;
+    for (let t = 0; t < 2.5; t += DT) {
+      // Swings in toward the wall and turns along it.
+      const vx = input.hero.x > -150 ? -900 : 0;
+      input.vel = { x: vx, y: 0, z: vx ? 300 : 900 };
+      input.hero = { x: Math.max(-170, input.hero.x + vx * DT), y: 300, z: input.hero.z + input.vel.z * DT };
+      const pose = cam.update(input, DT);
+      if (inside(pose.position)) insideFrames++;
+      shortest = Math.min(shortest, pose.arm);
+    }
+    expect(insideFrames).toBeLessThan(6);
+    expect(shortest).toBeGreaterThanOrEqual(TRAVEL_TUNING.minArm - 1);
+  });
+});
+
 /** A point on screen from a pose, NDC (x right, y up), and its depth; null behind the camera. */
 function ndc(pose: ChasePose, p: Vec3, aspect: number): { x: number; y: number; z: number } | null {
   const f = { x: pose.target.x - pose.position.x, y: pose.target.y - pose.position.y, z: pose.target.z - pose.position.z };
@@ -477,6 +789,62 @@ describe("arena two-shot", () => {
     };
     expect(progress(true)).toBeLessThan(progress(false) - 0.1);
     expect(progress(true)).toBeGreaterThan(0);
+  });
+
+  it("doesn't bob with a hop: a fighter's small jumps leave the camera and its look point still", () => {
+    const cam = new ChaseCamera();
+    const input = createChaseInput();
+    input.arena = arena;
+    input.rival = { x: 150, y: 300, z: 0 };
+    input.rivalVel = { x: 0, y: 0, z: 0 };
+    // The hero hops 45 high twice a second beside him (ruleset 3 fights hopped all the time).
+    const at = (time: number) => {
+      const p = (time * 2) % 1;
+      input.hero = { x: -150, y: 266 + 180 * p * (1 - p), z: 0 };
+      input.vel = { x: 0, y: 180 * (1 - 2 * p) * 2, z: 0 };
+    };
+    let time = 0;
+    for (; time < 4; time += DT) {
+      at(time);
+      cam.update(input, DT);
+    }
+    let camLo = Infinity;
+    let camHi = -Infinity;
+    let lookLo = Infinity;
+    let lookHi = -Infinity;
+    for (; time < 8; time += DT) {
+      at(time);
+      const pose = cam.update(input, DT);
+      camLo = Math.min(camLo, pose.position.y);
+      camHi = Math.max(camHi, pose.position.y);
+      lookLo = Math.min(lookLo, pose.target.y);
+      lookHi = Math.max(lookHi, pose.target.y);
+      const p = ndc(pose, input.hero, input.aspect)!;
+      expect(Math.abs(p.y)).toBeLessThan(1);
+    }
+    expect(camHi - camLo).toBeLessThan(2);
+    expect(lookHi - lookLo).toBeLessThan(2);
+    // A real climb (a flyer rising 300) still moves the shot.
+    input.rival = { x: 150, y: 600, z: 0 };
+    const pose = run(cam, input, 3);
+    expect(pose.target.y).toBeGreaterThan(lookHi + 20);
+  });
+
+  it("never sits inside a wall in an arena: the arm comes in past its shortest two-shot instead", () => {
+    // A tall slab 150 behind the pivot, between the fighters' side and the arena's edge.
+    const city = wallCity();
+    const cam = new ChaseCamera(createLocalRaycast(city));
+    const input = createChaseInput();
+    input.arena = { x0: -400, z0: -400, x1: 400, z1: 400, h: 1020 };
+    input.hero = { x: 0, y: 300, z: -60 };
+    input.rival = { x: 0, y: 300, z: 60 };
+    input.facing = { x: 1, y: 0, z: 0 };
+    for (let t = 0; t < 4; t += DT) {
+      const pose = cam.update(input, DT);
+      const p = pose.position;
+      const inside = p.x > -260 && p.x < -200 && p.z > -400 && p.z < 400 && p.y < 2000;
+      expect(inside).toBe(false);
+    }
   });
 
   it("eases into a boxed-in climb instead of stepping the camera up", () => {

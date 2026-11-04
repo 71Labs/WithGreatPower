@@ -7,6 +7,8 @@
 #   launch/brand/hero/make.sh renders    just the renders and previews
 #   launch/brand/hero/make.sh cast       just the rest of the cast (build_cast.py, cast.py) and
 #                                        their extra clips: apps/wgp/public/models/cast-*.glb
+#   launch/brand/hero/make.sh civilians  just the city's people (build_cast.py, civilians.py) and
+#                                        their moves (crowd_anims.py): civ-*.glb, crowd-anims.glb
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$HERE"
@@ -23,6 +25,15 @@ cast() {
   blender -b "$BLEND" -P retarget.py -- --cast --out "$MODELS/cast-anims.glb"
 }
 
+civilians() {
+  # Eight civilian bodies on the same skeleton (~1 min each), dressed per person in the game.
+  for who in civ-office civ-jogger civ-elder civ-teen civ-auntie civ-worker civ-student civ-kid; do
+    blender -b -P build_cast.py -- --who "$who"
+  done
+  # The crowd's moves: UAL clips the cast doesn't use, and a wave, a cheer, a phone… made on them.
+  blender -b "$BLEND" -P crowd_anims.py
+}
+
 # The game loads packed files (meshopt): pack whatever was just written.
 pack() {
   "$HERE/../../../apps/wgp/scripts/models/compress.sh"
@@ -30,6 +41,12 @@ pack() {
 
 if [[ "$step" == cast ]]; then
   cast
+  pack
+  exit 0
+fi
+
+if [[ "$step" == civilians ]]; then
+  civilians
   pack
   exit 0
 fi
@@ -55,5 +72,6 @@ if [[ "$step" == all ]]; then
   # The motion: Quaternius' UAL (mocap/, CC0) retargeted onto the same skeleton.
   blender -b "$BLEND" -P retarget.py -- --out "$MODELS/hero-anims.glb"
   cast
+  civilians
   pack
 fi

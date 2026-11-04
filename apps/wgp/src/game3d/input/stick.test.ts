@@ -53,6 +53,16 @@ describe("camera-relative sticks", () => {
     expect(viewFromPose({ position: { x: 5, y: 900, z: 5 }, target: { x: 5, y: 0, z: 5 } })).toBeNull();
     expect(viewFromPose(null)).toBeNull();
   });
+
+  it("goes by the pose's held steering heading while there is one (the camera easing behind a run)", () => {
+    const pose = { position: { x: 0, y: 500, z: 100 }, target: { x: 0, y: 0, z: -300 }, steer: EAST };
+    expect(viewFromPose(pose)).toEqual(EAST);
+    // Right of east is south (+z).
+    const right = worldStick({ x: 1, y: 0 }, viewFromPose(pose));
+    expect(right.x).toBeCloseTo(0, 10);
+    expect(right.z).toBeCloseTo(1, 10);
+    expect(viewFromPose({ ...pose, steer: null })?.fz).toBeCloseTo(-1, 10);
+  });
 });
 
 describe("key and drag sticks", () => {

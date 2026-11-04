@@ -23,6 +23,10 @@
  *   web shoots on the next tick (you asked for it). The street costs a little health and the
  *   combo, and bounces you back up with most of your speed.
  *
+ * Ruleset v4 fights (strike.ts): on the stage, the web button strikes a villain in reach and
+ * zips at one further out; beside him it never swings. The hero stays on the stage, its edge
+ * stops him dead, and getting hurt is a shove that slides out (a stagger, no running).
+ *
  * Ruleset v2 physics: quadratic air drag with a terminal speed; air control that only builds
  * speed up to a limit; the rope's tension does no work (only the pump adds energy); running
  * with an acceleration curve and grip; landings that lose speed to friction and crouch;
@@ -47,6 +51,7 @@ import {
   HERO_RADIUS,
   HERO_TURN,
   HERO_TURN_GROUND,
+  HURT_FRICTION,
   LAND_STOP,
   MANTLE_CLEAR,
   MAX_SPEED,
@@ -70,12 +75,14 @@ import {
   SUBSTEP_LEN,
   WEB_BUFFER,
   WEB_TAP,
+  ZIP_RANGE,
 } from "./constants";
 import { collideSphere, groundBelow, overRiver, supported, type AnchorPick, type SphereHit } from "./city";
 import { nearestTarget } from "./combat";
 import type { InputFrame, Vec3, Zone } from "./contract";
 import { clamp, datan2, dcos, DIR64, dsin, len2, len3, MAG_SCALE } from "./dmath";
 import { breakCombo, feedCombo } from "./pickups";
+import { fightPress, startStrike, startZip, stepStrike } from "./strike";
 import { flightStep, inReleaseWindow, launchFromGround, pickAnchor, wrapRope, type FlightInput } from "./swing";
 import type { Hero, SimState } from "./types";
 
@@ -117,6 +124,13 @@ export function newHero(x: number, y: number, z: number, grounded: boolean): Her
     ropeT: 0,
     latched: false,
     rewebWait: false,
+    strike: -1,
+    zip: -1,
+    strikeCd: 0,
+    zipCd: 0,
+    strikeBody: -1,
+    strikeDone: false,
+    zipped: false,
   };
 }
 
@@ -310,6 +324,34 @@ function webInput(s: SimState, input: InputFrame, hx: number, hz: number, can: b
     h.webBuf = 0;
     return;
   }
+  // v4: in a fight, the web strikes or zips at a villain in reach (a press waits out a cooldown
+  // for its buffer); it only swings out of his reach. While he makes his entrance it waits.
+  if (!h.rope && s.mode === "intro" && s.villain && len2(s.villain.x - h.x, s.villain.z - h.z) < ZIP_RANGE) {
+    h.webBuf = 0;
+    return;
+  }
+  if (!h.rope && s.mode === "fight") {
+    if (h.strike >= 0 || h.zip >= 0) {
+      h.webBuf = pressed ? WEB_BUFFER : Math.max(0, h.webBuf - dt);
+      return;
+    }
+    const p = fightPress(s);
+    if (p.kind !== "web") {
+      if (h.webBuf > 0 && p.kind !== "wait") {
+        if (p.kind === "strike") startStrike(s, p.target, false);
+        else startZip(s, p.target);
+        h.webBuf = 0;
+      } else {
+        // Over your head and out of reach: the strand flies up and drops.
+        if (pressed && p.kind === "wait" && p.high && h.fizzleCd <= 0) {
+          h.fizzleCd = FIZZLE_COOLDOWN;
+          s.events.push({ type: "fizzle", x: h.x, y: h.y, z: h.z });
+        }
+        h.webBuf = Math.max(0, h.webBuf - dt);
+      }
+      return;
+    }
+  }
   if (h.rope) {
     if (pressed && h.latched) h.latched = false; // a tapped swing taken back in hand
     else if (!input.web && !h.latched) {
@@ -357,23 +399,26 @@ function confine(s: SimState, arena: Zone | null) {
   const h = s.hero;
   const r = HERO_RADIUS;
   if (arena) {
-    const b = arena.bounds;
+    // v4: on the stage (the arena's roof, Doc's deck), whatever happens: no falls mid-fight,
+    // and its edge stops you dead (v3 bounced you back off the arena's sides at 0.45).
+    const b = arena.stage ?? arena.bounds;
+    const k = arena.stage ? 0 : -0.45;
     if (h.x < b.x0 + r) {
       h.x = b.x0 + r;
-      if (h.vx < 0) h.vx = -h.vx * 0.45;
+      if (h.vx < 0) h.vx *= k;
     } else if (h.x > b.x1 - r) {
       h.x = b.x1 - r;
-      if (h.vx > 0) h.vx = -h.vx * 0.45;
+      if (h.vx > 0) h.vx *= k;
     }
     if (h.z < b.z0 + r) {
       h.z = b.z0 + r;
-      if (h.vz < 0) h.vz = -h.vz * 0.45;
+      if (h.vz < 0) h.vz *= k;
     } else if (h.z > b.z1 - r) {
       h.z = b.z1 - r;
-      if (h.vz > 0) h.vz = -h.vz * 0.45;
+      if (h.vz > 0) h.vz *= k;
     }
-    if (h.y > b.h) {
-      h.y = b.h;
+    if (h.y > arena.bounds.h) {
+      h.y = arena.bounds.h;
       if (h.vy > 0) h.vy = 0;
     }
     return;
@@ -549,10 +594,26 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
   h.holdPrev = input.web;
 
   if (s.mode === "ko") {
+    h.strike = -1;
+    h.zip = -1;
     stepKnockedOut(s, arena, dt);
     return;
   }
   if (frozen) return;
+  // v4: a strike or a zip drives the hero itself (the stick waits for it).
+  const striking = stepStrike(s, dt);
+  // v4: the fight is on the stage's floor: stood on a corner tower's top (or anything well above
+  // it) when it starts, the hero steps off toward the middle.
+  const st = arena?.stage;
+  if (st && h.grounded && (s.mode === "intro" || s.mode === "fight") && h.y - HERO_RADIUS > st.y + STEP_UP + 60) {
+    const cx = (st.x0 + st.x1) / 2 - h.x;
+    const cz = (st.z0 + st.z1) / 2 - h.z;
+    const d = len2(cx, cz) || 1;
+    h.grounded = false;
+    h.vx = (cx / d) * 300;
+    h.vz = (cz / d) * 300;
+    h.vy = 0;
+  }
 
   if (h.heldT > 0) {
     // Clapped in a bread trap: stuck for a moment (a strong drag, not a stop).
@@ -562,11 +623,16 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
   }
 
   const tilt = MAG_SCALE[input.mag];
-  const sx = input.mag > 0 ? DIR64[input.dir][0] * tilt : 0;
-  const sz = input.mag > 0 ? DIR64[input.dir][1] * tilt : 0;
+  const sx = input.mag > 0 && !striking ? DIR64[input.dir][0] * tilt : 0;
+  const sz = input.mag > 0 && !striking ? DIR64[input.dir][1] * tilt : 0;
   if (h.grounded) {
     // Only the stick runs; centred, friction stops you.
-    if (input.mag > 0) {
+    if (striking) {
+      // The strike sets the step.
+    } else if (arena && h.hurtT > 0) {
+      // v4: hurt in a fight, staggered: the shove slides out, no running.
+      friction(h, HURT_FRICTION, dt);
+    } else if (input.mag > 0) {
       const speed = arena ? RUN_SPEED * tilt : RUN_SPEED * (input.mag === 3 ? 1.25 : input.mag === 2 ? 1 : 0.6);
       run(h, DIR64[input.dir][0], DIR64[input.dir][1], speed, dt);
     } else friction(h, len2(h.vx, h.vz) > RUN_SPEED ? SKID_FRICTION : GROUND_FRICTION, dt);
@@ -711,7 +777,11 @@ export function stepHero(s: SimState, input: InputFrame, dt: number) {
   // Face where you're going, turning at a limited rate: on a wall, face it; on the ground,
   // face the stick (a quick turn on the spot), else the slide.
   if (h.climbing) turnFacing(h, -h.wallNx, -h.wallNz, dt);
-  else if (h.grounded) {
+  else if (striking && h.strike >= 0) {
+    // v4: a blow squares up to its target.
+    const t = nearestTarget(s, h.x, h.y, h.z);
+    if (t) turnFacing(h, t.x - h.x, t.z - h.z, dt, HERO_TURN_GROUND);
+  } else if (h.grounded) {
     if (input.mag > 0) turnFacing(h, sx, sz, dt, HERO_TURN_GROUND);
     else if (len2(h.vx, h.vz) > 30) turnFacing(h, h.vx, h.vz, dt, HERO_TURN_GROUND);
   } else if (len2(h.vx, h.vz) > 40) turnFacing(h, h.vx, h.vz, dt);

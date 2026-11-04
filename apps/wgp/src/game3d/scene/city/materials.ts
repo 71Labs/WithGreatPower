@@ -34,6 +34,8 @@ export interface SharedUniforms {
   uOccR: IUniform<Vector4>;
   /** The hero (w: on): what it stands over never fades. */
   uOccHero: IUniform<Vector4>;
+  /** In a fight, anything within this of the camera (above the fighters' feet) thins out too; 0 is off. */
+  uOccNear: IUniform<number>;
   /** Ben-Day dots on (1) or off (0), their cell in CSS px, and the dot radii (shadow, side, far 2, far 3). */
   uHalftone: IUniform<number>;
   uHalftoneCell: IUniform<number>;
@@ -63,6 +65,7 @@ export function createSharedUniforms(): SharedUniforms {
     uOccB: { value: new Vector4() },
     uOccR: { value: new Vector4(OCCLUSION.outerCam, OCCLUSION.outerEnd, OCCLUSION.innerCam, OCCLUSION.innerEnd) },
     uOccHero: { value: new Vector4() },
+    uOccNear: { value: 0 },
     uHalftone: { value: 1 },
     uHalftoneCell: { value: HALFTONE.cell },
     uHalftoneDots: { value: new Vector4(HALFTONE.shadow, HALFTONE.side, HALFTONE.far[0], HALFTONE.far[1]) },

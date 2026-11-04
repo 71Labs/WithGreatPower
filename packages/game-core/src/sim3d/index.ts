@@ -28,7 +28,8 @@ export {
 export { createSim, debugSetHp, debugWin, IDLE_FRAME, resolveErrand, simRunning, stepSim } from "./sim";
 export { abilityBlocked, cooldownSeconds, gweiBlocked } from "./abilities";
 export { arenaZone, bestAnchor, heroHeading, inArena, stopTarget, travelBearing } from "./hero";
-export { docVulnerable, isVulnerable, nearestTarget, villainHits, villainTargets, type Target } from "./combat";
+export { docVulnerable, inOpening, isVulnerable, nearestTarget, takesHit, villainHits, villainTargets, type Target } from "./combat";
+export { fightPress, type FightPress } from "./strike";
 export { armShoulder, armTip, villainLines } from "./villains";
 export { inReleaseWindow, pickForecast } from "./swing";
 export { comboMultiplier, nextPickup, placePickups } from "./pickups";

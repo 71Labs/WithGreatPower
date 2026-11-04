@@ -14,12 +14,14 @@ import type { SuitColors } from "@/components/cast";
 import { heldStick } from "@/game3d/input/latch";
 
 import { ChaseCamera, createChaseInput, type ChasePose, type Raycast } from "./camera/chase";
+import { CameraDirector, type DirectorInput, type SceneCue } from "./camera/director";
 import { citySolids, createCityRaycast, type CitySolids } from "./camera/raycast";
 import { SpeedLines } from "./camera/speed-lines";
 import { buildCityMeshes, type CityMeshes } from "./city/city-meshes";
 import { LightPools } from "./city/light-pools";
 import { createSharedUniforms, type SharedUniforms } from "./city/materials";
-import { setOcclusion } from "./city/occlusion";
+import { OCCLUSION, setOcclusion } from "./city/occlusion";
+import { CrowdSystem } from "./crowd/crowd";
 import { Bursts, Sparks, type BurstOptions } from "./effects";
 import { Hazards } from "./hazards";
 import { Pickups } from "./pickups";
@@ -43,9 +45,13 @@ export class SceneEngine {
   readonly uniforms: SharedUniforms;
   readonly solids: CitySolids;
   readonly chase: ChaseCamera;
+  /** Beats over the chase: the countdown's establishing shot, an errand's two-shot, the end of the night. */
+  readonly director: CameraDirector;
   readonly city: CityMeshes;
   readonly sky: Sky;
   readonly characters: CharacterSystem;
+  /** The city's people (render only). */
+  readonly crowd: CrowdSystem;
   readonly bursts: Bursts;
   readonly web: WebLine;
   readonly hazards: Hazards;
@@ -64,6 +70,9 @@ export class SceneEngine {
   private readonly post: PostFrame = { speed: 0, focus: new Vector2() };
   private wasStuck = false;
   private readonly input = createChaseInput();
+  private readonly beat: DirectorInput = { cue: null, mode: "travel", hero: { x: 0, y: 0, z: 0 }, goal: null, ally: null, aspect: 1, reducedMotion: false, input: false };
+  /** A key or a press the page passed on (skips the countdown's shot). */
+  private skipped = false;
   private orbitYaw = 0;
   private orbitPitch = 0;
   private orbiting = false;
@@ -81,7 +90,9 @@ export class SceneEngine {
     this.root.name = "wgp-scene";
     this.uniforms = createSharedUniforms();
     this.solids = citySolids(cityData);
-    this.chase = new ChaseCamera(raycast ?? createCityRaycast(cityData));
+    const cast = raycast ?? createCityRaycast(cityData);
+    this.chase = new ChaseCamera(cast);
+    this.director = new CameraDirector(cast);
     this.city = buildCityMeshes(cityData, this.uniforms);
     this.far = this.city.horizon * 2.4;
     this.sky = buildSky(
@@ -90,6 +101,7 @@ export class SceneEngine {
       this.far,
     );
     this.characters = new CharacterSystem(cityData, this.solids, this.uniforms);
+    this.crowd = new CrowdSystem(cityData, this.uniforms);
     this.bursts = new Bursts(this.uniforms);
     this.web = this.characters.web;
     this.hazards = new Hazards();
@@ -102,7 +114,7 @@ export class SceneEngine {
     for (const child of this.city.root.children) {
       if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
     }
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.hazards.root, this.pickups.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -113,6 +125,7 @@ export class SceneEngine {
   setQuality(preset: QualityPreset): void {
     this.city.setPropOutlines(preset.propOutlines);
     this.characters.setTier(preset.tier);
+    this.crowd.setTier(preset.tier);
     this.sky.setStars(preset.stars);
     this.sky.skyline.visible = preset.skyline;
     this.city.setDetail(preset.detail);
@@ -139,6 +152,7 @@ export class SceneEngine {
     this.bursts.reducedMotion = on;
     this.pickups.reducedMotion = on;
     this.characters.setReducedMotion(on);
+    this.crowd.reducedMotion = on;
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
 
@@ -164,13 +178,24 @@ export class SceneEngine {
     this.characters.fizzle();
   }
 
+  /** A strike at a villain in reach: the hero throws a punch. */
+  punch(): void {
+    this.characters.punch();
+  }
+
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
   cut(): void {
     this.chase.reset();
+    this.director.cut();
     this.speedLines.reset();
   }
 
-  update(frame: RenderFrame3D | null, camera: PerspectiveCamera, size: ViewSize, dpr: number, dt: number, time: number): ChasePose | null {
+  /** The player pressed something: a camera beat gives way (the countdown's shot is skipped). */
+  skip(): void {
+    this.skipped = true;
+  }
+
+  update(frame: RenderFrame3D | null, camera: PerspectiveCamera, size: ViewSize, dpr: number, dt: number, time: number, cue: SceneCue | null = null): ChasePose | null {
     const u = this.uniforms;
     u.uTime.value = time;
     u.uDpr.value = dpr;
@@ -198,9 +223,27 @@ export class SceneEngine {
       i.orbiting = this.orbiting;
       i.aspect = size.width / Math.max(1, size.height);
       i.reducedMotion = this.reducedMotion;
+      // Travel: the next stop, and whether the hero stands or runs on something.
+      i.goal = frame.mode === "travel" ? (frame.route?.[0] ?? null) : null;
+      i.grounded = frame.hero.grounded;
+      // A fight's encounter, its end and a knockout keep the plain chase: the fight camera's to frame.
+      i.framing = frame.mode !== "intro" && frame.mode !== "won" && frame.mode !== "ko";
+      const looked = this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbiting || heldStick.x * heldStick.x + heldStick.y * heldStick.y > 0.04;
       this.orbitYaw = 0;
       this.orbitPitch = 0;
       pose = this.chase.update(i, dt);
+      const b = this.beat;
+      b.cue = cue;
+      b.mode = frame.mode;
+      b.hero = frame.hero.pos;
+      // On an errand the route's first stop is the ally's: the way on is the next one.
+      b.goal = (frame.mode === "errand" ? frame.route?.[1] : frame.route?.[0]) ?? null;
+      b.ally = frame.mode === "errand" && zone?.kind === "errand" ? (zone.allyAt ?? zone.center) : null;
+      b.aspect = i.aspect;
+      b.reducedMotion = this.reducedMotion;
+      b.input = looked || this.skipped;
+      this.skipped = false;
+      pose = this.director.update(pose, b, dt);
       camera.position.set(pose.position.x, pose.position.y, pose.position.z);
       camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
       if (Math.abs(pose.fov - this.lastFov) > 0.01) {
@@ -226,7 +269,8 @@ export class SceneEngine {
     this.city.updateLod(camera.position.x, camera.position.z);
     // Fade what stands between the camera and the hero (and the rival in a fight); clear the
     // deck's traffic while a fight is on the bridge.
-    setOcclusion(u, camera.position, frame ? frame.hero.pos : null, frame && frame.mode === "fight" ? this.input.rival : null);
+    const fight = !!frame && frame.mode === "fight";
+    setOcclusion(u, camera.position, frame ? frame.hero.pos : null, fight ? this.input.rival : null, fight ? OCCLUSION.nearFight : 0);
     this.city.traffic.setDeckClear(!!frame && frame.mode !== "travel" && this.onDeck(this.cityData.zones[frame.stop]?.center));
     this.speedLines.update(frame ? frame.hero.vel : null, camera, size.width * dpr, size.height * dpr, dt, time);
 
@@ -235,7 +279,7 @@ export class SceneEngine {
       const t0 = performance.now();
       this.characters.update(frame, camera, size, dt, time);
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
-      this.hazards.update(frame);
+      this.hazards.update(frame, frame.mode === "fight" ? (this.cityData.zones[frame.stop]?.stage?.y ?? null) : null);
       this.pickups.update(frame, time);
       // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
       const stuck = this.characters.stuck;
@@ -243,6 +287,7 @@ export class SceneEngine {
       if (stuck && !this.wasStuck) this.sparks.splat(stuck);
       this.wasStuck = !!stuck;
     }
+    this.crowd.update(frame, camera, dt, time);
     this.bursts.update(dt, time);
     this.sparks.update(dt);
     return pose;
@@ -283,6 +328,7 @@ export class SceneEngine {
     this.city.dispose();
     this.sky.dispose();
     this.characters.dispose();
+    this.crowd.dispose();
     this.bursts.dispose();
     this.hazards.dispose();
     this.pickups.dispose();

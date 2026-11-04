@@ -8,8 +8,8 @@
  *   … --base http://localhost:3000   … --top 10   … --board tonight
  *
  * Exits non-zero if any run doesn't reproduce. A run recorded under another ruleset is
- * skipped: replay it from the git tag of its ruleset (`git checkout ruleset-v2`, for
- * runs from before ruleset 3).
+ * skipped: replay it from the git tag of its ruleset (`git checkout ruleset-v3` for runs
+ * from ruleset 3, `ruleset-v2` for older ones).
  */
 import { replayRun } from "@wgp/game-core/replay";
 import { RULESET_VERSION } from "@wgp/game-core/sim3d/constants";

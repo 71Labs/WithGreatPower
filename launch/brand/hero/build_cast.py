@@ -146,6 +146,11 @@ class Kit:
         self.sockets = {}
         self.parts = []  # accessory objects, joined after the body is decimated
         self.lenses = False
+        # Civilians (civilians.py): a phone in the hand, the fingers folded into the hands, and
+        # the face's coordinates scaled onto their shared layout.
+        self.phone = False
+        self.fold_fingers = False
+        self.face_sx = self.face_sy_up = self.face_sy_down = 1.0
 
     # -- the body ------------------------------------------------------------------
 
@@ -739,14 +744,15 @@ class Kit:
 # Decimation, attributes and export
 
 
-def seam_locked_decimate(ob, target, symmetric=True):
-    """Decimate `ob` to about `target` triangles; vertices on colour seams may not collapse."""
+def seam_locked_decimate(ob, target, symmetric=True, seams=True):
+    """Decimate `ob` to about `target` triangles; vertices on colour seams may not collapse
+    (unless `seams` is off, for a body only ever seen far off), nor those on open edges."""
     me = ob.data
     lock = set()
     bm = bmesh.new()
     bm.from_mesh(me)
     for e in bm.edges:
-        if len(e.link_faces) == 2 and e.link_faces[0].material_index != e.link_faces[1].material_index:
+        if seams and len(e.link_faces) == 2 and e.link_faces[0].material_index != e.link_faces[1].material_index:
             lock.update(v.index for v in e.verts)
         if e.is_boundary:
             lock.update(v.index for v in e.verts)
@@ -795,8 +801,9 @@ def face_coords(k, ob):
     for v in me.vertices:
         hw = sum(g.weight for g in v.groups if names.get(g.group) == "head")
         p = v.co
-        x = (p.x - c.x) * 100
+        x = (p.x - c.x) * 100 * k.face_sx
         y = (p.z - c.z) * 100
+        y *= k.face_sy_up if y > 0 else k.face_sy_down
         on = hw > 0.5 and abs(p.x - c.x) < f["half_w"] and f["bottom"] < p.z < f["top"] and p.y < c.y + f["depth"] and v.normal.y < 0.15
         data[v.index] = (x, y, 1.0 if on else 0.0)
     return data
@@ -845,6 +852,8 @@ def meta(k):
         "sockets": k.sockets,
         "web": k.lenses,
         "height": k.height_total,
+        # Civilians: the colours each slot may take (the game dresses each person from them).
+        **({"looks": k.spec["looks"], "phone": k.phone} if k.spec.get("looks") else {}),
     }
 
 
@@ -897,6 +906,28 @@ def export_glb(k, rig, meshes, path):
         for m in saved[ob.name]:
             ob.data.materials.append(m)
     print("[cast] wrote", path, f"{os.path.getsize(path) / 1e6:.2f} MB")
+
+
+FINGER = ("thumb_", "index_", "middle_", "ring_", "pinky_")
+
+
+def fold_finger_weights(ob):
+    """Every finger's weights into its hand (a crowd body never curls its fingers)."""
+    names = {g.index: g.name for g in ob.vertex_groups}
+    hands = {s: ob.vertex_groups.get("hand_" + s) or ob.vertex_groups.new(name="hand_" + s) for s in "lr"}
+    for v in ob.data.vertices:
+        add = {"l": 0.0, "r": 0.0}
+        for g in v.groups:
+            n = names[g.group]
+            if n.startswith(FINGER):
+                add[n[-1]] += g.weight
+        for s, w in add.items():
+            if w > 0:
+                have = next((g.weight for g in v.groups if g.group == hands[s].index), 0.0)
+                hands[s].add([v.index], have + w, "REPLACE")
+    for vg in list(ob.vertex_groups):
+        if vg.name.startswith(FINGER):
+            ob.vertex_groups.remove(vg)
 
 
 def join_into(target, parts):
@@ -985,10 +1016,19 @@ def strip_groups(ob, bones):
             ob.vertex_groups.remove(vg)
 
 
-def build(who, o):
+def spec_of(who):
+    """A cast member (cast.py), or a civilian (civilians.py, the ids "civ-…")."""
+    if who.startswith("civ-"):
+        import civilians as CIV
+
+        return CIV.CIVILIANS[who]
     import cast as CAST
 
-    spec = CAST.CAST[who]
+    return CAST.CAST[who]
+
+
+def build(who, o):
+    spec = spec_of(who)
     k = Kit(who, spec)
     k.make_body()
     spec["build"](k)
@@ -1008,12 +1048,14 @@ def build(who, o):
         # Gwei's mask web: decimation smears corner data, so it's resampled from the full body.
         high = copy_object(body)
         lens_slots = {k.pal("lens"), k.pal("ink")}
-    seam_locked_decimate(body, max(2500, hi_t - acc_hi))
+    seam_locked_decimate(body, max(spec.get("hi_floor", 2500), hi_t - acc_hi))
     if web:
         EX.resample_web(body, high, lens_slots)
     lo = copy_object(body)
-    acc_lo2 = sum(tri_count(p.data) // (2 if p.get("lod", "both") == "both" and tri_count(p.data) > 300 else 1) for p in parts_lo)
-    seam_locked_decimate(lo, max(1200, lo_t - acc_lo2))
+    # Props over this many triangles are halved for the light body (a crowd's, sooner).
+    halve = spec.get("lo_halve", 300)
+    acc_lo2 = sum(tri_count(p.data) // (2 if p.get("lod", "both") == "both" and tri_count(p.data) > halve else 1) for p in parts_lo)
+    seam_locked_decimate(lo, max(spec.get("lo_floor", 1200), lo_t - acc_lo2), seams=not spec.get("lo_unlocked"))
     if web:
         EX.resample_web(lo, high, lens_slots)
         bpy.data.objects.remove(high, do_unlink=True)
@@ -1021,8 +1063,8 @@ def build(who, o):
     for p in parts_lo:
         c = copy_object(p) if p in parts_hi else p
         # Heavier props thin out for the light body too.
-        if p.get("lod", "both") == "both" and tri_count(c.data) > 300:
-            seam_locked_decimate(c, tri_count(c.data) // 2, symmetric=False)
+        if p.get("lod", "both") == "both" and tri_count(c.data) > halve:
+            seam_locked_decimate(c, tri_count(c.data) // 2, symmetric=False, seams=not spec.get("lo_unlocked"))
         lo_parts.append(c)
     join_into(lo, lo_parts)
     join_into(body, parts_hi)
@@ -1035,6 +1077,9 @@ def build(who, o):
         seam_locked_decimate(mn, spec["min"])
         mn.name = mn.data.name = "BodyMin"
         extra.append(mn)
+    if k.fold_fingers:
+        for ob in [body, lo] + extra:
+            fold_finger_weights(ob)
     finish_mesh(k, body, "hi")
     finish_mesh(k, lo, "lo")
     for m in extra:
@@ -1046,8 +1091,9 @@ def build(who, o):
     if o["blend"]:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, f"cast-{who}.blend"), compress=True)
     if o["export"]:
-        export_glb(k, k.rig, [body, lo] + extra, os.path.join(o["out"], f"cast-{who}.glb"))
-        export_glb(k, k.rig, [lo] + extra, os.path.join(o["out"], f"cast-{who}-lo.glb"))
+        name = spec.get("file") or f"cast-{who}"
+        export_glb(k, k.rig, [body, lo] + extra, os.path.join(o["out"], f"{name}.glb"))
+        export_glb(k, k.rig, [lo] + extra, os.path.join(o["out"], f"{name}-lo.glb"))
     return k
 
 
