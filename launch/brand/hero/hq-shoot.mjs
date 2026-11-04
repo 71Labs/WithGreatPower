@@ -416,7 +416,7 @@ function table() {
   const b = opt("b", "after");
   const read = (l) => {
     const dir = join(ROOT, l);
-    const files = existsSync(dir) ? readdirSync(dir).filter((f) => /^perf-.*\.json$/.test(f) && !/-ab|-port|-before|-after|-e\d/.test(f)) : [];
+    const files = existsSync(dir) ? readdirSync(dir).filter((f) => /^perf-.*\.json$/.test(f)) : [];
     return Object.fromEntries(files.map((f) => [f.replace(/\.json$/, ""), JSON.parse(readFileSync(join(dir, f), "utf8"))]));
   };
   const A = read(a);
