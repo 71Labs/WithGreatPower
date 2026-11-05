@@ -71,6 +71,8 @@ export function fightPress(s: SimState): FightPress {
     }
   }
   if (strike) return h.strikeCd <= 0 && h.strike < 0 ? { kind: "strike", target: strike } : { kind: "wait", high: false };
+  // Case File 002's lineup: a mark is a blow beside the voter you chose, never a zip at the nearest.
+  if (zip && s.chapter?.phase === "lineup") return { kind: "wait", high: false };
   if (zip) return h.zipCd <= 0 && h.strikeCd <= 0 && h.zip < 0 && h.strike < 0 ? { kind: "zip", target: zip } : { kind: "wait", high: false };
   return near ? { kind: "wait", high: true } : { kind: "web" };
 }

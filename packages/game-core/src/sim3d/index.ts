@@ -54,3 +54,7 @@ export {
   RESTORE_TICKS,
 } from "./chapter";
 export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, rightClickerAim, rightClickerState, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";
+// Case File 002, "The Sybil Vote".
+export { BOOTH_ROW, BOOTH_STEP, VOTE_CLUES, VOTE_LEVEL, VOTER_LIFT } from "./chapter";
+export { atBallotBox, BALLOT_REACH, knownTells, RECOUNT_AT, RECOUNT_SECONDS, voteHidden, VOTE_HITS, VOTER_RADIUS } from "./vote";
+export { FORK_CALL, FORK_SAFE, forkSideOf, sybilVoteState } from "./sybil-vote";

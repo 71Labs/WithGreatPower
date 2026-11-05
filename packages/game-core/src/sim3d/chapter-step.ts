@@ -9,6 +9,8 @@
  *   restore her (RESTORE_TICKS), paused while hurt; two paper copies come to interrupt. A
  *   fresh press with a copy in reach still strikes it.
  * - done: she's free ("gm", a beat in mode "won"), then case-closed and the night ends.
+ *
+ * Case File 002 (`chapter.vote`) goes its own way at each of these: vote.ts.
  */
 import {
   besideCaptive,
@@ -27,6 +29,7 @@ import { len2 } from "./dmath";
 import { DRAG_SPEED } from "./right-clicker";
 import { fightPress } from "./strike";
 import type { SimState, Villain } from "./types";
+import { stepVoteRescue, voteWonEnd } from "./vote";
 
 const STILL: InputFrame = Object.freeze({ dir: 0, mag: 0, web: false, shot: 0 }) as InputFrame;
 
@@ -38,6 +41,8 @@ const STILL: InputFrame = Object.freeze({ dir: 0, mag: 0, web: false, shot: 0 })
  */
 export function chapterInput(s: SimState, input: InputFrame): InputFrame {
   const c = s.chapter!;
+  // Case File 002 shapes nothing: no freeze, no lasso, and its rescue is a chase.
+  if (c.vote) return input;
   const h = s.hero;
   if (c.savedT > 0) {
     c.savedT = Math.max(0, c.savedT - DT);
@@ -81,6 +86,10 @@ function sendCopy(s: SimState, v: Villain) {
 /** After the fight-mode step in the rescue: the second copy, Mary's restore, and her release. */
 export function stepRescue(s: SimState, input: InputFrame) {
   const c = s.chapter!;
+  if (c.vote) {
+    stepVoteRescue(s);
+    return;
+  }
   const v = s.villain;
   if (c.phase !== "rescue" || s.mode !== "fight" || !v) return;
   c.rescueT += DT;
@@ -106,6 +115,10 @@ export function stepRescue(s: SimState, input: InputFrame) {
 /** The end of a "won" beat on a chapter night: after the fight, the rescue; after the release, the case is closed. */
 export function chapterWonEnd(s: SimState) {
   const c = s.chapter!;
+  if (c.vote) {
+    voteWonEnd(s);
+    return;
+  }
   const v = s.villain;
   if (c.phase === "standoff" && v) {
     c.phase = "rescue";

@@ -197,7 +197,7 @@ export interface Stats {
 }
 
 /** A story chapter ("case file"), played as its own night (rules/chapters.ts, sim3d/chapter.ts). */
-export type ChapterId = "case-001";
+export type ChapterId = "case-001" | "case-002";
 
 /** A case file in the save: whether it's closed, when, and the fastest clear. */
 export interface CaseRecord {
