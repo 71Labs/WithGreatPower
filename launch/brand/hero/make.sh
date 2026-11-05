@@ -18,11 +18,13 @@ MODELS="$HERE/../../../apps/wgp/public/models"
 
 cast() {
   # Each character on its own MPFB body, the same skeleton as the hero's (~1 min each).
-  for who in aunt-mainnet uncle-gen mary-jpeg bearson gwei gas-goblin sandwich-man doc-octochain sybil; do
+  for who in aunt-mainnet uncle-gen mary-jpeg bearson gwei gas-goblin sandwich-man doc-octochain sybil right-clicker; do
     blender -b -P build_cast.py -- --who "$who"
   done
   # The cast's extra clips (interact, crouch, spell cast, sword stance, treading water).
   blender -b "$BLEND" -P retarget.py -- --cast --out "$MODELS/cast-anims.glb"
+  # Case file 001: The Right-Clicker's pistol-style aim, click and made moves.
+  blender -b "$BLEND" -P rc_anims.py
 }
 
 civilians() {
