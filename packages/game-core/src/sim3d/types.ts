@@ -8,6 +8,7 @@ import type { ClueId } from "../rules/chapters";
 import type { ChapterId, PowerId, Stop, VillainId } from "../rules/types";
 import type { CityIndex } from "./city";
 import type { City, InputFrame, Vec3, ZoneKind } from "./contract";
+import type { RoamState } from "./roam/types";
 
 /* ------------------------------------------------------------------ the hero */
 
@@ -442,4 +443,6 @@ export interface SimState {
   events: SimEvent[];
   /** A story chapter's state (Case File 001), or null on a patrol night. */
   chapter: ChapterState | null;
+  /** Free roam's state (sim3d/roam), set only on a roam outing; absent on every night and chapter. */
+  roam?: RoamState | null;
 }

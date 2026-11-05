@@ -4,7 +4,8 @@
  * every consumer in the same PR. v1.3 (ruleset 3) added the pickups, the combo, the route and
  * the hero's `controlled`; v1.4 (ruleset 4) a fight zone's `stage`; v1.5 (Case File 001, chapter
  * ruleset c001-1, patrol nights untouched) the frame's `chapter`, the Right-Clicker and a
- * villain's `aim`.
+ * villain's `aim`; v1.6 (free roam, ruleset tag roam-1, patrol nights untouched) the frame's
+ * `roam`.
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
@@ -266,6 +267,52 @@ export interface RenderFrame3D {
     captive: { pos: Vec3; restore: number; freed: boolean } | null;
     copies: { id: number; pos: Vec3; yaw: number; alive: boolean }[];
   } | null;
+  /** Free roam (the City mode, ruleset tag roam-1), else null or absent. v1.6; see RoamFrame. */
+  roam?: RoamFrame | null;
+}
+
+/* ------------------------------------------------------------------ free roam (v1.6) */
+
+/**
+ * What free roam's body is doing (sim3d/roam/types.ts RoamMove): on its feet, in the air, on
+ * a wall, hanging from a ledge, pulling up over it, vaulting, running along a facade, rolling
+ * out of a hard landing, zipping on the web, swinging, or in the river.
+ */
+export type RoamMoveName = "ground" | "air" | "climb" | "hang" | "mantle" | "vault" | "wallrun" | "roll" | "zip" | "swing" | "splash";
+
+/**
+ * Free roam's frame (filled by sim3d/roam/render.ts; never read back by the sim or hashed).
+ * Positions are feet level unless said otherwise. Lists keep their fixed order (ids are
+ * indices), found ones included, so the scene can play the moment one is found.
+ */
+export interface RoamFrame {
+  move: RoamMoveName;
+  /** Seconds in `move`. */
+  moveT: number;
+  sprint: boolean;
+  /** The wall a climb, a hang, a mantle or a wall run is on: its outward normal (unit xz) and the top of its face. */
+  wall: { nx: number; nz: number; top: number } | null;
+  /** A scripted move's path (vault, mantle, zip): the body centre's from and to, and how far along (0–1). */
+  path: { from: Vec3; to: Vec3; u: number } | null;
+  /** Where a web-zip would go now (the reticle), or null. */
+  zip: Vec3 | null;
+  /** The pickpocket bot once it's out: feet position, velocity, what it's doing. */
+  bot: { pos: Vec3; vel: Vec3; state: "running" | "waiting" | "caught" } | null;
+  /** Everyone to talk to, by id: feet, the way they face (radians, 0 = +z), a civilian body (0–7) or a cast id, and whether they're mid-line. */
+  folks: { id: number; key: string; pos: Vec3; yaw: number; body: number; cast: string | null; talking: boolean }[];
+  /** The line on screen: who said it, which (rules/city.ts FOLKS[key].lines), and what's still to find for `{left}`. */
+  chat: { folk: number; line: number; left: number } | null;
+  /** What the interact button would do now: talk to folk `index`, photograph tag `index`, sync view `index`. */
+  act: { kind: "talk" | "photo" | "sync"; index: number } | null;
+  pages: { pos: Vec3; found: boolean }[];
+  /** Viewpoints: `pos` is the perch on top of the mast; `roof` the roof it stands on. */
+  views: { pos: Vec3; roof: number; synced: boolean }[];
+  /** Mary Jpeg's pixels (shown while her task is on). */
+  pixels: { pos: Vec3; found: boolean }[];
+  /** Gas Goblin's tags: the centre on the wall and the wall's outward normal. */
+  tags: { pos: Vec3; normal: Vec3; shot: boolean }[];
+  /** Per task (rules/city.ts TASK_IDS order): its stage (9 finished) and items found. */
+  tasks: { id: string; stage: number; got: number }[];
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */
