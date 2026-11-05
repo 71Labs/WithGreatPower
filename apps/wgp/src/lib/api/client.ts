@@ -7,6 +7,7 @@
 import type { Action } from "@wgp/game-core/engine";
 import type { Save } from "@wgp/game-core/types";
 
+import type { CasesResponse } from "@/lib/cases/types";
 import type { ClaimInfo } from "@/server/auth/privy-sign-in";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { ImportResult } from "@/server/db/migrate-save";
@@ -94,6 +95,9 @@ export function getLeaderboard(board: Board, opts: { period?: string; aroundMe?:
   if (opts.aroundMe) q.set("around", "me");
   return call<LeaderboardResponse>(`/api/leaderboard?${q}`, { signal: opts.signal });
 }
+
+/** The signed-in player's case files (the chapters): each case's status, best clear and "Case closed" badge. */
+export const getCases = (signal?: AbortSignal) => call<CasesResponse>("/api/cases", { signal });
 
 /** Menu actions reduced on the server. 409 rev_conflict carries the current { save, rev } in body. */
 export const postAction = (action: Action, rev: number) => call<ActionResponse>("/api/actions", { method: "POST", json: { action, rev } });
