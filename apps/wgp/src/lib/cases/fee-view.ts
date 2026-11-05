@@ -45,7 +45,7 @@ export function feeObjective(hud: Pick<FeeHud, "phase" | "cluesFound" | "clues">
     case "meter":
       return { label: "Find the fee meter", count: null };
     case "chase":
-      return { label: "Keep up with Gas Goblin", count: null };
+      return { label: "Chase Gas Goblin", count: null };
     case "showdown":
       return { label: mode === "travel" ? "Land on Aunt Mainnet’s roof" : "Stop Gas Goblin", count: null };
     case "cool":

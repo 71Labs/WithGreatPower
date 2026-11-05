@@ -13,7 +13,7 @@ describe("Fee Strike in words", () => {
   it("names the objective for every phase, with the clue count while investigating", () => {
     expect(feeObjective({ phase: "investigate", cluesFound: 1, clues: 3 })).toEqual({ label: "Find the clues", count: { found: 1, total: 3 } });
     expect(feeObjective({ phase: "meter", cluesFound: 3, clues: 3 }).label).toBe("Find the fee meter");
-    expect(feeObjective({ phase: "chase", cluesFound: 3, clues: 3 }).label).toBe("Keep up with Gas Goblin");
+    expect(feeObjective({ phase: "chase", cluesFound: 3, clues: 3 }).label).toBe("Chase Gas Goblin");
     expect(feeObjective({ phase: "showdown", cluesFound: 3, clues: 3 }, "travel").label).toBe("Land on Aunt Mainnet’s roof");
     expect(feeObjective({ phase: "showdown", cluesFound: 3, clues: 3 }, "fight").label).toBe("Stop Gas Goblin");
     expect(feeObjective({ phase: "cool", cluesFound: 3, clues: 3 }).label).toBe("Cool the fees");

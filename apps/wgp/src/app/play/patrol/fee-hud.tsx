@@ -4,7 +4,7 @@
  * Case File 003's HUD over its night ("Fee Strike"), shown only while the sim's HUD snapshot
  * carries `fee` (game3d/session/hud.ts feeHud); every other night never mounts any of it.
  *
- * - FeeObjective: in the route bar's place. "Find the clues 1/3", "Find the fee meter", then
+ * - FeeObjective: in the route bar's place. "Find the clues 1/3", "Find the fee meter", then ("Chase Gas Goblin")
  *   through the chase the chase panel: Gas Goblin's face, how close you are ("On his tail",
  *   "Keep up", "Falling behind", "He’s getting away!"), the escape meter, checkpoints passed
  *   and losses of five; then "Land on Aunt Mainnet’s roof", "Stop Gas Goblin", "Cool the fees".
@@ -298,7 +298,7 @@ export function FeeCallouts({ hud, bus, layout }: { hud: HudStore; bus: FeeBus; 
   return (
     <div aria-hidden className={`pointer-events-none absolute inset-x-0 flex items-center gap-3 px-4 ${CALLOUTS[layout]}`}>
       {spike ? <Hazard word="Fee spike!" line="Step out of the ring" sound="[The meter hisses]" icon="flame" /> : null}
-      {away && !spike ? <Hazard word={FEE_STRIKE_LINES.warn} line="Swing after him" sound="[A glider whines off]" icon="alert" /> : null}
+      {away && !spike && word?.tone !== "bad" ? <Hazard word={FEE_STRIKE_LINES.warn} line="Swing after him" sound="[A glider whines off]" icon="alert" /> : null}
       {word ? <WordCard word={word} /> : null}
       {note ? <NoteCard note={note} /> : null}
     </div>
