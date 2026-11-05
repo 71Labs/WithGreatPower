@@ -185,7 +185,7 @@ export function feedCombo(s: SimState, n: number) {
 }
 
 /** End the combo (the street, or its time ran out). */
-export function breakCombo(s: SimState, reason: "time" | "street") {
+export function breakCombo(s: SimState, reason: "time" | "street" | "saved") {
   if (s.combo > 0) s.events.push({ type: "combo-end", count: s.combo, reason });
   s.combo = 0;
   s.comboT = 0;

@@ -3,16 +3,19 @@
  * encounter ends. Villain HP is counted in hits; the engine decides loot and XP. Ported
  * from 2D with z added; every number is unchanged.
  */
+import { RIGHT_CLICKER_MOVES } from "../rules/chapters";
 import { VILLAINS, damageScale } from "../rules/data";
 import type { VillainId } from "../rules/types";
 
+import { COPY_RADIUS, popCopies, popCopy } from "./chapter";
 import { HURT_AIR_VY, HURT_INVULN, HURT_SHOVE, HURT_STAGGER, KO_SECONDS, MERCY_DAMAGE, MERCY_GUARD, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
 import { len2, len3 } from "./dmath";
-import type { HitSource, SimState, Villain } from "./types";
+import type { HitSource, SimState, SimVillainId, Villain } from "./types";
 
-/** A villain move's damage at this level, from the content tables. */
+/** A villain move's damage at this level, from the content tables (the Right-Clicker's in rules/chapters.ts). */
 export function moveDamage(v: Villain, label: string): number {
-  const base = VILLAINS[v.kind].moves.find((m) => m.label === label)?.value ?? 10;
+  const moves = v.kind === "right-clicker" ? RIGHT_CLICKER_MOVES : VILLAINS[v.kind].moves;
+  const base = moves.find((m) => m.label === label)?.value ?? 10;
   return Math.round(base * damageScale(v.level));
 }
 
@@ -32,15 +35,22 @@ export function mercy(level: number): number {
  * openings (Gas Goblin's stall after a dive, Sandwich Man's stumble after a lunge) get through
  * a guard, and end on the hit.
  */
-const VILLAIN_GUARD: Partial<Record<VillainId, number>> = {
+const VILLAIN_GUARD: Partial<Record<SimVillainId, number>> = {
   "gas-goblin": 3,
   "sandwich-man": 3,
   "doc-octochain": 1.2,
   sybil: 2,
+  // Case File 001: long, so the fight goes through his openings (the reload after a flash, the
+  // stagger of a broken drag).
+  "right-clicker": 4,
 };
 
-/** v4: a villain in an opening (Gas Goblin's stall, Sandwich Man's stumble) takes a direct hit through his guard. */
+/**
+ * v4: a villain in an opening (Gas Goblin's stall, Sandwich Man's stumble; the Right-Clicker
+ * reloading after a flash, or staggered by a broken drag) takes a direct hit through his guard.
+ */
 export function inOpening(v: Villain): boolean {
+  if (v.kind === "right-clicker") return v.phase === "recover" || v.phase === "stagger";
   return (v.kind === "gas-goblin" || v.kind === "sandwich-man") && v.phase === "recover";
 }
 
@@ -78,8 +88,18 @@ export interface Target {
   body: number;
 }
 
-/** Every point you can hit: Sybil's living bodies, or the villain himself. */
+/**
+ * Every point you can hit: Sybil's living bodies, or the villain himself. The Right-Clicker:
+ * himself until he's beaten, and his standing paper copies (each pops on one blow).
+ */
 export function villainTargets(v: Villain): Target[] {
+  if (v.kind === "right-clicker") {
+    const out: Target[] = v.hits > 0 ? [{ x: v.x, y: v.y, z: v.z, r: v.radius, body: -1 }] : [];
+    v.bodies.forEach((b, i) => {
+      if (b.alive) out.push({ x: b.x, y: b.y, z: b.z, r: COPY_RADIUS, body: i });
+    });
+    return out;
+  }
   if (v.kind === "sybil") {
     const out: Target[] = [];
     v.bodies.forEach((b, i) => {
@@ -165,6 +185,15 @@ export function hurtHero(s: SimState, damage: number, source: string, fromX: num
 export function hitVillain(s: SimState, body: number, n: number, by: HitSource): boolean {
   const v = s.villain;
   if (!v || s.mode !== "fight" || n <= 0) return false;
+  if (v.kind === "right-clicker") {
+    // A paper copy takes the blow and pops (it doesn't land on him); beaten, he takes no more.
+    const copy = body >= 0 ? v.bodies[body] : undefined;
+    if (copy) {
+      popCopy(s, copy);
+      return false;
+    }
+    if (v.hits <= 0) return false;
+  }
   const direct = by === "slam" || by === "dash" || by === "sling" || by === "strike";
   const at = body >= 0 && v.bodies[body] ? v.bodies[body] : v;
   if (direct && v.kind === "doc-octochain" && !docVulnerable(v)) {
@@ -240,6 +269,14 @@ export function winFight(s: SimState) {
   s.hazards.length = 0;
   s.shots.length = 0;
   s.events.push({ type: "fight-won", index: s.index, villain: v.kind, hp: s.hp, fluid: s.fluid, uses: report(s), gweiUsed: s.gweiUsed });
+  // Case File 001: his copies go with him, and the lasso lets go.
+  if (v.kind === "right-clicker") {
+    popCopies(s, v);
+    if (s.chapter) {
+      s.chapter.dragT = 0;
+      s.chapter.savedT = 0;
+    }
+  }
 }
 
 export function knockOut(s: SimState) {
