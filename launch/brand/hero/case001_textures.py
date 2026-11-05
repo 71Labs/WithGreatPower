@@ -1,10 +1,10 @@
 """
 Case file 001's two textures for the game (apps/wgp/public/media/chapters/), from our own art:
 
-  case-001-poster.webp      the MISSING poster (launch/out/x-missing/missing-mary-jpeg.png),
+  case-001-tabs-tex.webp      the MISSING poster (launch/out/x-missing/missing-mary-jpeg.png),
                             straightened and cropped to the paper; the clue on the roof pole
                             uses its body, and one of its tear-off tabs for the torn strips
-  case-001-hero-cutout.webp The Node standing three-quarter (render.py --pose rest34), die-cut
+  case-001-copy-tex.webp The Node standing three-quarter (render.py --pose rest34), die-cut
                             on a card border with an ink rim: the Right-Clicker's paper copies
 
     blender -b launch/brand/hero/build/hero-base.blend -P launch/brand/hero/render.py -- \
@@ -44,7 +44,7 @@ def poster():
     ang = math.degrees(math.atan2(TOP_RIGHT[1] - TOP_LEFT[1], TOP_RIGHT[0] - TOP_LEFT[0]))
     r = im.rotate(ang, resample=Image.BICUBIC, center=TOP_LEFT, fillcolor=(20, 20, 40))
     c = r.crop(PAPER).resize(POSTER_SIZE, Image.LANCZOS)
-    path = os.path.join(OUT, "case-001-poster.webp")
+    path = os.path.join(OUT, "case-001-tabs-tex.webp")
     c.save(path, quality=84, method=6)
     print("wrote", path, os.path.getsize(path), "bytes")
 
@@ -70,7 +70,7 @@ def cutout(width=256, pad=30, card=14, ink=6):
     img = Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8))
     img = img.crop(img.getbbox())
     img = img.resize((width, round(img.height * width / img.width)), Image.LANCZOS)
-    path = os.path.join(OUT, "case-001-hero-cutout.webp")
+    path = os.path.join(OUT, "case-001-copy-tex.webp")
     img.save(path, quality=86, method=6)
     print("wrote", path, img.size, os.path.getsize(path), "bytes")
 

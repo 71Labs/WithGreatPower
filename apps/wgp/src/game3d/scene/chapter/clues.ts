@@ -2,7 +2,7 @@
  * Case file 001's three clues, where the frame's `chapter.clues` puts them:
  *
  * - `tabs`: a street pole on the roof with the MISSING poster on it (our own poster art,
- *   media/chapters/case-001-poster.webp), every tear-off tab torn away along a ragged edge and
+ *   media/chapters/case-001-tabs-tex.webp), every tear-off tab torn away along a ragged edge and
  *   the tabs lying round the pole's foot ("Somebody tore off a tab. Then all of them.").
  * - `cursor`: a rooftop billboard with a giant pointer-shaped scorch burnt into its ad, the
  *   char still glowing at the rim.
@@ -332,13 +332,10 @@ export class ClueProps {
   private build(clues: readonly ChapterClue[], key: string): void {
     this.key = key;
     this.clearMeshes();
-    const start = this.city.start;
     this.sites = clues.map((c) => {
-      const floor = surfaceBelow(this.solids, c.pos.x, c.pos.z, c.pos.y + 8);
       // Clear of the roof's own props (a water tower, a billboard), within reach of the clue.
-      const spot = clearSpot(this.city, c.pos, floor, CLEARANCE[c.id], (x, z) => Math.abs(surfaceBelow(this.solids, x, z, floor + 8) - floor) < 2);
-      const yaw = Math.atan2(start.x - spot.x, start.z - spot.z);
-      return { id: c.id, at: new Vector3(spot.x, c.pos.y, spot.z), floor, yaw };
+      const p = cluePlacement(this.city, this.solids, c.id, c.pos);
+      return { id: c.id, at: new Vector3(p.x, c.pos.y, p.z), floor: p.floor, yaw: p.yaw };
     });
     const parts: BufferGeometry[] = [];
     for (const s of this.sites) {
@@ -476,6 +473,60 @@ export class ClueProps {
   }
 }
 
+/** Where a clue's prop stands and which way it faces. */
+export interface CluePlace {
+  x: number;
+  z: number;
+  floor: number;
+  /** Radians, 0 facing +z. */
+  yaw: number;
+}
+
+/**
+ * A clue's prop: clear of the roof's own props near the clue's point, facing the night's start
+ * (or the side of the roof with the most open floor in front of it, so you can walk up to it).
+ */
+export function cluePlacement(city: City, solids: CitySolids, id: ClueId, pos: Vec3): CluePlace {
+  const floor = surfaceBelow(solids, pos.x, pos.z, pos.y + 8);
+  const onFloor = (x: number, z: number) => Math.abs(surfaceBelow(solids, x, z, floor + 8) - floor) < 2;
+  const spot = clearSpot(city, pos, floor, CLEARANCE[id], onFloor);
+  const start = city.start;
+  const pref = Math.atan2(start.x - spot.x, start.z - spot.z);
+  let yaw = pref;
+  let best = -1;
+  for (let k = 0; k < 4; k++) {
+    const a = pref + (k * Math.PI) / 2;
+    let open = 0;
+    for (let d = 60; d <= 240; d += 60) {
+      const x = spot.x + Math.sin(a) * d;
+      const z = spot.z + Math.cos(a) * d;
+      if (onFloor(x, z) && propClearance(city, x, z, floor) > 28) open++;
+    }
+    // Three steps' room (about 180 units) is enough: then the start's side wins.
+    open = Math.min(open, 3);
+    if (open > best) {
+      best = open;
+      yaw = a;
+    }
+  }
+  return { x: spot.x, z: spot.z, floor, yaw };
+}
+
+/** Distance from (x, z) to the nearest rooftop prop's footprint at this floor. */
+function propClearance(city: City, x: number, z: number, floor: number): number {
+  let best = Infinity;
+  for (const p of city.props) {
+    if (p.kind === "crane" || Math.abs(p.at.y - floor) > 40) continue;
+    const side = p.facing % 2 === 1;
+    const hw = (side ? p.d : p.w) / 2;
+    const hd = (side ? p.w : p.d) / 2;
+    const dx = Math.max(0, Math.abs(x - p.at.x) - hw);
+    const dz = Math.max(0, Math.abs(z - p.at.z) - hd);
+    best = Math.min(best, Math.hypot(dx, dz));
+  }
+  return best;
+}
+
 /** Room each prop needs round its foot (units): the billboard is wide, the pole thin. */
 const CLEARANCE: Record<ClueId, number> = { cursor: 95, tabs: 48, pixels: 30 };
 /** How far a prop may stand from its clue's point (the sim finds it within ~140). */
@@ -486,37 +537,31 @@ const MAX_SHIFT = 110;
  * floor (`onFloor`), within MAX_SHIFT; `at` itself if none is.
  */
 export function clearSpot(city: City, at: Vec3, floor: number, room: number, onFloor: (x: number, z: number) => boolean): { x: number; z: number } {
-  const near = city.props.filter((p) => p.kind !== "crane" && Math.hypot(p.at.x - at.x, p.at.z - at.z) < MAX_SHIFT + room + 200 && Math.abs(p.at.y - floor) < 40);
-  const clearance = (x: number, z: number) => {
-    let best = Infinity;
-    for (const p of near) {
-      const side = p.facing % 2 === 1;
-      const hw = (side ? p.d : p.w) / 2;
-      const hd = (side ? p.w : p.d) / 2;
-      const dx = Math.max(0, Math.abs(x - p.at.x) - hw);
-      const dz = Math.max(0, Math.abs(z - p.at.z) - hd);
-      best = Math.min(best, Math.hypot(dx, dz));
-    }
-    return best;
-  };
+  const clearance = (x: number, z: number) => propClearance(city, x, z, floor);
   if (clearance(at.x, at.z) >= room) return { x: at.x, z: at.z };
   let pick: { x: number; z: number } | null = null;
-  let pickD = Infinity;
-  for (let r = 15; r <= MAX_SHIFT; r += 15) {
+  // If nothing within reach is clear enough, the clearest spot that is.
+  let roomiest = { x: at.x, z: at.z };
+  let roomiestC = clearance(at.x, at.z);
+  for (let r = 15; r <= MAX_SHIFT && !pick; r += 15) {
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * Math.PI * 2;
       const x = at.x + Math.cos(a) * r;
       const z = at.z + Math.sin(a) * r;
       // The prop's foot (and the billboard's width) stays on the roof.
       if (!onFloor(x, z) || !onFloor(x + room * 0.6, z) || !onFloor(x - room * 0.6, z) || !onFloor(x, z + room * 0.6) || !onFloor(x, z - room * 0.6)) continue;
-      if (clearance(x, z) >= room && r < pickD) {
+      const c = clearance(x, z);
+      if (c >= room) {
         pick = { x, z };
-        pickD = r;
+        break;
+      }
+      if (c > roomiestC) {
+        roomiestC = c;
+        roomiest = { x, z };
       }
     }
-    if (pick) break;
   }
-  return pick ?? { x: at.x, z: at.z };
+  return pick ?? roomiest;
 }
 
 /** One part of the props: non-indexed, placed, tagged with its kind and fill. */

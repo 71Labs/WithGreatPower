@@ -18,6 +18,8 @@ import { generateCity } from "@wgp/game-core/sim3d";
 import type { Building, City, HeroAction, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 import type { Stop } from "@wgp/game-core/types";
 
+import { citySolids } from "@/game3d/scene/camera/raycast";
+import { cluePlacement, type CluePlace } from "@/game3d/scene/chapter/clues";
 import type { ChapterEvent, ChapterFrame, ClueId, RightClickerPhase, SceneVillain } from "@/game3d/scene/chapter/contract";
 import { AIM_TICKS } from "@/game3d/scene/chapter/math";
 
@@ -59,6 +61,8 @@ export interface CaseSite {
   id: ClueId;
   pos: Vec3;
   roof: Building;
+  /** Where the scene stands its prop (clues.ts). */
+  place: CluePlace;
 }
 
 function roofOf(b: Building): number {
@@ -67,6 +71,7 @@ function roofOf(b: Building): number {
 
 /** Three clue roofs near the bridge, spread apart, deterministic for the city. */
 export function pickClueRoofs(city: City): CaseSite[] {
+  const solids = citySolids(city);
   const deck = city.bridge?.deck;
   const c = deck ? v((deck.x0 + deck.x1) / 2, deck.y, (deck.z0 + deck.z1) / 2) : city.start;
   const stageIds = new Set<number>();
@@ -82,7 +87,8 @@ export function pickClueRoofs(city: City): CaseSite[] {
   for (const { b } of fits) {
     const p = v((b.x0 + b.x1) / 2, roofOf(b), (b.z0 + b.z1) / 2);
     if (out.some((o) => Math.hypot(o.pos.x - p.x, o.pos.z - p.z) < 520)) continue;
-    out.push({ id: ids[out.length], pos: p, roof: b });
+    const id = ids[out.length];
+    out.push({ id, pos: p, roof: b, place: cluePlacement(city, solids, id, p) });
     if (out.length === 3) break;
   }
   return out;
@@ -222,16 +228,15 @@ export class CaseScript {
       site = sites[i];
       if (this.sceneT % 6 > 3.5) this.found.add(site.id);
     } else site = sites.find((s) => s.id === this.clue) ?? sites[0];
-    // Stand on its roof, in front of it (props face the night's start), looking at it.
-    const s = this.city.start;
-    const dx = s.x - site.pos.x;
-    const dz = s.z - site.pos.z;
-    const l = Math.hypot(dx, dz) || 1;
+    // Stand on its roof in front of its prop (where the scene puts it), looking at it.
+    const p = site.place;
     const b = site.roof;
-    const d = site.id === "pixels" ? 150 : 210;
-    const x = Math.min(b.x1 - 30, Math.max(b.x0 + 30, site.pos.x + (dx / l) * d + (-dz / l) * 40));
-    const z = Math.min(b.z1 - 30, Math.max(b.z0 + 30, site.pos.z + (dz / l) * d + (dx / l) * 40));
-    this.hero(v(x, site.pos.y + HERO_R, z), site.pos);
+    const d = site.id === "pixels" ? 150 : 200;
+    const fx = Math.sin(p.yaw);
+    const fz = Math.cos(p.yaw);
+    const x = Math.min(b.x1 - 30, Math.max(b.x0 + 30, p.x + fx * d - fz * 35));
+    const z = Math.min(b.z1 - 30, Math.max(b.z0 + 30, p.z + fz * d + fx * 35));
+    this.hero(v(x, p.floor + HERO_R, z), v(p.x, p.floor, p.z));
     f.route = [site.pos];
     void dt;
   }
@@ -325,8 +330,9 @@ export class CaseScript {
     }
     this.freed = freed;
     // The hero beside her, holding web to restore her.
-    const hp = this.deck(60, 40, HERO_R);
-    this.hero(hp, v(at.x, at.y, at.z));
+    // Beside her, a little back, so the camera over his shoulder sees her.
+    const hp = this.deck(15, -50, HERO_R);
+    this.hero(hp, this.deck(-260, -40));
     // Beaten, he's out of the fight (his fall is the lab cast's `webbed`).
     f.villains.length = 0;
     // Two copies try to interrupt while she's saved.

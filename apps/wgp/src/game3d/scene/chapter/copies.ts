@@ -1,6 +1,6 @@
 /**
  * The Right-Clicker's paper copies (CTRL+C): cardboard cut-outs of the hero, die-cut on a card
- * border with an ink rim (media/chapters/case-001-hero-cutout.webp, made from the hero's own
+ * border with an ink rim (media/chapters/case-001-copy-tex.webp, made from the hero's own
  * render by launch/brand/hero/case001_textures.py), standing where the frame puts them, each
  * on its own slight wobble. The front is the print, a little posterised (they're copies);
  * the back is bare corrugated card. A new copy pops up like a pop-up book; a popped one is

@@ -40,8 +40,8 @@ import { ShotFrames } from "./frames";
 import { aimCharge, inCone, SAVED_SECONDS, smooth } from "./math";
 import { Pops } from "./particles";
 
-export const POSTER_URL = "/media/chapters/case-001-poster.webp";
-export const CUTOUT_URL = "/media/chapters/case-001-hero-cutout.webp";
+export const POSTER_URL = "/media/chapters/case-001-tabs-tex.webp";
+export const CUTOUT_URL = "/media/chapters/case-001-copy-tex.webp";
 
 /** What the chapter needs from the rest of the scene. */
 export interface ChapterHost {
