@@ -18,7 +18,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { castById, type CastId } from "@wgp/game-core/cast";
-import { villainCard } from "@wgp/game-core/chapters";
+import { CHAPTERS, villainCard } from "@wgp/game-core/chapters";
 import { ALLY_CAST, ERRANDS, SUITS } from "@wgp/game-core/data";
 import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
 import type { Stop, StopResult } from "@wgp/game-core/types";
@@ -37,6 +37,7 @@ import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sh
 
 import { ChapterBeats, ChapterCallouts, ChapterStore, ChapterTips, feedChapter, ObjectiveChip, RestoreBar, RightClickerBar, useChapterLines, useChapterValue } from "./chapter-hud";
 import { chapterFixtureName, FixtureTap } from "./chapter-fixture";
+import { CoolBar, FeeBeats, FeeCallouts, FeeObjective, FeeTips, FeeVillain, useFeeLines, useFeeOn } from "./fee-hud";
 import { CityMap, stopName } from "./city-map";
 import { ComboMeter } from "./combo";
 import { Minimap } from "./minimap";
@@ -63,6 +64,8 @@ const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : A
 
 /** Where a case night's minimap button says the next mark is. */
 const CHAPTER_NEXT = { investigate: "the nearest clue", standoff: "the bridge deck", rescue: "Mary Jpeg", done: null } as const;
+/** Case File 003's: the next clue, the meter, Gas Goblin, the bakery, the meter again. */
+const FEE_NEXT = { investigate: "the nearest clue", meter: "the fee meter", chase: "Gas Goblin", showdown: "Aunt Mainnet’s bakery", cool: "the fee meter", done: null } as const;
 
 /** How a case night ended, for its "Case closed" results. */
 export interface ChapterEnd {
@@ -94,7 +97,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const colors = SUITS[hero.suit].colors;
   const loadout = useMemo(() => hero.loadout.filter((id) => hero.powers[id]), [hero]);
   // A chapter's cast: Mary (frozen on the deck) and Gwei; the Right-Clicker comes with the bridge's zone.
-  const cast = useMemo(() => (chapter ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
+  // (Case File 003's: Gas Goblin from its stop, Aunt Mainnet on her roof, Gwei.)
+  const cast = useMemo(() => (chapter && chapter !== "case-003" ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
   const positions = useMemo(() => stopPositions(stops.length), [stops]);
 
   const [hudStore] = useState(() => new HudStore());
@@ -109,6 +113,9 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [chapterStore] = useState(() => new ChapterStore());
   const chapterOn = useChapterValue(chapterStore, (c) => c !== null);
   const chapterPhase = useChapterValue(chapterStore, (c) => c?.phase ?? null);
+  /** Case File 003's HUD (only while the sim's snapshot carries `fee`). */
+  const feeOn = useFeeOn(hudStore);
+  const feePhase = useHudValue(hudStore, (h) => h?.fee?.phase ?? null);
   /** A case night's ending, from its events: how it ended and when. */
   const chapterEnd = useRef<ChapterEnd | null>(null);
   // Only the few HUD values the page itself places by: it re-renders when one changes, not
@@ -185,7 +192,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       switch (ev.type) {
         case "encounter": {
           const stop = stops[ev.index] as Extract<Stop, { kind: "fight" }> | undefined;
-          const v = villainCard(ev.villain);
+          // Case File 003's Gas Goblin says the case's lines.
+          const v = session.chapter === "case-003" ? CHAPTERS["case-003"].villain : villainCard(ev.villain);
           say(`${v.name}${stop?.boss ? ", the boss" : ""}${stop?.quest ? ", tonight’s quest" : ""}: “${v.taunt}”`, true);
           break;
         }
@@ -199,7 +207,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           if (ev.hits > 0) say(`Hit! ${ev.hits} to go.`);
           break;
         case "fight-won":
-          say(`Webbed! ${villainCard(ev.villain).defeat}`, true);
+          say(`Webbed! ${(session.chapter === "case-003" ? CHAPTERS["case-003"].villain : villainCard(ev.villain)).defeat}`, true);
           break;
         case "ko":
           say("Knocked out. Aunt Mainnet will patch you up.", true);
@@ -296,6 +304,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   // A case night's HUD reads the frames the overlays see, and says what happens out loud.
   useEffect(() => feedChapter(tap, chapterStore, hudStore), [tap, chapterStore, hudStore]);
   useChapterLines(chapterStore, loop.bus, say);
+  useFeeLines(hudStore, loop.bus, say);
 
   const togglePause = useCallback(
     (next?: boolean) => {
@@ -559,7 +568,13 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onGwei={() => latch.pushShot(5)}
             onPause={() => togglePause(true)}
             combo={<ComboMeter tap={tap} store={hudStore} />}
-            chapter={chapterOn ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> } : undefined}
+            chapter={
+              chapterOn
+                ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> }
+                : feeOn
+                  ? { objective: <FeeObjective hud={hudStore} className="w-full max-w-[520px]" />, villain: <FeeVillain hud={hudStore} /> }
+                  : undefined
+            }
             minimap={
               <Minimap
                 tap={tap}
@@ -571,7 +586,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
                 onOpen={openMapFromHud}
                 still={still}
                 touch={touch}
-                nextLabel={chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
+                nextLabel={feeOn ? FEE_NEXT[feePhase ?? "done"] : chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
                 hidden={phone && villainKind !== null}
               />
             }
@@ -579,7 +594,15 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         ) : null}
         {/* A chapter's stop is the bridge, not a patrol villain: its own banner and captions belong to the chapter HUD. */}
         {!ended && !chapter && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
-        {!ended && hudMode === "won" && villainKind && villainKind !== "right-clicker" ? <WonCaption villain={villainKind} /> : null}
+        {!ended && hudMode === "won" && villainKind && villainKind !== "right-clicker" && !feeOn ? <WonCaption villain={villainKind} /> : null}
+        {/* Case File 003's own: the cooling bar over the meter, its beats and callouts. */}
+        {!ended && feeOn ? (
+          <>
+            <CoolBar tap={tap} touch={touch} hud={hudStore} />
+            <FeeBeats hud={hudStore} />
+            <FeeCallouts hud={hudStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
+          </>
+        ) : null}
         {!ended && chapterOn ? (
           <>
             <RestoreBar tap={tap} touch={touch} store={chapterStore} />
@@ -605,7 +628,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           onResume={() => togglePause(false)}
           onMap={() => openMap("pause")}
           settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
-          help={chapterOn ? <ChapterTips touch={touch} /> : undefined}
+          help={chapterOn ? <ChapterTips touch={touch} /> : feeOn ? <FeeTips touch={touch} /> : undefined}
         />
       ) : null}
       {map && !ended ? (
