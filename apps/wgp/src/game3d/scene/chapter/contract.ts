@@ -30,9 +30,10 @@ export type RightClickerPhase = "idle" | "aim" | "flash" | "recover" | "copy" | 
 export const RIGHT_CLICKER_PHASES: readonly RightClickerPhase[] = ["idle", "aim", "flash", "recover", "copy", "drag", "stunned"];
 
 /** The chapter's sim events. */
-export type ChapterEvent = Extract<SimEvent, { type: "clue-found" | "screenshot" | "copy-spawn" | "copy-pop" | "drag" | "captive-restore" | "captive-freed" | "case-closed" }>;
+export type ChapterEvent = Extract<SimEvent, { type: "clue-found" | "screenshot" | "copy-spawn" | "copy-pop" | "drag" | "captive-restore" | "captive-freed" | "case-closed" | "voter-mark" | "fork-call" | "fork" | "recount" | "ballot" }>;
 
-const EVENT_TYPES: ReadonlySet<string> = new Set(["clue-found", "screenshot", "copy-spawn", "copy-pop", "drag", "captive-restore", "captive-freed", "case-closed"]);
+// Case file 002 adds the voter marks, the fork vote, the recount and the ballot (vote/vote-scene.ts).
+const EVENT_TYPES: ReadonlySet<string> = new Set(["clue-found", "screenshot", "copy-spawn", "copy-pop", "drag", "captive-restore", "captive-freed", "case-closed", "voter-mark", "fork-call", "fork", "recount", "ballot"]);
 
 export function isChapterEvent(ev: { type: string }): ev is ChapterEvent {
   return EVENT_TYPES.has(ev.type);
