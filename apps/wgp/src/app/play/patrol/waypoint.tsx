@@ -84,7 +84,7 @@ function TargetFace({ cast, size }: { cast: CastId | null; size: "lg" | "sm" }) 
   return (
     <>
       {cast ? (
-        <span className="block group-data-[target=bridge]:hidden group-data-[target=clue]:hidden group-data-[target=mary]:hidden">
+        <span className="block group-data-[target=bridge]:hidden group-data-[target=clue]:hidden group-data-[target=gen]:hidden group-data-[target=mary]:hidden">
           <Face id={cast} className={size === "lg" ? box : `${box} rounded-full`} />
         </span>
       ) : null}
@@ -100,6 +100,10 @@ function TargetFace({ cast, size }: { cast: CastId | null; size: "lg" | "sm" }) 
       </span>
       <span className="hidden group-data-[target=mary]:block">
         <Face id="mary-jpeg" className={size === "lg" ? box : `${box} rounded-full`} />
+      </span>
+      {/* Case file 002: Uncle Gen's ballot box. */}
+      <span className="hidden group-data-[target=gen]:block">
+        <Face id="uncle-gen" className={size === "lg" ? box : `${box} rounded-full`} />
       </span>
     </>
   );
@@ -220,7 +224,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
   const cast = stop && Object.hasOwn(AVATARS, stopCast(stop)) ? stopCast(stop) : null;
   const fight = stop?.kind === "fight";
   // A case night's marks (data-target, set from the frame): the ring and the wedge take their colour.
-  const ring = `${fight ? "border-game-hero" : "border-game-gold"} group-data-[target=bridge]:border-game-hero group-data-[target=clue]:border-game-gold group-data-[target=mary]:border-game-gold`;
+  const ring = `${fight ? "border-game-hero" : "border-game-gold"} group-data-[target=bridge]:border-game-hero group-data-[target=clue]:border-game-gold group-data-[target=mary]:border-game-gold group-data-[target=gen]:border-game-gold`;
   return (
     <div ref={root} aria-hidden data-mode="pin" data-target="stop" className="group pointer-events-none invisible absolute left-0 top-0 z-0 will-change-transform">
       <NavStyles />
@@ -245,7 +249,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
           <svg width="22" height="26" viewBox="0 0 22 26" className="absolute left-[22px] top-[-13px] block">
             <path
               d="M2 2 L20 13 L2 24 Z"
-              className={`${fight ? "fill-game-hero" : "fill-game-gold"} group-data-[target=bridge]:fill-game-hero group-data-[target=clue]:fill-game-gold group-data-[target=mary]:fill-game-gold`}
+              className={`${fight ? "fill-game-hero" : "fill-game-gold"} group-data-[target=bridge]:fill-game-hero group-data-[target=clue]:fill-game-gold group-data-[target=mary]:fill-game-gold group-data-[target=gen]:fill-game-gold`}
               stroke="var(--game-ink)"
               strokeWidth="2.5"
               strokeLinejoin="round"

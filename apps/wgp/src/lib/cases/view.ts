@@ -178,6 +178,8 @@ export function objective(hud: Pick<ChapterHud, "phase" | "found" | "total">): O
     case "investigate":
       return { text: `Find the clues ${hud.found}/${hud.total}`, label: "Find the clues", count: { found: hud.found, total: hud.total } };
     case "standoff":
+    // (Case File 001 has no lineup; Case File 002's HUD is its own, lib/cases/vote-view.ts.)
+    case "lineup":
       return { text: "Stop the Right-Clicker", label: "Stop the Right-Clicker", count: null };
     case "rescue":
       return { text: "Restore Mary", label: "Restore Mary", count: null };
@@ -243,6 +245,7 @@ export function phaseLine(phase: ChapterPhase): string {
     case "investigate":
       return "Case file 001. Find the three clues in the Bridge District.";
     case "standoff":
+    case "lineup":
       return "That’s every clue. Stop the Right-Clicker on the bridge deck.";
     case "rescue":
       return "The Right-Clicker’s down. Stand next to Mary and hold web to restore her.";

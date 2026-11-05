@@ -37,6 +37,7 @@ import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sh
 
 import { ChapterBeats, ChapterCallouts, ChapterStore, ChapterTips, feedChapter, ObjectiveChip, RestoreBar, RightClickerBar, useChapterLines, useChapterValue } from "./chapter-hud";
 import { chapterFixtureName, FixtureTap } from "./chapter-fixture";
+import { BallotPointer, feedVote, SybilVoteBar, useVoteLines, VoteBeats, VoteCallouts, VoteObjective, VoteStore, VoteTips } from "./vote-hud";
 import { CityMap, stopName } from "./city-map";
 import { ComboMeter } from "./combo";
 import { Minimap } from "./minimap";
@@ -62,7 +63,9 @@ html:has([data-night]), html:has([data-night]) body { overscroll-behavior: none;
 const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : ALLY_CAST[stop.ally]);
 
 /** Where a case night's minimap button says the next mark is. */
-const CHAPTER_NEXT = { investigate: "the nearest clue", standoff: "the bridge deck", rescue: "Mary Jpeg", done: null } as const;
+const CHAPTER_NEXT = { investigate: "the nearest clue", standoff: "the bridge deck", rescue: "Mary Jpeg", done: null, lineup: "the bridge deck" } as const;
+/** Case file 002's. */
+const VOTE_NEXT = { investigate: "the nearest drop box", lineup: "the polling station", standoff: "the polling station", rescue: "Uncle Gen’s ballot", done: null } as const;
 
 /** How a case night ended, for its "Case closed" results. */
 export interface ChapterEnd {
@@ -91,10 +94,12 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   // The sim's stops: the patrol's, or a chapter's one stage (Case File 001 has no patrol).
   const stops = run.sim.config.stops;
   const chapter = run.chapter;
+  /** Case file 002, "The Sybil Vote": its own HUD (vote-hud.tsx). */
+  const vote = chapter === "case-002";
   const colors = SUITS[hero.suit].colors;
   const loadout = useMemo(() => hero.loadout.filter((id) => hero.powers[id]), [hero]);
   // A chapter's cast: Mary (frozen on the deck) and Gwei; the Right-Clicker comes with the bridge's zone.
-  const cast = useMemo(() => (chapter ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
+  const cast = useMemo(() => (chapter === "case-002" ? (["uncle-gen", "gwei"] as CastId[]) : chapter ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
   const positions = useMemo(() => stopPositions(stops.length), [stops]);
 
   const [hudStore] = useState(() => new HudStore());
@@ -109,6 +114,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [chapterStore] = useState(() => new ChapterStore());
   const chapterOn = useChapterValue(chapterStore, (c) => c !== null);
   const chapterPhase = useChapterValue(chapterStore, (c) => c?.phase ?? null);
+  const [voteStore] = useState(() => new VoteStore());
   /** A case night's ending, from its events: how it ended and when. */
   const chapterEnd = useRef<ChapterEnd | null>(null);
   // Only the few HUD values the page itself places by: it re-renders when one changes, not
@@ -118,6 +124,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const hudStatus = useHudValue(hudStore, (h) => h?.status ?? null);
   const hudCountdown = useHudValue(hudStore, (h) => (h?.status === "intro" ? h.countdown : null));
   const villainKind = useHudValue(hudStore, (h) => h?.villain?.kind ?? null);
+  const hudChapterPhase = useHudValue(hudStore, (h) => h?.chapter?.phase ?? null);
   const touch = useCoarsePointer();
   /** A phone, held either way: the HUD gives the minimap's spot to the villain bar in a fight. */
   const narrow = useNarrowViewport();
@@ -296,6 +303,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   // A case night's HUD reads the frames the overlays see, and says what happens out loud.
   useEffect(() => feedChapter(tap, chapterStore, hudStore), [tap, chapterStore, hudStore]);
   useChapterLines(chapterStore, loop.bus, say);
+  useEffect(() => (vote ? feedVote(tap, voteStore, hudStore) : undefined), [vote, tap, voteStore, hudStore]);
+  useVoteLines(voteStore, loop.bus, say);
 
   const togglePause = useCallback(
     (next?: boolean) => {
@@ -559,7 +568,13 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onGwei={() => latch.pushShot(5)}
             onPause={() => togglePause(true)}
             combo={<ComboMeter tap={tap} store={hudStore} />}
-            chapter={chapterOn ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> } : undefined}
+            chapter={
+              vote
+                ? { objective: <VoteObjective store={voteStore} className="w-full max-w-[520px]" />, villain: <SybilVoteBar store={voteStore} /> }
+                : chapterOn
+                  ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> }
+                  : undefined
+            }
             minimap={
               <Minimap
                 tap={tap}
@@ -571,7 +586,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
                 onOpen={openMapFromHud}
                 still={still}
                 touch={touch}
-                nextLabel={chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
+                nextLabel={vote ? VOTE_NEXT[hudChapterPhase ?? "done"] : chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
                 hidden={phone && villainKind !== null}
               />
             }
@@ -579,7 +594,14 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         ) : null}
         {/* A chapter's stop is the bridge, not a patrol villain: its own banner and captions belong to the chapter HUD. */}
         {!ended && !chapter && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
-        {!ended && hudMode === "won" && villainKind && villainKind !== "right-clicker" ? <WonCaption villain={villainKind} /> : null}
+        {!ended && !chapter && hudMode === "won" && villainKind && villainKind !== "right-clicker" ? <WonCaption villain={villainKind} /> : null}
+        {!ended && vote ? (
+          <>
+            <BallotPointer tap={tap} />
+            <VoteBeats hud={hudStore} />
+            <VoteCallouts store={voteStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
+          </>
+        ) : null}
         {!ended && chapterOn ? (
           <>
             <RestoreBar tap={tap} touch={touch} store={chapterStore} />
@@ -605,7 +627,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           onResume={() => togglePause(false)}
           onMap={() => openMap("pause")}
           settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
-          help={chapterOn ? <ChapterTips touch={touch} /> : undefined}
+          help={vote ? <VoteTips touch={touch} /> : chapterOn ? <ChapterTips touch={touch} /> : undefined}
         />
       ) : null}
       {map && !ended ? (
