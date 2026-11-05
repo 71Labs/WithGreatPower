@@ -275,6 +275,25 @@ export abstract class ActorAnimator {
     }
   }
 
+  /**
+   * Set the body down so its lowest sole (heel or ball of the foot, whichever a clip has lower)
+   * is at `y`: a whole-body clip (a crouch) carries its own hips, and its feet with them.
+   */
+  protected soleTo(y: number): void {
+    const rig = this.rig;
+    rig.bones[0].updateMatrixWorld(true);
+    let low = Infinity;
+    for (let i = 0; i < 2; i++) {
+      low = Math.min(low, worldPos(rig.legs[i].end, _a).y - rig.spec.ankle);
+      const ball = rig.index.get(i === 0 ? "ball_l" : "ball_r");
+      const rest = rig.joints.get(i === 0 ? "ball_l" : "ball_r");
+      if (ball !== undefined && rest) low = Math.min(low, worldPos(rig.bones[ball], _a).y - rest.y);
+    }
+    if (!Number.isFinite(low) || Math.abs(low - y) < 0.05) return;
+    this.group.position.y += y - low;
+    this.group.updateMatrixWorld(true);
+  }
+
   /** Hands toward the pose's targets by `w` (per hand), after a clip moved the arms. */
   protected reachHands(w0: number, w1: number): void {
     const rig = this.rig;

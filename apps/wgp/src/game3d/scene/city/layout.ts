@@ -12,6 +12,7 @@ import type { Building, Cable, City, Prop, Vec3 } from "@wgp/game-core/sim3d/con
 
 import { C, buildingFill, mixRgb, type RGB } from "../palette";
 import { addDetails } from "./details";
+import { TANK_EAVE } from "./geometry";
 import { KIND, WINDOW_STYLE, windowStyle, type BoxSpec, type PushBox } from "./kinds";
 
 export { KIND, WINDOW_STYLE, windowStyle, type BoxSpec } from "./kinds";
@@ -28,6 +29,11 @@ export interface TankSpec {
   h: number;
   seed: number;
   ref: { x: number; z: number };
+  /**
+   * An ally stands on it (Gwei Stacy's errand): its roof is drawn flat, a lid at the tower's
+   * full height (the sim's `Zone.allyAt`), instead of a cone whose point she'd hover over.
+   */
+  flat: boolean;
 }
 
 export interface SectorBounds {
@@ -129,10 +135,13 @@ export function buildCityLayout(city: City, opts: { details?: boolean } = {}): C
     }
   }
 
+  // Where allies stand: a water tower with one on top gets a flat roof (TankSpec.flat).
+  const allies = city.zones.flatMap((z) => (z.allyAt ? [z.allyAt] : []));
+  const carries = (p: Prop) => p.kind === "water-tower" && allies.some((a) => Math.abs(a.x - p.at.x) < 1 && Math.abs(a.z - p.at.z) < 1 && Math.abs(a.y - (p.at.y + p.h)) < 1);
   for (const p of city.props) {
     const owner = p.buildingId !== null ? byId.get(p.buildingId) : undefined;
     const ref = owner ? { x: (owner.x0 + owner.x1) / 2, z: (owner.z0 + owner.z1) / 2 } : { x: p.at.x, z: p.at.z };
-    addProp(p, ref, push, tanks, texts);
+    addProp(p, ref, push, tanks, texts, carries(p));
   }
 
   if (city.bridge) addBridge(city, push);
@@ -142,7 +151,7 @@ export function buildCityLayout(city: City, opts: { details?: boolean } = {}): C
   return { boxes, tanks, sectors, texts };
 }
 
-function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: TankSpec[], texts: string[]) {
+function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: TankSpec[], texts: string[], flat = false) {
   const { x, y, z } = p.at;
   const yaw = (p.facing & 3) * QUARTER;
   const at = (lx: number, lz: number) => {
@@ -166,7 +175,8 @@ function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: Tank
       // Braces halfway up the legs.
       push({ x, y: y + legH * 0.45, z: z - r, w: r * 2, h: 3, d: 3, color: C.ink, kind: KIND.solid, hull: 0, ref, lod: 1 });
       push({ x, y: y + legH * 0.45, z: z + r, w: r * 2, h: 3, d: 3, color: C.ink, kind: KIND.solid, hull: 0, ref, lod: 1 });
-      tanks.push({ x, y: y + legH, z, w: p.w, h: tankH, seed, ref });
+      // A flat roof is pressed down to the eave: the tank is drawn taller so its lid is at the top.
+      tanks.push({ x, y: y + legH, z, w: p.w, h: flat ? tankH / TANK_EAVE : tankH, seed, ref, flat });
       break;
     }
     case "antenna": {
