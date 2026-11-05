@@ -41,6 +41,8 @@ export class Captive {
   private clips: HeroClips | null = null;
   private asked: string | null = null;
   private settled = 0;
+  /** Stood somewhere yet (her first frame places her). */
+  private placed = false;
   private freed = false;
   private readonly heroPos = new Vector3();
   private readonly ctx: AnimContext;
@@ -110,6 +112,15 @@ export class Captive {
     this.root.add(model.group);
   }
 
+  /** A fresh animator: her pose settles again from standing. */
+  private restand(): void {
+    if (!this.model || !this.clips) return;
+    const anim = new AllyAnimator(this.model.rig, this.model.group, "hips");
+    anim.setClips(this.clips, this.model.k);
+    this.anim = anim;
+    this.settled = 0;
+  }
+
   private drop(): void {
     if (!this.model) return;
     this.root.remove(this.model.group);
@@ -133,6 +144,9 @@ export class Captive {
     if (!model || !anim) return null;
     model.visible = true;
     const floor = surfaceBelow(this.solids, c.pos.x, c.pos.z, c.pos.y + 6);
+    // Put somewhere else (a new night, the lab's scenes): stood up afresh there, not stepped over.
+    if (this.placed && Math.hypot(c.pos.x - this.at.x, floor - this.at.y, c.pos.z - this.at.z) > 2) this.restand();
+    this.placed = true;
     this.at.set(c.pos.x, floor, c.pos.z);
     this.heroPos.set(hero.x, hero.y, hero.z);
     this.ctx.reducedMotion = this.reducedMotion;
@@ -144,10 +158,11 @@ export class Captive {
     }
     // Saved, she holds still (a screenshot); freed, she moves and waves.
     // (Held still by stepping no time: the pose is recomposed where it stopped.)
-    if (this.freed) anim.update({ pos: this.at, state: "wave" }, dt, this.ctx);
+    const pose = this.anim ?? anim;
+    if (this.freed) pose.update({ pos: this.at, state: "wave" }, dt, this.ctx);
     else {
       const step = this.settled < SETTLE ? Math.max(dt, 1 / 60) : 0;
-      anim.update({ pos: this.at, state: "idle" }, step, this.ctx);
+      pose.update({ pos: this.at, state: "idle" }, step, this.ctx);
       this.settled += step;
     }
     // The JPEG look, its "image" anchored on her on screen.
