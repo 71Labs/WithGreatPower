@@ -199,7 +199,8 @@ export class ChapterScene {
     for (const id of this.gone) this.popCopy(id);
 
     // Captive Mary and her frame.
-    const centre = p.captive.update(ch.captive, hero, camera, size, dt);
+    // The sim's position, not his breathing hips: a jittering target would keep her stepping round.
+    const centre = p.captive.update(ch.captive, frame.hero.pos, camera, size, dt);
     p.frames.begin();
     if (ch.captive && centre) {
       const c = centre.clone();
