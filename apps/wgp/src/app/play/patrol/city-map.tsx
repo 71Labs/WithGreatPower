@@ -126,7 +126,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
           <div className="relative mx-auto aspect-square w-full max-w-[min(100%,calc(100dvh-220px),560px)] shrink-0 overflow-hidden rounded-[18px] border-[2.5px] border-game-ink bg-game-paper-2 md:w-[min(56vw,calc(100dvh-200px),560px)]">
             <canvas ref={canvas} aria-hidden className="absolute inset-0 block size-full" />
             <ol aria-hidden className="contents">
-              {stops.map((stop, i) => {
+              {(chapter ? [] : stops).map((stop, i) => {
                 const p = toMap(unit, stopPoint(city.zones[i]).x, stopPoint(city.zones[i]).z);
                 const s = statusOf(i, current, results[i]);
                 return (
@@ -154,7 +154,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
 
           <div className="flex min-w-0 flex-1 flex-col gap-4">
             {chapter ? <ChapterMapList chapter={chapter} /> : null}
-            <ol aria-label="Tonight’s stops" className={`flex flex-col gap-2 ${stops.length ? "" : "hidden"}`}>
+            <ol aria-label="Tonight’s stops" className={`flex flex-col gap-2 ${stops.length && !chapter ? "" : "hidden"}`}>
               {stops.map((stop, i) => {
                 const s = statusOf(i, current, results[i]);
                 return (
@@ -182,7 +182,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
             </ol>
             <p className="flex items-center gap-2 text-[13px] leading-5 text-game-muted">
               <HeroFace colors={hero} className="size-6 rounded-full" />
-              The arrow is you; the dots lead to the next stop.
+              {chapter ? "The arrow is you; the pins are the case’s." : "The arrow is you; the dots lead to the next stop."}
             </p>
             <label htmlFor={`${id}-n`} className="flex min-h-11 cursor-pointer items-center justify-between gap-3 border-t-2 border-dashed border-game-ink/30 pt-3">
               <span className="flex flex-col gap-0.5">

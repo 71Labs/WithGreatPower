@@ -35,7 +35,7 @@ import { useCoarsePointer, useNarrowViewport, useReducedMotion, useShortViewport
 import { Hud, useHudValue } from "@/sim/ui/hud";
 import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sheets";
 
-import { ChapterCallouts, ChapterStore, ChapterTips, feedChapter, ObjectiveChip, RestoreBar, RightClickerBar, useChapterLines, useChapterValue } from "./chapter-hud";
+import { ChapterBeats, ChapterCallouts, ChapterStore, ChapterTips, feedChapter, ObjectiveChip, RestoreBar, RightClickerBar, useChapterLines, useChapterValue } from "./chapter-hud";
 import { chapterFixtureName, FixtureTap } from "./chapter-fixture";
 import { CityMap, stopName } from "./city-map";
 import { ComboMeter } from "./combo";
@@ -60,6 +60,9 @@ html:has([data-night]), html:has([data-night]) body { overscroll-behavior: none;
 `;
 
 const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : ALLY_CAST[stop.ally]);
+
+/** Where a case night's minimap button says the next mark is. */
+const CHAPTER_NEXT = { investigate: "the nearest clue", standoff: "the bridge deck", rescue: "Mary Jpeg", done: null } as const;
 
 /** How a case night ended, for its "Case closed" results. */
 export interface ChapterEnd {
@@ -105,6 +108,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   /** A case night's HUD (only while the frame carries a chapter). */
   const [chapterStore] = useState(() => new ChapterStore());
   const chapterOn = useChapterValue(chapterStore, (c) => c !== null);
+  const chapterPhase = useChapterValue(chapterStore, (c) => c?.phase ?? null);
   /** A case night's ending, from its events: how it ended and when. */
   const chapterEnd = useRef<ChapterEnd | null>(null);
   // Only the few HUD values the page itself places by: it re-renders when one changes, not
@@ -567,7 +571,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
                 onOpen={openMapFromHud}
                 still={still}
                 touch={touch}
-                nextLabel={nextStop ? stopName(nextStop) : null}
+                nextLabel={chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
                 hidden={phone && villainKind !== null}
               />
             }
@@ -579,6 +583,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         {!ended && chapterOn ? (
           <>
             <RestoreBar tap={tap} touch={touch} store={chapterStore} />
+            <ChapterBeats hud={hudStore} />
             <ChapterCallouts store={chapterStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
           </>
         ) : null}

@@ -19,13 +19,16 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { StickerPanel } from "@/components/game/kit";
+import { CHAPTERS } from "@wgp/game-core/chapters";
+
+import { StickerEyebrow, StickerPanel } from "@/components/game/kit";
 import { RightClickerArt } from "@/components/cases/art";
 import { Camera, Check, Cursor, Search } from "@/components/icons";
 import { project } from "@/game3d/nav/waypoint";
 import { throttled, type FrameTap } from "@/game3d/nav/tap";
 import type { HudStore } from "@/sim/loop";
 import { Face } from "@/sim/ui/bits";
+import { useHudValue } from "@/sim/ui/hud";
 import { CASE_001, CLUES, RIGHT_CLICKER, clueCopy } from "@/lib/cases/content";
 import type { ChapterPhase, ChapterRenderFrame, ClueId } from "@/lib/cases/types";
 import { chapterHud, chapterLine, isChapterEvent, objective, phaseLine, villainCue, type ChapterHud } from "@/lib/cases/view";
@@ -314,6 +317,64 @@ export function ChapterCallouts({ store, bus, layout }: { store: ChapterStore; b
       <CaseNote bus={bus} />
     </div>
   );
+}
+
+/* ------------------------------------------------------------------ the standoff's beats */
+
+/** The Right-Clicker's sticker face (he isn't in the cast's art). */
+function RightClickerFace({ className = "size-10 rounded-full" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`grid shrink-0 overflow-hidden border-2 border-white bg-sticker shadow-[0_2px_0_var(--game-ink)] ${className}`}>
+      <RightClickerArt />
+    </span>
+  );
+}
+
+/**
+ * The case's own beats over the night, where a patrol's encounter banner and win caption
+ * go: the Right-Clicker on the deck as the standoff opens, his defeat line once he's
+ * webbed, and Mary's "gm" once she's free.
+ */
+export function ChapterBeats({ hud }: { hud: HudStore }) {
+  const beat = useHudValue(hud, (h) => {
+    const c = h?.chapter;
+    if (!c) return null;
+    if (h.mode === "intro" && c.phase === "standoff") return "encounter";
+    if (h.mode === "won" && c.phase === "standoff") return "webbed";
+    if (c.phase === "done" && c.freed) return "freed";
+    return null;
+  });
+  const v = CHAPTERS["case-001"].villain;
+  if (beat === "encounter")
+    return (
+      <div className="pointer-events-none absolute inset-x-0 top-[34%] flex justify-center px-4 md:top-[30%] short:top-[84px]">
+        <StickerPanel className="animate-rise flex w-full max-w-[460px] items-start gap-4 p-4 sm:p-5">
+          <RightClickerFace className="size-20 rounded-[24px] border-[5px] sm:size-24" />
+          <div className="flex min-w-0 flex-col gap-2">
+            <StickerEyebrow>
+              <span>
+                Case file <span className="num">{CASE_001.number}</span> · {CASE_001.district}
+              </span>
+            </StickerEyebrow>
+            <h2 className="text-[26px] font-bold leading-7 tracking-[-0.02em] text-game-ink sm:text-[30px] sm:leading-8">{v.name}</h2>
+            <p className="text-[13px] italic leading-[18px] text-game-muted">“{v.tagline}”</p>
+            <p className="relative mt-1 rounded-[14px] border-2 border-game-ink bg-game-paper-2 px-3 py-2 text-[14px] font-medium leading-5">“{v.taunt}”</p>
+          </div>
+        </StickerPanel>
+      </div>
+    );
+  if (beat === "webbed" || beat === "freed")
+    return (
+      <div className="pointer-events-none absolute inset-x-0 bottom-[max(28px,env(safe-area-inset-bottom))] flex justify-center px-4">
+        <StickerPanel className="animate-rise flex max-w-[460px] items-center gap-3 rounded-full py-2 pl-2 pr-5">
+          {beat === "webbed" ? <RightClickerFace /> : <Face id="mary-jpeg" className="size-10 rounded-full" />}
+          <p className="text-[14px] font-semibold leading-5 text-pretty">
+            {beat === "webbed" ? v.defeat : `${CHAPTERS["case-001"].captive.name}: “${CHAPTERS["case-001"].captive.freed}.” Back to full quality.`}
+          </p>
+        </StickerPanel>
+      </div>
+    );
+  return null;
 }
 
 /* ------------------------------------------------------------------ the rescue */
