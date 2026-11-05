@@ -3,7 +3,8 @@
  * game-core's fillRenderFrame) and writes the frame the scene reads as a blend of them,
  * in place: positions slide by `alpha`, everything else (velocity, facing, the animation
  * state words and their ages, Doc's arms, the Goblin's bank; v1.3's pickups, combo, route and
- * the hero's `controlled`; v1.5's chapter and a villain's aim, though the paper copies slide)
+ * the hero's `controlled`; v1.5's chapter and a villain's aim, though the paper copies slide;
+ * v1.6's fee, though its meter slides with Gas Goblin)
  * is the latest tick's. A jump too
  * big for one tick (a teleport beside an errand ally, a resume) snaps instead of sliding.
  * Allocates only when a list grows.
@@ -169,7 +170,62 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
   }
   hz.length = curr.hazards.length;
   blendChapter(prev, curr, t, out);
+  blendFee(prev, curr, t, out);
   return out;
+}
+
+/**
+ * v1.6: Case File 003's clues, meter, route and chase. The meter slides (it rides under Gas
+ * Goblin through the chase, whose own position slides); the route never moves, so it's copied
+ * once; the rest is the latest tick's.
+ */
+function blendFee(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: RenderFrame3D) {
+  const cf = curr.fee;
+  if (!cf) {
+    if (cf === undefined) delete out.fee;
+    else out.fee = null;
+    return;
+  }
+  const of = (out.fee ??= {
+    id: cf.id,
+    phase: cf.phase,
+    clues: [],
+    meter: { pos: v3(), carried: false, heat: 1, cooled: false, spike: 0 },
+    route: [],
+    chase: null,
+    bakery: v3(),
+  });
+  of.id = cf.id;
+  of.phase = cf.phase;
+  for (let i = 0; i < cf.clues.length; i++) {
+    const k = cf.clues[i];
+    const slot = (of.clues[i] ??= { id: k.id, pos: v3(), found: k.found });
+    slot.id = k.id;
+    copyInto(slot.pos, k.pos);
+    slot.found = k.found;
+  }
+  of.clues.length = cf.clues.length;
+  const pm = prev.fee?.meter;
+  const m = of.meter;
+  // Picked up or put down between the two ticks: no slide across the city.
+  lerpInto(m.pos, pm && pm.carried === cf.meter.carried ? pm.pos : undefined, cf.meter.pos, t);
+  m.carried = cf.meter.carried;
+  m.heat = cf.meter.heat;
+  m.cooled = cf.meter.cooled;
+  m.spike = cf.meter.spike;
+  if (of.route.length !== cf.route.length || (cf.route[0] && of.route[0].pos.x !== cf.route[0].pos.x)) {
+    of.route = cf.route.map((p) => ({ pos: { ...p.pos }, roof: p.roof ? { ...p.roof } : null }));
+  }
+  if (cf.chase) {
+    const c = (of.chase ??= { next: 0, checkpoint: 0, escape: 0, gap: 0, losses: 0, maxLosses: 0 });
+    c.next = cf.chase.next;
+    c.checkpoint = cf.chase.checkpoint;
+    c.escape = cf.chase.escape;
+    c.gap = cf.chase.gap;
+    c.losses = cf.chase.losses;
+    c.maxLosses = cf.chase.maxLosses;
+  } else of.chase = null;
+  copyInto(of.bakery, cf.bakery);
 }
 
 /** v1.5: a chapter night's clues, captive and paper copies; the copies slide, the rest is the latest tick's. */
