@@ -8,6 +8,7 @@
  */
 import type { City, HeroAction, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 
+import type { SceneVillain } from "@/game3d/scene/chapter/contract";
 import type { CharacterKey } from "@/game3d/scene/characters/model";
 
 export const ROOF = 300;
@@ -29,10 +30,16 @@ export const VILLAIN_STATES = ["idle", "windup", "attack", "hit", "stunned", "gu
 export const ALLY_STATES = ["idle", "wave", "talk"] as const;
 
 export const ALLIES: LabCharacter[] = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei"];
-export const VILLAINS: LabCharacter[] = ["gas-goblin", "sandwich-man", "doc-octochain", "sybil"];
+export const VILLAINS: LabCharacter[] = ["gas-goblin", "sandwich-man", "doc-octochain", "sybil", "right-clicker"];
+/**
+ * Case file 001's Right-Clicker: his phases, plus `walk` (idle, walking a circle), `hit`, and
+ * `webbed` (beaten). `flash` loops the whole shot (aim, click, reload); `copy` and `drag` repeat.
+ */
+export const RIGHT_CLICKER_STATES = ["idle", "walk", "aim", "flash", "recover", "copy", "drag", "stunned", "hit", "webbed"] as const;
 
 export function statesFor(c: LabCharacter): readonly string[] {
   if (c === "hero") return HERO_STATES;
+  if (c === "right-clicker") return RIGHT_CLICKER_STATES;
   if (VILLAINS.includes(c)) return VILLAIN_STATES;
   return ALLY_STATES;
 }
@@ -421,8 +428,41 @@ export class CastScript {
     }
   }
 
+  /** The Right-Clicker on the roof, by lab state (his phases loop the way a fight runs them). */
+  private rightClicker(): void {
+    const f = this.frame;
+    const t = this.t;
+    const list = f.villains as SceneVillain[];
+    list.length = 0;
+    let state: string = this.state;
+    let st = t;
+    let pos = v(0, ROOF + 26, 0);
+    let vel = v();
+    if (state === "walk") {
+      const R = 120;
+      const a = t * (55 / R);
+      pos = v(Math.cos(a) * R, ROOF + 26, Math.sin(a) * R - 40);
+      vel = v(-Math.sin(a) * 55, 0, Math.cos(a) * 55);
+      state = "idle";
+    } else if (state === "flash") {
+      const u = t % 2.3;
+      [state, st] = u < 0.9 ? ["aim", u] : u < 1.05 ? ["flash", u - 0.9] : ["recover", u - 1.05];
+    } else if (state === "copy" || state === "drag") {
+      const len = state === "copy" ? 1.2 : 1.0;
+      const u = t % (len + 0.9);
+      [state, st] = u < len ? [state, u] : ["idle", u - len];
+    } else if (state === "hit") state = "idle";
+    const hits = this.state === "hit" ? 8 - (Math.floor(t / 1.4) % 8) : 5;
+    const aim = state === "aim" || state === "flash" ? { dir: v(0.6, 0, 0.8), half: 0.32 } : null;
+    list.push({ id: "right-clicker", copy: false, pos, vel, hits, hitsMax: 8, state, stateTicks: Math.floor(st * 60), aim, facing: state === "idle" && this.state === "walk" ? undefined : v(0.6, 0, 0.8) });
+  }
+
   private villain(): void {
     const f = this.frame;
+    if (this.character === "right-clicker") {
+      this.rightClicker();
+      return;
+    }
     const id = this.character as "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
     const t = this.t;
     const state = this.state === "hit" ? "idle" : this.state;

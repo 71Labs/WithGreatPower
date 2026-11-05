@@ -4,7 +4,7 @@
 import type { CastDef, CharacterKey } from "../model";
 import { AUNT, BEARSON, MARY, UNCLE_GEN } from "./allies";
 import { GWEI, HERO } from "./heroes";
-import { DOC_OCTOCHAIN, GOBLIN, SANDWICH, SYBIL, SYBIL_COPY } from "./villains";
+import { DOC_OCTOCHAIN, GOBLIN, RIGHT_CLICKER, SANDWICH, SYBIL, SYBIL_COPY } from "./villains";
 
 export const CAST_DEFS: Record<CharacterKey, CastDef> = {
   hero: HERO,
@@ -18,6 +18,7 @@ export const CAST_DEFS: Record<CharacterKey, CastDef> = {
   "doc-octochain": DOC_OCTOCHAIN,
   sybil: SYBIL,
   "sybil-copy": SYBIL_COPY,
+  "right-clicker": RIGHT_CLICKER,
 };
 
 export const CHARACTER_KEYS = Object.keys(CAST_DEFS) as CharacterKey[];

@@ -17,7 +17,7 @@ import { bodyMaterial, decalUniforms, hullMaterial, paletteUniform, type Decal }
 import { createRig, type BodySpec, type ExtraBone, type Rig } from "./rig";
 
 /** Every body the scene can draw: the hero, the cast, and the grey Sybil copy. */
-export type CharacterKey = "hero" | "gwei" | "uncle-gen" | "aunt-mainnet" | "bearson" | "mary-jpeg" | "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil" | "sybil-copy";
+export type CharacterKey = "hero" | "gwei" | "uncle-gen" | "aunt-mainnet" | "bearson" | "mary-jpeg" | "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil" | "sybil-copy" | "right-clicker";
 
 /** How a body moves, which picks its animator. */
 export type Motion = "hero" | "glider" | "runner" | "hover" | "float" | "ally";

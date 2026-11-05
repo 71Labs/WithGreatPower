@@ -5,7 +5,7 @@
  * whose four booms end at the sim's arm shoulders; The Sybil, a floating goo body on a tail with a mouthful of fangs, and the
  * grey copy he hides among.
  */
-import { ExtrudeGeometry, Shape, Vector3 } from "three";
+import { ExtrudeGeometry, Matrix4, Quaternion, Shape, Vector3 } from "three";
 
 import { DETAIL, placeAt } from "../builder";
 import type { CastDef, DecalSpec } from "../model";
@@ -289,4 +289,81 @@ export const SYBIL_COPY: CastDef = {
   key: "sybil-copy",
   name: "A copy",
   colors: () => ({ goo: "#A3A3A0", body: "#A3A3A0", eye: "#E4E4E1", mouth: "#74746F", tooth: "#D6D6D2" }),
+};
+
+/* ------------------------------------------------------------------ The Right-Clicker */
+
+/**
+ * Case file 001's villain, while his MPFB body (cast-right-clicker.glb) is on its way: a slim
+ * hooded figure in a dark hoodie, the hood's shade over his eyes, a giant white cursor in his
+ * right fist.
+ */
+const RIGHT_CLICKER_BODY = scaleBody(HERO_BODY, 0.98, { shoulderX: 11, hipWidth: 5.2 });
+
+const RIGHT_CLICKER_DECALS: DecalSpec[] = [
+  { shape: "ellipse", x: 0, y: 0.5, rx: 0.95, ry: 0.62, fill: "shade" },
+  { shape: "ellipse", x: -0.32, y: 0.02, rx: 0.15, ry: 0.075, rot: -0.12, fill: "white", ink: 2, mirror: true },
+  { shape: "ellipse", x: -0.28, y: 0.01, rx: 0.05, ry: 0.065, fill: "ink", clip: true, mirror: true },
+  { shape: "stroke", x: -0.32, y: 0.17, rx: 0.17, ry: 0.035, rot: -0.38, fill: "ink", mirror: true },
+  { shape: "stroke", x: 0.08, y: -0.45, rx: 0.2, ry: 0.025, rot: 0.2, fill: "ink" },
+];
+
+/** The pointer arrow (a 12 × 20 cursor, y down from the tip), as cast.py's CURSOR. */
+export const CURSOR_ARROW: [number, number][] = [
+  [0, 0],
+  [0, 17],
+  [4, 13],
+  [7, 19.5],
+  [9.6, 18.4],
+  [6.6, 12],
+  [12, 12],
+];
+
+/** Where the fist holds the arrow: the middle of its stem's end. */
+export const CURSOR_TAIL: [number, number] = [8.3, 18.95];
+
+function cursorProp(k: BodyKit): void {
+  const s = new Shape();
+  // Tip up in the shape's plane (+y), the stem's end at the origin.
+  CURSOR_ARROW.forEach(([x, y], i) => (i === 0 ? s.moveTo(x - CURSOR_TAIL[0], CURSOR_TAIL[1] - y) : s.lineTo(x - CURSOR_TAIL[0], CURSOR_TAIL[1] - y)));
+  s.closePath();
+  const geo = new ExtrudeGeometry(s, { depth: 1, bevelEnabled: false, curveSegments: 1 });
+  geo.translate(0, 0, -0.5);
+  const hand = k.joint("handR");
+  const fore = k.joint("foreR");
+  const dir = hand.clone().sub(fore).normalize();
+  const at = hand.clone().addScaledVector(dir, 3);
+  // The shape's +y along the hand, its plane upright through the arm.
+  const m = new Matrix4().makeRotationFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), dir));
+  m.scale(new Vector3(1.25, 1.25, 1.6)).setPosition(at);
+  k.add(geo, "handR", m, "cursor", { radial: true });
+  geo.dispose();
+}
+
+export const RIGHT_CLICKER: CastDef = {
+  key: "right-clicker",
+  name: "The Right-Clicker",
+  body: RIGHT_CLICKER_BODY,
+  height: 90,
+  motion: "runner",
+  colors: () => ({ skin: "#D9A07A", shade: "#8A5C49", hoodie: "#363A4D", pants: "#1E2029", glove: "#18191E", shoe: "#3A3D4A", cursor: "#FFFFFF" }),
+  decals: RIGHT_CLICKER_DECALS,
+  build(k) {
+    const y = k.y;
+    k.torso({ hip: [8.4, 6.2], waist: [7.4, 5.8], chest: [9.8, 6.8], shoulder: [10.4, 6.2], chestFwd: 0.4, colors: [{ y: 0, color: "pants" }, { y: y.spine - 3, color: "hoodie" }] });
+    k.neck(3.1, "skin");
+    const head = k.head({ y: 7.2, rx: 7, ry: 8.6, rz: 7.8, jaw: 0.7, chin: 0.6, faceY: -0.05, color: "skin", kind: DETAIL.face });
+    // The hood: a shell over the head open at the face, its brim forward over the brow.
+    k.sphere("head", k.onHead(head, 0, 0.12, -0.2), [head.rx * 1.22, head.ry * 1.14, head.rz * 1.12], "hoodie");
+    k.sphere("head", k.onHead(head, 0, 0.62, 0.62), [head.rx * 1.05, head.ry * 0.32, head.rz * 0.42], "hoodie", { rot: [0.35, 0, 0] });
+    k.sphere("chest", new Vector3(0, y.neck - 2, -2.5), [9, 4.5, 6.5], "hoodie");
+    k.both((side) => {
+      k.arm(side, { r: [3.8, 3.2, 2.6, 2.9, 2.3], colors: [{ s: 0, color: "hoodie" }] });
+      k.hand(side, 6, "glove");
+      k.leg(side, { r: [5, 4.5, 3.3, 3.5, 2.5], colors: [{ s: 0, color: "pants" }] });
+      k.foot(side, 11, 3.2, 3.2, "shoe", "ink");
+    });
+    cursorProp(k);
+    return head;
+  },
 };

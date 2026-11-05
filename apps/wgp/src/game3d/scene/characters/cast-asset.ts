@@ -32,7 +32,7 @@ export { CAST_ANIMS } from "./files";
 export const UNITS_PER_METRE = 88 / 1.886;
 
 /** The characters with an MPFB body. */
-export const CAST_BODIES = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei", "gas-goblin", "sandwich-man", "doc-octochain", "sybil"] as const;
+export const CAST_BODIES = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei", "gas-goblin", "sandwich-man", "doc-octochain", "sybil", "right-clicker"] as const;
 export type CastBodyId = (typeof CAST_BODIES)[number];
 
 export function castModelUrl(id: CastBodyId, low: boolean): string {

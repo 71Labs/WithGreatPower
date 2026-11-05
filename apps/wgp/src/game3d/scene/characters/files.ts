@@ -24,6 +24,9 @@ export const HERO_ANIMS = "/models/hero-anims.glb";
 /** The cast's extra motion: clips the hero doesn't use (retarget.py --cast). */
 export const CAST_ANIMS = "/models/cast-anims.glb";
 
+/** Case file 001's Right-Clicker: his pistol-style aim, click, reload and made moves (rc_anims.py). Fetched only on a night he's in. */
+export const RIGHT_CLICKER_ANIMS = "/models/right-clicker-anims.glb";
+
 /** The hero's body file for a tier. */
 export const heroModelUrl = (tier: QualityTier) => (tier === "low" ? HERO_MODEL.lo : HERO_MODEL.hi);
 
