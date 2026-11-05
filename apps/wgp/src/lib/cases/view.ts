@@ -7,11 +7,13 @@
  * - chapterHud / objective / villainCue: the in-night HUD's view of `frame.chapter`.
  */
 import { EXPLORER_URL } from "@/lib/near/config";
+import type { ChapterHud as SimChapterHud } from "@/sim/loop";
 
 import { clueCopy } from "./content";
 import {
   CHAPTER_ID,
   type BadgeStatus,
+  type CaseRecord,
   type CaseRecordApi,
   type ChapterEvent,
   type ChapterPhase,
@@ -19,7 +21,6 @@ import {
   type ClueId,
   type RightClickerFrame,
   type RightClickerPhase,
-  type SavedCase,
 } from "./types";
 
 /** The sim's rate: ticks per second (game-core sim3d SIM_HZ). */
@@ -42,14 +43,15 @@ export interface LocalCase {
 export interface CaseSources {
   /** `GET /api/cases` for this case (signed in), if it answered. */
   api?: CaseRecordApi | null;
-  /** `Save.cases[id]`. */
-  saved?: SavedCase | null;
+  /** `Save.cases[id]`: the account's (verified) or a guest's browser save (unverified). */
+  saved?: Pick<CaseRecord, "cleared" | "bestTicks"> | null;
   local?: LocalCase | null;
 }
 
 export function caseStatus({ api, saved, local }: CaseSources): CaseStatus {
   if (api?.status === "cleared" || saved?.cleared || local?.cleared) return "closed";
-  if (local?.startedAt) return "in-progress";
+  // A run of it in flight on the server, or started from this browser.
+  if (api?.active || local?.startedAt) return "in-progress";
   return "new";
 }
 
@@ -114,33 +116,51 @@ export interface ChapterHud {
   clues: { id: ClueId; found: boolean }[];
   found: number;
   total: number;
-  /** The Right-Clicker, while he's on the deck. */
-  villain: { phase: RightClickerPhase; hits: number; hitsMax: number } | null;
+  /**
+   * The Right-Clicker, while he's on the deck. `open`: a blow lands now (his reload, a broken
+   * drag's stagger), from the sim's HUD when it has one, else read off his state.
+   */
+  villain: { phase: RightClickerPhase; hits: number; hitsMax: number; open: boolean } | null;
   /** 0–1 during the rescue, else null. */
   restore: number | null;
+  /** The hero stands beside Mary: holding the web restores her (the sim's HUD). */
+  beside: boolean;
+  /** Frozen by a SCREENSHOT right now (the sim's HUD). */
+  saved: boolean;
   freed: boolean;
 }
 
-const PHASES: readonly RightClickerPhase[] = ["idle", "aim", "flash", "recover", "copy", "drag", "stunned"];
+const PHASES: readonly RightClickerPhase[] = ["idle", "aim", "flash", "recover", "copy", "drag", "stunned", "webbed"];
 const asPhase = (s: string): RightClickerPhase => (PHASES as readonly string[]).includes(s) ? (s as RightClickerPhase) : "idle";
 
 export function rightClickerOf(frame: Pick<ChapterRenderFrame, "villains">): RightClickerFrame | null {
   return (frame.villains.find((v) => v.id === "right-clicker") as RightClickerFrame | undefined) ?? null;
 }
 
-/** The HUD's view of a frame's chapter, or null on a normal night. Restore is rounded to a percent so a still bar doesn't re-render. */
-export function chapterHud(frame: Pick<ChapterRenderFrame, "chapter" | "villains">): ChapterHud | null {
+/**
+ * The HUD's view of a frame's chapter, or null on a normal night. The frame gives the phase,
+ * the clues, the Right-Clicker and Mary; the sim's own HUD snapshot (`sim`, when there is one)
+ * adds what only the sim knows: whether a blow lands now, the hero beside Mary, SAVED. Restore
+ * is rounded to a percent so a still bar doesn't re-render.
+ */
+export function chapterHud(frame: Pick<ChapterRenderFrame, "chapter" | "villains">, sim?: SimChapterHud | null): ChapterHud | null {
   const c = frame.chapter;
   if (!c || c.id !== CHAPTER_ID) return null;
   const rc = rightClickerOf(frame);
   const found = c.clues.filter((x) => x.found).length;
+  const phase = rc ? asPhase(rc.state) : "idle";
   return {
     phase: c.phase,
     clues: c.clues.map((x) => ({ id: x.id, found: x.found })),
     found,
     total: c.clues.length,
-    villain: rc && c.phase === "standoff" ? { phase: asPhase(rc.state), hits: rc.hits, hitsMax: rc.hitsMax } : null,
+    villain:
+      rc && c.phase === "standoff" && phase !== "webbed"
+        ? { phase, hits: rc.hits, hitsMax: rc.hitsMax, open: sim?.villain ? sim.villain.open : phase === "recover" || phase === "stunned" }
+        : null,
     restore: c.phase === "rescue" && c.captive ? Math.round(Math.max(0, Math.min(1, c.captive.restore)) * 100) / 100 : null,
+    beside: !!sim?.beside,
+    saved: !!sim?.saved,
     freed: !!c.captive?.freed,
   };
 }
@@ -166,22 +186,22 @@ export function objective(hud: Pick<ChapterHud, "phase" | "found" | "total">): O
   }
 }
 
-/** The word on the Right-Clicker's bar for what he's doing, or null when there's nothing to read. */
-export function villainCue(phase: RightClickerPhase): { text: string; tone: "warn" | "open" | "plain" } | null {
+/**
+ * The word on the Right-Clicker's bar for what he's doing, or null when there's nothing to
+ * read: "Saving…" while he aims (even over a flinch), "Open: hit him" while a blow lands.
+ */
+export function villainCue(phase: RightClickerPhase, open = phase === "recover" || phase === "stunned"): { text: string; tone: "warn" | "open" | "plain" } | null {
+  if (phase === "aim") return { text: "Saving…", tone: "warn" };
+  if (phase === "flash") return { text: "Click!", tone: "warn" };
+  if (open) return { text: "Open: hit him", tone: "open" };
   switch (phase) {
-    case "aim":
-      return { text: "Saving…", tone: "warn" };
-    case "flash":
-      return { text: "Click!", tone: "warn" };
-    case "recover":
-      return { text: "Open: hit him", tone: "open" };
-    case "stunned":
-      return { text: "Stunned: hit him", tone: "open" };
     case "copy":
       return { text: "Ctrl+C", tone: "plain" };
     case "drag":
       return { text: "Dragging you", tone: "warn" };
-    case "idle":
+    case "stunned":
+      return { text: "Stunned", tone: "plain" };
+    default:
       return null;
   }
 }
@@ -199,7 +219,7 @@ export function chapterLine(ev: ChapterEvent): { text: string; urgent: boolean }
   switch (ev.type) {
     case "clue-found": {
       const c = clueCopy(ev.id);
-      return { text: `Clue found: ${c.name.toLowerCase()}. “${c.note}”`, urgent: true };
+      return { text: `Clue ${ev.found} of ${ev.of} found: ${c.name.toLowerCase()}. “${c.note}”`, urgent: true };
     }
     case "screenshot":
       return ev.hit ? { text: "Saved! Frozen for a second.", urgent: true } : { text: "Dodged the screenshot. He’s reloading: hit him.", urgent: true };

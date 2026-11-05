@@ -12,13 +12,22 @@
  *
  * The browser and the server both go through stepRun, so a verified run is exactly the
  * run that was played.
+ *
+ * Story chapters (Case File 001) are runs too: startChapterRun(save, seed, chapter) plays the
+ * chapter's own night on the hero from the save, with no patrol and no engine actions (the
+ * save is untouched until the server closes the case: rules/chapters.ts applyCaseClear). Their
+ * logs carry chapterLogRuleset(chapter) in the ruleset field, so a chapter log never replays
+ * as a patrol night and a patrol log never as a chapter: pass `{ chapter }` to resumeRun and
+ * replayRun for a chapter run.
  */
-import { actionFor3d, currentErrand, errandActions, sessionStart3d } from "./bridge3d";
+import { actionFor3d, chapterConfig, currentErrand, errandActions, sessionStart3d } from "./bridge3d";
 import { hashState } from "./hash";
 import { decodeInputCodes, encodeInputCodes, frameCode, frameFromCode, InputLogError } from "./input/log";
+import { isChapterId } from "./rules/chapters";
 import { reduce } from "./rules/engine";
-import type { Save, Stop } from "./rules/types";
+import type { ChapterId, Save, Stop } from "./rules/types";
 import { RULESET_VERSION, scoreRun, type ScoreBreakdown } from "./score";
+import { chapterLogRuleset } from "./sim3d/chapter";
 import { SIM_HZ } from "./sim3d/constants";
 import type { InputEvent, InputFrame, ReplayInput, ReplayResult } from "./sim3d/contract";
 import { createSim, resolveErrand, simRunning, stepSim } from "./sim3d/sim";
@@ -44,6 +53,8 @@ export interface Run {
   /** Abilities fired and Gwei calls, for stats. */
   abilities: number;
   gwei: number;
+  /** The story chapter this run plays (startChapterRun), or null for a patrol night. */
+  readonly chapter: ChapterId | null;
 }
 
 /** Whether two stop lists are the same (field by field). */
@@ -59,8 +70,8 @@ function sameStops(a: Stop[], b: Stop[]): boolean {
 }
 
 /** A run that failed before it began. */
-function deadRun(save: Save, seed: number, error: string): Run {
-  return { save, start: save, seed, sim: null as unknown as SimState, codes: [], events: [], checkpoints: [], over: true, error, abilities: 0, gwei: 0 };
+function deadRun(save: Save, seed: number, error: string, chapter: ChapterId | null = null): Run {
+  return { save, start: save, seed, sim: null as unknown as SimState, codes: [], events: [], checkpoints: [], over: true, error, abilities: 0, gwei: 0, chapter };
 }
 
 export interface RunOptions {
@@ -69,6 +80,21 @@ export interface RunOptions {
    * `seed` (hand-built stop lists). The server never sets this.
    */
   trustPatrol?: boolean;
+  /** resumeRun / replayRun: the log is this story chapter's (startChapterRun), not a patrol night's. */
+  chapter?: ChapterId;
+}
+
+/**
+ * Start a story chapter's night (Case File 001) on the save's hero, from the server's seed (or
+ * a local one for guests): full health and fluid, the hero's loadout, one Gwei call. The save
+ * isn't touched, and needs no patrol: a chapter can be played on any night.
+ */
+export function startChapterRun(save: Save, seed: number, chapter: ChapterId): Run {
+  if (!isChapterId(chapter)) return deadRun(save, seed, `no chapter ${String(chapter)}`, null);
+  if (!save?.hero) return deadRun(save, seed, "no hero", chapter);
+  const config = chapterConfig(save, seed, chapter);
+  if (!config) return deadRun(save, seed, "no hero", chapter);
+  return { save, start: save, seed, sim: createSim(config), codes: [], events: [], checkpoints: [], over: false, error: null, abilities: 0, gwei: 0, chapter };
 }
 
 /**
@@ -107,14 +133,21 @@ export function startRun(input: Save, seed: number, opts: RunOptions = {}): Run 
     error: null,
     abilities: 0,
     gwei: 0,
+    chapter: null,
   };
 }
 
-/** Send each event's engine action. A refused action kills the run (a desync). */
+/** Send each event's engine action. A refused action kills the run (a desync). Chapters send none. */
 function dispatch(run: Run, events: SimEvent[]) {
   for (const ev of events) {
     if (ev.type === "ability") run.abilities += 1;
     if (ev.type === "gwei") run.gwei += 1;
+    if (run.chapter) {
+      // A chapter's checkpoints: each clue, the win, and Mary's release.
+      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed") run.checkpoints.push(hashState(run.sim));
+      if (ev.type === "night-over") run.over = true;
+      continue;
+    }
     const action = actionFor3d(ev);
     if (action) {
       const next = reduce(run.save, action);
@@ -175,9 +208,12 @@ export function chooseErrand(run: Run, value: number): SimEvent[] | null {
   return events;
 }
 
+/** The ruleset field a run's log carries: RULESET_VERSION, or the chapter's (chapterLogRuleset). */
+export const logRuleset = (chapter: ChapterId | null | undefined) => (chapter ? chapterLogRuleset(chapter) : RULESET_VERSION);
+
 /** The canonical input log of everything recorded so far. */
 export function runLog(run: Run): Uint8Array {
-  return encodeInputCodes(run.codes, run.events, 0, RULESET_VERSION);
+  return encodeInputCodes(run.codes, run.events, 0, logRuleset(run.chapter));
 }
 
 /** The state hash right now. */
@@ -192,11 +228,17 @@ export function resumeRun(input: ReplayInput, opts: RunOptions = {}): Run {
   try {
     decoded = decodeInputCodes(input.log);
   } catch (e) {
-    return deadRun(input.save as Save, input.seed, e instanceof InputLogError ? `bad log: ${e.message}` : "bad log");
+    return deadRun(input.save as Save, input.seed, e instanceof InputLogError ? `bad log: ${e.message}` : "bad log", opts.chapter ?? null);
   }
-  if (decoded.ruleset !== RULESET_VERSION) return deadRun(input.save as Save, input.seed, `ruleset ${decoded.ruleset} is not ${RULESET_VERSION}`);
-  if (decoded.fromTick !== 0) return deadRun(input.save as Save, input.seed, "a run's log starts at tick 0");
-  const run = startRun(input.save as Save, input.seed, opts);
+  const chapter = opts.chapter ?? null;
+  if (chapter !== null && !isChapterId(chapter)) return deadRun(input.save as Save, input.seed, `no chapter ${String(chapter)}`);
+  const want = logRuleset(chapter);
+  if (decoded.ruleset !== want) {
+    const what = chapter ? `chapter ${chapter}'s ${want}` : String(RULESET_VERSION);
+    return deadRun(input.save as Save, input.seed, `ruleset ${decoded.ruleset} is not ${what}`, chapter);
+  }
+  if (decoded.fromTick !== 0) return deadRun(input.save as Save, input.seed, "a run's log starts at tick 0", chapter);
+  const run = chapter ? startChapterRun(input.save as Save, input.seed, chapter) : startRun(input.save as Save, input.seed, opts);
   if (run.error) return run;
   const { codes, events } = decoded;
   let e = 0;
@@ -263,6 +305,39 @@ export function runStats(run: Run, score: ScoreBreakdown | null): Record<string,
   };
 }
 
+/** Whether a chapter run closed its case: Mary freed and the night ended on it. */
+export function chapterCleared(run: Run): boolean {
+  const c = run.sim?.chapter;
+  return !!run.chapter && !!c && c.phase === "done" && c.captive.freed && run.over && !run.error && run.sim.mode === "done" && run.sim.hp > 0;
+}
+
+/** A chapter run's stats, as the server stores them: `cleared` (0 or 1) decides the case. */
+export function chapterStats(run: Run): Record<string, number> {
+  const s = run.sim;
+  const c = s?.chapter;
+  return {
+    chapter: 1,
+    cleared: chapterCleared(run) ? 1 : 0,
+    ticks: s?.tick ?? 0,
+    seconds: Math.floor((s?.tick ?? 0) / SIM_HZ),
+    cluesFound: c ? c.clues.filter((k) => k.found).length : 0,
+    clues: c ? c.clues.length : 0,
+    fightsWon: c && (c.phase === "rescue" || c.phase === "done") ? 1 : 0,
+    restore: c ? c.captive.restore : 0,
+    perfect: s?.total.perfect ?? 0,
+    good: s?.total.good ?? 0,
+    miss: s?.total.miss ?? 0,
+    maxCombo: s?.maxCombo ?? 0,
+    bits: s?.bits ?? 0,
+    rings: s?.rings ?? 0,
+    pickupsPlaced: s?.pickups.length ?? 0,
+    hpLeft: s && s.mode !== "ko" ? s.hp : 0,
+    knockedOut: s && s.hp <= 0 ? 1 : 0,
+    abilities: run.abilities,
+    gweiUsed: run.gwei,
+  };
+}
+
 /** The score of a finished run (from the save's results and the sim's swing stats). */
 export function runScore(run: Run): ScoreBreakdown {
   const p = run.save.patrol;
@@ -295,6 +370,10 @@ export function finishRun(run: Run): ReplayResult {
   });
   if (run.error) return fail(run.error);
   if (!run.over) return fail("the night didn't finish");
+  if (run.chapter) {
+    // A chapter is never scored or banked here: the server closes the case (applyCaseClear) on a clear.
+    return { ok: true, save: run.save, score: 0, ticks: run.sim.tick, stats: chapterStats(run), checkpoints: run.checkpoints, hash: hashState(run.sim) };
+  }
   const save = reduce(run.save, { type: "finish-patrol" });
   if (!save.nightDone) return fail("finish-patrol refused the night");
   run.save = save;

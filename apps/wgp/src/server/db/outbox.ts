@@ -8,6 +8,9 @@
  *   `items` include the night's Bits as `item:bits` (src/lib/market/rewards.ts), so they
  *   go out through the same `mint_rewards` call as the loot.
  * - `mint_import`: { playerId, accountId, items: [{ tokenId, amount }], trophy, level?, digest }
+ * - `mint_reward` for a case file's first verified clear (dedupe `badge:<chapter>:<playerId>`):
+ *   { runId, playerId, accountId, items: [], badges: ["case-001"], level?, digest }, minted as
+ *   the soulbound `trophy:badge:case-001` through the same `mint_rewards` call.
  * - `register_hero`: { accountId, name, suit }. Only the player's own key can send it, so
  *   it waits (pending, no nonce) for their session key; see src/server/near/heroes.ts.
  *
@@ -265,14 +268,16 @@ export function rewardFromOp(op: ChainOp): {
   digest: string;
 } {
   if (!(MINT_KINDS as readonly string[]).includes(op.kind) || op.rewardNonce === null) throw new Error(`${op.id} is not a reward mint`);
-  const p = op.payload as { accountId?: string; items?: MintItem[]; level?: number; trophy?: string; digest?: string };
+  const p = op.payload as { accountId?: string; items?: MintItem[]; level?: number; trophy?: string; badges?: string[]; digest?: string };
   if (!p.accountId || !p.digest) throw new Error(`${op.id} is missing its account or digest`);
   const items = (p.items ?? []).map(({ tokenId, amount }) => {
     if (!tokenId.startsWith("item:")) throw new Error(`Only items are minted as rewards, not ${tokenId}`);
     return { item: tokenId.slice(5), amount };
   });
-  // The contract mints a badge `b` as `trophy:badge:b`; ours are queued as `trophy:b`.
-  const badges = p.trophy ? [p.trophy.replace(/^trophy:/, "")] : undefined;
+  // The contract mints a badge `b` as `trophy:badge:b`. An import queues one as `trophy:b`; a
+  // case file's first clear queues `badges: ["case-001"]` (src/server/db/cases.ts).
+  const all = [...(p.badges ?? []), ...(p.trophy ? [p.trophy.replace(/^trophy:/, "")] : [])];
+  const badges = all.length > 0 ? all : undefined;
   return { key: op.id, accountId: p.accountId, nonce: op.rewardNonce, items, ...(p.level ? { level: p.level } : {}), ...(badges ? { badges } : {}), digest: p.digest };
 }
 

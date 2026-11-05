@@ -38,6 +38,10 @@ export interface CaseClosedProps {
   heroName: string;
   closed: boolean;
   ticks: number | null;
+  /** The case's best clear after this night, when the save says (the first clear's own time). */
+  best?: number | null;
+  /** This night closed the case for the first time (verified, or in this browser). */
+  firstClear?: boolean;
   filing: CaseFiling;
   /** The latest edition once the night is banked: the Rug leads with the case until a newer one. */
   edition: number;
@@ -113,7 +117,15 @@ function Filing({ filing, badge, onRetry }: { filing: CaseFiling; badge: BadgeVi
   }
 }
 
-export function CaseClosed({ heroName, closed, ticks, filing, edition, onRetry, record = true }: CaseClosedProps) {
+/** The line under the time: a first clear, a new best, or the best to beat. */
+function bestLine(ticks: number, best: number | null | undefined, first: boolean | undefined): string {
+  if (first) return "First clear. Off the boards: kept in the case file.";
+  if (best !== null && best !== undefined && best < ticks) return `Your best is ${formatTicks(best)}.`;
+  if (best !== null && best !== undefined && best === ticks) return "A new best for the case file.";
+  return "Off the boards: kept in the case file.";
+}
+
+export function CaseClosed({ heroName, closed, ticks, best, firstClear, filing, edition, onRetry, record = true }: CaseClosedProps) {
   const badge = useFiledBadge(filing);
   const kept = record && closed && (filing.kind === "filed" || filing.kind === "guest");
 
@@ -177,7 +189,7 @@ export function CaseClosed({ heroName, closed, ticks, filing, edition, onRetry, 
                   {formatTicks(ticks)}
                 </p>
                 <p className="sr-only">{spokenTicks(ticks)}</p>
-                <p className="text-[12px] leading-4 text-game-muted">Off the boards: kept in the case file.</p>
+                <p className="max-w-[24ch] text-[12px] leading-4 text-game-muted text-pretty">{bestLine(ticks, best, firstClear)}</p>
               </div>
             ) : null}
             {closed ? <Filing filing={filing} badge={badge} onRetry={onRetry} /> : null}

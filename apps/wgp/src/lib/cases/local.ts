@@ -11,7 +11,7 @@ import { useSyncExternalStore } from "react";
 
 import type { Save } from "@wgp/game-core/types";
 
-import { CHAPTER_ID, type SaveWithCases } from "./types";
+import { CHAPTER_ID, type ChapterId } from "./types";
 import type { LocalCase } from "./view";
 
 const KEY = "wgp:cases:v1";
@@ -83,9 +83,9 @@ export function markCaseSeen(id: string, now = Date.now()) {
 }
 
 /** True while a case is still new to this hero: not opened, started or closed (here or on the save). */
-export function useNewCase(save: Save | null, id: string = CHAPTER_ID): boolean {
+export function useNewCase(save: Save | null, id: ChapterId = CHAPTER_ID): boolean {
   const mine = useCaseMarks().cases[id];
-  const saved = (save as SaveWithCases | null)?.cases?.[id];
+  const saved = save?.cases?.[id];
   return !!save?.hero && !mine?.seenAt && !mine?.startedAt && !mine?.cleared && !saved?.cleared;
 }
 

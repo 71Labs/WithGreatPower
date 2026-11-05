@@ -18,9 +18,10 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { castById, type CastId } from "@wgp/game-core/cast";
-import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
+import { villainCard } from "@wgp/game-core/chapters";
+import { ALLY_CAST, ERRANDS, SUITS } from "@wgp/game-core/data";
 import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
-import type { Stop, StopResult, VillainId } from "@wgp/game-core/types";
+import type { Stop, StopResult } from "@wgp/game-core/types";
 
 import { holdAudioLoads, playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { attachControls, InputLatch, STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
@@ -60,9 +61,6 @@ html:has([data-night]), html:has([data-night]) body { overscroll-behavior: none;
 
 const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : ALLY_CAST[stop.ally]);
 
-/** A villain the stock HUD knows (the chapter's Right-Clicker has his own bar and lines). */
-const knownVillain = (id: string | null | undefined): id is VillainId => !!id && Object.hasOwn(VILLAINS, id);
-
 /** How a case night ended, for its "Case closed" results. */
 export interface ChapterEnd {
   id: string;
@@ -87,10 +85,13 @@ export interface PlaySurfaceProps {
 export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallback }: PlaySurfaceProps) {
   const { run } = session;
   const hero = run.start.hero!;
-  const stops = run.start.patrol!.stops;
+  // The sim's stops: the patrol's, or a chapter's one stage (Case File 001 has no patrol).
+  const stops = run.sim.config.stops;
+  const chapter = run.chapter;
   const colors = SUITS[hero.suit].colors;
   const loadout = useMemo(() => hero.loadout.filter((id) => hero.powers[id]), [hero]);
-  const cast = useMemo(() => [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])], [stops]);
+  // A chapter's cast: Mary (frozen on the deck) and Gwei; the Right-Clicker comes with the bridge's zone.
+  const cast = useMemo(() => (chapter ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
   const positions = useMemo(() => stopPositions(stops.length), [stops]);
 
   const [hudStore] = useState(() => new HudStore());
@@ -179,10 +180,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     const onEvent = (ev: LoopEvent3D) => {
       switch (ev.type) {
         case "encounter": {
-          // A case's villain is announced by the case (useChapterLines).
-          if (!knownVillain(ev.villain)) break;
-          const stop = stops[ev.index] as Extract<Stop, { kind: "fight" }>;
-          const v = VILLAINS[ev.villain];
+          const stop = stops[ev.index] as Extract<Stop, { kind: "fight" }> | undefined;
+          const v = villainCard(ev.villain);
           say(`${v.name}${stop?.boss ? ", the boss" : ""}${stop?.quest ? ", tonight’s quest" : ""}: “${v.taunt}”`, true);
           break;
         }
@@ -196,7 +195,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           if (ev.hits > 0) say(`Hit! ${ev.hits} to go.`);
           break;
         case "fight-won":
-          say(knownVillain(ev.villain) ? `Webbed! ${VILLAINS[ev.villain].defeat}` : "Webbed!", true);
+          say(`Webbed! ${villainCard(ev.villain).defeat}`, true);
           break;
         case "ko":
           say("Knocked out. Aunt Mainnet will patch you up.", true);
@@ -228,14 +227,12 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         case "status":
           if (ev.status === "done") {
             // A case night (one whose frames carried a chapter) ends on its own results.
-            const end = chapterEnd.current ?? (chapterStore.getSnapshot() ? { id: "case-001", closed: false, ticks: null } : undefined);
+            const end = chapterEnd.current ?? (session.chapter ? { id: session.chapter, closed: false, ticks: null } : undefined);
             done.current(end);
           }
           break;
       }
-      // The chapter's own events aren't in the sim's union yet (lib/cases/types.ts).
-      const kind: string = ev.type;
-      if (kind === "case-closed") chapterEnd.current = { id: "case-001", closed: true, ticks: run.sim.tick };
+      if (ev.type === "case-closed") chapterEnd.current = { id: ev.id, closed: true, ticks: ev.ticks };
       if (ev.type === "arrive" || ev.type === "fight-won" || ev.type === "ko" || ev.type === "stop-done" || ev.type === "night-over") {
         setResults(run.save.patrol?.results ?? []);
       }
@@ -293,7 +290,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   }, [loop, latch, run, session, stops, autopilot, debug, touch, say, chapterStore]);
 
   // A case night's HUD reads the frames the overlays see, and says what happens out loud.
-  useEffect(() => feedChapter(tap, chapterStore), [tap, chapterStore]);
+  useEffect(() => feedChapter(tap, chapterStore, hudStore), [tap, chapterStore, hudStore]);
   useChapterLines(chapterStore, loop.bus, say);
 
   const togglePause = useCallback(
@@ -576,11 +573,12 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             }
           />
         ) : null}
-        {!ended && introStop?.kind === "fight" && knownVillain(introStop.villain) ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
-        {!ended && hudMode === "won" && knownVillain(villainKind) ? <WonCaption villain={villainKind} /> : null}
+        {/* A chapter's stop is the bridge, not a patrol villain: its own banner and captions belong to the chapter HUD. */}
+        {!ended && !chapter && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
+        {!ended && hudMode === "won" && villainKind && villainKind !== "right-clicker" ? <WonCaption villain={villainKind} /> : null}
         {!ended && chapterOn ? (
           <>
-            <RestoreBar tap={tap} touch={touch} />
+            <RestoreBar tap={tap} touch={touch} store={chapterStore} />
             <ChapterCallouts store={chapterStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
           </>
         ) : null}

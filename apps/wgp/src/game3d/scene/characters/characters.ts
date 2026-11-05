@@ -43,6 +43,8 @@ import { RigDebug } from "./debug";
 import { heroAssetNow, heroScale, HERO_ANIMS, HERO_MODEL, loadHeroAsset, loadHeroClips, type HeroAsset, type HeroClips } from "./hero-asset";
 import { HeroModel } from "./hero-model";
 import { CharacterModel, CopyBatch, type BodyModel } from "./model";
+// PLACEHOLDER (Case File 001): the Right-Clicker's stand-in body until his model lands.
+import { villainBody } from "../chapter-placeholder";
 import { WebShot } from "./web-shot";
 
 type VillainKey = "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
@@ -207,7 +209,7 @@ export class CharacterSystem {
     // behind them, in the order the night meets them (files.ts).
     this.askHero();
     const villainIds = new Set<VillainKey>(["gas-goblin", "sandwich-man", "doc-octochain", "sybil"].filter((id) => this.cast.includes(id as CastId)) as VillainKey[]);
-    for (const z of this.city.zones) if (z.villain) villainIds.add(z.villain);
+    for (const z of this.city.zones) if (z.villain) villainIds.add(villainBody(z.villain));
     const met = (id: CastBodyId) => {
       const i = this.cast.indexOf(id as CastId);
       return i < 0 ? this.cast.length : i;
@@ -606,7 +608,7 @@ export class CharacterSystem {
         copies++;
         continue;
       }
-      const actor = this.villain(v.id);
+      const actor = this.villain(villainBody(v.id));
       const { model, anim } = actor;
       model.visible = true;
       if (actor.hits >= 0 && v.hits < actor.hits) {

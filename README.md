@@ -91,6 +91,15 @@ Web3 games make players fight wallets before villains: seed phrases, popups for 
 3. **Burn:** a 2% "gas fee" on every trade is burned. Crafting a suit (`/play/suits`) burns the loot in its recipe.
 4. **Nobody sets prices:** the price is wherever supply and demand leave the curve. `/lab/economy` fast-forwards weeks of this on the same pricing code.
 
+## Story chapters
+
+**Case File 001, "Missing: Mary Jpeg"** (`/play/patrol?case=001`) is a chapter night: find three clues in the Bridge District, beat the Right-Clicker on the bridge deck, then hold the web beside Mary to restore her. On the deck, sidestep his SCREENSHOT cone, pop his CTRL+C paper copies and punch through his DRAG.
+- **Replay-verified:** a chapter is its own deterministic night in `@wgp/game-core`, with chapter rules `c001-1` on ruleset 4 (patrol nights and their goldens are unchanged). Signed in, the server issues the seed and replays the log as the chapter, like a ranked night. A chapter log never replays as a patrol night, nor the reverse.
+- **Unranked:** chapter runs never reach the Tonight, Season or All-time boards and never mint Bits. You can play one on any night, done or not.
+- **A soulbound badge:** your first verified clear closes the case in your save, adds 100 XP and mints `trophy:badge:case-001` through `mint_rewards`. Later clears only improve your best time. Guests can play too: their clear stays in the browser until they sign in and file the case.
+
+The contract the chapter's builds share is [docs/chapters/case-001.md](docs/chapters/case-001.md).
+
 ## Try it: do X, see Y
 
 All steps work on the live site, with no install.

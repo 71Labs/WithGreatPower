@@ -211,8 +211,11 @@ export function nightScore(stops: readonly Stop[], out: ScoreOut = playerOut) {
         boss = stop?.kind === "fight" && stop.boss;
         cackled = false;
         out.stopMusic({ fade: 0.6 });
-        out.sting(STING[ev.villain]);
-        out.voice(TAUNT[ev.villain], { delay: 0.45 });
+        // Case File 001's Right-Clicker has no sting or voice lines yet.
+        if (ev.villain !== "right-clicker") {
+          out.sting(STING[ev.villain]);
+          out.voice(TAUNT[ev.villain], { delay: 0.45 });
+        }
         break;
       }
       case "fight-live":
@@ -221,7 +224,7 @@ export function nightScore(stops: readonly Stop[], out: ScoreOut = playerOut) {
       case "fight-won":
         out.sfx("webbed");
         out.sfx("loot", { delay: 0.9, volume: 0.8 });
-        out.voice(DEFEAT[ev.villain], { delay: 0.5 });
+        if (ev.villain !== "right-clicker") out.voice(DEFEAT[ev.villain], { delay: 0.5 });
         if (ev.index >= stops.length - 1) out.stopMusic({ fade: 1.2 });
         else {
           out.music("patrol", { fade: 1 });

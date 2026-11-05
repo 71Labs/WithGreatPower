@@ -24,6 +24,7 @@ import { RightClickerArt } from "@/components/cases/art";
 import { Camera, Check, Cursor, Search } from "@/components/icons";
 import { project } from "@/game3d/nav/waypoint";
 import { throttled, type FrameTap } from "@/game3d/nav/tap";
+import type { HudStore } from "@/sim/loop";
 import { Face } from "@/sim/ui/bits";
 import { CASE_001, CLUES, RIGHT_CLICKER, clueCopy } from "@/lib/cases/content";
 import type { ChapterPhase, ChapterRenderFrame, ClueId } from "@/lib/cases/types";
@@ -56,9 +57,12 @@ export class ChapterStore {
   }
 }
 
-/** Feed the store from the frame tap (after the camera moves, like the minimap). */
-export function feedChapter(tap: FrameTap, store: ChapterStore): () => void {
-  return tap.on(throttled(12, (t) => store.set(chapterHud(t.frame as unknown as ChapterRenderFrame))));
+/**
+ * Feed the store from the frame tap (after the camera moves, like the minimap), with what the
+ * sim's own HUD snapshot adds (`hud.chapter`: a blow lands now, beside Mary, SAVED).
+ */
+export function feedChapter(tap: FrameTap, store: ChapterStore, hud: HudStore): () => void {
+  return tap.on(throttled(12, (t) => store.set(chapterHud(t.frame as ChapterRenderFrame, hud.getSnapshot()?.chapter))));
 }
 
 export function useChapter(store: ChapterStore): ChapterHud | null {
@@ -180,7 +184,7 @@ export function RightClickerBar({ store }: { store: ChapterStore }) {
   const hud = useChapter(store);
   const v = hud?.villain;
   if (!v) return null;
-  const cue = villainCue(v.phase);
+  const cue = villainCue(v.phase, v.open);
   return (
     <StickerPanel className="flex max-w-full items-center gap-2.5 rounded-[22px] py-1.5 pl-1.5 pr-3">
       <span aria-hidden className="grid size-10 shrink-0 overflow-hidden rounded-full border-2 border-white bg-sticker shadow-[0_2px_0_var(--game-ink)]">
@@ -217,6 +221,8 @@ type Shot = { hit: boolean; at: number } | null;
  */
 function ScreenshotAlert({ store, bus }: { store: ChapterStore; bus: ChapterBus }) {
   const aiming = useChapterValue(store, (c) => c?.villain?.phase === "aim");
+  // Frozen by the flash: the sim's word, for as long as it lasts.
+  const saved = useChapterValue(store, (c) => !!c?.saved);
   const [shot, setShot] = useState<Shot>(null);
   useEffect(() => {
     let timer = 0;
@@ -232,13 +238,14 @@ function ScreenshotAlert({ store, bus }: { store: ChapterStore; bus: ChapterBus 
     };
   }, [bus]);
 
-  const view = shot
-    ? shot.hit
+  const view =
+    saved || shot?.hit
       ? { word: "Saved!", line: "Frozen for a second", sound: "[Shutter clicks]" }
-      : { word: "Missed you", line: "He’s reloading: hit him", sound: "[Shutter clicks]" }
-    : aiming
-      ? { word: "Screenshot!", line: "Step out of the cone", sound: "[Shutter winding up]" }
-      : null;
+      : shot
+        ? { word: "Missed you", line: "He’s reloading: hit him", sound: "[Shutter clicks]" }
+        : aiming
+          ? { word: "Screenshot!", line: "Step out of the cone", sound: "[Shutter winding up]" }
+          : null;
   if (!view) return null;
   return (
     <div key={view.word} className="wgp-pop flex flex-col items-center gap-1.5">
@@ -259,14 +266,14 @@ function ScreenshotAlert({ store, bus }: { store: ChapterStore; bus: ChapterBus 
 
 /** The note each clue leaves in the case file, for a few seconds after it's found. */
 function CaseNote({ bus }: { bus: ChapterBus }) {
-  const [note, setNote] = useState<{ id: ClueId; n: number } | null>(null);
+  const [note, setNote] = useState<{ id: ClueId; n: number; found: number; of: number } | null>(null);
   useEffect(() => {
     let timer = 0;
     let n = 0;
     const off = bus.on((ev) => {
       if (!isChapterEvent(ev) || ev.type !== "clue-found") return;
       window.clearTimeout(timer);
-      setNote({ id: ev.id, n: ++n });
+      setNote({ id: ev.id, n: ++n, found: ev.found, of: ev.of });
       timer = window.setTimeout(() => setNote(null), 4800);
     });
     return () => {
@@ -281,7 +288,9 @@ function CaseNote({ bus }: { bus: ChapterBus }) {
       <span aria-hidden className="absolute -top-2.5 left-1/2 h-5 w-14 -translate-x-1/2 rotate-2 rounded-[3px] bg-game-gold/80" />
       <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase leading-4 tracking-[0.08em] text-game-muted">
         <Search aria-hidden className="size-3.5" strokeWidth={2.5} />
-        Case note · {c.name}
+        <span>
+          Clue <span className="num">{note.found}</span> of <span className="num">{note.of}</span> · {c.name}
+        </span>
       </p>
       <p className="mt-1 text-[15px] font-semibold leading-5 text-pretty">“{c.note}”</p>
     </div>
@@ -313,8 +322,9 @@ export function ChapterCallouts({ store, bus, layout }: { store: ChapterStore; b
 const LIFT = 120;
 
 /** "Restoring quality" over Mary while you hold web beside her, placed from the camera each frame. */
-export function RestoreBar({ tap, touch }: { tap: FrameTap; touch: boolean }) {
+export function RestoreBar({ tap, touch, store }: { tap: FrameTap; touch: boolean; store: ChapterStore }) {
   const root = useRef<HTMLDivElement>(null);
+  const hint = useRef<HTMLParagraphElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
   const pct = useRef<HTMLSpanElement>(null);
   const meter = useRef<HTMLDivElement>(null);
@@ -324,6 +334,7 @@ export function RestoreBar({ tap, touch }: { tap: FrameTap; touch: boolean }) {
     let shown = false;
     let lastPlace = "";
     let lastPct = -1;
+    let lastHint = "";
     const at = { x: 0, y: 0, z: 0 };
     const off = tap.on((t) => {
       const c = (t.frame as unknown as ChapterRenderFrame).chapter;
@@ -353,12 +364,18 @@ export function RestoreBar({ tap, touch }: { tap: FrameTap; touch: boolean }) {
         if (pct.current) pct.current.textContent = `${n}%`;
         meter.current?.setAttribute("aria-valuenow", String(n));
       }
+      // What to do: get beside her, then hold the web (the sim says which).
+      const words = store.getSnapshot()?.beside ? (touch ? "Hold the right side to restore her" : "Hold Space to restore her") : "Stand beside her and hold web";
+      if (words !== lastHint && hint.current) {
+        lastHint = words;
+        hint.current.textContent = words;
+      }
     });
     return () => {
       off();
       el.style.visibility = "hidden";
     };
-  }, [tap]);
+  }, [tap, store, touch]);
   return (
     <div ref={root} className="pointer-events-none invisible absolute left-0 top-0 z-0 will-change-transform">
       <div className="absolute bottom-0 left-0 flex w-[200px] -translate-x-1/2 flex-col items-center">
@@ -372,7 +389,9 @@ export function RestoreBar({ tap, touch }: { tap: FrameTap; touch: boolean }) {
           <div ref={meter} role="meter" aria-label="Restoring Mary’s quality" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0} className="h-3 overflow-hidden rounded-full border-2 border-game-ink bg-game-paper-2">
             <span ref={fill} className="block h-full w-0 bg-game-mint" />
           </div>
-          <p className="text-[11px] font-medium leading-[14px] text-game-muted">{touch ? "Hold the right side beside her" : "Hold Space beside her"}</p>
+          <p ref={hint} className="text-[11px] font-medium leading-[14px] text-game-muted">
+            Stand beside her and hold web
+          </p>
         </StickerPanel>
         <svg aria-hidden width="16" height="12" viewBox="0 0 16 12" className="-mt-px block">
           <path d="M1.5 1.5 L8 10.5 L14.5 1.5 Z" fill="var(--game-paper)" stroke="var(--game-ink)" strokeWidth="2.5" strokeLinejoin="round" />

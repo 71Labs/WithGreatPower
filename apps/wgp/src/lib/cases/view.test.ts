@@ -4,7 +4,20 @@ import { xLength } from "@/lib/social/x";
 import { FIXTURE_TICKS, chapterFixture, withChapterFixture } from "./fixtures";
 import { CASE_001, CLUES, caseShareText } from "./content";
 import { rugLeadFor } from "./local";
-import type { ChapterFrame, ChapterRenderFrame } from "./types";
+import type { CaseRecordApi, ChapterFrame, ChapterRenderFrame } from "./types";
+
+/** A GET /api/cases entry. */
+const api = (over: Partial<CaseRecordApi> = {}): CaseRecordApi => ({
+  id: "case-001",
+  number: "001",
+  title: "Missing: Mary Jpeg",
+  status: "new",
+  clearedAt: null,
+  bestTicks: null,
+  badge: { status: "none", tokenId: "trophy:badge:case-001", tx: null },
+  active: null,
+  ...over,
+});
 import { badgeView, bestTicks, caseStatus, chapterHud, chapterLine, formatTicks, isChapterEvent, objective, spokenTicks, txUrl, villainCue } from "./view";
 
 const frame = (chapter: Partial<ChapterFrame> | null, villains: ChapterRenderFrame["villains"] = []): Pick<ChapterRenderFrame, "chapter" | "villains"> => ({
@@ -41,22 +54,23 @@ describe("objective", () => {
 describe("caseStatus", () => {
   it("is new with nothing on record", () => {
     expect(caseStatus({})).toBe("new");
-    expect(caseStatus({ api: { id: "case-001", status: "new", bestTicks: null, badge: { status: "none", tx: null } } })).toBe("new");
+    expect(caseStatus({ api: api() })).toBe("new");
   });
 
-  it("is in progress once started in this browser", () => {
+  it("is in progress once started in this browser, or with a run in flight on the server", () => {
     expect(caseStatus({ local: { startedAt: 1 } })).toBe("in-progress");
+    expect(caseStatus({ api: api({ active: { runId: "r1", expiresAt: "2026-11-05T22:00:00.000Z" } }) })).toBe("in-progress");
   });
 
   it("is closed by any clear: the server, the save or this browser", () => {
-    expect(caseStatus({ api: { id: "case-001", status: "cleared", bestTicks: 900, badge: { status: "queued", tx: null } }, local: { startedAt: 1 } })).toBe("closed");
-    expect(caseStatus({ saved: { cleared: true } })).toBe("closed");
+    expect(caseStatus({ api: api({ status: "cleared", bestTicks: 900 }), local: { startedAt: 1 } })).toBe("closed");
+    expect(caseStatus({ saved: { cleared: true, bestTicks: 900 } })).toBe("closed");
     expect(caseStatus({ local: { startedAt: 1, cleared: true } })).toBe("closed");
   });
 
   it("keeps the best time from any source", () => {
     expect(bestTicks({})).toBeNull();
-    expect(bestTicks({ api: { id: "case-001", status: "cleared", bestTicks: 9000, badge: { status: "none", tx: null } }, local: { bestTicks: 8000 } })).toBe(8000);
+    expect(bestTicks({ api: api({ status: "cleared", bestTicks: 9000 }), local: { bestTicks: 8000 } })).toBe(8000);
     expect(bestTicks({ saved: { cleared: true, bestTicks: 0 } })).toBeNull();
   });
 });
@@ -114,9 +128,28 @@ describe("chapterHud", () => {
   });
 
   it("reads the Right-Clicker's state in the standoff", () => {
-    const rc = { id: "right-clicker" as const, pos: { x: 0, y: 0, z: 0 }, hits: 6, hitsMax: 8, state: "aim", aim: { dir: { x: 1, y: 0, z: 0 }, half: 0.4 } };
-    expect(chapterHud(frame({ phase: "standoff" }, [rc]))?.villain).toEqual({ phase: "aim", hits: 6, hitsMax: 8 });
+    const rc = { id: "right-clicker" as const, copy: false, pos: { x: 0, y: 0, z: 0 }, hits: 6, hitsMax: 8, state: "aim", aim: { dir: { x: 1, y: 0, z: 0 }, half: 0.4 } };
+    expect(chapterHud(frame({ phase: "standoff" }, [rc]))?.villain).toEqual({ phase: "aim", hits: 6, hitsMax: 8, open: false });
     expect(chapterHud(frame({ phase: "standoff" }, [{ ...rc, state: "windup" }]))?.villain?.phase).toBe("idle");
+    expect(chapterHud(frame({ phase: "standoff" }, [{ ...rc, state: "recover" }]))?.villain?.open).toBe(true);
+    // Webbed: beaten, so no bar.
+    expect(chapterHud(frame({ phase: "standoff" }, [{ ...rc, state: "webbed" }]))?.villain).toBeNull();
+  });
+
+  it("takes what only the sim knows from its HUD: open, beside Mary, SAVED", () => {
+    const rc = { id: "right-clicker" as const, copy: false, pos: { x: 0, y: 0, z: 0 }, hits: 3, hitsMax: 8, state: "idle" };
+    const sim = {
+      id: "case-001" as const,
+      phase: "standoff" as const,
+      cluesFound: 3,
+      clues: 3,
+      villain: { name: "The Right-Clicker", hits: 3, hitsMax: 8, state: "idle", open: true, guard: false },
+      saved: true,
+      restore: 0,
+      beside: true,
+      freed: false,
+    };
+    expect(chapterHud(frame({ phase: "standoff" }, [rc]), sim)).toMatchObject({ villain: { open: true }, saved: true, beside: true });
   });
 
   it("rounds the restore to a percent, only in the rescue", () => {
@@ -128,8 +161,12 @@ describe("chapterHud", () => {
 describe("villainCue", () => {
   it("warns while he aims and opens up while he reloads", () => {
     expect(villainCue("aim")).toEqual({ text: "Saving…", tone: "warn" });
+    // Aim shows over a flinch: still Saving…, open or not.
+    expect(villainCue("aim", true)).toEqual({ text: "Saving…", tone: "warn" });
     expect(villainCue("recover")).toEqual({ text: "Open: hit him", tone: "open" });
+    expect(villainCue("idle", true)).toEqual({ text: "Open: hit him", tone: "open" });
     expect(villainCue("idle")).toBeNull();
+    expect(villainCue("webbed")).toBeNull();
   });
 });
 
@@ -140,8 +177,9 @@ describe("chapter events", () => {
   });
 
   it("reads each clue's case note", () => {
-    for (const c of CLUES) expect(chapterLine({ type: "clue-found", id: c.id })?.text).toContain(c.note);
-    expect(chapterLine({ type: "screenshot", hit: true })).toEqual({ text: "Saved! Frozen for a second.", urgent: true });
+    for (const c of CLUES) expect(chapterLine({ type: "clue-found", id: c.id, x: 0, y: 0, z: 0, found: 2, of: 3 })?.text).toContain(c.note);
+    expect(chapterLine({ type: "clue-found", id: "tabs", x: 0, y: 0, z: 0, found: 2, of: 3 })?.text).toMatch(/^Clue 2 of 3 found: torn tabs/);
+    expect(chapterLine({ type: "screenshot", hit: true, x: 0, y: 0, z: 0 })).toEqual({ text: "Saved! Frozen for a second.", urgent: true });
     expect(chapterLine({ type: "captive-restore", p: 0.5 })).toBeNull();
   });
 });

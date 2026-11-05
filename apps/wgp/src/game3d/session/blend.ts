@@ -3,7 +3,8 @@
  * game-core's fillRenderFrame) and writes the frame the scene reads as a blend of them,
  * in place: positions slide by `alpha`, everything else (velocity, facing, the animation
  * state words and their ages, Doc's arms, the Goblin's bank; v1.3's pickups, combo, route and
- * the hero's `controlled`) is the latest tick's. A jump too
+ * the hero's `controlled`; v1.5's chapter and a villain's aim, though the paper copies slide)
+ * is the latest tick's. A jump too
  * big for one tick (a teleport beside an errand ally, a resume) snaps instead of sliding.
  * Allocates only when a list grows.
  */
@@ -129,6 +130,13 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
     slot.facing = copyOptional(cv.facing, slot.facing);
     slot.stateTicks = cv.stateTicks;
     slot.bank = cv.bank;
+    // v1.5: the Right-Clicker's SCREENSHOT cone (absent for the patrol villains).
+    if (cv.aim) {
+      const aim = (slot.aim ??= { dir: v3(), half: cv.aim.half });
+      copyInto(aim.dir, cv.aim.dir);
+      aim.half = cv.aim.half;
+    } else if (cv.aim === null) slot.aim = null;
+    else delete slot.aim;
     if (cv.arms) {
       const same = pv && pv.id === cv.id && pv.copy === cv.copy && pv.arms?.length === cv.arms.length;
       const arms = (slot.arms ??= []);
@@ -160,5 +168,44 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
     hz[i] = slot;
   }
   hz.length = curr.hazards.length;
+  blendChapter(prev, curr, t, out);
   return out;
+}
+
+/** v1.5: a chapter night's clues, captive and paper copies; the copies slide, the rest is the latest tick's. */
+function blendChapter(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: RenderFrame3D) {
+  const cc = curr.chapter;
+  if (!cc) {
+    if (cc === undefined) delete out.chapter;
+    else out.chapter = null;
+    return;
+  }
+  const oc = (out.chapter ??= { id: cc.id, phase: cc.phase, clues: [], captive: null, copies: [] });
+  oc.id = cc.id;
+  oc.phase = cc.phase;
+  for (let i = 0; i < cc.clues.length; i++) {
+    const k = cc.clues[i];
+    const slot = (oc.clues[i] ??= { id: k.id, pos: v3(), found: k.found });
+    slot.id = k.id;
+    copyInto(slot.pos, k.pos);
+    slot.found = k.found;
+  }
+  oc.clues.length = cc.clues.length;
+  if (cc.captive) {
+    const cap = (oc.captive ??= { pos: v3(), restore: 0, freed: false });
+    copyInto(cap.pos, cc.captive.pos);
+    cap.restore = cc.captive.restore;
+    cap.freed = cc.captive.freed;
+  } else oc.captive = null;
+  const pc = prev.chapter?.copies;
+  for (let i = 0; i < cc.copies.length; i++) {
+    const k = cc.copies[i];
+    const p = pc?.[i];
+    const slot = (oc.copies[i] ??= { id: k.id, pos: v3(), yaw: k.yaw, alive: k.alive });
+    slot.id = k.id;
+    lerpInto(slot.pos, p && p.id === k.id ? p.pos : undefined, k.pos, t);
+    slot.yaw = k.yaw;
+    slot.alive = k.alive;
+  }
+  oc.copies.length = cc.copies.length;
 }

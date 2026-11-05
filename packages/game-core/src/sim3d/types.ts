@@ -4,7 +4,8 @@
  * here: the scene animates from events and positions.
  */
 import type { CastId } from "../rules/cast";
-import type { PowerId, Stop, VillainId } from "../rules/types";
+import type { ClueId } from "../rules/chapters";
+import type { ChapterId, PowerId, Stop, VillainId } from "../rules/types";
 import type { CityIndex } from "./city";
 import type { City, InputFrame, Vec3, ZoneKind } from "./contract";
 
@@ -106,13 +107,14 @@ export interface Arm {
   lv: number;
 }
 
+/** One of Sybil's bodies, or (Case File 001) one of the Right-Clicker's paper copies. */
 export interface SybilBody {
   x: number;
   y: number;
   z: number;
   real: boolean;
   alive: boolean;
-  /** Orbit slot. */
+  /** Orbit slot; a paper copy's id (render `chapter.copies[].id`). */
   slot: number;
   /** Time until this one shoots. */
   shootT: number;
@@ -122,11 +124,18 @@ export interface SybilBody {
   vz: number;
 }
 
-export type VillainPhase = "enter" | "idle" | "telegraph" | "dash" | "sweep" | "slam-wind" | "slam" | "retract" | "recover";
+/**
+ * Case File 001 adds the Right-Clicker's aim, flash, copy, drag and stagger
+ * (sim3d/right-clicker.ts); the patrol villains never use them.
+ */
+export type VillainPhase = "enter" | "idle" | "telegraph" | "dash" | "sweep" | "slam-wind" | "slam" | "retract" | "recover" | "aim" | "flash" | "copy" | "drag" | "stagger";
+
+/** The patrol's villains, and the chapters' (the Right-Clicker only appears in Case File 001). */
+export type SimVillainId = VillainId | "right-clicker";
 
 export interface Villain {
-  kind: VillainId;
-  cast: CastId;
+  kind: SimVillainId;
+  cast: CastId | "right-clicker";
   level: number;
   boss: boolean;
   quest: boolean;
@@ -270,7 +279,7 @@ export type SimEvent =
   /** v3: a Bits token or a ring collected: the points it was worth (× the multiplier), and the combo after it. */
   | { type: "pickup"; kind: PickupKind; id: number; x: number; y: number; z: number; points: number; combo: number; multiplier: number }
   /** v3: the combo ran out or was broken (the street), with the count it reached. */
-  | { type: "combo-end"; count: number; reason: "time" | "street" }
+  | { type: "combo-end"; count: number; reason: "time" | "street" | "saved" }
   | {
       type: "arrive";
       index: number;
@@ -283,7 +292,7 @@ export type SimEvent =
       miss: number;
       uses: Partial<Record<PowerId, number>>;
     }
-  | { type: "encounter"; index: number; villain: VillainId }
+  | { type: "encounter"; index: number; villain: SimVillainId }
   | { type: "fight-live"; index: number }
   | { type: "villain-hit"; x: number; y: number; z: number; hits: number; hitsMax: number; by: HitSource; double: boolean; copy: boolean }
   | { type: "clang"; x: number; y: number; z: number; reason: "arms" | "guard" }
@@ -297,11 +306,27 @@ export type SimEvent =
   | { type: "trap"; x: number; y: number; z: number }
   | { type: "goo"; x: number; y: number; z: number }
   | { type: "villain-attack"; label: string; x: number; y: number; z: number }
-  | { type: "fight-won"; index: number; villain: VillainId; hp: number; fluid: number; uses: Partial<Record<PowerId, number>>; gweiUsed: number }
-  | { type: "ko"; index: number; villain: VillainId; hp: number; fluid: number; uses: Partial<Record<PowerId, number>>; gweiUsed: number }
+  | { type: "fight-won"; index: number; villain: SimVillainId; hp: number; fluid: number; uses: Partial<Record<PowerId, number>>; gweiUsed: number }
+  | { type: "ko"; index: number; villain: SimVillainId; hp: number; fluid: number; uses: Partial<Record<PowerId, number>>; gweiUsed: number }
   | { type: "stop-done"; index: number }
   | { type: "errand"; index: number }
-  | { type: "night-over"; reason: "ko" | "route" };
+  | { type: "night-over"; reason: "ko" | "route" }
+  /* Case File 001 (sim3d/chapter.ts, right-clicker.ts): chapter nights only. */
+  /** A clue found (walked or swung into its reach); `found` of `of` found so far. */
+  | { type: "clue-found"; id: ClueId; x: number; y: number; z: number; found: number; of: number }
+  /** The SCREENSHOT's flash from the Right-Clicker at (x, y, z): `hit` when it SAVED the hero (frozen, hurt, combo broken). */
+  | { type: "screenshot"; hit: boolean; x: number; y: number; z: number }
+  /** A paper copy appears (CTRL+C in the standoff, or one of the two that interrupt the rescue). */
+  | { type: "copy-spawn"; id: number; x: number; y: number; z: number }
+  /** A paper copy pops: hit, or swept away when the fight or the rescue ends. */
+  | { type: "copy-pop"; id: number; x: number; y: number; z: number }
+  /** The DRAG lasso catches the hero at `from` and pulls him toward `to`. */
+  | { type: "drag"; from: Vec3; to: Vec3 }
+  /** Mary's restore so far, 0–1: every quarter second of restoring, and at 1. */
+  | { type: "captive-restore"; p: number }
+  | { type: "captive-freed"; x: number; y: number; z: number }
+  /** The chapter is cleared after `ticks`: the night ends with it (night-over, "route"). */
+  | { type: "case-closed"; id: ChapterId; ticks: number };
 
 export interface SimConfig {
   seed: number;
@@ -317,6 +342,49 @@ export interface SimConfig {
   gweiCalls: number;
   heroLevel: number;
   loadout: { id: PowerId; scale: number }[];
+  /**
+   * A story chapter instead of a patrol (sim3d/chapter.ts); `stops` is then its one stage
+   * (chapterStops). Absent on patrol nights, whose state never carries chapter fields.
+   */
+  chapter?: ChapterId;
+}
+
+/* ------------------------------------------------------------------ chapters */
+
+export type ChapterPhase = "investigate" | "standoff" | "rescue" | "done";
+
+export interface ChapterClue {
+  id: ClueId;
+  x: number;
+  y: number;
+  z: number;
+  found: boolean;
+}
+
+/** Case File 001's own state (sim3d/chapter.ts). Hashed after everything else, and only on chapter nights. */
+export interface ChapterState {
+  id: ChapterId;
+  phase: ChapterPhase;
+  clues: ChapterClue[];
+  /** Mary Jpeg, frozen on the deck: where she stands, restore ticks so far (of RESTORE_TICKS), and whether she's free. */
+  captive: { x: number; y: number; z: number; restore: number; freed: boolean };
+  /** Seconds of the SCREENSHOT's freeze left ("SAVED!"). */
+  savedT: number;
+  /** The aim, a unit xz direction from the Right-Clicker, while he aims and flashes. */
+  aimX: number;
+  aimZ: number;
+  /** The DRAG lasso's pull: seconds left (0: none), and the point it pulls the hero toward. */
+  dragT: number;
+  dragX: number;
+  dragZ: number;
+  /** The rescue: seconds in, and paper copies sent so far (two at most). */
+  rescueT: number;
+  rescueCopies: number;
+  /** Paper copies spawned tonight (ids 0, 1, …, the bodies' `slot`). */
+  copies: number;
+  /** Per copy (by id): the rescue slap's wind-up seconds left (0: none), and the cooldown before the next. */
+  copyWind: number[];
+  copyCd: number[];
 }
 
 export interface SimState {
@@ -372,4 +440,6 @@ export interface SimState {
   input: InputFrame;
   /** Queued since the loop last drained them. */
   events: SimEvent[];
+  /** A story chapter's state (Case File 001), or null on a patrol night. */
+  chapter: ChapterState | null;
 }

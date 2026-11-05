@@ -30,6 +30,7 @@ import type { PostFrame } from "./render/post";
 import { MoonShadows, SHADOW_LAYER } from "./render/shadows";
 import { buildSky, type Sky } from "./sky";
 import { CharacterSystem } from "./characters/characters";
+import { ChapterPlaceholder } from "./chapter-placeholder";
 import type { WebLine } from "./web";
 
 /** Every cast member a night can show (their bodies are built up front). */
@@ -62,6 +63,8 @@ export class SceneEngine {
   readonly pools: LightPools;
   /** Impact debris and the web splat. */
   readonly sparks: Sparks;
+  /** PLACEHOLDER: Case File 001's stand-in markers, on a chapter's city only (chapter-placeholder.ts). */
+  private readonly chapter: ChapterPlaceholder | null;
   /** Moon shadows, on tiers with a shadow map (the compositor draws their depth pass). */
   shadows: MoonShadows | null = null;
   /** Camera far plane, from the city's size. */
@@ -115,6 +118,9 @@ export class SceneEngine {
       if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
     }
     this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
+    // PLACEHOLDER (Case File 001's markers until its art lands; chapter-placeholder.ts).
+    this.chapter = cityData.zones.some((z) => z.villain === "right-clicker") ? new ChapterPlaceholder() : null;
+    if (this.chapter) this.root.add(this.chapter.root);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -281,6 +287,7 @@ export class SceneEngine {
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
       this.hazards.update(frame, frame.mode === "fight" ? (this.cityData.zones[frame.stop]?.stage?.y ?? null) : null);
       this.pickups.update(frame, time);
+      this.chapter?.update(frame);
       // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
       const stuck = this.characters.stuck;
       this.bursts.setAnchor(stuck);
@@ -320,6 +327,7 @@ export class SceneEngine {
   }
 
   dispose(): void {
+    this.chapter?.dispose();
     this.shadows?.dispose();
     this.shadows = null;
     this.pools.dispose();

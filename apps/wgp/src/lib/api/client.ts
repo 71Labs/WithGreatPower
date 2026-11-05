@@ -5,11 +5,12 @@
  * Network failures resolve to status 0, error "network".
  */
 import type { Action } from "@wgp/game-core/engine";
-import type { Save } from "@wgp/game-core/types";
+import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import type { CasesResponse } from "@/lib/cases/types";
 import type { ClaimInfo } from "@/server/auth/privy-sign-in";
 import type { LeaderboardView } from "@/server/db/board-view";
+import type { CaseOutcome } from "@/server/db/cases";
 import type { ImportResult } from "@/server/db/migrate-save";
 import type { StartedRun } from "@/server/db/runs";
 import type { ChainStatus } from "@/server/near/status";
@@ -22,7 +23,8 @@ export interface Me {
   player: { id: string; handle: string; nearAccountId: string; authKind: string; createdAt: string; banned: boolean; migrated: boolean };
   save: Save;
   rev: number;
-  activeRun: { runId: string; expiresAt: string; night: number } | null;
+  /** `chapter`: the run in flight is a story chapter's (absent from older servers). */
+  activeRun: { runId: string; expiresAt: string; night: number; chapter?: ChapterId | null } | null;
   runsToday: { used: number; limit: number };
   /** The player's X handle (unverified) and whether drafts may tag them; absent from older servers. */
   social?: XProfile;
@@ -33,8 +35,20 @@ export type MeResponse = Me | { signedIn: false };
 export type Board = LeaderboardView["board"];
 export type LeaderboardResponse = LeaderboardView & { signedIn: boolean };
 
-/** `bits`: the Bits minted for the night (src/lib/market/rewards.ts). */
-export type SubmitResponse = { status: "verified"; runId: string; score: number; ticks: number; digest: string; bits: number; ranked: boolean; save: Save; rev: number; idempotent: boolean };
+/** `bits`: the Bits minted for the night (src/lib/market/rewards.ts). `chapter`: a story chapter's run (unranked, no Bits). */
+export type SubmitResponse = {
+  status: "verified";
+  runId: string;
+  score: number;
+  ticks: number;
+  digest: string;
+  bits: number;
+  ranked: boolean;
+  save: Save;
+  rev: number;
+  idempotent: boolean;
+  chapter?: CaseOutcome;
+};
 
 export interface ActionResponse {
   applied: boolean;
@@ -82,8 +96,11 @@ export const devSignInAvailable = (signal?: AbortSignal) => call<{ enabled: true
  */
 export const getNearAuthNonce = () => call<{ nonce: string; expiresAt: string }>("/api/auth/near-auth/nonce", { method: "POST" });
 
-/** 409 run_active (body.runId) when a run is in flight; pass `abandon` to drop it. 429 daily_cap. */
-export const startRankedRun = (opts: { assist?: boolean; abandon?: boolean } = {}) => call<StartedRun>("/api/runs/start", { method: "POST", json: opts });
+/**
+ * 409 run_active (body.runId) when a run is in flight; pass `abandon` to drop it. 429 daily_cap.
+ * `chapter`: a story chapter's run (Case File 001), played with startChapterRun.
+ */
+export const startRankedRun = (opts: { assist?: boolean; abandon?: boolean; chapter?: ChapterId } = {}) => call<StartedRun>("/api/runs/start", { method: "POST", json: opts });
 
 /** 422 run_rejected (body.reason) · 409 rev_conflict · 410 run_expired · 409 already_submitted. */
 export const submitRankedRun = (runId: string, log: Uint8Array, clientHash: string) =>

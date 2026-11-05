@@ -16,7 +16,7 @@ import { useAccount, useGame } from "@/game/store";
 
 import { CASES_FIXTURES, isCasesFixture, type CasesFixtureName } from "./fixtures";
 import { useCaseMarks } from "./local";
-import { CHAPTER_ID, type CaseRecordApi, type CasesResponse, type SaveWithCases } from "./types";
+import { CHAPTER_ID, type CaseRecordApi, type CasesResponse } from "./types";
 import { badgeView, bestTicks, caseStatus, type BadgeView, type CaseStatus } from "./view";
 
 /** A fixture asked for in the URL, outside production. Read in the browser. */
@@ -93,7 +93,7 @@ export function useCaseFiles(): CaseFiles {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  const value: Answer = !signedIn ? { cases: [] } : answer?.key === key ? answer.value : "loading";
+  const value: Answer = !signedIn ? { signedIn: false, cases: [] } : answer?.key === key ? answer.value : "loading";
   const loading = (!fx && account.status === "loading") || value === "loading";
   const failed = value === "error";
   const list = typeof value === "object" ? value.cases : [];
@@ -102,7 +102,7 @@ export function useCaseFiles(): CaseFiles {
   if (fixture === "empty") return { signedIn, loading: false, failed: false, cases: [], retry, fixture };
 
   const api: CaseRecordApi | null = list.find((c) => c.id === CHAPTER_ID) ?? null;
-  const saved = (save as SaveWithCases | null)?.cases?.[CHAPTER_ID] ?? null;
+  const saved = save?.cases?.[CHAPTER_ID] ?? null;
   const local = (fx ? fx.local : marks.cases)?.[CHAPTER_ID] ?? null;
   const sources = { api, saved, local };
   const status = caseStatus(sources);

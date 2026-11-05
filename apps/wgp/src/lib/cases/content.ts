@@ -3,6 +3,8 @@
  * Daily Rug's voice. Sentence case, curly quotes, no prizes or money. The story and its
  * jokes come from the chapter spec (launch/out/chapters/case-001-spec.md).
  */
+import { CHAPTERS } from "@wgp/game-core/chapters";
+
 import { SITE_URL } from "@/lib/site";
 
 import { CHAPTER_ID, type ClueId } from "./types";
@@ -14,10 +16,8 @@ export const CASE_PATHS = {
   play: "/play/patrol?case=001",
 } as const;
 
-export const RIGHT_CLICKER = {
-  name: "The Right-Clicker",
-  tagline: "Saves everything. Owns nothing.",
-} as const;
+/** The villain's name and line, from the game's content (game-core rules/chapters.ts). */
+export const RIGHT_CLICKER = { name: CHAPTERS["case-001"].villain.name, tagline: CHAPTERS["case-001"].villain.tagline };
 
 export interface ClueCopy {
   id: ClueId;

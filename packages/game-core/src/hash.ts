@@ -16,7 +16,9 @@ const LO = LITTLE ? 0 : 1;
 const HI = LITTLE ? 1 : 0;
 
 const MODES = ["travel", "intro", "fight", "won", "errand", "ko", "done"] as const;
-const PHASES = ["enter", "idle", "telegraph", "dash", "sweep", "slam-wind", "slam", "retract", "recover"] as const;
+/** Villain phases by index. Case File 001's are appended, so every patrol night hashes as before. */
+const PHASES = ["enter", "idle", "telegraph", "dash", "sweep", "slam-wind", "slam", "retract", "recover", "aim", "flash", "copy", "drag", "stagger"] as const;
+const CHAPTER_PHASES = ["investigate", "standoff", "rescue", "done"] as const;
 const HAZARDS = ["bomb", "goo", "trap", "blast"] as const;
 const TRAP_STATES = ["open", "armed", "clap", "closed"] as const;
 const POWER_IDS = Object.keys(POWERS) as PowerId[];
@@ -220,6 +222,36 @@ export function hashState(s: SimState): string {
     f.num(g.y);
     f.num(g.z);
     f.bool(g.struck);
+  }
+  // Case File 001, after everything else: patrol nights (chapter null) hash exactly as before.
+  const c = s.chapter;
+  if (c) {
+    f.num(CHAPTER_PHASES.indexOf(c.phase));
+    f.num(c.clues.length);
+    for (const k of c.clues) {
+      f.num(k.x);
+      f.num(k.y);
+      f.num(k.z);
+      f.bool(k.found);
+    }
+    f.num(c.captive.x);
+    f.num(c.captive.y);
+    f.num(c.captive.z);
+    f.num(c.captive.restore);
+    f.bool(c.captive.freed);
+    f.num(c.savedT);
+    f.num(c.aimX);
+    f.num(c.aimZ);
+    f.num(c.dragT);
+    f.num(c.dragX);
+    f.num(c.dragZ);
+    f.num(c.rescueT);
+    f.num(c.rescueCopies);
+    f.num(c.copies);
+    for (let i = 0; i < c.copies; i++) {
+      f.num(c.copyWind[i]);
+      f.num(c.copyCd[i]);
+    }
   }
   return f.hex();
 }

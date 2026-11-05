@@ -10,7 +10,7 @@ import { ON_PAPER, StickerBadge } from "@/components/game/kit";
 import { ChevronRight } from "@/components/icons";
 import { CASE_001, CASE_PATHS } from "@/lib/cases/content";
 import { useCaseMarks, useNewCase } from "@/lib/cases/local";
-import { CHAPTER_ID, type SaveWithCases } from "@/lib/cases/types";
+import { CHAPTER_ID } from "@/lib/cases/types";
 import { caseStatus, STATUS_LABEL } from "@/lib/cases/view";
 import type { Save } from "@wgp/game-core/types";
 
@@ -19,7 +19,7 @@ import { MissingPoster } from "./art";
 export function CaseTile({ save, className = "" }: { save: Save; className?: string }) {
   const marks = useCaseMarks();
   const fresh = useNewCase(save);
-  const status = caseStatus({ saved: (save as SaveWithCases).cases?.[CHAPTER_ID] ?? null, local: marks.cases[CHAPTER_ID] ?? null });
+  const status = caseStatus({ saved: save.cases?.[CHAPTER_ID] ?? null, local: marks.cases[CHAPTER_ID] ?? null });
   return (
     <Link
       href={CASE_PATHS.list}
