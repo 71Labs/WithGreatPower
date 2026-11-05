@@ -12,6 +12,7 @@ import { useEffect, useId, useRef } from "react";
 import type { SuitColors } from "@/components/cast";
 import { StickerEyebrow, StickerIconButton, StickerPanel } from "@/components/game/kit";
 import { Check, X } from "@/components/icons";
+import { chapterOf } from "@/game3d/nav/chapter-pins";
 import { drawFullMap } from "@/game3d/nav/draw";
 import { compass, fitCity, metres, stopPoint, toMap } from "@/game3d/nav/map";
 import { Chip, Face, HeroFace, Kbd } from "@/sim/ui/bits";
@@ -20,6 +21,8 @@ import { ALLY_CAST, DISTRICTS, VILLAINS } from "@wgp/game-core/data";
 import { castById } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 import type { Stop, StopResult } from "@wgp/game-core/types";
+
+import { ChapterMapList, ChapterPinsLayer, chapterWhere } from "./chapter-map";
 
 /** Padding around the city, as a share of the map's side. */
 const PAD = 0.035;
@@ -82,7 +85,13 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
   const h = frame.hero.pos;
   const next = city.zones[current];
   const togo = next && frame.mode === "travel" ? stopPoint(next) : null;
-  const where = togo ? `${stopName(stops[current])} is ${metres(Math.hypot(togo.x - h.x, togo.z - h.z))} m ${compass(togo.x - h.x, togo.z - h.z)} of you.` : null;
+  // A case night: its clues and the bridge on the map, and its case file beside it.
+  const chapter = chapterOf(frame);
+  const where = chapter
+    ? chapterWhere(chapter, city, h)
+    : togo
+      ? `${stopName(stops[current])} is ${metres(Math.hypot(togo.x - h.x, togo.z - h.z))} m ${compass(togo.x - h.x, togo.z - h.z)} of you.`
+      : null;
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-game-night/70 p-3 sm:p-4">
@@ -97,7 +106,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1.5">
             <StickerEyebrow>
-              <span className="num">{current < stops.length ? `Stop ${current + 1} of ${stops.length}` : "Route done"}</span>
+              <span className="num">{chapter ? "Case file 001" : current < stops.length ? `Stop ${current + 1} of ${stops.length}` : "Route done"}</span>
             </StickerEyebrow>
             <h2 id={`${id}-title`} className="text-[24px] font-bold leading-7 tracking-[-0.02em] text-game-ink">
               City map
@@ -140,10 +149,12 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
                 );
               })}
             </ol>
+            {chapter ? <ChapterPinsLayer chapter={chapter} city={city} unit={unit} still={still} /> : null}
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <ol aria-label="Tonight’s stops" className="flex flex-col gap-2">
+            {chapter ? <ChapterMapList chapter={chapter} /> : null}
+            <ol aria-label="Tonight’s stops" className={`flex flex-col gap-2 ${stops.length ? "" : "hidden"}`}>
               {stops.map((stop, i) => {
                 const s = statusOf(i, current, results[i]);
                 return (

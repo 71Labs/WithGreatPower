@@ -141,7 +141,8 @@ function RouteBar({ hud, stops, results, positions, hero, className = "" }: { hu
 
 function VillainBar({ hud }: { hud: HudSnapshot }) {
   const v = hud.villain;
-  if (!v || hud.mode === "intro") return null;
+  // A villain without a face here (a case's own) has its own bar (patrol/chapter-hud.tsx).
+  if (!v || hud.mode === "intro" || !Object.hasOwn(VILLAINS, v.kind)) return null;
   const doc = v.kind === "doc-octochain";
   return (
     <StickerPanel className="flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4">
@@ -316,6 +317,11 @@ interface HudProps {
   minimap?: ReactNode;
   /** In place of the combo chip (the 3D night's combo meter). */
   combo?: ReactNode;
+  /**
+   * A case night (patrol/chapter-hud.tsx): its objective takes the route bar's place and
+   * its villain's bar the villain bar's. Normal nights pass nothing and draw as ever.
+   */
+  chapter?: { objective: ReactNode; villain: ReactNode };
 }
 
 /**
@@ -327,7 +333,7 @@ interface HudProps {
  * the screen, where the hero is, stays clear. Elements marked `data-hud-zone` are measured
  * by the waypoint (patrol/waypoint.tsx) to stay out of their way.
  */
-function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onPause, hint, minimap, combo, playing }: Omit<HudProps, "store" | "touch" | "arc"> & { hud: HudSnapshot; playing: boolean }) {
+function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onPause, hint, minimap, combo, chapter, playing }: Omit<HudProps, "store" | "touch" | "arc"> & { hud: HudSnapshot; playing: boolean }) {
   const short = useShortViewport();
   const narrow = useNarrowViewport();
   const fight = hud.mode === "fight" && !!hud.villain;
@@ -341,7 +347,8 @@ function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onP
       {minimap}
     </div>
   ) : null;
-  const route = <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className={`w-full ${short ? "max-w-[460px]" : "max-w-[520px]"}`} />;
+  const route = chapter ? chapter.objective : <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className={`w-full ${short ? "max-w-[460px]" : "max-w-[520px]"}`} />;
+  const villain = chapter ? chapter.villain : <VillainBar hud={hud} />;
   const edges = "pl-[max(12px,env(safe-area-inset-left))] pr-[max(12px,env(safe-area-inset-right))] pt-[max(12px,env(safe-area-inset-top))]";
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
@@ -356,7 +363,7 @@ function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onP
           </div>
           <div data-hud-zone="band" className="flex min-w-0 flex-1 flex-col items-center gap-2">
             {route}
-            <VillainBar hud={hud} />
+            {villain}
           </div>
           <PauseButton onPause={onPause} />
           {map}
@@ -372,7 +379,7 @@ function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onP
           </div>
           <div data-hud-zone="band" className="flex flex-col items-center gap-2">
             {route}
-            <VillainBar hud={hud} />
+            {villain}
           </div>
           {hintPanel || map ? (
             <div className="flex items-start justify-between gap-3">
@@ -393,14 +400,15 @@ function TouchHud({ hud, stops, results, positions, hero, onAbility, onGwei, onP
   );
 }
 
-export function Hud({ store, stops, results, positions, hero, onAbility, onGwei, onPause, touch, hint, arc = false, minimap, combo }: HudProps) {
+export function Hud({ store, stops, results, positions, hero, onAbility, onGwei, onPause, touch, hint, arc = false, minimap, combo, chapter }: HudProps) {
   const hud = useHud(store);
   if (!hud || hud.status === "loading") return null;
   // Controls only while there's swinging or fighting to do (not over an errand sheet or a knockout).
   const playing = (hud.status === "live" || hud.status === "intro") && (hud.mode === "travel" || hud.mode === "fight" || hud.mode === "intro");
   if (arc && touch)
-    return <TouchHud hud={hud} stops={stops} results={results} positions={positions} hero={hero} onAbility={onAbility} onGwei={onGwei} onPause={onPause} hint={hint} minimap={minimap} combo={combo} playing={playing} />;
+    return <TouchHud hud={hud} stops={stops} results={results} positions={positions} hero={hero} onAbility={onAbility} onGwei={onGwei} onPause={onPause} hint={hint} minimap={minimap} combo={combo} chapter={chapter} playing={playing} />;
   const fight = hud.mode === "fight" && !!hud.villain;
+  const villain = chapter ? chapter.villain : <VillainBar hud={hud} />;
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 pt-[max(12px,env(safe-area-inset-top))] sm:p-4">
@@ -408,14 +416,14 @@ export function Hud({ store, stops, results, positions, hero, onAbility, onGwei,
           <Vitals hud={hud} combo={combo} />
         </div>
         <div className="pointer-events-auto absolute left-1/2 top-4 hidden w-[min(44vw,560px)] -translate-x-1/2 flex-col items-center gap-2 md:flex">
-          <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className="w-full" />
-          <VillainBar hud={hud} />
+          {chapter ? chapter.objective : <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className="w-full" />}
+          {villain}
         </div>
         <PauseButton onPause={onPause} />
       </div>
       <div className="pointer-events-auto absolute inset-x-3 top-[118px] flex flex-col items-center gap-2 sm:top-[128px] md:hidden">
-        <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className="w-full max-w-[520px]" />
-        <VillainBar hud={hud} />
+        {chapter ? chapter.objective : <RouteBar hud={hud} stops={stops} results={results} positions={positions} hero={hero} className="w-full max-w-[520px]" />}
+        {villain}
       </div>
 
       {minimap ? <div className="pointer-events-auto absolute bottom-0 left-0 p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:p-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]">{minimap}</div> : null}

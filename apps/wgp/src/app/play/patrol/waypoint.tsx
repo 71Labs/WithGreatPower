@@ -13,14 +13,21 @@
  *
  * Placed every frame from the frame tap (after the camera moves, so it doesn't lag the
  * picture) by writing a transform; React renders it only when the stop changes.
+ *
+ * On a case night (`frame.chapter`) it points at the case's next mark instead: the nearest
+ * clue, then the bridge deck, then Mary (game3d/nav/chapter-pins.ts chapterWaypoint).
  */
 import { useEffect, useRef } from "react";
 
+import { AVATARS } from "@/components/cast";
+import { Cursor, Search } from "@/components/icons";
+import { chapterOf, chapterWaypoint } from "@/game3d/nav/chapter-pins";
 import { metres, stopPoint } from "@/game3d/nav/map";
 import type { FrameTap } from "@/game3d/nav/tap";
 import { edgePoint, inBox, project, waypointLayout, waypointLayoutFromHud, type HudZones, type Rect } from "@/game3d/nav/waypoint";
 import { Face } from "@/sim/ui/bits";
 import { stopCast } from "@/sim/ui/hud";
+import type { CastId } from "@wgp/game-core/cast";
 import type { City, Vec3 } from "@wgp/game-core/sim3d/contract";
 import type { Stop } from "@wgp/game-core/types";
 
@@ -65,6 +72,39 @@ function measureHud(el: HTMLElement, probe: HTMLElement | null): HudZones | null
   return { band, avoid, safe: { top: px(s?.paddingTop), right: px(s?.paddingRight), bottom: px(s?.paddingBottom), left: px(s?.paddingLeft) } };
 }
 
+/**
+ * What the pin shows: the stop's face, or on a case night (the root's data-target) a clue's
+ * magnifier, the bridge's cursor sign or Mary. All drawn once; the frame tap only flips the
+ * attribute, so nothing re-renders per frame.
+ */
+function TargetFace({ cast, size }: { cast: CastId | null; size: "lg" | "sm" }) {
+  const box = size === "lg" ? "size-11 border-[3px] ring-2 ring-game-ink" : "size-9";
+  const icon = size === "lg" ? "size-5" : "size-4";
+  const mark = `grid place-items-center rounded-full border-2 border-game-ink ${size === "lg" ? "size-11 ring-2 ring-game-ink" : "size-9"}`;
+  return (
+    <>
+      {cast ? (
+        <span className="block group-data-[target=bridge]:hidden group-data-[target=clue]:hidden group-data-[target=mary]:hidden">
+          <Face id={cast} className={size === "lg" ? box : `${box} rounded-full`} />
+        </span>
+      ) : null}
+      <span className="hidden group-data-[target=clue]:block">
+        <span className={`${mark} bg-game-gold text-game-ink`}>
+          <Search className={icon} strokeWidth={2.5} />
+        </span>
+      </span>
+      <span className="hidden group-data-[target=bridge]:block">
+        <span className={`${mark} rounded-[30%] bg-game-hero text-game-on-hero`}>
+          <Cursor className={icon} strokeWidth={2.5} />
+        </span>
+      </span>
+      <span className="hidden group-data-[target=mary]:block">
+        <Face id="mary-jpeg" className={size === "lg" ? box : `${box} rounded-full`} />
+      </span>
+    </>
+  );
+}
+
 export interface WaypointProps {
   tap: FrameTap;
   city: City;
@@ -102,14 +142,21 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
     let lastTurn = "";
     const off = tap.on((t) => {
       const f = t.frame;
-      const zone = city.zones[f.stop];
-      const show = !!zone && !!t.pose && f.mode === "travel";
+      // A case night points at the case's next mark (a clue, the bridge, Mary), not a stop.
+      const chapter = chapterOf(f);
+      const mark = chapter ? chapterWaypoint(chapter, city, f.hero.pos) : null;
+      const zone = chapter ? null : city.zones[f.stop];
+      const target = mark ? mark.point : zone && f.mode === "travel" ? stopPoint(zone) : null;
+      const show = !!target && !!t.pose;
       if (show !== shown) {
         shown = show;
         el.style.visibility = show ? "visible" : "hidden";
       }
-      if (!show || !t.pose) return;
-      const p = stopPoint(zone);
+      if (!target || !t.pose) return;
+      // Read back from the element: a re-render (a new stop) resets it to "stop".
+      const kind = mark ? mark.target : "stop";
+      if (el.dataset.target !== kind) el.dataset.target = kind;
+      const p = target;
       at.x = p.x;
       at.y = p.y + LIFT;
       at.z = p.z;
@@ -168,12 +215,14 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
     };
   }, [tap, city]);
 
-  const stop = stops[Math.min(index, stops.length - 1)];
-  if (!stop) return null;
-  const cast = stopCast(stop);
-  const ring = stop.kind === "fight" ? "border-game-hero" : "border-game-gold";
+  const stop = stops[Math.min(index, stops.length - 1)] ?? null;
+  // A case's own villain has no face here; the case's marks stand in for it.
+  const cast = stop && Object.hasOwn(AVATARS, stopCast(stop)) ? stopCast(stop) : null;
+  const fight = stop?.kind === "fight";
+  // A case night's marks (data-target, set from the frame): the ring and the wedge take their colour.
+  const ring = `${fight ? "border-game-hero" : "border-game-gold"} group-data-[target=bridge]:border-game-hero group-data-[target=clue]:border-game-gold group-data-[target=mary]:border-game-gold`;
   return (
-    <div ref={root} aria-hidden data-mode="pin" className="group pointer-events-none invisible absolute left-0 top-0 z-0 will-change-transform">
+    <div ref={root} aria-hidden data-mode="pin" data-target="stop" className="group pointer-events-none invisible absolute left-0 top-0 z-0 will-change-transform">
       <NavStyles />
       <span ref={safe} className="invisible absolute size-0 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]" />
       {/* The pin: its tip on the point. */}
@@ -184,7 +233,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
         />
         <span className="relative">
           <span className={`absolute -inset-1.5 rounded-[34%] border-[3px] ${ring} ${still ? "" : "wgp-ping"}`} />
-          <Face id={cast} className="size-11 border-[3px] ring-2 ring-game-ink" />
+          <TargetFace cast={cast} size="lg" />
         </span>
         <svg width="16" height="12" viewBox="0 0 16 12" className="-mt-px block">
           <path d="M1.5 1.5 L8 10.5 L14.5 1.5 Z" fill="var(--game-paper)" stroke="var(--game-ink)" strokeWidth="2.5" strokeLinejoin="round" />
@@ -194,11 +243,17 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
       <div className="absolute left-0 top-0 group-data-[mode=pin]:hidden">
         <span ref={wedge} className="absolute left-0 top-0 block size-0 will-change-transform">
           <svg width="22" height="26" viewBox="0 0 22 26" className="absolute left-[22px] top-[-13px] block">
-            <path d="M2 2 L20 13 L2 24 Z" fill={stop.kind === "fight" ? "var(--game-hero)" : "var(--game-gold)"} stroke="var(--game-ink)" strokeWidth="2.5" strokeLinejoin="round" />
+            <path
+              d="M2 2 L20 13 L2 24 Z"
+              className={`${fight ? "fill-game-hero" : "fill-game-gold"} group-data-[target=bridge]:fill-game-hero group-data-[target=clue]:fill-game-gold group-data-[target=mary]:fill-game-gold`}
+              stroke="var(--game-ink)"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+            />
           </svg>
         </span>
         <span className="absolute left-0 top-0 grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-[2.5px] border-game-ink bg-game-paper shadow-[var(--game-shadow-sm)]">
-          <Face id={cast} className="size-9 rounded-full" />
+          <TargetFace cast={cast} size="sm" />
         </span>
         <span ref={chip} className="absolute left-0 top-0 block size-0 will-change-transform">
           <span

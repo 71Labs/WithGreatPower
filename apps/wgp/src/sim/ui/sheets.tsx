@@ -229,10 +229,23 @@ const SWINGING_TOUCH = [
   "Touching the street costs a little health and your combo. Rooftops are safe: you can land and run.",
 ];
 
-export function HowToPlay({ loadout, mode = "2d", touch = false }: { loadout: PowerId[]; mode?: "2d" | "3d"; /** The 3D night on a touch screen: the thumb controls, not the keys. */ touch?: boolean }) {
+export function HowToPlay({
+  loadout,
+  mode = "2d",
+  touch = false,
+  lead,
+}: {
+  loadout: PowerId[];
+  mode?: "2d" | "3d";
+  /** The 3D night on a touch screen: the thumb controls, not the keys. */
+  touch?: boolean;
+  /** Tonight's own section, first (a case night's tips). */
+  lead?: ReactNode;
+}) {
   const thumbs = touch && mode === "3d";
   return (
     <div className="flex flex-col gap-5 text-[14px] leading-5">
+      {lead}
       <section className="flex flex-col gap-2">
         <h3 className="text-[15px] font-bold text-game-ink">Swinging</h3>
         <ul className="flex list-disc flex-col gap-1.5 pl-5">
@@ -295,6 +308,7 @@ export function PauseMenu({
   touch = false,
   settings,
   onMap,
+  help: lead,
 }: {
   loadout: PowerId[];
   onResume: () => void;
@@ -305,6 +319,8 @@ export function PauseMenu({
   settings?: ReactNode;
   /** Open the city map (the 3D night). */
   onMap?: () => void;
+  /** Tonight's own section at the top of How to play (a case night's tips). */
+  help?: ReactNode;
 }) {
   const [help, setHelp] = useState(false);
   const resume = useRef<HTMLButtonElement>(null);
@@ -328,7 +344,7 @@ export function PauseMenu({
           ) : null}
         </div>
         {help ? (
-          <HowToPlay loadout={loadout} mode={mode} touch={touch} />
+          <HowToPlay loadout={loadout} mode={mode} touch={touch} lead={lead} />
         ) : (
           <>
             <p className="text-[14px] leading-5 text-game-muted">Your progress is kept. Come back any time and you’ll pick up at this stop.</p>

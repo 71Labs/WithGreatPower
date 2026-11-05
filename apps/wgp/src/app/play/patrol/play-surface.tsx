@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { castById, type CastId } from "@wgp/game-core/cast";
 import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
-import type { Stop, StopResult } from "@wgp/game-core/types";
+import type { Stop, StopResult, VillainId } from "@wgp/game-core/types";
 
 import { holdAudioLoads, playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { attachControls, InputLatch, STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type Controls, type StickVisual } from "@/game3d/input";
@@ -34,6 +34,8 @@ import { useCoarsePointer, useNarrowViewport, useReducedMotion, useShortViewport
 import { Hud, useHudValue } from "@/sim/ui/hud";
 import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sheets";
 
+import { ChapterCallouts, ChapterStore, ChapterTips, feedChapter, ObjectiveChip, RestoreBar, RightClickerBar, useChapterLines, useChapterValue } from "./chapter-hud";
+import { chapterFixtureName, FixtureTap } from "./chapter-fixture";
 import { CityMap, stopName } from "./city-map";
 import { ComboMeter } from "./combo";
 import { Minimap } from "./minimap";
@@ -58,12 +60,24 @@ html:has([data-night]), html:has([data-night]) body { overscroll-behavior: none;
 
 const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : ALLY_CAST[stop.ally]);
 
+/** A villain the stock HUD knows (the chapter's Right-Clicker has his own bar and lines). */
+const knownVillain = (id: string | null | undefined): id is VillainId => !!id && Object.hasOwn(VILLAINS, id);
+
+/** How a case night ended, for its "Case closed" results. */
+export interface ChapterEnd {
+  id: string;
+  /** Closed: Mary restored and the case-closed event seen. */
+  closed: boolean;
+  /** Sim ticks to the close (60 a second), when it closed. */
+  ticks: number | null;
+}
+
 export interface PlaySurfaceProps {
   session: NightSession;
   autopilot: boolean;
   debug: boolean;
-  /** The night is over and its outro has played: submit or bank it. */
-  onDone(): void;
+  /** The night is over and its outro has played: submit or bank it. A case night says how it ended. */
+  onDone(chapter?: ChapterEnd): void;
   /** Set once the night is over: the controls and HUD go, the results draw over the city. */
   ended: boolean;
   /** The WebGL context didn't come back: switch to the 2D game. */
@@ -82,8 +96,16 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [hudStore] = useState(() => new HudStore());
   const [loop] = useState(() => new RunLoop(run, { hud: hudStore }));
   const [latch] = useState(() => new InputLatch());
-  /** Overlays placed from the camera each frame (the waypoint, the minimap, the combo timer). */
-  const [tap] = useState(() => new FrameTap());
+  /** Overlays placed from the camera each frame (the waypoint, the minimap, the combo timer). In development `?chapter=` dresses its frames with a fixture case. */
+  const [tap] = useState<FrameTap>(() => {
+    const fixture = chapterFixtureName();
+    return fixture ? new FixtureTap(fixture, run.sim.city) : new FrameTap();
+  });
+  /** A case night's HUD (only while the frame carries a chapter). */
+  const [chapterStore] = useState(() => new ChapterStore());
+  const chapterOn = useChapterValue(chapterStore, (c) => c !== null);
+  /** A case night's ending, from its events: how it ended and when. */
+  const chapterEnd = useRef<ChapterEnd | null>(null);
   // Only the few HUD values the page itself places by: it re-renders when one changes, not
   // on every snapshot (the HUD subscribes to those on its own).
   const hudIndex = useHudValue(hudStore, (h) => h?.index ?? null);
@@ -157,9 +179,11 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     const onEvent = (ev: LoopEvent3D) => {
       switch (ev.type) {
         case "encounter": {
+          // A case's villain is announced by the case (useChapterLines).
+          if (!knownVillain(ev.villain)) break;
           const stop = stops[ev.index] as Extract<Stop, { kind: "fight" }>;
           const v = VILLAINS[ev.villain];
-          say(`${v.name}${stop.boss ? ", the boss" : ""}${stop.quest ? ", tonight’s quest" : ""}: “${v.taunt}”`, true);
+          say(`${v.name}${stop?.boss ? ", the boss" : ""}${stop?.quest ? ", tonight’s quest" : ""}: “${v.taunt}”`, true);
           break;
         }
         case "fight-live":
@@ -172,7 +196,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           if (ev.hits > 0) say(`Hit! ${ev.hits} to go.`);
           break;
         case "fight-won":
-          say(`Webbed! ${VILLAINS[ev.villain].defeat}`, true);
+          say(knownVillain(ev.villain) ? `Webbed! ${VILLAINS[ev.villain].defeat}` : "Webbed!", true);
           break;
         case "ko":
           say("Knocked out. Aunt Mainnet will patch you up.", true);
@@ -202,9 +226,16 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           say(touch ? "Go! Hold the right side to web." : "Go! Hold Space to web.", true);
           break;
         case "status":
-          if (ev.status === "done") done.current();
+          if (ev.status === "done") {
+            // A case night (one whose frames carried a chapter) ends on its own results.
+            const end = chapterEnd.current ?? (chapterStore.getSnapshot() ? { id: "case-001", closed: false, ticks: null } : undefined);
+            done.current(end);
+          }
           break;
       }
+      // The chapter's own events aren't in the sim's union yet (lib/cases/types.ts).
+      const kind: string = ev.type;
+      if (kind === "case-closed") chapterEnd.current = { id: "case-001", closed: true, ticks: run.sim.tick };
       if (ev.type === "arrive" || ev.type === "fight-won" || ev.type === "ko" || ev.type === "stop-done" || ev.type === "night-over") {
         setResults(run.save.patrol?.results ?? []);
       }
@@ -259,7 +290,11 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       setAudioPaused(false);
       if (debug || autopilot) delete window.__wgpPlay;
     };
-  }, [loop, latch, run, session, stops, autopilot, debug, touch, say]);
+  }, [loop, latch, run, session, stops, autopilot, debug, touch, say, chapterStore]);
+
+  // A case night's HUD reads the frames the overlays see, and says what happens out loud.
+  useEffect(() => feedChapter(tap, chapterStore), [tap, chapterStore]);
+  useChapterLines(chapterStore, loop.bus, say);
 
   const togglePause = useCallback(
     (next?: boolean) => {
@@ -523,6 +558,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onGwei={() => latch.pushShot(5)}
             onPause={() => togglePause(true)}
             combo={<ComboMeter tap={tap} store={hudStore} />}
+            chapter={chapterOn ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> } : undefined}
             minimap={
               <Minimap
                 tap={tap}
@@ -540,8 +576,14 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             }
           />
         ) : null}
-        {!ended && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
-        {!ended && hudMode === "won" && villainKind ? <WonCaption villain={villainKind} /> : null}
+        {!ended && introStop?.kind === "fight" && knownVillain(introStop.villain) ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
+        {!ended && hudMode === "won" && knownVillain(villainKind) ? <WonCaption villain={villainKind} /> : null}
+        {!ended && chapterOn ? (
+          <>
+            <RestoreBar tap={tap} touch={touch} />
+            <ChapterCallouts store={chapterStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
+          </>
+        ) : null}
         {countdown && !ended ? (
           // Off the hero, who stands in the middle: below the feet, or above the head on a phone held sideways.
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%+128px)] flex justify-center short:top-[calc(50%-112px)]">
@@ -560,6 +602,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           onResume={() => togglePause(false)}
           onMap={() => openMap("pause")}
           settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
+          help={chapterOn ? <ChapterTips touch={touch} /> : undefined}
         />
       ) : null}
       {map && !ended ? (
@@ -567,7 +610,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           city={run.sim.city}
           stops={stops}
           results={results}
-          frame={loop.view}
+          frame={tap instanceof FixtureTap ? tap.dress(loop.view) : loop.view}
           hero={colors}
           northUp={settings.northUp}
           onNorthUp={setNorthUp}

@@ -11,6 +11,7 @@
 import type { Building, City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 import { BLOCK, GRID, PITCH } from "@wgp/game-core/sim3d/constants";
 
+import { drawChapterPins } from "./chapter-pins";
 import { NAV_COLORS as K } from "./colors";
 import { clampToDisc, mapAngle, remainingRoute, stopPoint, toMap, type MapView } from "./map";
 
@@ -377,6 +378,9 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
     ctx.stroke();
     stickerAt(ctx, s.sticker(frame.stop), c.x, c.y, 24);
   }
+
+  // A case night's clues and the bridge (nothing on a normal night).
+  drawChapterPins(ctx, frame, city, view, R, rim);
 
   const h = heading(frame);
   heroArrow(ctx, R, R, mapAngle(view, h.x, h.z), 9, s.heroColor);
