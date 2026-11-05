@@ -293,6 +293,7 @@ export class VoteScene {
   private tier: QualityTier = "medium";
   private reduced = false;
   private primed = false;
+  private boothsUp = false;
   private time = 0;
   private readonly alive = new Map<number, Vec3>();
   private readonly found = new Set<string>();
@@ -474,15 +475,28 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
       } else if (!c.found) this.found.delete(c.id);
     }
     p.beams.count = beams;
+    p.beams.visible = beams > 0;
     p.beams.instanceMatrix.needsUpdate = true;
     p.beamMat.uniforms.uPulse.value = still ? 0.5 : 0.5 + 0.5 * Math.sin(time * 3);
 
-    // The station: booth frames and their placards.
-    for (const at of vote.booths) {
-      for (const side of [-1, 1]) b.add(at.x + side * 46, floor + 50, at.z, 6, 100, 6, 0, COL.post);
-      b.add(at.x, floor + 101, at.z, 100, 7, 7, 0, COL.bar);
-      b.add(at.x, floor + 114, at.z, 42, 16, 3, 0, COL.placard);
-      b.add(at.x, floor + 114, at.z, 34, 4, 3.4, 0, COL.stripe);
+    // The station while the line stands: a taped square on the roof under each booth and a
+    // little "vote" sign on a pole at its back corner. The line breaks when he's unmasked: the
+    // booths go flying (confetti) and the roof's clear for the fight.
+    const station = ch.phase === "investigate" || ch.phase === "lineup";
+    if (station) {
+      const mid = zone?.center.z ?? 0;
+      for (const at of vote.booths) {
+        const back = at.z > mid ? 1 : -1;
+        b.add(at.x, floor + 0.6, at.z, 84, 1.2, 84, 0, COL.stripe);
+        b.add(at.x, floor + 1.6, at.z, 74, 1.2, 74, 0, COL.post);
+        b.add(at.x - 38, floor + 34, at.z + back * 38, 4, 68, 4, 0, COL.post);
+        b.add(at.x - 38, floor + 72, at.z + back * 38, 30, 14, 2.5, 0, COL.placard);
+        b.add(at.x - 38, floor + 68, at.z + back * 38, 26, 3, 2.9, 0, COL.bar);
+      }
+      this.boothsUp = true;
+    } else if (this.boothsUp) {
+      this.boothsUp = false;
+      if (!first) for (const at of vote.booths) this.parts!.pops.pop("paper", { x: at.x - 38, y: floor + 60, z: at.z }, ["#FFFDF8", "#3B5BA8", "#E5392C", "#2E3350"]);
     }
     // The ballot box beside Uncle Gen.
     const bx = vote.box;
@@ -514,7 +528,13 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
       if (v.runner) {
         // Uncle Gen's ballot, held up high and gold.
         b.add(v.pos.x + lx * 22, v.pos.y + 30 + bob, v.pos.z + lz * 22, 20, 26, 2.5, yaw, COL.gold);
-      } else b.add(v.pos.x + lx * 26 * hand, v.pos.y + 18 + bob, v.pos.z + lz * 26 * hand, 17, 22, 2, yaw, COL.ballot);
+      } else {
+        // His ballot, held out in that hand: a card with a red band across its foot.
+        const hx = v.pos.x + lx * 30 * hand;
+        const hz = v.pos.z + lz * 30 * hand;
+        b.add(hx, v.pos.y + 16 + bob, hz, 20, 26, 2, yaw, COL.ballot);
+        b.add(hx, v.pos.y + 7 + bob, hz, 20.4, 5, 2.4, yaw, COL.bar);
+      }
       if (v.shadow && shadows < MAX_VOTERS) {
         const g = v.pos.y - LIFT;
         this.tmp.position.set(v.pos.x, g + 1.5, v.pos.z);
@@ -526,9 +546,9 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
       if (picking && eyes < MAX_VOTERS) {
         // A blinker shuts his eye now and then (each on his own beat); the rest stare.
         const shut = v.blink && (time + v.id * 0.37) % BLINK_EVERY < SHUT;
-        this.tmp.position.set(v.pos.x, v.pos.y + 62, v.pos.z);
+        this.tmp.position.set(v.pos.x, v.pos.y + 58, v.pos.z);
         this.tmp.quaternion.copy(cq);
-        this.tmp.scale.set(24, 24, 1);
+        this.tmp.scale.set(19, 19, 1);
         this.tmp.updateMatrix();
         p.eyes.setMatrixAt(eyes, this.tmp.matrix);
         p.eyeCell.setX(eyes, shut ? 1 : 0);
@@ -536,8 +556,10 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
       }
     }
     p.shadows.count = shadows;
+    p.shadows.visible = shadows > 0;
     p.shadows.instanceMatrix.needsUpdate = true;
     p.eyes.count = eyes;
+    p.eyes.visible = eyes > 0;
     p.eyes.instanceMatrix.needsUpdate = true;
     p.eyeCell.needsUpdate = true;
 
@@ -628,6 +650,7 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
   private reset(): void {
     this.root.visible = false;
     this.primed = false;
+    this.boothsUp = false;
     this.alive.clear();
     this.found.clear();
     const p = this.parts;

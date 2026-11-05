@@ -377,25 +377,63 @@ function BoxNote({ bus, store }: { bus: VoteBus; store: VoteStore }) {
   );
 }
 
-/** While you pick him out (the lineup, the recount): the profile, and the recount's clock. */
-function Picking({ store }: { store: VoteStore }) {
+/** The recount's clock while he hides. */
+function RecountAlert({ store }: { store: VoteStore }) {
+  const left = useVoteValue(store, (c) => (c?.phase === "standoff" && c.recount ? c.recount.left : null));
+  if (left === null) return null;
+  return (
+    <Striped>
+      <Users aria-hidden className="size-6 shrink-0" strokeWidth={2.25} />
+      <span className="font-display text-[22px] font-bold uppercase leading-7 tracking-[0.02em]">Recount</span>
+      <span className="num ml-1 rounded-full border-2 border-game-ink bg-game-ink px-2 text-[15px] font-bold leading-6 text-game-paper">{left}</span>
+    </Striped>
+  );
+}
+
+/** The profile as a stack of chips, for a phone: each tell, or a dashed "?" while its clue's unread. */
+function ProfileChips({ profile }: { profile: ProfileLine[] }) {
+  return (
+    <ul aria-label="Suspect profile" className="flex flex-col items-start gap-1.5">
+      {profile.map((p) => (
+        <li
+          key={p.tell}
+          className={`flex h-8 items-center gap-1 rounded-full border-2 px-2 text-[12px] font-bold leading-4 text-game-ink shadow-[var(--game-shadow-sm)] ${p.known ? "border-game-ink bg-game-paper" : "border-dashed border-game-ink/60 bg-game-paper-2 italic text-game-muted"}`}
+        >
+          <span className="grid size-5 place-items-center [&>svg]:size-[18px]">
+            <TellGlyph tell={p.tell} />
+          </span>
+          {p.known ? p.words : `${p.label}: ?`}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const PROFILE_AT = {
+  /** A mouse and keys: down the left, under the vitals. */
+  wide: "left-4 top-[176px] items-start",
+  /** A phone held upright: down the left under the objective (the minimap keeps the right). */
+  phone: "left-3 top-[calc(max(12px,env(safe-area-inset-top))+184px)] items-start",
+  /** Held sideways: down the left under the vitals. */
+  short: "left-3 top-[calc(max(8px,env(safe-area-inset-top))+96px)] items-start",
+} as const;
+
+/** While you pick him out (the lineup, the recount): what the drop boxes said about him. */
+export function VoteProfile({ store, layout }: { store: VoteStore; layout: keyof typeof PROFILE_AT }) {
   const key = useVoteValue(store, (c) => {
     if (!c) return null;
     const picking = c.phase === "lineup" || (c.phase === "standoff" && c.stage === "recount");
-    return picking ? JSON.stringify({ p: c.profile, r: c.recount?.left ?? null, w: c.wrong, ph: c.phase }) : null;
+    return picking ? JSON.stringify({ p: c.profile, w: c.wrong, ph: c.phase }) : null;
   });
   if (!key) return null;
-  const { p, r, w, ph } = JSON.parse(key) as { p: ProfileLine[]; r: number | null; w: number; ph: string };
+  const { p, w, ph } = JSON.parse(key) as { p: ProfileLine[]; w: number; ph: string };
   return (
-    <div className="flex flex-col items-center gap-2">
-      {r !== null ? (
-        <Striped>
-          <Users aria-hidden className="size-6 shrink-0" strokeWidth={2.25} />
-          <span className="font-display text-[22px] font-bold uppercase leading-7 tracking-[0.02em]">Recount</span>
-          <span className="num ml-1 rounded-full border-2 border-game-ink bg-game-ink px-2 text-[15px] font-bold leading-6 text-game-paper">{r}</span>
-        </Striped>
-      ) : null}
-      <SuspectProfile profile={p} title={ph === "lineup" ? (w > 0 ? `Suspect profile · ${w} wrong` : "Suspect profile: hit the match") : "He’s one of these: hit the match"} />
+    <div aria-hidden className={`pointer-events-none absolute flex flex-col ${PROFILE_AT[layout]}`}>
+      {layout === "wide" ? (
+        <SuspectProfile profile={p} title={ph === "lineup" ? (w > 0 ? `Suspect profile · ${w} wrong` : "Suspect profile: hit the match") : "He’s one of these: hit the match"} />
+      ) : (
+        <ProfileChips profile={p} />
+      )}
     </div>
   );
 }
@@ -406,14 +444,17 @@ const CALLOUTS = {
   short: "bottom-[max(12px,env(safe-area-inset-bottom))] flex-col",
 } as const;
 
-/** The warnings, the profile and the notes, kept off the hero and the controls. Read out by the page's announcer, not here. */
+/** The warnings and the notes, kept off the hero and the controls. Read out by the page's announcer, not here. */
 export function VoteCallouts({ store, bus, layout }: { store: VoteStore; bus: VoteBus; layout: keyof typeof CALLOUTS }) {
   return (
-    <div aria-hidden className={`pointer-events-none absolute inset-x-0 flex items-center gap-3 px-4 ${CALLOUTS[layout]}`}>
-      <ForkAlert store={store} bus={bus} />
-      <Picking store={store} />
-      <BoxNote bus={bus} store={store} />
-    </div>
+    <>
+      <div aria-hidden className={`pointer-events-none absolute inset-x-0 flex items-center gap-3 px-4 ${CALLOUTS[layout]}`}>
+        <ForkAlert store={store} bus={bus} />
+        <RecountAlert store={store} />
+        <BoxNote bus={bus} store={store} />
+      </div>
+      <VoteProfile store={store} layout={layout} />
+    </>
   );
 }
 
