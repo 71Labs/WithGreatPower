@@ -10,6 +10,7 @@ import { applyPose, newPose } from "./anim/pose";
 import { CAST_LOOPS, ClipLayer } from "./anim/clip-layer";
 import { CAST_ANIMS, CAST_BODIES, castFromScene, castGeometry, castModelUrl, rigSource, UNITS_PER_METRE, type CastAsset } from "./cast-asset";
 import { expandCastDecals } from "./cast-model";
+import { RIGHT_CLICKER_ANIMS } from "./files";
 import { CAST_MAX_DECALS, CAST_PALETTE } from "./cast-shaders";
 import { clipsFromGltf, HERO_ANIMS, type HeroClips } from "./hero-asset";
 import { rigFromAsset } from "./hero-rig";
@@ -24,7 +25,7 @@ async function parse(url: string) {
 /** Both clip files merged, with the hero skeleton's rest pose, as the scene loads them. */
 async function clips(): Promise<HeroClips> {
   const out: HeroClips = new Map();
-  for (const url of [HERO_ANIMS, CAST_ANIMS]) {
+  for (const url of [HERO_ANIMS, CAST_ANIMS, RIGHT_CLICKER_ANIMS]) {
     const gltf = await parse(url);
     for (const [k, v] of clipsFromGltf(gltf.animations)) out.set(k, v);
     if (url === HERO_ANIMS) {
@@ -146,5 +147,36 @@ describe("the cast's MPFB bodies", () => {
       expect(run.speed, id).toBeGreaterThan(120);
       expect(run.speed, id).toBeLessThan(380);
     }
+  });
+
+  it("give the Right-Clicker his own clips and his cursor in his right fist", () => {
+    const a = assets.get("right-clicker")!;
+    for (const name of ["rc-idle", "rc-aim", "rc-click", "rc-reload", "rc-copy", "rc-drag", "rc-stagger", "walk", "hit-chest", "death"]) expect(all.has(name), name).toBe(true);
+    const { rig, group } = rigOf(a);
+    const layer = new ClipLayer(rig, all, UNITS_PER_METRE);
+    // His idle and his stagger stand on his soles.
+    for (const clip of ["rc-idle", "rc-stagger"]) expect(Math.abs(layer.motion.floorOf(clip)), clip).toBeLessThan(1.6);
+    // Aiming, the right hand is out in front of his chest, at about shoulder height.
+    layer.loops([["rc-aim", 0.05, 1]], 1, layer.full, 1);
+    group.updateMatrixWorld(true);
+    const hand = new Vector3().setFromMatrixPosition(rig.get("handR").matrixWorld);
+    const chest = new Vector3().setFromMatrixPosition(rig.get("chest").matrixWorld);
+    expect(hand.z - chest.z).toBeGreaterThan(20);
+    expect(Math.abs(hand.y - chest.y)).toBeLessThan(20);
+    // The cursor (palette "cursor") is skinned to the right hand only.
+    const g = a.hi!;
+    const pal = g.getAttribute("_pal");
+    const si = g.getAttribute("skinIndex");
+    const sw = g.getAttribute("skinWeight");
+    const cursor = a.meta.names.indexOf("cursor");
+    const handR = a.bones.findIndex((b) => b.name === "hand_r");
+    let n = 0;
+    for (let i = 0; i < pal.count; i++) {
+      if (Math.round(pal.getX(i)) !== cursor) continue;
+      n++;
+      expect(si.getX(i)).toBe(handR);
+      expect(sw.getX(i)).toBeCloseTo(1, 3);
+    }
+    expect(n).toBeGreaterThan(10);
   });
 });

@@ -4,7 +4,7 @@
  * The patrol: the 3D city where the browser can draw WebGL 2, the 2D game where it can't.
  * The check runs on the client only, so the server render is the loading state.
  */
-import { useSyncExternalStore } from "react";
+import { Suspense, useSyncExternalStore } from "react";
 
 import { prefetchHero } from "@/game3d/scene/characters/files";
 import { hasWebGL2 } from "@/game3d/scene/quality";
@@ -39,5 +39,18 @@ export function Patrol() {
         <Loading />
       </div>
     );
-  return ok ? <Night3D /> : <PatrolGame />;
+  // Night3D reads `?case=` from the router (useSearchParams), which wants a Suspense boundary.
+  return ok ? (
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 z-[60] overflow-hidden bg-game-night text-game-ink">
+          <Loading />
+        </div>
+      }
+    >
+      <Night3D />
+    </Suspense>
+  ) : (
+    <PatrolGame />
+  );
 }

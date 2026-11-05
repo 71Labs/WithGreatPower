@@ -5,6 +5,10 @@
  *   409 { error: "rev_conflict", … } when the save moved on during the run
  *   410 run_expired · 409 already_submitted (a different log for a finished run)
  * Idempotent: the same log again returns the stored outcome.
+ *
+ * A story chapter's run (started with `chapter`) is replayed as that chapter and answers
+ * ranked: false, bits: 0 and `chapter: { id, cleared, firstClear, record, badge }`
+ * (src/server/db/cases.ts): never a board, never Bits; a first clear queues the badge.
  */
 import { z } from "zod";
 

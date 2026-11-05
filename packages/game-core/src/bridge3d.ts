@@ -4,10 +4,35 @@
  * driver, the server verifier and the browser all go through here, so they play the exact
  * same flow.
  */
-import { ERRANDS, powerScale } from "./rules/data";
+import { ERRANDS, MAX_FLUID, powerScale } from "./rules/data";
 import type { Action } from "./rules/engine";
-import type { Save, Stop } from "./rules/types";
+import type { ChapterId, Save, Stop } from "./rules/types";
+import { chapterStops } from "./sim3d/chapter";
 import type { SimConfig, SimEvent } from "./sim3d/types";
+
+/**
+ * A story chapter's sim config from a save (Case File 001): the hero at full health and
+ * fluid with their loadout and one Gwei call, on the chapter's own stage. Null without a hero.
+ */
+export function chapterConfig(save: Save, seed: number, chapter: ChapterId): SimConfig | null {
+  const hero = save.hero;
+  if (!hero) return null;
+  const loadout = hero.loadout.filter((id) => hero.powers[id]).map((id) => ({ id, scale: powerScale(hero.powers[id]?.mastery ?? 0) }));
+  return {
+    seed: seed >>> 0,
+    stops: chapterStops(chapter),
+    index: 0,
+    entry: "travel",
+    hp: hero.maxHp,
+    maxHp: hero.maxHp,
+    fluid: MAX_FLUID,
+    combo: 0,
+    gweiCalls: 1,
+    heroLevel: hero.level,
+    loadout,
+    chapter,
+  };
+}
 
 export type SessionStart3D =
   | { kind: "none" }

@@ -196,6 +196,23 @@ export interface Stats {
   nights: number;
 }
 
+/** A story chapter ("case file"), played as its own night (rules/chapters.ts, sim3d/chapter.ts). */
+export type ChapterId = "case-001";
+
+/** A case file in the save: whether it's closed, when, and the fastest clear. */
+export interface CaseRecord {
+  cleared: boolean;
+  /** ISO time of the first clear. */
+  clearedAt: string | null;
+  /** Sim ticks of the fastest clear (60 a second). */
+  bestTicks: number | null;
+  /**
+   * True once the server replayed a clear (signed in: the badge is queued with it). A guest's
+   * clear is kept in the browser's save with false: "sign in to file the case".
+   */
+  verified: boolean;
+}
+
 export interface Save {
   version: 1;
   hero: Hero | null;
@@ -211,4 +228,6 @@ export interface Save {
   /** −100 (menace) to 100 (hero): what the city thinks of you. */
   reputation: number;
   stats: Stats;
+  /** Story chapters, by id. Absent on saves from before chapters, and until one is cleared. */
+  cases?: Partial<Record<ChapterId, CaseRecord>>;
 }

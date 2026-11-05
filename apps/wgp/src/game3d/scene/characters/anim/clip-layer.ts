@@ -17,7 +17,7 @@ import { smoothstep } from "./common";
 import { MotionLayer } from "./motion";
 
 /** Clips that loop (the rest play once). */
-export const CAST_LOOPS = ["idle", "idle-talk", "walk", "jog", "sprint", "jump-loop", "crouch-idle", "spell-idle", "sword-idle", "swim-idle"];
+export const CAST_LOOPS = ["idle", "idle-talk", "walk", "jog", "sprint", "jump-loop", "crouch-idle", "spell-idle", "sword-idle", "swim-idle", "rc-idle", "rc-aim", "rc-stagger"];
 
 export interface ClipShot {
   name: string;

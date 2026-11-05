@@ -32,12 +32,14 @@ import type { ActorAnimator } from "./anim/actor";
 import { yawOf } from "./anim/common";
 import { HeroAnimator } from "./anim/hero";
 import type { AnimContext } from "./anim/types";
+import { RightClickerAnimator } from "./anim/right-clicker";
 import { DocAnimator, GoblinAnimator, SandwichAnimator, SybilAnimator } from "./anim/villains";
+import { villainsOf, type SceneVillain, type SceneVillainId } from "../chapter/contract";
 import { CAST_DEFS } from "./cast";
 import type { Lod } from "./cast/kit";
 import { CAST_ANIMS, castAssetNow, castModelUrl, loadCastAsset, UNITS_PER_METRE, type CastAsset, type CastBodyId } from "./cast-asset";
 import { CastCopies, CastModel } from "./cast-model";
-import { queueAfter } from "./files";
+import { queueAfter, RIGHT_CLICKER_ANIMS } from "./files";
 import { ARMS, DocChains } from "./chains";
 import { RigDebug } from "./debug";
 import { heroAssetNow, heroScale, HERO_ANIMS, HERO_MODEL, loadHeroAsset, loadHeroClips, type HeroAsset, type HeroClips } from "./hero-asset";
@@ -45,7 +47,8 @@ import { HeroModel } from "./hero-model";
 import { CharacterModel, CopyBatch, type BodyModel } from "./model";
 import { WebShot } from "./web-shot";
 
-type VillainKey = "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
+/** The night's villains, and Case file 001's Right-Clicker (scene/chapter/contract.ts). */
+type VillainKey = SceneVillainId;
 type AllyKey = "aunt-mainnet" | "uncle-gen" | "mary-jpeg" | "bearson" | "gwei";
 
 const ALLY_STYLE: Record<AllyKey, AllyStyle> = {
@@ -143,6 +146,12 @@ export class CharacterSystem {
   private wantFlip = false;
   private wantMiss = false;
   private wantPunch = false;
+  /** The Right-Clicker's own clips (only fetched on a night he's in). */
+  private rcClips: HeroClips | null = null;
+  private rcClipsAsked = false;
+  /** Case file 001's "SAVED!": seconds the hero's pose stays frozen, and a white wash on him (0–1). */
+  private heroFreeze = 0;
+  heroWash = 0;
   reducedMotion = false;
 
   constructor(
@@ -258,7 +267,9 @@ export class CharacterSystem {
           ? new SandwichAnimator(model.rig, model.group)
           : id === "doc-octochain"
             ? new DocAnimator(model.rig, model.group)
-            : new SybilAnimator(model.rig, model.group);
+            : id === "right-clicker"
+              ? new RightClickerAnimator(model.rig, model.group)
+              : new SybilAnimator(model.rig, model.group);
     anim.strandAnchor = (p, out) => this.strandAnchor(p, out);
     if (model instanceof CastModel && this.castClips) anim.setClips(this.castClips, model.k);
     return anim;
@@ -277,6 +288,7 @@ export class CharacterSystem {
           merged.pelvisRest = hero.pelvisRest;
           merged.restQ = hero.restQ;
           this.castClips = merged;
+          this.mergeRcClips();
           // Bodies that arrived first can come in now.
           for (const u of this.castAsked) {
             const a = castAssetNow(u);
@@ -296,6 +308,43 @@ export class CharacterSystem {
         // No file: the procedural body carries on.
       },
     );
+  }
+
+  /** The Right-Clicker's clips (right-clicker-anims.glb), once, merged into the cast's when both are in. */
+  private askRcClips(): void {
+    if (this.rcClipsAsked) return;
+    this.rcClipsAsked = true;
+    loadHeroClips(RIGHT_CLICKER_ANIMS).then(
+      (clips) => {
+        this.rcClips = clips;
+        this.mergeRcClips();
+      },
+      () => {
+        // No file: he plays the cast's clips and his procedural poses.
+      },
+    );
+  }
+
+  private mergeRcClips(): void {
+    const all = this.castClips;
+    const rc = this.rcClips;
+    if (!all || !rc || this.disposed) return;
+    for (const [name, clip] of rc) all.set(name, clip);
+    const a = this.villains.get("right-clicker");
+    if (a && a.model instanceof CastModel) a.anim.setClips(all, a.model.k);
+  }
+
+  /**
+   * Build a villain's body ahead of its fight (hidden) and start its files: a chapter asks for
+   * the Right-Clicker while the hero is still finding the clues.
+   */
+  prepareVillain(id: VillainKey): void {
+    if (this.built) this.villain(id);
+  }
+
+  /** "SAVED!": hold the hero's pose for `seconds` (the sim freezes him for as long). */
+  freezeHero(seconds: number): void {
+    this.heroFreeze = Math.max(this.heroFreeze, seconds);
   }
 
   /** Put a loaded MPFB body in place of a procedural one, wherever that character is. */
@@ -407,6 +456,7 @@ export class CharacterSystem {
     this.root.add(model.group);
     const actor = { model, anim, flash: 0, hits: -1 };
     this.villains.set(id, actor);
+    if (id === "right-clicker") this.askRcClips();
     if (id === "sybil" && !this.copies) {
       if (asset) this.swapCopies(asset);
       else {
@@ -576,11 +626,13 @@ export class CharacterSystem {
     this.wantPunch = false;
     const rival = frame.mode === "fight" ? (frame.villains.find((v) => !v.copy) ?? frame.villains[0]) : undefined;
     ha.lookAt(rival ? rival.pos : null);
-    ha.update(frame, dt, ctx);
+    // "SAVED!" (Case file 001): the pose holds still like a screenshot while the sim freezes him.
+    if (this.heroFreeze > 0) this.heroFreeze = Math.max(0, this.heroFreeze - dt);
+    else ha.update(frame, dt, ctx);
     hm.visible = frame.mode !== "done";
     this.lodFor(hm, frame.hero.pos, cam);
     const flash = frame.hero.hurtFlash > 0 && Math.floor(time * 16) % 2 === 0;
-    hm.fill.uniforms.uFlash.value = flash ? 0.7 : 0;
+    hm.fill.uniforms.uFlash.value = Math.max(flash ? 0.7 : 0, this.heroWash);
     hm.fill.uniforms.uFade.value = frame.hero.cloak ? 0.55 : 0;
     if (hm.visible) shadow(ha.centre, 40);
     if (debug) this.debugActor(hm, ha.targets, ha.ragdollPoints());
@@ -601,7 +653,7 @@ export class CharacterSystem {
     let copies = 0;
     let strandShown = false;
     let docSeen = false;
-    for (const v of frame.villains) {
+    for (const v of villainsOf(frame)) {
       if (v.copy) {
         copies++;
         continue;
@@ -609,6 +661,8 @@ export class CharacterSystem {
       const actor = this.villain(v.id);
       const { model, anim } = actor;
       model.visible = true;
+      // The SCREENSHOT's cone: he squares up to it.
+      if (anim instanceof RightClickerAnimator) anim.aimDir = v.aim?.dir ?? null;
       if (actor.hits >= 0 && v.hits < actor.hits) {
         actor.flash = 0.3;
         anim.struck();
@@ -669,7 +723,7 @@ export class CharacterSystem {
     if (points) this.debug.particles(points);
   }
 
-  private updateChains(frame: RenderFrame3D, v: RenderFrame3D["villains"][number], model: BodyModel, dt: number): void {
+  private updateChains(frame: RenderFrame3D, v: SceneVillain, model: BodyModel, dt: number): void {
     const sockets = CAST_DEFS["doc-octochain"].sockets!;
     const names = ["armUL", "armUR", "armLL", "armLR"];
     const roots = this.sockets;

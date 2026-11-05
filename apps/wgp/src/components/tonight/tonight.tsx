@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createElement } from "react";
 
 import { AVATARS, HeroArt } from "@/components/cast";
+import { CaseTile } from "@/components/cases/case-tile";
 import { stickerTileClass, StickerBadge, StickerButton, StickerChip, StickerFrame, StickerLink } from "@/components/game/kit";
 import { useUnreadEdition } from "@/components/game/shell";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
@@ -229,10 +230,10 @@ function QuestTile({ save }: { save: HeroSave }) {
  * desktop is a lobby, the hero in the middle with tonight's events either side.
  */
 const GRID =
-  "grid w-full grid-cols-2 justify-items-center gap-x-3 gap-y-3.5 [grid-template-areas:'title_title'_'hero_hero'_'route_route'_'action_action'_'rug_quest'] " +
+  "grid w-full grid-cols-2 justify-items-center gap-x-3 gap-y-3.5 [grid-template-areas:'title_title'_'hero_hero'_'route_route'_'action_action'_'case_case'_'rug_quest'] " +
   "[@media(orientation:landscape)_and_(max-height:520px)]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] [@media(orientation:landscape)_and_(max-height:520px)]:gap-x-6 [@media(orientation:landscape)_and_(max-height:520px)]:gap-y-3 " +
-  "[@media(orientation:landscape)_and_(max-height:520px)]:[grid-template-areas:'hero_title_title'_'hero_route_route'_'hero_action_action'_'rug_rug_quest'] " +
-  "lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-x-10 lg:gap-y-5 lg:[grid-template-areas:'._title_.'_'rug_hero_quest'_'._route_.'_'._action_.']";
+  "[@media(orientation:landscape)_and_(max-height:520px)]:[grid-template-areas:'hero_title_title'_'hero_route_route'_'hero_action_action'_'rug_rug_quest'_'case_case_case'] " +
+  "lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-x-10 lg:gap-y-5 lg:[grid-template-areas:'._title_.'_'rug_hero_quest'_'._route_.'_'._action_.'_'._case_.']";
 
 export function Tonight() {
   const save = useHeroSave();
@@ -285,6 +286,7 @@ export function Tonight() {
           <RugTile save={save} highlight={save.nightDone} />
           <QuestTile save={save} />
         </div>
+        <CaseTile save={save} className="[grid-area:case] lg:max-w-[400px]" />
       </div>
     </div>
   );

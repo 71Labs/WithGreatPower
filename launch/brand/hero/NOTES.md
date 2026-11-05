@@ -288,6 +288,41 @@ burst); run it once with the cast's files hidden for `before/` (the procedural b
 for `after/`. `cast-moments.mjs` records a full autopilot night's fights, catches, errands and
 Gwei's assist (`moments-a/`, `moments-b/`). `cast-sheet.py` lays them out in `compare/`.
 
+## The Right-Clicker (Case file 001: `cast.py`, `rc_anims.py`, `case001_textures.py`)
+
+Case file 001's villain is a tenth cast body, made exactly like the rest:
+
+```sh
+blender -b -P launch/brand/hero/build_cast.py -- --who right-clicker      # cast-right-clicker{,-lo}.glb
+blender -b launch/brand/hero/build/hero-base.blend -P launch/brand/hero/rc_anims.py   # right-clicker-anims.glb
+apps/wgp/scripts/models/compress.sh apps/wgp/public/models/cast-right-clicker.glb apps/wgp/public/models/cast-right-clicker-lo.glb apps/wgp/public/models/right-clicker-anims.glb
+```
+
+- **Body:** a slim young man (MakeHuman macros in `cast.py`), 1.82 m. A dark hoodie with a
+  ribbed hem and a kangaroo pocket, joggers, black gloves, dark sneakers; drawstrings; a small
+  white cursor badge on the chest. The hood is `hood_mb` with a peak (`extra` metaballs: a
+  ridge over the brow), so its brim hangs over his eyes; dark hair under it.
+- **Face:** as his 2D sticker (`components/cases/art.tsx`, `RightClickerArt`): the hood's dark
+  across the upper face down to the nose, two glowing cyan pixel eyes in it (the `rect` decal,
+  filled with a palette entry in the file's `glow` list, which the cast shader leaves unshaded
+  and blooms), slanted brows, a lopsided smirk on the lower face.
+- **The cursor:** `CURSOR`, the classic 12 × 20 pointer, extruded 3.8 cm and 56 cm long, rigid on
+  `hand_r`. Its stem runs through the fist and the arrow points along the hand, its plane
+  across the palm (upright in a pistol grip); white faces, ink walls.
+- **Budgets:** 7,000 triangles ("Body"), 2,600 ("BodyLo"); packed 194 KB and 72 KB.
+- **Clips (`rc_anims.py`):** the UAL's `Pistol_Aim_Neutral`, `Pistol_Shoot` and `Pistol_Reload`
+  (rc-aim, rc-click, rc-reload), and moves made like the crowd's: rc-idle (the cursor on his
+  shoulder, on the UAL idle), rc-copy (Ctrl+C, on the aim, 1.2 s), rc-drag (the lasso hauled
+  in, 1.0 s) and rc-stagger (reeling, on the idle). The walk, the hits and the fall are the
+  hero's. Packed 66 KB, fetched only on a night he's in.
+- **Textures (`case001_textures.py`):** the MISSING poster straightened and cropped for the tabs
+  clue, and the hero's `render.py --pose rest34` die-cut on a card border for the paper copies
+  (`apps/wgp/public/media/chapters/`).
+
+In the game: `scene/characters/anim/right-clicker.ts` (his phases), `scene/chapter/` (the
+clues, the copies, captive Mary, SCREENSHOT) and `/lab/case` (fixture frames).
+`case-shoot.mjs` takes the proof shots and the perf runs.
+
 ## The city's people (`civilians.py`, `crowd_anims.py`)
 
 Eight civilians, made exactly like the cast (an MPFB body on the same 53-bone skeleton,

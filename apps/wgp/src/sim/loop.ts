@@ -13,7 +13,7 @@
  * - Lifecycle: loading → intro (3, 2, 1, THWIP) → live ⇄ paused → outro → done.
  */
 import { MAX_FLUID, POWERS, VILLAINS } from "@wgp/game-core/data";
-import type { PowerId, VillainId } from "@wgp/game-core/types";
+import type { ChapterId, PowerId, VillainId } from "@wgp/game-core/types";
 
 import {
   abilityBlocked,
@@ -62,10 +62,32 @@ export interface HudSnapshot {
    * `open`: a direct hit would land now. 3D (ruleset 4) adds `opening` (Gas Goblin's stall or
    * Sandwich Man's stumble, through his guard) and `guard` (blocking after a hit).
    */
-  villain: { kind: VillainId; name: string; hits: number; hitsMax: number; open: boolean; opening?: boolean; guard?: boolean; boss: boolean; quest: boolean } | null;
+  villain: { kind: VillainId | "right-clicker"; name: string; hits: number; hitsMax: number; open: boolean; opening?: boolean; guard?: boolean; boss: boolean; quest: boolean } | null;
   buffs: { shield: boolean; cloak: boolean; finality: boolean; fork: boolean; slowmo: boolean };
   /** True until the first web of the session. */
   hint: boolean;
+  /**
+   * 3D, a story chapter's night (Case File 001; game3d/session/hud.ts), else absent or null.
+   * `villain` is set for the Right-Clicker too (kind "right-clicker": no sticker face, not in
+   * VILLAINS); this adds his state word, SAVED, the clues and Mary's restore.
+   */
+  chapter?: ChapterHud | null;
+}
+
+/** What the chapter HUD shows (docs/chapters/case-001.md). */
+export interface ChapterHud {
+  id: ChapterId;
+  phase: "investigate" | "standoff" | "rescue" | "done";
+  cluesFound: number;
+  clues: number;
+  /** The Right-Clicker from the standoff's fight on: hits left, his state word (render contract), open (a blow lands now) and guarding. */
+  villain: { name: string; hits: number; hitsMax: number; state: string; open: boolean; guard: boolean } | null;
+  /** Frozen by a SCREENSHOT right now ("SAVED!"). */
+  saved: boolean;
+  /** Mary's restore, 0–1 (two decimals), and whether the hero stands beside her (holding the web restores). */
+  restore: number;
+  beside: boolean;
+  freed: boolean;
 }
 
 /** A tiny external store for useSyncExternalStore. Snapshots are replaced, never mutated. */
@@ -104,6 +126,7 @@ function sameHud(a: HudSnapshot, b: HudSnapshot): boolean {
   )
     return false;
   if (JSON.stringify(a.buffs) !== JSON.stringify(b.buffs) || JSON.stringify(a.villain) !== JSON.stringify(b.villain)) return false;
+  if (JSON.stringify(a.chapter ?? null) !== JSON.stringify(b.chapter ?? null)) return false;
   if (a.abilities.length !== b.abilities.length) return false;
   return a.abilities.every((x, i) => {
     const y = b.abilities[i];

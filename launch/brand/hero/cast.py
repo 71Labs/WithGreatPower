@@ -306,9 +306,9 @@ def relax_rim(bm, iterations):
             v.co = c
 
 
-def hood_mb(k, name, pal, lining, open_w=0.064, open_top=0.055, open_bottom=-0.12, ease=0.024, cowl=(0.13, 0.12, 0.075)):
+def hood_mb(k, name, pal, lining, open_w=0.064, open_top=0.055, open_bottom=-0.12, ease=0.024, cowl=(0.13, 0.12, 0.075), extra=()):
     """A hood sculpted round the head and down onto the shoulders (metaballs), open at the
-    face, lined inside."""
+    face, lined inside; `extra` metaball elements join it (a brim's peak)."""
     hc = k.head_c
     fz = k.face_c.z
     hw = k.head_halfw
@@ -318,7 +318,7 @@ def hood_mb(k, name, pal, lining, open_w=0.064, open_top=0.055, open_bottom=-0.1
     els = [
         ("ELLIPSOID", Vector((0, (k.head_back + k.face_c.y) / 2 + 0.006, (k.head_top + k.chin_z) / 2 + 0.012)), (hw + ease, depth + ease, hh + ease * 0.6), None),
         ("ELLIPSOID", Vector((0, nb.y + 0.012, nb.z - 0.005)), cowl, None),
-    ]
+    ] + list(extra)
     bm = k.metaball(name, els, resolution=0.012)
     zc = fz + (open_top + open_bottom) / 2
     hz = (open_top - open_bottom) / 2
@@ -970,6 +970,145 @@ def sybil(k):
 
 
 # ---------------------------------------------------------------------------------------
+# The Right-Clicker (Case file 001): a slim young man in a dark hoodie with the hood up, its
+# brim shading his eyes, black gloves, joggers and dark sneakers; a white cursor badge on his
+# chest and an oversized mouse-pointer arrow in his right fist. "Saves everything. Owns nothing."
+
+# The classic pointer arrow, in pixels of a 12 × 20 cursor (x right, y down from the tip).
+CURSOR = [(0.0, 0.0), (0.0, 17.0), (4.0, 13.0), (7.0, 19.5), (9.6, 18.4), (6.6, 12.0), (12.0, 12.0)]
+# The middle of the stem's end, where the fist holds it.
+CURSOR_TAIL = (8.3, 18.95)
+
+
+def cursor_mesh(k, grip, axis, up, length, thick, front="cursor", side="ink"):
+    """An extruded pointer arrow: its stem's end at `grip`, its tip `length` metres along
+    `axis`, the arrow's plane spanned by `axis` and `up` (the stem's notch toward −up), `thick`
+    thick. Front and back faces in `front`, the walls in `side` (its ink rim seen edge-on)."""
+    tx, ty = CURSOR_TAIL
+    ax, ay = -tx, -ty
+    al = math.hypot(ax, ay)
+    ax, ay = ax / al, ay / al
+    bx, by = -ay, ax  # perpendicular, toward the arrow's straight edge
+    s = length / al
+    axis = Vector(axis).normalized()
+    up = (Vector(up) - axis * Vector(up).dot(axis)).normalized()
+    normal = axis.cross(up).normalized()
+    bm = bmesh.new()
+    rings = []
+    for off in (-thick / 2, thick / 2):
+        ring = []
+        for x, y in CURSOR:
+            dx, dy = x - tx, y - ty
+            a = (dx * ax + dy * ay) * s
+            b = (dx * bx + dy * by) * s
+            ring.append(bm.verts.new(grip + axis * a + up * b + normal * off))
+        rings.append(ring)
+    back, frontr = rings
+    n = len(CURSOR)
+    caps = [bm.faces.new(list(reversed(back))), bm.faces.new(frontr)]
+    walls = []
+    for i in range(n):
+        j = (i + 1) % n
+        walls.append(bm.faces.new((back[i], back[j], frontr[j], frontr[i])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    # The caps are concave: triangulate them (the walls stay quads).
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
+    names = []
+    for f in bm.faces:
+        names.append(front if abs(f.normal.dot(normal)) > 0.7 else side)
+    return bm, names
+
+
+def cursor_prop(k):
+    """The giant cursor in his right fist: its stem through the grip, the arrow out along the
+    hand like a pistol's barrel, its plane upright when the thumb is up."""
+    h = k.J("hand_r")
+    m = k.J("middle_01_r")
+    d = (m - h).normalized()
+    palm = h.lerp(m, 0.62)
+    # The palm's normal is the hand bone's local Z; the thumb side lies across it.
+    mat = k.bones["hand_r"].matrix_local.to_3x3()
+    pn = Vector(mat.col[2]).normalized()
+    thumb = (k.J("thumb_01_r") - h)
+    up = pn.cross(d).normalized()
+    if up.dot(thumb) < 0:
+        up = -up
+    grip = palm + pn * 0.012 - d * 0.03
+    bm, names = cursor_mesh(k, grip, d, up, 0.56, 0.038)
+    ob = k.part("cursor", bm, "cursor", bone="hand_r", flat_shade=True)
+    for p, nm in zip(ob.data.polygons, names):
+        p.material_index = k.pal(nm)
+    return ob
+
+
+def chest_badge(k):
+    """A small white cursor printed on the hoodie's chest (left of centre)."""
+    bvh = k.bvh()
+    s3 = k.J("spine_03")
+    at = Vector((0.07, 0, s3.z + 0.055))
+    hit, nrm, *_ = bvh.ray_cast(Vector((at.x, -0.5, at.z)), Vector((0, 1, 0)))
+    if hit is None:
+        return None
+    grip = Vector(hit) + Vector((0, -0.008, 0)) + Vector((0.02, 0, -0.045))
+    # Pointing up and to his right (the tip toward the collarbone), flat on the chest.
+    axis = Vector((-0.38, 0, 0.92))
+    bm, names = cursor_mesh(k, grip, axis, Vector((0.92, 0, 0.38)), 0.1, 0.004, front="badge", side="badge")
+    ob = k.part("badge", bm, "badge", flat_shade=True)
+    return ob
+
+
+def drawstrings(k, pal):
+    """The hood's two strings, hanging from either side of the throat."""
+    bvh = k.bvh()
+    nf = k.neck_front
+    parts = []
+    for s_ in (1, -1):
+        top = Vector((s_ * 0.032, nf.y - 0.006, nf.z - 0.035))
+        hit, *_ = bvh.ray_cast(Vector((top.x, -0.5, top.z - 0.1)), Vector((0, 1, 0)))
+        bot_y = (hit.y if hit is not None else top.y) - 0.008
+        pts = [top, Vector((s_ * 0.036, (top.y + bot_y) / 2 - 0.004, top.z - 0.06)), Vector((s_ * 0.038, bot_y, top.z - 0.13))]
+        parts.append(k.tube(pts, [0.0045, 0.0045, 0.006], segs=5))
+    return k.part("strings", k.join_bm(*parts), pal)
+
+
+def right_clicker(k):
+    k.clothe(ears=1.0)
+    k.open_paint()
+    k.fill("hoodie")
+    w = waist_z(k, -0.02)
+    k.paint("pants", "torso+legs", [k.below(w)])
+    # The hoodie's ribbed hem and the kangaroo pocket on its front.
+    k.paint("rib", "torso", [k.above(w), k.below(w + 0.035)])
+    k.paint("pocket", "torso", [k.above(w + 0.045), k.below(w + 0.17), k.front(-0.02), k.plane((0.105, 0, 0), (-1, 0, 0)), k.plane((-0.105, 0, 0), (1, 0, 0))])
+    k.paint("skin", "head+neck", [k.neckline(drop=-0.01, keep="above")])
+    sleeves(k, "hoodie", 1.86)
+    gloves(k, "glove", 1.86)
+    shoes(k, "shoe", 1.9)
+    k.close_paint()
+    fz = k.face_c.z
+    # Dark hair under the hood (any gap at the brim shows hair, not scalp).
+    hair_cap(k, "hair", "hair", front=0.03, side=-0.01, back=-0.06, thick=0.008, top=0.01, edge=0.003, region=lambda c, phi: c.z < fz + 0.2)
+    # A deep hood: wide ease, its brim low over the brow so the eyes sit in its shade.
+    # The brim's peak: a ridge forward over the brow, so the hood hangs over the face.
+    peak = [("ELLIPSOID", Vector((0, k.face_c.y + 0.012, fz + 0.062)), (0.085, 0.05, 0.04), Matrix.Rotation(0.35, 3, "X"))]
+    hood_mb(k, "hood", "hoodie", "lining", open_w=0.084, open_top=0.036, open_bottom=-0.15, ease=0.03, cowl=(0.14, 0.13, 0.08), extra=peak)
+    drawstrings(k, "string")
+    chest_badge(k)
+    cursor_prop(k)
+    human_face(k, top=0.05)
+    my = face_y(k, k.mouth.z)
+    # The hood's shade across the upper face (the sticker's flat shadow), the eyes glinting in it.
+    # As his sticker (components/cases/art.tsx): the hood's dark down to the nose, two glowing
+    # pixel eyes in it under slanted brows, and a smirk on the lower face.
+    k.decal("ellipse", 0.0, 4.5, 10.5, 9.3, fill="shade")
+    k.decal("rect", 3.1, 0.2, 1.4, 0.95, fill="eye", ink=1.6, mirror=True)
+    k.decal("stroke", 3.3, 2.4, 1.35, 0.3, rot=0.25, fill="ink", mirror=True)
+    # A sly, lopsided smirk.
+    k.decal("arc", 0.8, my + 0.9, 1.9, 0.75, rot=0.2, fill="ink", ink=2.4)
+    k.decal("stroke", 2.75, my + 1.05, 0.35, 0.12, rot=1.1, fill="ink")
+
+
+# ---------------------------------------------------------------------------------------
 # The table
 
 CAST = {
@@ -1156,5 +1295,31 @@ CAST = {
         "flat": ["ink"],
         "tris": (7000, 2600),
         "build": mary,
+    },
+    "right-clicker": {
+        "macros": {"gender": 1.0, "age": 0.5, "muscle": 0.42, "weight": 0.3, "height": 0.58, "proportions": 0.55, "race": {"asian": 0.35, "caucasian": 0.35, "african": 0.3}},
+        "details": {},
+        "palette": {
+            "ink": INK,
+            "skin": "#E9B98F",
+            "shade": "#151829",
+            "hoodie": "#2E3350",
+            "rib": "#23273F",
+            "pocket": "#3A4062",
+            "lining": "#10121F",
+            "pants": "#1E2029",
+            "glove": "#18191E",
+            "shoe": "#3A3D4A",
+            "hair": "#1A1410",
+            "string": "#C9CBD6",
+            "badge": "#FFFFFF",
+            "cursor": "#FFFFFF",
+            "eye": "#9BF2FF",
+        },
+        "flat": ["ink", "badge"],
+        # The pixel eyes glow in the hood's dark (the cast shader's glow flag).
+        "glow": ["eye"],
+        "tris": (7000, 2600),
+        "build": right_clicker,
     },
 }

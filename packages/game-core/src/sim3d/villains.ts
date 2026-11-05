@@ -29,6 +29,7 @@
  * - The Sybil's swarm drifts at chest height, slower, and scatters when a copy pops.
  * Knocks slide a villain along the roof; nobody is popped into the air.
  */
+import { CHAPTERS } from "../rules/chapters";
 import { VILLAINS } from "../rules/data";
 import type { Stop } from "../rules/types";
 
@@ -74,6 +75,7 @@ import {
 import { docVulnerable, hitVillain, hurtHero, mercy, moveDamage, villainHits, villainTargets } from "./combat";
 import type { Zone } from "./contract";
 import { clamp, datan2, dcos, dsin, len2, len3, PI } from "./dmath";
+import { spawnRightClicker, stepRightClicker, stepRightClickerWebbed } from "./right-clicker";
 import { roll } from "./rng";
 import type { Hazard, SimState, Villain } from "./types";
 
@@ -92,6 +94,8 @@ const DOC_HOVER = 280;
 const SYBIL_HOVER = 120;
 
 export function spawnVillain(s: SimState, zone: Zone): Villain {
+  // Case File 001: the Right-Clicker on the bridge.
+  if (s.chapter) return spawnRightClicker(s, zone);
   const stop = s.config.stops[zone.index] as Extract<Stop, { kind: "fight" }>;
   const hits = villainHits(stop.level, stop.boss);
   const rate = 1 + 0.08 * (stop.level - 1) + (stop.boss ? 0.15 : 0);
@@ -1119,6 +1123,10 @@ function stepSybil(s: SimState, v: Villain, dt: number, zone: Zone) {
 
 /** Webbed after a win: flyers lose their steering and sink to hang; Sandwich Man falls where he was hit. */
 function stepWebbed(s: SimState, v: Villain, dt: number, zone: Zone) {
+  if (v.kind === "right-clicker") {
+    stepRightClickerWebbed(v, dt, zone);
+    return;
+  }
   // Flyers sink to hang this far over the floor (v3: 260 over the street).
   const hang = floorOf(zone) + 70;
   if (v.kind === "sandwich-man") {
@@ -1199,6 +1207,9 @@ export function stepVillain(s: SimState, dt: number) {
       break;
     case "sybil":
       stepSybil(s, v, vdt, zone);
+      break;
+    case "right-clicker":
+      stepRightClicker(s, v, vdt, zone);
       break;
   }
   if (s.mode === "fight") heroContact(s, v);
@@ -1343,5 +1354,6 @@ export function stepHazards(s: SimState, dt: number) {
 
 /** The villain's taunt and defeat line, for banners. */
 export function villainLines(v: Villain) {
+  if (v.kind === "right-clicker") return { taunt: CHAPTERS["case-001"].villain.taunt, defeat: CHAPTERS["case-001"].villain.defeat };
   return { taunt: VILLAINS[v.kind].taunt, defeat: VILLAINS[v.kind].defeat };
 }

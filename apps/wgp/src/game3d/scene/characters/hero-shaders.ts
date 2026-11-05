@@ -118,7 +118,12 @@ void main() {
   else if (kind > 7.5) col = uLens;
   else {
     float pxw = max(length(fwidth(vRest)) * 0.577, 1e-4);
-    col = mix(uSuit, uWeb, web(vWebP, vWebQ, vWebR, pxw));
+    // A hit (or SAVED!) blinks the suit hot, in its own colour, under white Ben-Day dots;
+    // never a flat wash toward white: far off the web fades out, and a washed-out suit reads
+    // as a bare, pale figure (a mannequin). The ink and lenses don't blink.
+    vec3 hot = mix(uSuit / max(max(uSuit.r, uSuit.g), max(uSuit.b, 0.05)), vec3(1.0), 0.12);
+    vec3 suit = mix(mix(uSuit, hot, uFlash), vec3(1.0), uFlash > 0.0 ? halftone(uFlash * 0.18) : 0.0);
+    col = mix(suit, uWeb, web(vWebP, vWebQ, vWebR, pxw));
     vec3 n = normalize(vNormalW);
     float l = dot(n, uLight) - (1.0 - vAO) * uAo;
     vec3 shade = vec3(1.0);
@@ -140,7 +145,6 @@ void main() {
     col = mix(col, vec3(0.62, 0.74, 1.0), back * 0.4);
     glow = rim * 0.22 + back * 0.28;
   }
-  col = mix(col, vec3(1.0), uFlash);
   // Alpha: the bloom's inverted glow (render/post-shaders.ts).
   gl_FragColor = vec4(mix(col, uFog, uFogMix), 1.0 - glow * (1.0 - uFogMix));
 }

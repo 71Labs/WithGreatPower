@@ -21,7 +21,7 @@ import type { BodyModel } from "./model";
 import type { Rig } from "./rig";
 import { HULL_FRAGMENT } from "./shaders";
 
-const SHAPES: Record<CastDecal["shape"], number> = { ellipse: 0, ring: 1, lower: 2, stroke: 3, upper: 4, arc: 5, jag: 6, teeth: 7 };
+const SHAPES: Record<CastDecal["shape"], number> = { ellipse: 0, ring: 1, lower: 2, stroke: 3, upper: 4, arc: 5, jag: 6, teeth: 7, rect: 8 };
 /** How far the baked AO pushes a crease down the bands. */
 const AO_STRENGTH = 0.6;
 /** The hull sits this far behind the body along the view (metres), as on the hero. */
@@ -54,7 +54,7 @@ export function castUniforms(meta: CastMeta, colors?: string[]) {
   const hex = colors ?? meta.palette;
   for (let i = 0; i < CAST_PALETTE; i++) {
     pal.push(v3(hex[i] ?? "#FF00FF"));
-    flags.push((meta.flat.includes(i) ? 1 : 0) + (meta.gloss.includes(i) ? 2 : 0));
+    flags.push((meta.flat.includes(i) ? 1 : 0) + (meta.gloss.includes(i) ? 2 : 0) + (meta.glow?.includes(i) ? 4 : 0));
   }
   const list = expandCastDecals(meta.decals);
   const a: Vector4[] = [];
@@ -75,10 +75,12 @@ export function castUniforms(meta: CastMeta, colors?: string[]) {
   return { pal, flags, a, b, c, n: list.length };
 }
 
-export function castMaterial(shared: SharedUniforms, meta: CastMeta, k: number, opts: { colors?: string[]; poses?: { texture: DataTexture; bones: number } } = {}): ShaderMaterial {
+export function castMaterial(shared: SharedUniforms, meta: CastMeta, k: number, opts: { colors?: string[]; poses?: { texture: DataTexture; bones: number }; jpeg?: boolean } = {}): ShaderMaterial {
   const u = castUniforms(meta, opts.colors);
   const defines: Record<string, string> = {};
   if (meta.web) defines.USE_WEB = "";
+  // Case file 001's captive Mary: the compressed-screenshot look (cast-shaders.ts JPEG_*).
+  if (opts.jpeg) defines.USE_JPEG = "";
   if (opts.poses) {
     defines.USE_SKINNING = "";
     defines.USE_POSES = "";
@@ -112,6 +114,7 @@ export function castMaterial(shared: SharedUniforms, meta: CastMeta, k: number, 
       uGlitch: { value: 0 },
       uWebColor: { value: v3(meta.palette[meta.names.indexOf("web")] ?? "#B6A2EC") },
       uWebHalf: { value: WEB_HALF * k },
+      ...(opts.jpeg ? { uJpeg: { value: 0 }, uJpegLevels: { value: 32 }, uJpegGrid: { value: new Vector3(0, 0, 1) }, uJpegSnap: { value: 0 } } : {}),
       ...(opts.poses
         ? { boneTexture: { value: opts.poses.texture }, bindMatrix: { value: new Matrix4() }, bindMatrixInverse: { value: new Matrix4() }, uBones: { value: opts.poses.bones } }
         : {}),
@@ -131,10 +134,12 @@ export class CastModel implements BodyModel {
   private readonly geos = new Map<Lod, BufferGeometry>();
   lod: Lod;
 
+  /** `jpeg`: Case file 001's compressed-screenshot look (captive Mary). */
   constructor(
     readonly asset: CastAsset,
     shared: SharedUniforms,
     lods: Lod[],
+    opts: { jpeg?: boolean } = {},
   ) {
     const k = this.k;
     this.group.name = `cast-${asset.meta.who}`;
@@ -146,8 +151,8 @@ export class CastModel implements BodyModel {
     this.geos.set("min", light);
     this.lod = this.geos.has("hi") ? "hi" : "lo";
     const first = this.geos.get(this.lod)!;
-    this.fill = castMaterial(shared, asset.meta, k);
-    this.ink = hullMaterial(shared, this.fill);
+    this.fill = castMaterial(shared, asset.meta, k, { jpeg: opts.jpeg });
+    this.ink = hullMaterial(shared, this.fill, undefined, { jpeg: opts.jpeg });
     this.ink.uniforms.uHullBack.value = HULL_BACK * k;
     this.body = new SkinnedMesh(first, this.fill);
     this.hull = new SkinnedMesh(first, this.ink);

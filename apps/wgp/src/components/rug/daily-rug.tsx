@@ -8,7 +8,9 @@ import { markEditionRead, useUnreadEdition } from "@/components/game/shell";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight } from "@/components/icons";
 import { AVATARS } from "@/components/cast";
+import { CaseRugLead } from "@/components/cases/rug-lead";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
+import { rugLeadFor, useCaseMarks } from "@/lib/cases/local";
 import { castById } from "@wgp/game-core/cast";
 import type { Edition } from "@wgp/game-core/types";
 
@@ -40,12 +42,14 @@ function Masthead({ dateline, issue }: { dateline: string; issue?: string }) {
   );
 }
 
-function LeadStory({ edition }: { edition: Edition }) {
+function LeadStory({ edition, second = false }: { edition: Edition; /** Under a case's lead: the night's story a size down, below a rule. */ second?: boolean }) {
   return (
-    <section aria-labelledby="lead-headline" className="flex min-w-0 flex-col gap-4">
+    <section aria-labelledby="lead-headline" className={`flex min-w-0 flex-col gap-4 ${second ? "border-t-[3px] border-game-ink pt-4" : ""}`}>
       <h2
         id="lead-headline"
-        className="font-display text-[clamp(1.875rem,1.3rem+2.6vw,3.25rem)] font-bold uppercase leading-[0.95] tracking-[-0.03em] text-game-ink [overflow-wrap:anywhere]"
+        className={`font-display font-bold uppercase tracking-[-0.03em] text-game-ink [overflow-wrap:anywhere] ${
+          second ? "text-[clamp(1.375rem,1.1rem+1.2vw,2rem)] leading-[1]" : "text-[clamp(1.875rem,1.3rem+2.6vw,3.25rem)] leading-[0.95]"
+        }`}
       >
         {edition.headline}
       </h2>
@@ -121,6 +125,7 @@ export function DailyRugScreen() {
   const latestNight = save?.editions[0]?.night;
 
   const unread = useUnreadEdition(save);
+  const marks = useCaseMarks();
 
   // The paper lands: its jingle over the hub theme, and the snap of newsprint.
   useEffect(() => {
@@ -138,6 +143,9 @@ export function DailyRugScreen() {
     markEditionRead(latestNight);
   }, [latestNight, unread]);
 
+  // A case closed since this edition went to print leads the front page.
+  const caseLead = rugLeadFor(marks, latestNight ?? 0);
+
   if (!save) return <GameLoading />;
   const [latest, ...older] = save.editions;
 
@@ -148,10 +156,11 @@ export function DailyRugScreen() {
         className={`flex flex-col gap-6 rounded-[22px] border-[2.5px] border-game-ink bg-game-paper px-4 pb-6 pt-5 text-game-ink shadow-[var(--game-shadow)] sm:px-8 sm:pb-8 sm:pt-7 ${ON_PAPER}`}
       >
         <Masthead
-          dateline={latest ? `Night ${latest.night} · Late edition` : `Night ${save.night}`}
-          issue={latest ? `No. ${latest.night}` : "No edition yet"}
+          dateline={caseLead ? `${latest ? `Night ${latest.night}` : `Night ${save.night}`} · Extra edition` : latest ? `Night ${latest.night} · Late edition` : `Night ${save.night}`}
+          issue={latest ? `No. ${latest.night}` : caseLead ? "Extra" : "No edition yet"}
         />
-        {latest ? <FrontPage save={save} edition={latest} /> : <EmptyFrontPage />}
+        {caseLead ? <CaseRugLead hero={caseLead.hero || save.hero.name.trim()} /> : null}
+        {latest ? <FrontPage save={save} edition={latest} second={!!caseLead} /> : caseLead ? null : <EmptyFrontPage />}
         <MarketMovers />
       </article>
 
@@ -160,10 +169,10 @@ export function DailyRugScreen() {
   );
 }
 
-function FrontPage({ save, edition }: { save: HeroSave; edition: Edition }) {
+function FrontPage({ save, edition, second = false }: { save: HeroSave; edition: Edition; second?: boolean }) {
   return (
     <>
-      <LeadStory edition={edition} />
+      <LeadStory edition={edition} second={second} />
       <div className="grid gap-6 md:grid-cols-2 md:gap-8">
         <ReaderPoll edition={edition} heroName={save.hero.name.trim()} />
         {edition.quest ? <QuestBox save={save} quest={edition.quest} /> : null}

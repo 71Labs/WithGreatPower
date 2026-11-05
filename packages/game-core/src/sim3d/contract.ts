@@ -2,7 +2,9 @@
  * The frozen v1 contract between the 3D sim (game-core), the 3D scene (apps/wgp/src/game3d)
  * and the server verifier. Add fields freely; never rename or remove them without updating
  * every consumer in the same PR. v1.3 (ruleset 3) added the pickups, the combo, the route and
- * the hero's `controlled`; v1.4 (ruleset 4) a fight zone's `stage`.
+ * the hero's `controlled`; v1.4 (ruleset 4) a fight zone's `stage`; v1.5 (Case File 001, chapter
+ * ruleset c001-1, patrol nights untouched) the frame's `chapter`, the Right-Clicker and a
+ * villain's `aim`.
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
@@ -74,7 +76,8 @@ export interface Zone {
   center: Vec3;
   /** Arena bounds (axis-aligned), which keep villains and the camera inside. */
   bounds: { x0: number; z0: number; x1: number; z1: number; h: number };
-  villain: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil" | null;
+  /** Who fights here. Case File 001's bridge (v1.5) is the Right-Clicker's. */
+  villain: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil" | "right-clicker" | null;
   ally: "aunt-mainnet" | "uncle-gen" | "mary-jpeg" | "bearson" | "gwei" | null;
   /** Errands: where the ally stands (on the roof, or on the water tower for Gwei). Added in v1.1. */
   allyAt?: Vec3 | null;
@@ -195,12 +198,17 @@ export interface RenderFrame3D {
     controlled?: boolean;
   };
   villains: {
-    id: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil";
+    /** v1.5: "right-clicker" on Case File 001's bridge. */
+    id: "gas-goblin" | "sandwich-man" | "doc-octochain" | "sybil" | "right-clicker";
     copy: boolean;
     pos: Vec3;
     hits: number;
     hitsMax: number;
-    /** A short state word for animation ("idle", "windup", "attack", "stunned", "guard", "open"). */
+    /**
+     * A short state word for animation ("idle", "windup", "attack", "stunned", "guard", "open";
+     * "webbed" once caught). The Right-Clicker's (v1.5): "idle", "aim", "flash", "recover",
+     * "copy", "drag", "stunned", and "webbed" from the win on.
+     */
     state: string;
     /** Velocity, units per second. Added in v1.2. */
     vel?: Vec3;
@@ -216,6 +224,12 @@ export interface RenderFrame3D {
      * this angle. Added in v1.2 (ruleset 2).
      */
     bank?: number;
+    /**
+     * The Right-Clicker's SCREENSHOT cone while he aims and flashes (state "aim" or "flash"),
+     * else null: a unit xz direction (y = 0) from his position, and the cone's half-angle in
+     * radians. The hero inside it at the flash is SAVED. Absent for the patrol villains. v1.5.
+     */
+    aim?: { dir: Vec3; half: number } | null;
   }[];
   /** Hazards and projectiles: fee bombs, bread traps, goo, chain arms (as segments). */
   hazards: { kind: string; pos: Vec3; to?: Vec3; r: number; armed: boolean }[];
@@ -234,6 +248,24 @@ export interface RenderFrame3D {
   combo?: { count: number; multiplier: number; ticksLeft: number };
   /** The remaining stop centres in order (the current stop first), for the map. Added in v1.3. */
   route?: Vec3[];
+  /**
+   * A story chapter's night (Case File 001), else null. v1.5. Clues and copies keep their
+   * order (copies by id, popped ones included, so the scene can play the pop); positions are
+   * the sim's.
+   * - phase: investigate (find the clues), standoff (the Right-Clicker on the deck), rescue
+   *   (restore Mary), done (she's free; the night ends a beat later).
+   * - clues: on roofs, feet level; found within CLUE_REACH (140) of the hero's centre across
+   *   and 1.5 times that up and down.
+   * - captive: Mary on the deck (feet level); restore 0–1, filled by holding the web beside her.
+   * - copies: the paper cutouts; `yaw` turns the cutout's front (+z) to face (sin yaw, 0, cos yaw).
+   */
+  chapter?: {
+    id: "case-001";
+    phase: "investigate" | "standoff" | "rescue" | "done";
+    clues: { id: "tabs" | "cursor" | "pixels"; pos: Vec3; found: boolean }[];
+    captive: { pos: Vec3; restore: number; freed: boolean } | null;
+    copies: { id: number; pos: Vec3; yaw: number; alive: boolean }[];
+  } | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */
