@@ -21,11 +21,11 @@ import { reduce } from "../src/rules/engine";
 import type { PowerId, Save, Stop, VillainId } from "../src/rules/types";
 import { abilityBlocked, gweiBlocked } from "../src/sim3d/abilities";
 import { groundBelow } from "../src/sim3d/city";
-import { isVulnerable, nearestTarget } from "../src/sim3d/combat";
+import { isVulnerable, nearestTarget, takesHit } from "../src/sim3d/combat";
 import type { InputFrame } from "../src/sim3d/contract";
 import { dirIndex, len2, len3 } from "../src/sim3d/dmath";
 import { botFrame, newBotMemory, type BotMemory } from "../src/sim3d/bot";
-import type { SimEvent, SimState } from "../src/sim3d/types";
+import type { SimEvent, SimState, SimVillainId } from "../src/sim3d/types";
 import { heroSave } from "./helpers";
 
 export type FightPolicy = "bot" | "simple" | "average" | "good" | "idle";
@@ -34,7 +34,7 @@ export const VILLAIN_IDS = Object.keys(VILLAINS) as VillainId[];
 
 /* ------------------------------------------------------------------ the players */
 
-interface PlayerMem {
+export interface PlayerMem {
   t: number;
   /** A deterministic per-player random stream (the "human" coin flips). */
   rng: number;
@@ -52,7 +52,7 @@ interface PlayerMem {
   bot: BotMemory;
 }
 
-const newPlayerMem = (seed: number): PlayerMem => ({
+export const newPlayerMem = (seed: number): PlayerMem => ({
   t: 0,
   rng: seed >>> 0 || 1,
   stickDir: 0,
@@ -67,7 +67,7 @@ const newPlayerMem = (seed: number): PlayerMem => ({
   bot: newBotMemory(),
 });
 
-function coin(m: PlayerMem): number {
+export function coin(m: PlayerMem): number {
   // xorshift32
   let x = m.rng;
   x ^= x << 13;
@@ -101,7 +101,7 @@ const SKILL: Record<"simple" | "average" | "good", Skill> = {
 };
 
 /** The big, telegraphed attacks a player can see coming. */
-const WINDUPS = new Set(["Glider dive", "Front-run", "Cross-chain slam", "Eight-arm flurry", "Fake vote", "Bread trap", "Fee bomb"]);
+const WINDUPS = new Set(["Glider dive", "Front-run", "Cross-chain slam", "Eight-arm flurry", "Fake vote", "Bread trap", "Fee bomb", "Screenshot"]);
 
 /** The power slot holding `id`, or −1. */
 const slotOf = (s: SimState, id: PowerId) => s.powers.findIndex((p) => p.id === id);
@@ -147,7 +147,7 @@ function shotFor(s: SimState, m: PlayerMem, skill: Skill, dist: number): InputFr
 }
 
 /** A human-ish player's frame in a fight. `events` are last tick's. */
-function playerFrame(policy: "simple" | "average" | "good", s: SimState, m: PlayerMem, events: SimEvent[]): InputFrame {
+export function playerFrame(policy: "simple" | "average" | "good", s: SimState, m: PlayerMem, events: SimEvent[]): InputFrame {
   const skill = SKILL[policy];
   const h = s.hero;
   const v = s.villain!;
@@ -158,7 +158,8 @@ function playerFrame(policy: "simple" | "average" | "good", s: SimState, m: Play
   const hd = len2(dx, dz);
   const dist = len3(dx, t.y - h.y, dz);
   // What a player sees: not guarding, or stumbling or stalled after an attack (Doc: arms in).
-  const open = isVulnerable(v) && (v.invuln <= 0 || ((v.kind === "gas-goblin" || v.kind === "sandwich-man") && v.phase === "recover"));
+  // (The Right-Clicker's openings are his reload and his stagger; a paper copy in the way is always open.)
+  const open = takesHit(v) || (v.kind === "right-clicker" && t.body >= 0);
 
   // Dodges: a wind-up seen (after the reaction delay), sideways to the line between you.
   if (skill.dodge > 0) {
@@ -245,7 +246,7 @@ function fightFrame(policy: FightPolicy, s: SimState, m: PlayerMem, events: SimE
 /* ------------------------------------------------------------------ measuring */
 
 export interface FightStats {
-  villain: VillainId;
+  villain: SimVillainId;
   level: number;
   boss: boolean;
   policy: FightPolicy;
@@ -608,7 +609,7 @@ export function byKey(fs: FightStats[], key: (f: FightStats) => string): [string
 
 /** One fight's motion, tick by tick, for the camera report in apps/wgp (it rebuilds the city from seed and stops). */
 export interface FightTrack {
-  villain: VillainId;
+  villain: SimVillainId;
   policy: FightPolicy;
   seed: number;
   stops: Stop[];

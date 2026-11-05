@@ -1,0 +1,20 @@
+{
+  "ruleset": "c001-1",
+  "logRuleset": 201330948,
+  "patrolRuleset": 4,
+  "case": {
+    "ok": true,
+    "hash": "cc173491",
+    "checkpoints": [
+      "cdd731cd",
+      "2e1eb325",
+      "95de1d16",
+      "9e86f3a5",
+      "ffe2cbff"
+    ],
+    "score": 0,
+    "ticks": 3181,
+    "bytes": 1520,
+    "cleared": 1
+  }
+}
