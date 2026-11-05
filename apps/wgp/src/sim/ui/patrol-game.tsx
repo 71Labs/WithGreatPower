@@ -456,7 +456,7 @@ function PlaySurface({ save }: { save: HeroSave }) {
           />
         ) : null}
         {introStop && introStop.kind === "fight" ? <EncounterBanner stop={introStop} index={hud!.index} total={stops.length} /> : null}
-        {hud?.mode === "won" && hud.villain ? <WonCaption villain={hud.villain.kind} /> : null}
+        {hud?.mode === "won" && hud.villain && hud.villain.kind !== "right-clicker" ? <WonCaption villain={hud.villain.kind} /> : null}
       </div>
       {errandStop && errandStop.kind === "errand" && !paused ? (
         <ErrandSheet

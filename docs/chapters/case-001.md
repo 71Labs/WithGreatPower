@@ -128,13 +128,16 @@ Also on chapter nights:
     villain: { name: "The Right-Clicker"; hits; hitsMax; state /* the render state word */; open /* a blow lands now */; guard } | null;
     saved: boolean /* frozen by a SCREENSHOT now */; restore: number /* 0..1, two decimals */; beside: boolean /* beside Mary */; freed: boolean }
   ```
-  The patrol `villain` field stays null for the Right-Clicker, because the patrol villain bar draws a sticker face he doesn't have. Use `chapter.villain`: "Saving…" while `state === "aim"`, "Open: hit him" while `open` (his reload or stagger). Clue pins come from `frame.chapter.clues`.
+  - **The patrol `villain` field:** set for the Right-Clicker through the standoff, so on a phone the minimap gives its place to the villain bar. Its `kind` is `"right-clicker"` (`HudSnapshot.villain.kind` widens to `VillainId | "right-clicker"`), and `name` is "The Right-Clicker". `opening` means his reload or stagger, and `guard` his guard. It is null in the rescue, when he's beaten.
+  - **No sticker face yet:** the patrol villain bar skips its face for him, and `WonCaption` isn't shown for him.
+  - **`chapter.villain`:** adds his state word. Show "Saving…" while `state === "aim"`, and "Open: hit him" while `open`.
+  - **Clue pins:** come from `frame.chapter.clues`.
 - **The ending:** `endNight` answers `NightOutcome` `{ kind: "case", chapter, cleared, ticks, filed: "verified" | "local" | "unranked", firstClear, record: CaseRecord, badge: { status, tokenId, tx } | null, runId, save }`.
   - **Failures:** a failed submit is `submit-failed`, a refused log `rejected`.
   - **A guest's clear:** it closes the case in the browser's save, unverified, so the ending shows "Sign in to file the case".
   - **Placeholders to replace:** `NightResults` hands chapters to `app/play/patrol/case-results.tsx`, a plain placeholder for C's "Case closed" ending. The patrol's `EncounterBanner` and `WonCaption` are skipped on chapter nights (C's own banner goes there).
 - **Copy:** `CHAPTERS["case-001"]` holds the clue notes, the villain's lines and Mary's "gm". `villainCard(id)` gives any villain's name and lines, the Right-Clicker's included.
-- **The case files page:** `GET /api/cases` (below) and `getCases()` in `src/lib/api/client.ts`.
+- **The case files page:** `GET /api/cases` (below). The browser helper `getCases()` comes from the UI build; this branch adds none, to keep the merge clean.
 
 ## For B: scene
 
@@ -201,7 +204,7 @@ Also on chapter nights:
   - `captive` is non-null for the whole chapter; `copies` keeps popped ones.
 - **Sim modes:** the rescue runs in sim mode `"fight"`; the freed beat is `"won"`, then `"done"`.
 - **The fight's numbers:** the Right-Clicker is level 2 (a level 1–2 villain, mercy 2/3) with a 4 s guard. His aim and CTRL+C are committed (a blow doesn't cancel them), so not dodging costs damage.
-- **The patrol HUD's `villain`:** it is null for him; `HudSnapshot.chapter` carries him.
+- **The patrol HUD's `villain`:** it carries him through the standoff, with `kind: "right-clicker"` (a widened type). `HudSnapshot.chapter` adds his state word.
 - **The save and the endpoint:**
   - `CaseRecord` adds `verified`.
   - `GET /api/cases` adds `number`, `title`, `clearedAt`, `badge.tokenId` and `active` (a run in flight: "In progress"). `status` stays `new | cleared`.

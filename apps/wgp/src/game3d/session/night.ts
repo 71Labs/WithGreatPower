@@ -23,7 +23,8 @@ import { chapterCleared, finishRun, resumeRun, runHash, runLog, runScore, startC
 import type { CaseRecord, ChapterId, Save } from "@wgp/game-core/types";
 
 import { adoptServerSave, commitLocalSave, getSave, refreshAccount } from "@/game/store";
-import { getLeaderboard, startRankedRun, submitRankedRun, type CaseOutcome } from "@/lib/api/client";
+import { getLeaderboard, startRankedRun, submitRankedRun } from "@/lib/api/client";
+import type { CaseOutcome } from "@/server/db/cases";
 
 import { clearRecording, type Recording, type RecordingMode } from "./recorder";
 

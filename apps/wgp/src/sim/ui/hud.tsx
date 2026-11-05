@@ -145,7 +145,8 @@ function VillainBar({ hud }: { hud: HudSnapshot }) {
   const doc = v.kind === "doc-octochain";
   return (
     <StickerPanel className="flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4">
-      <Face id={v.kind} className="size-9 rounded-full" />
+      {/* The Right-Clicker (Case File 001) has no sticker face yet. */}
+      {v.kind !== "right-clicker" ? <Face id={v.kind} className="size-9 rounded-full" /> : null}
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex items-center gap-1.5 text-[13px] font-semibold leading-4">
           <span className="truncate">{v.name}</span>

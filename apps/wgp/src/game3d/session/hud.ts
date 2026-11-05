@@ -101,12 +101,13 @@ export function hudSnapshot(s: SimState, opts: { status: LoopStatus; countdown: 
       };
     }),
     gwei: { left: s.gweiLeft, ready: !gweiBlocked(s) },
-    // The Right-Clicker has no patrol bar (no avatar, not in VILLAINS): `chapter.villain` carries him.
+    // Set for the Right-Clicker too, through the standoff (the phone HUD gives the minimap's spot
+    // to the villain bar), but not in the rescue, when he's beaten and his copies come at you.
     villain:
-      v && v.kind !== "right-clicker" && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko")
+      v && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko") && !(s.chapter && s.chapter.phase !== "standoff")
         ? {
             kind: v.kind,
-            name: VILLAINS[v.kind].name,
+            name: v.kind === "right-clicker" ? villainCard(v.kind).name : VILLAINS[v.kind].name,
             hits: v.hits,
             hitsMax: v.hitsMax,
             open: takesHit(v),

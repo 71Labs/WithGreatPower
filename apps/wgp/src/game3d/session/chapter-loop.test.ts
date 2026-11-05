@@ -45,8 +45,10 @@ describe("a chapter night in the 3D loop", () => {
       if (loop.view.villains.some((v) => v.id === "right-clicker" && v.aim)) aim = true;
       const hud = loop.hud.getSnapshot();
       if (hud && hud.chapter) {
-        expect(hud.villain).toBeNull();
         expect(hud.chapter.clues).toBe(3);
+        // The villain bar through the standoff (so the phone HUD makes room), none in the rescue.
+        if (hud.chapter.phase === "standoff" && (hud.mode === "fight" || hud.mode === "intro")) expect(hud.villain).toMatchObject({ kind: "right-clicker", name: "The Right-Clicker", hitsMax: 8 });
+        if (hud.chapter.phase === "rescue" || hud.chapter.phase === "investigate") expect(hud.villain).toBeNull();
       }
     }
     expect(loop.status).toBe("done");

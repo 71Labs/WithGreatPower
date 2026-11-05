@@ -9,7 +9,7 @@ import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import type { ClaimInfo } from "@/server/auth/privy-sign-in";
 import type { LeaderboardView } from "@/server/db/board-view";
-import type { CaseOutcome, CaseView } from "@/server/db/cases";
+import type { CaseOutcome } from "@/server/db/cases";
 import type { ImportResult } from "@/server/db/migrate-save";
 import type { StartedRun } from "@/server/db/runs";
 import type { ChainStatus } from "@/server/near/status";
@@ -48,10 +48,6 @@ export type SubmitResponse = {
   idempotent: boolean;
   chapter?: CaseOutcome;
 };
-
-/** GET /api/cases (src/server/db/cases.ts). */
-export type CasesResponse = { signedIn: boolean; cases: CaseView[] };
-export type { CaseOutcome, CaseView };
 
 export interface ActionResponse {
   applied: boolean;
@@ -104,9 +100,6 @@ export const getNearAuthNonce = () => call<{ nonce: string; expiresAt: string }>
  * `chapter`: a story chapter's run (Case File 001), played with startChapterRun.
  */
 export const startRankedRun = (opts: { assist?: boolean; abandon?: boolean; chapter?: ChapterId } = {}) => call<StartedRun>("/api/runs/start", { method: "POST", json: opts });
-
-/** The case files: closed or not, best time, the badge, a run in flight. Works signed out (all new). */
-export const getCases = (signal?: AbortSignal) => call<CasesResponse>("/api/cases", { signal });
 
 /** 422 run_rejected (body.reason) · 409 rev_conflict · 410 run_expired · 409 already_submitted. */
 export const submitRankedRun = (runId: string, log: Uint8Array, clientHash: string) =>

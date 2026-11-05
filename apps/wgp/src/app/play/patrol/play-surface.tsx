@@ -546,7 +546,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         ) : null}
         {/* A chapter's stop is the bridge, not a patrol villain: its own banner and captions belong to the chapter HUD. */}
         {!ended && !chapter && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
-        {!ended && hudMode === "won" && villainKind ? <WonCaption villain={villainKind} /> : null}
+        {!ended && hudMode === "won" && villainKind && villainKind !== "right-clicker" ? <WonCaption villain={villainKind} /> : null}
         {countdown && !ended ? (
           // Off the hero, who stands in the middle: below the feet, or above the head on a phone held sideways.
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%+128px)] flex justify-center short:top-[calc(50%-112px)]">

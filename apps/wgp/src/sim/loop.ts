@@ -62,13 +62,14 @@ export interface HudSnapshot {
    * `open`: a direct hit would land now. 3D (ruleset 4) adds `opening` (Gas Goblin's stall or
    * Sandwich Man's stumble, through his guard) and `guard` (blocking after a hit).
    */
-  villain: { kind: VillainId; name: string; hits: number; hitsMax: number; open: boolean; opening?: boolean; guard?: boolean; boss: boolean; quest: boolean } | null;
+  villain: { kind: VillainId | "right-clicker"; name: string; hits: number; hitsMax: number; open: boolean; opening?: boolean; guard?: boolean; boss: boolean; quest: boolean } | null;
   buffs: { shield: boolean; cloak: boolean; finality: boolean; fork: boolean; slowmo: boolean };
   /** True until the first web of the session. */
   hint: boolean;
   /**
    * 3D, a story chapter's night (Case File 001; game3d/session/hud.ts), else absent or null.
-   * The patrol `villain` stays null for the Right-Clicker: his bar is drawn from this.
+   * `villain` is set for the Right-Clicker too (kind "right-clicker": no sticker face, not in
+   * VILLAINS); this adds his state word, SAVED, the clues and Mary's restore.
    */
   chapter?: ChapterHud | null;
 }
