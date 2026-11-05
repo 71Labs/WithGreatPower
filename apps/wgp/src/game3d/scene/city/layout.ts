@@ -13,6 +13,7 @@ import type { Building, Cable, City, Prop, Vec3 } from "@wgp/game-core/sim3d/con
 import { C, buildingFill, mixRgb, type RGB } from "../palette";
 import { addDetails } from "./details";
 import { TANK_EAVE } from "./geometry";
+import { drawnProps } from "./props";
 import { KIND, WINDOW_STYLE, windowStyle, type BoxSpec, type PushBox } from "./kinds";
 
 export { KIND, WINDOW_STYLE, windowStyle, type BoxSpec } from "./kinds";
@@ -138,10 +139,12 @@ export function buildCityLayout(city: City, opts: { details?: boolean } = {}): C
   // Where allies stand: a water tower with one on top gets a flat roof (TankSpec.flat).
   const allies = city.zones.flatMap((z) => (z.allyAt ? [z.allyAt] : []));
   const carries = (p: Prop) => p.kind === "water-tower" && allies.some((a) => Math.abs(a.x - p.at.x) < 1 && Math.abs(a.z - p.at.z) < 1 && Math.abs(a.y - (p.at.y + p.h)) < 1);
-  for (const p of city.props) {
+  // The props as drawn: none inside another or inside a setback (city/props.ts).
+  for (const d of drawnProps(city)) {
+    const p = d.y === d.prop.at.y && d.h === d.prop.h ? d.prop : { ...d.prop, at: { ...d.prop.at, y: d.y }, h: d.h };
     const owner = p.buildingId !== null ? byId.get(p.buildingId) : undefined;
     const ref = owner ? { x: (owner.x0 + owner.x1) / 2, z: (owner.z0 + owner.z1) / 2 } : { x: p.at.x, z: p.at.z };
-    addProp(p, ref, push, tanks, texts, carries(p));
+    addProp(p, ref, push, tanks, texts, carries(p), d.bare);
   }
 
   if (city.bridge) addBridge(city, push);
@@ -151,7 +154,7 @@ export function buildCityLayout(city: City, opts: { details?: boolean } = {}): C
   return { boxes, tanks, sectors, texts };
 }
 
-function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: TankSpec[], texts: string[], flat = false) {
+function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: TankSpec[], texts: string[], flat = false, bare = false) {
   const { x, y, z } = p.at;
   const yaw = (p.facing & 3) * QUARTER;
   const at = (lx: number, lz: number) => {
@@ -180,8 +183,10 @@ function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: Tank
       break;
     }
     case "antenna": {
-      push({ x, y, z, w: 18, h: 12, d: 18, color: C.rooftop, kind: KIND.solid, hull: 0, ref, lod: 1 });
-      push({ x, y: y + 10, z, w: 5, h: p.h - 10, d: 5, color: C.ink, kind: KIND.solid, hull: 0, ref });
+      // A bare mast (city/props.ts) has no foot block: it rises straight from where it stands.
+      if (!bare) push({ x, y, z, w: 18, h: 12, d: 18, color: C.rooftop, kind: KIND.solid, hull: 0, ref, lod: 1 });
+      const foot = bare ? 0 : 10;
+      push({ x, y: y + foot, z, w: 5, h: p.h - foot, d: 5, color: C.ink, kind: KIND.solid, hull: 0, ref });
       for (let i = 1; i <= 2; i++) {
         const half = 14 - i * 3;
         push({ x, y: y + (p.h * i) / 3, z, w: half * 2, h: 3, d: 3, yaw: i % 2 ? 0 : QUARTER, color: C.ink, kind: KIND.solid, hull: 0, ref, lod: 1 });
@@ -219,8 +224,9 @@ function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: Tank
       // Jib forward, counter-jib back, both along the facing.
       const jib = at(0, p.w / 2 - 6);
       push({ x: jib.x, y: top - 4, z: jib.z, w: 16, h: 16, d: p.w + 12, yaw, color: C.crane, kind: KIND.solid, hull: 0.8, ref });
+      // The counter-jib a hair slimmer than the jib it meets over the mast: no shared faces to flicker.
       const cj = at(0, -p.w * 0.175);
-      push({ x: cj.x, y: top - 4, z: cj.z, w: 16, h: 16, d: p.w * 0.35, yaw, color: C.crane, kind: KIND.solid, hull: 0.8, ref });
+      push({ x: cj.x, y: top - 4, z: cj.z, w: 15, h: 15, d: p.w * 0.35, yaw, color: C.crane, kind: KIND.solid, hull: 0.8, ref });
       const cw = at(0, -p.w * 0.3);
       push({ x: cw.x, y: top - 30, z: cw.z, w: 36, h: 26, d: 36, yaw, color: C.rooftop, kind: KIND.solid, hull: 0.8, ref });
       push({ x, y: top - 44, z, w: 36, h: 32, d: 36, yaw, color: C.crane, kind: KIND.solid, hull: 0.8, ref });
