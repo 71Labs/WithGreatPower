@@ -94,8 +94,36 @@ export function pickClueRoofs(city: City): CaseSite[] {
   return out;
 }
 
+/** The deck's stage: its centre and the bridge's axis. */
+function deckFrame(city: City): { centre: Vec3; axis: { x: number; z: number } } {
+  const st = city.zones.find((z) => z.stage)?.stage;
+  const centre = st ? v((st.x0 + st.x1) / 2, st.y, (st.z0 + st.z1) / 2) : city.start;
+  return { centre, axis: (city.bridge?.axis ?? "x") === "x" ? { x: 1, z: 0 } : { x: 0, z: 1 } };
+}
+
+/** Where captive Mary stands on the deck: `along` the bridge from the stage's centre, `across` it. */
+const MARY_AT = { along: -60, across: 20 };
+
+/**
+ * The night's city, plus a lab-only errand zone with no ally on the deck where Mary stands: in
+ * the rescue the frame says "errand" there, so the director's two-shot frames the hero and her
+ * (the chase camera alone keeps her small behind him). Never in a real night.
+ */
 export function caseCity(seed = 7): City {
-  return generateCity(seed, CASE_STOPS);
+  const city = generateCity(seed, CASE_STOPS);
+  const { centre, axis } = deckFrame(city);
+  const at = v(centre.x + axis.x * MARY_AT.along - axis.z * MARY_AT.across, centre.y, centre.z + axis.z * MARY_AT.along + axis.x * MARY_AT.across);
+  city.zones.push({
+    index: city.zones.length,
+    kind: "errand",
+    district: "bridge-district",
+    center: at,
+    bounds: { x0: at.x - 300, z0: at.z - 300, x1: at.x + 300, z1: at.z + 300, h: at.y + 600 },
+    villain: null,
+    ally: null,
+    allyAt: at,
+  });
+  return city;
 }
 
 export class CaseScript {
@@ -105,6 +133,7 @@ export class CaseScript {
   private readonly stop: number;
   private readonly centre: Vec3;
   private readonly axis: { x: number; z: number };
+  private readonly rescueStop: number;
   scene: CaseScene = "investigate";
   clue: ClueView = "tabs";
   phase: PhaseChoice = "cycle";
@@ -124,11 +153,12 @@ export class CaseScript {
     this.sites = pickClueRoofs(city);
     const zi = city.zones.findIndex((z) => z.stage);
     this.stop = Math.max(0, zi);
-    const z = city.zones[this.stop];
-    const st = z?.stage;
-    this.centre = st ? v((st.x0 + st.x1) / 2, st.y, (st.z0 + st.z1) / 2) : city.start;
-    const ax = city.bridge?.axis ?? "x";
-    this.axis = ax === "x" ? { x: 1, z: 0 } : { x: 0, z: 1 };
+    const { centre, axis } = deckFrame(city);
+    this.centre = centre;
+    this.axis = axis;
+    // The lab's two-shot zone (caseCity), when the city has it.
+    const ri = city.zones.findIndex((z) => z.kind === "errand" && !z.ally && !!z.allyAt && Math.abs(z.allyAt.y - centre.y) < 1);
+    this.rescueStop = ri >= 0 ? ri : this.stop;
     this.frame = {
       tick: 0,
       alpha: 1,
@@ -298,7 +328,8 @@ export class CaseScript {
       this.copiesUp = true;
       const a = this.nextCopy++;
       const b = this.nextCopy++;
-      const yaw = Math.atan2(dir.x, dir.z) + Math.PI;
+      // The prints face the hero.
+      const yaw = Math.atan2(dir.x, dir.z);
       f.chapter.copies = [
         { id: a, pos: this.deck(40, -30), yaw: yaw - 0.15, alive: true },
         { id: b, pos: this.deck(95, 25), yaw: yaw + 0.2, alive: true },
@@ -309,9 +340,10 @@ export class CaseScript {
 
   private rescue(events: ChapterEvent[]): void {
     const f = this.frame;
-    f.mode = "fight";
-    f.stop = this.stop;
-    const at = this.deck(-60, 20);
+    // The director's two-shot of the hero and Mary (the lab's zone, see caseCity).
+    f.mode = this.rescueStop !== this.stop ? "errand" : "fight";
+    f.stop = this.rescueStop;
+    const at = this.deck(MARY_AT.along, MARY_AT.across);
     const done = this.scene === "done";
     const fill = this.restore ?? Math.min(1, (this.sceneT % 5) / 3);
     const restore = done ? 1 : fill;
@@ -330,9 +362,9 @@ export class CaseScript {
     }
     this.freed = freed;
     // The hero beside her, holding web to restore her.
-    // Beside her, a little back, so the camera over his shoulder sees her.
-    const hp = this.deck(15, -50, HERO_R);
-    this.hero(hp, this.deck(-260, -40));
+    // Facing her from a few steps off, holding web to restore her.
+    const hp = this.deck(MARY_AT.along + 95, MARY_AT.across - 35, HERO_R);
+    this.hero(hp, at);
     // Beaten, he's out of the fight (his fall is the lab cast's `webbed`).
     f.villains.length = 0;
     // Two copies try to interrupt while she's saved.

@@ -16,6 +16,7 @@ import type { RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 
 import { RIGHT_CLICKER_PHASES, type ChapterEvent } from "@/game3d/scene/chapter/contract";
 import { QUALITY_PRESETS, TIERS, hasWebGL2, type QualityTier } from "@/game3d/scene/quality";
+import type { SceneCue } from "@/game3d/scene/camera/director";
 import { SceneCanvas, type SceneHandle, type SceneStats } from "@/game3d/scene/Scene";
 import { sceneEffects } from "@/game3d/session/effects";
 
@@ -106,6 +107,8 @@ export default function CaseBench() {
   const city = useMemo(() => caseCity(Number(params.get("seed")) || 7), [params]);
   const script = useMemo(() => new CaseScript(city), [city]);
   const frame = useRef<RenderFrame3D | null>(null);
+  // A night under way (no countdown), so the director runs its beats: the rescue's two-shot.
+  const cue = useRef<SceneCue | null>({ status: "live", introLeft: 0, introTotal: 0 });
   const handle = useRef<SceneHandle | null>(null);
   const readout = useRef<HTMLPreElement>(null);
   const lastStats = useRef<SceneStats | null>(null);
@@ -194,7 +197,7 @@ export default function CaseBench() {
   return (
     <div className="relative h-full w-full">
       <div className="absolute inset-0" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-        <SceneCanvas city={city} frame={frame} quality={QUALITY_PRESETS[tier]} handle={handle} reducedMotion={reduced} onStats={debug ? onStats : undefined}>
+        <SceneCanvas city={city} frame={frame} cue={cue} quality={QUALITY_PRESETS[tier]} handle={handle} reducedMotion={reduced} onStats={debug ? onStats : undefined}>
           <Driver script={script} handle={handle} paused={paused} />
         </SceneCanvas>
       </div>
