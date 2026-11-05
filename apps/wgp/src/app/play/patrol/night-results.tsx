@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { StickerButton, StickerLink } from "@/components/game/kit";
 import { BadgeCheck, CircleAlert, Coins, Medal } from "@/components/icons";
+import { CopyRaceLink } from "@/components/compete/race-link";
 import { ShareOnX } from "@/components/social/share-on-x";
 import { runShareText } from "@/lib/social/share";
 import { useAccount } from "@/game/store";
@@ -125,6 +126,8 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
           <EarnedBits bits={o.bits} />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {o.ranked ? <ShareOnX text={runShareText(o.score, o.runId)} className="w-full sm:w-auto" /> : null}
+            {/* Race my ghost: anyone with the link races this night again, against this run. */}
+            <CopyRaceLink runId={o.runId} className="w-full sm:w-auto" />
             <StickerLink href="/play/leaderboard" size="md" className="w-full sm:w-auto">
               See tonight’s board
             </StickerLink>
