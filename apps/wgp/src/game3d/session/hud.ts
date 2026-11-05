@@ -4,11 +4,41 @@
  * along it and the hero between the last stop and the next, by how much of the way there
  * is left.
  */
+import { villainCard } from "@wgp/game-core/chapters";
 import { MAX_FLUID, POWERS, VILLAINS } from "@wgp/game-core/data";
-import { abilityBlocked, gweiBlocked, inOpening, len2, stopTarget, takesHit } from "@wgp/game-core/sim3d";
+import { abilityBlocked, besideCaptive, gweiBlocked, inOpening, len2, RESTORE_TICKS, rightClickerState, stopTarget, takesHit } from "@wgp/game-core/sim3d";
 import type { SimState } from "@wgp/game-core/sim3d";
 
-import type { HudSnapshot, LoopStatus } from "@/sim/loop";
+import type { ChapterHud, HudSnapshot, LoopStatus } from "@/sim/loop";
+
+/** Case File 001's HUD fields, or null on a patrol night. */
+export function chapterHud(s: SimState): ChapterHud | null {
+  const c = s.chapter;
+  if (!c) return null;
+  const v = s.villain;
+  const fighting = !!v && v.kind === "right-clicker" && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko");
+  return {
+    id: c.id,
+    phase: c.phase,
+    cluesFound: c.clues.filter((k) => k.found).length,
+    clues: c.clues.length,
+    villain:
+      fighting && v
+        ? {
+            name: villainCard("right-clicker").name,
+            hits: v.hits,
+            hitsMax: v.hitsMax,
+            state: rightClickerState(s, v),
+            open: s.mode === "fight" && v.hits > 0 && takesHit(v),
+            guard: v.invuln > 0 && !inOpening(v),
+          }
+        : null,
+    saved: c.savedT > 0,
+    restore: Math.round((c.captive.restore / RESTORE_TICKS) * 100) / 100,
+    beside: besideCaptive(s),
+    freed: c.captive.freed,
+  };
+}
 
 /** Where each stop sits on the route bar, 0–1: evenly spaced, the last one at the end. */
 export function stopPositions(count: number): number[] {
@@ -71,8 +101,9 @@ export function hudSnapshot(s: SimState, opts: { status: LoopStatus; countdown: 
       };
     }),
     gwei: { left: s.gweiLeft, ready: !gweiBlocked(s) },
+    // The Right-Clicker has no patrol bar (no avatar, not in VILLAINS): `chapter.villain` carries him.
     villain:
-      v && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko")
+      v && v.kind !== "right-clicker" && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko")
         ? {
             kind: v.kind,
             name: VILLAINS[v.kind].name,
@@ -87,5 +118,6 @@ export function hudSnapshot(s: SimState, opts: { status: LoopStatus; countdown: 
         : null,
     buffs: { shield: h.shieldT > 0, cloak: h.cloakT > 0, finality: h.finalityT > 0, fork: h.forked, slowmo: s.slowmo > 0 },
     hint: !opts.hinted && s.index === 0 && s.mode === "travel",
+    ...(s.chapter ? { chapter: chapterHud(s) } : {}),
   };
 }

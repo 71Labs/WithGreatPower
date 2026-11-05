@@ -21,6 +21,8 @@ import { Chip } from "@/sim/ui/bits";
 import type { HeroSave } from "@/sim/ui/hooks";
 import { Results } from "@/sim/ui/results";
 
+import { CaseResults } from "./case-results";
+
 export type Ending = { kind: "submitting" } | { kind: "done"; outcome: NightOutcome };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -185,6 +187,8 @@ export function NightResults({ session, ending, onRetry }: { session: NightSessi
   useEffect(() => {
     document.getElementById("results-title")?.focus({ preventScroll: true });
   }, []);
+  // A story chapter has no patrol to sum up: its own ending (a placeholder until the UI build's).
+  if (session.chapter) return <CaseResults chapter={session.chapter} ending={ending} onRetry={onRetry} />;
   const o = ending.kind === "done" ? ending.outcome : null;
   const banked = o?.kind === "verified" || o?.kind === "guest" ? (o.save as HeroSave) : null;
   const subtitle =

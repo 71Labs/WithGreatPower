@@ -18,7 +18,8 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { castById, type CastId } from "@wgp/game-core/cast";
-import { ALLY_CAST, ERRANDS, SUITS, VILLAINS } from "@wgp/game-core/data";
+import { villainCard } from "@wgp/game-core/chapters";
+import { ALLY_CAST, ERRANDS, SUITS } from "@wgp/game-core/data";
 import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
 import type { Stop, StopResult } from "@wgp/game-core/types";
 
@@ -73,10 +74,13 @@ export interface PlaySurfaceProps {
 export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallback }: PlaySurfaceProps) {
   const { run } = session;
   const hero = run.start.hero!;
-  const stops = run.start.patrol!.stops;
+  // The sim's stops: the patrol's, or a chapter's one stage (Case File 001 has no patrol).
+  const stops = run.sim.config.stops;
+  const chapter = run.chapter;
   const colors = SUITS[hero.suit].colors;
   const loadout = useMemo(() => hero.loadout.filter((id) => hero.powers[id]), [hero]);
-  const cast = useMemo(() => [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])], [stops]);
+  // A chapter's cast: Mary (frozen on the deck) and Gwei; the Right-Clicker comes with the bridge's zone.
+  const cast = useMemo(() => (chapter ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
   const positions = useMemo(() => stopPositions(stops.length), [stops]);
 
   const [hudStore] = useState(() => new HudStore());
@@ -158,7 +162,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       switch (ev.type) {
         case "encounter": {
           const stop = stops[ev.index] as Extract<Stop, { kind: "fight" }>;
-          const v = VILLAINS[ev.villain];
+          const v = villainCard(ev.villain);
           say(`${v.name}${stop.boss ? ", the boss" : ""}${stop.quest ? ", tonight’s quest" : ""}: “${v.taunt}”`, true);
           break;
         }
@@ -172,7 +176,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           if (ev.hits > 0) say(`Hit! ${ev.hits} to go.`);
           break;
         case "fight-won":
-          say(`Webbed! ${VILLAINS[ev.villain].defeat}`, true);
+          say(`Webbed! ${villainCard(ev.villain).defeat}`, true);
           break;
         case "ko":
           say("Knocked out. Aunt Mainnet will patch you up.", true);
@@ -540,7 +544,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             }
           />
         ) : null}
-        {!ended && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
+        {/* A chapter's stop is the bridge, not a patrol villain: its own banner and captions belong to the chapter HUD. */}
+        {!ended && !chapter && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
         {!ended && hudMode === "won" && villainKind ? <WonCaption villain={villainKind} /> : null}
         {countdown && !ended ? (
           // Off the hero, who stands in the middle: below the feet, or above the head on a phone held sideways.

@@ -10,13 +10,28 @@
  *   an unreachable server each get a choice, with unranked play as the way through.
  * - At the end: submit (ranked), bank locally (guest) or just score it (unranked), and
  *   draw the results over the city.
+ * - `?case=001`: the night is that story chapter (Case File 001) instead, through the same
+ *   three ways (game3d/session/night.ts): the server's chapter run when signed in, a local
+ *   one for a guest, unranked when the server can't start one. Any night, done or not.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import type { Save } from "@wgp/game-core/types";
+import { isChapterId } from "@wgp/game-core/chapters";
+import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import { useAccount, useGame, type AccountState } from "@/game/store";
-import { beginLocal, beginRanked, clearRecording, endNight, loadRecording, resumeRecording, type NightSession, type RankedStart, type Recording } from "@/game3d/session";
+import {
+  beginLocal,
+  beginLocalChapter,
+  beginRanked,
+  clearRecording,
+  endNight,
+  loadRecording,
+  resumeRecording,
+  type NightSession,
+  type RankedStart,
+  type Recording,
+} from "@/game3d/session";
 
 import { NightResults, type Ending } from "./night-results";
 import { PlaySurface } from "./play-surface";
@@ -99,6 +114,49 @@ async function bootSignedIn(account: Extract<AccountState, { status: "signed-in"
   return rankedPhase(await beginRanked());
 }
 
+const NO_CASE: Phase = { kind: "notice", title: "This case won’t open", body: "Something’s missing from your save. Try again from the case files.", href: "/play", action: "Back to tonight" };
+
+/** A guest's chapter: a recording from before a reload, else a fresh local one. */
+async function bootGuestChapter(save: Save, chapter: ChapterId): Promise<Phase> {
+  if (!save.hero) return NO_HERO;
+  const rec = await loadRecording(chapter);
+  if (rec) {
+    const resumed = rec.mode === "guest" && !rec.playerId && rec.start.hero?.name === save.hero.name ? resumeRecording(rec) : null;
+    if (resumed) return { kind: "play", session: resumed };
+    await clearRecording(chapter);
+  }
+  const session = beginLocalChapter(save, chapter, "guest");
+  return session ? { kind: "play", session } : NO_CASE;
+}
+
+/** A signed-in chapter: the run in flight from a recording, else a new chapter run from the server. */
+async function bootSignedInChapter(account: Extract<AccountState, { status: "signed-in" }>, chapter: ChapterId): Promise<Phase> {
+  const { me } = account;
+  if (!me.save.hero) return NO_HERO;
+  const rec = await loadRecording(chapter);
+  if (rec && rec.mode !== "guest") {
+    const mine = rec.playerId === me.player.id;
+    const resumed = mine ? resumeRecording(rec) : null;
+    const live = !!resumed && (resumed.run.over || rec.mode === "unranked" || (!!rec.runId && me.activeRun?.runId === rec.runId));
+    if (resumed && live) return { kind: "play", session: resumed };
+    if (mine) await clearRecording(chapter);
+  }
+  if (me.activeRun) return { kind: "choice", choice: "run-active", message: "" };
+  return rankedPhase(await beginRanked({ chapter }));
+}
+
+/** `?case=001` (or `?case=case-001`): the chapter this page plays, or null for tonight's patrol. */
+function useChapterParam(): ChapterId | null {
+  const [chapter] = useState<ChapterId | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("case");
+    if (!raw) return null;
+    const id = raw.startsWith("case-") ? raw : `case-${raw}`;
+    return isChapterId(id) ? id : null;
+  });
+  return chapter;
+}
+
 const CHOICES = {
   "run-active": {
     eyebrow: "Ranked night",
@@ -107,6 +165,17 @@ const CHOICES = {
   },
   "daily-cap": { eyebrow: "Ranked night", title: "That’s today’s ranked nights", body: "" },
   error: { eyebrow: "Ranked night", title: "Couldn’t start a ranked night", body: "" },
+} as const;
+
+/** The same choices for a case file (it never ranks, but it's checked like a ranked night). */
+const CASE_CHOICES = {
+  "run-active": {
+    eyebrow: "Case file",
+    title: "A run is already under way",
+    body: "You started a night or a case somewhere else, maybe another tab, and this device can’t pick it up. Abandon it to open this case here; it won’t count.",
+  },
+  "daily-cap": { eyebrow: "Case file", title: "That’s today’s tries at this case", body: "" },
+  error: { eyebrow: "Case file", title: "Couldn’t open the case with the server", body: "" },
 } as const;
 
 /**
@@ -131,6 +200,7 @@ export function Night3D() {
   const [busy, setBusy] = useState(false);
   const autopilot = useUrlFlag("autopilot");
   const debug = useUrlFlag("debug");
+  const chapter = useChapterParam();
   // One boot per account state; a remount in development reuses the same promise.
   const boot = useRef<{ key: string; promise: Promise<Phase>; applied: boolean } | null>(null);
 
@@ -138,9 +208,18 @@ export function Night3D() {
   useEffect(() => {
     if (phase.kind !== "boot" || account.status === "loading") return;
     if (account.status === "guest" && !guestSave) return;
-    const key = account.status === "signed-in" ? `in:${account.me.player.id}` : "guest";
+    const key = `${account.status === "signed-in" ? `in:${account.me.player.id}` : "guest"}${chapter ? `:${chapter}` : ""}`;
     if (boot.current?.key === key && boot.current.applied) return;
-    if (boot.current?.key !== key) boot.current = { key, promise: account.status === "signed-in" ? bootSignedIn(account) : bootGuest(guestSave!), applied: false };
+    if (boot.current?.key !== key) {
+      const promise = chapter
+        ? account.status === "signed-in"
+          ? bootSignedInChapter(account, chapter)
+          : bootGuestChapter(guestSave!, chapter)
+        : account.status === "signed-in"
+          ? bootSignedIn(account)
+          : bootGuest(guestSave!);
+      boot.current = { key, promise, applied: false };
+    }
     const pending = boot.current;
     let live = true;
     void pending.promise.then((next) => {
@@ -151,20 +230,20 @@ export function Night3D() {
     return () => {
       live = false;
     };
-  }, [phase.kind, account, guestSave]);
+  }, [phase.kind, account, guestSave, chapter]);
 
-  const play = (session: NightSession | null) => setPhase(session ? { kind: "play", session } : { kind: "classic" });
+  const play = (session: NightSession | null) => setPhase(session ? { kind: "play", session } : chapter ? NO_CASE : { kind: "classic" });
 
   const startRanked = async (abandon: boolean) => {
     setBusy(true);
-    const next = rankedPhase(await beginRanked({ abandon }));
+    const next = rankedPhase(await beginRanked({ abandon, ...(chapter ? { chapter } : {}) }));
     setBusy(false);
     setPhase(next);
   };
 
   const playUnranked = () => {
     if (account.status !== "signed-in") return;
-    play(beginLocal(account.me.save, "unranked", account.me.player.id));
+    play(chapter ? beginLocalChapter(account.me.save, chapter, "unranked", account.me.player.id) : beginLocal(account.me.save, "unranked", account.me.player.id));
   };
 
   const session = phase.kind === "play" ? phase.session : null;
@@ -186,12 +265,18 @@ export function Night3D() {
   if (phase.kind === "boot") body = <Loading />;
   else if (phase.kind === "notice") body = <Notice title={phase.title} body={phase.body} href={phase.href} action={phase.action} />;
   else if (phase.kind === "choice") {
-    const c = CHOICES[phase.choice];
+    const c = (chapter ? CASE_CHOICES : CHOICES)[phase.choice];
     body = (
       <Choice
         eyebrow={c.eyebrow}
         title={c.title}
-        body={phase.choice === "run-active" ? c.body : phase.choice === "daily-cap" ? `${phase.message} You can still play tonight unranked; nothing is saved.` : `${phase.message} Try again, or play unranked; nothing is saved.`}
+        body={
+          phase.choice === "run-active"
+            ? c.body
+            : phase.choice === "daily-cap"
+              ? `${phase.message} You can still play ${chapter ? "the case" : "tonight"} unranked; nothing is saved.`
+              : `${phase.message} Try again, or play unranked; nothing is saved.`
+        }
         primary={phase.choice === "run-active" ? { label: "Abandon it and start over", onClick: () => void startRanked(true) } : phase.choice === "daily-cap" ? { label: "Play unranked", onClick: playUnranked } : { label: "Try again", onClick: () => void startRanked(false) }}
         secondary={phase.choice === "daily-cap" ? undefined : { label: "Play unranked", onClick: playUnranked }}
         busy={busy}
