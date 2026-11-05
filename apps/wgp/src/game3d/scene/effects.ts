@@ -42,10 +42,9 @@ export const BURST_WORDS = {
   /** Pickups (v1.3): a Bits token, a boost ring. */
   "+1 BIT!": [NAV_COLORS.bits, PAPER],
   "BOOST!": [NAV_COLORS.ring, PAPER],
-  /** Case file 001 (scene/chapter): a clue found, the SCREENSHOT's click, it landing, Ctrl+C, Mary's first word back. */
+  /** Case file 001 (scene/chapter): a clue found, the SCREENSHOT's click, Ctrl+C, Mary's first word back. */
   "+CLUE!": [CITY.windowLit, INK],
   "CLICK!": [PAPER, INK],
-  "SAVED!": [PAPER, CITY.neonRed],
   "CTRL+C!": [CITY.neonMint, INK],
   "gm": [CITY.neonMint, PAPER],
 } as const;

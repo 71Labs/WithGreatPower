@@ -2,7 +2,7 @@
  * "Screenshot frames": a thin floating selection rectangle round a saved body (captive Mary;
  * the hero for a second after a SCREENSHOT lands), with square handles at its corners and
  * sides, a mouse pointer at its corner as if it had just been dragged out, and a file tag
- * ("mary-jpeg.jpg · 1 MB", "the-node.png · SAVED"). Camera-facing, its lines a fixed number of
+ * ("mary-jpeg.jpg · 1 MB", "the-node.png · 2 MB"). Camera-facing, its lines a fixed number of
  * pixels wide at any distance. One instanced draw for both.
  */
 import { CanvasTexture, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, LinearFilter, Matrix4, NoColorSpace, PlaneGeometry, ShaderMaterial, Vector3 } from "three";
@@ -13,7 +13,7 @@ import type { SharedUniforms } from "../city/materials";
 import { C } from "../palette";
 import { CURSOR_SDF } from "./shaders";
 
-export const FRAME_LABELS = ["mary-jpeg.jpg · 1 MB", "the-node.png · SAVED!"] as const;
+export const FRAME_LABELS = ["mary-jpeg.jpg · 1 MB", "the-node.png · 2 MB"] as const;
 export type FrameLabel = 0 | 1;
 /** World units round the rectangle the quad leaves for the pointer and the tag. */
 const MARGIN = 26;
@@ -66,9 +66,9 @@ void main() {
   vec2 q = vec2(vP.x - half_.x, -(vP.y + half_.y)) / s + vec2(-1.0, -1.0);
   float cd = sdCursor(q) * s / px;
   if (cd < 2.0) col = vec4(cd < 0.0 ? vec3(1.0) : uInk, 1.0);
-  // The file tag over the top-left corner.
+  // The file tag under the bottom-left corner (the space over her head is the HUD's restore bar).
   vec2 tagSize = vec2(180.0, 20.0) * px;
-  vec2 tp = (vP - vec2(-half_.x, half_.y + 6.0 * px)) / tagSize;
+  vec2 tp = (vP - vec2(-half_.x, -half_.y - 6.0 * px - tagSize.y)) / tagSize;
   if (tp.x > 0.0 && tp.x < 1.0 && tp.y > 0.0 && tp.y < 1.0) {
     vec4 t = texture2D(uTags, vec2(tp.x, (tp.y + (1.0 - vFrame.w)) * 0.5));
     if (t.a > 0.05) col = vec4(t.rgb, t.a);

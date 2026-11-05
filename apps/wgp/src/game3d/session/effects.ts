@@ -76,6 +76,8 @@ export function sceneEffects(target: () => EffectsTarget | null) {
         break;
       }
       case "hero-hurt":
+        // A SCREENSHOT that lands is told by the scene's screenshot frame and the HUD's "Saved!".
+        if (ev.source === "a screenshot") break;
         t.burst("OOF!", above(ev.x, ev.y, ev.z), { size: 90, life: 0.8 });
         break;
       case "miss":

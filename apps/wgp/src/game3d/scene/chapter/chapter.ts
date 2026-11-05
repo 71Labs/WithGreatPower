@@ -1,17 +1,19 @@
 /**
  * Case file 001, "Missing: Mary Jpeg", in the 3D scene: everything a chapter night draws on top
- * of a normal one, from the frame's v1.5 `chapter` and the Right-Clicker's villain fields (local
- * types in contract.ts until the sim's land), plus the chapter's sim events:
+ * of a normal one, from the frame's v1.5 `chapter` and the Right-Clicker's villain fields
+ * (docs/chapters/case-001.md), plus the chapter's sim events:
  *
  * - the clues (clues.ts): the torn poster on its pole, the scorched billboard, the pixel trail,
  *   each with a glow that dims once found, and "+CLUE!" when one is;
  * - SCREENSHOT (flash.ts): the aim cone on the deck while he aims, then the flash (an outline
- *   pulse instead under reduced motion or the Steady camera), "CLICK!"; when it lands,
- *   "SAVED!": the hero framed as a screenshot and his pose held for the sim's 1 s freeze;
+ *   pulse instead under reduced motion or the Steady camera), "CLICK!"; when it lands, the
+ *   hero framed as a screenshot and his pose held for the sim's 1 s freeze (the word "Saved!"
+ *   is the HUD's);
  * - CTRL+C: "CTRL+C!" and the paper copies (copies.ts), which burst into card confetti when
  *   they pop (particles.ts); DRAG: a lasso from his cursor to the hero;
  * - captive Mary (captive.ts) compressed by 1 − restore inside her screenshot frame
- *   (frames.ts); freed, a pixel burst, "gm" and her wave.
+ *   (frames.ts), its file tag under her feet so the HUD's restore bar has the space over her
+ *   head; freed, a pixel burst, one "gm" (the HUD captions it too) and her wave.
  *
  * The Right-Clicker himself is a villain in characters.ts (anim/right-clicker.ts). Nothing is
  * built until a chapter frame arrives, so a normal night pays nothing. Visual triggers come
@@ -209,16 +211,16 @@ export class ChapterScene {
         this.freed = false;
         this.freedT = -1;
         const bob = this.reduced ? 0 : Math.sin(time * 1.6) * 2;
-        p.frames.add(c.x, c.y + 4 + bob, c.z, 70, 118, 1, 0);
+        p.frames.add(c.x, c.y + 2 + bob, c.z, 64, 100, 1, 0);
       } else if (this.freedT >= 0 && this.freedT < 0.35) {
         // The frame lets go of her: it swells and fades.
         const u = this.freedT / 0.35;
-        p.frames.add(c.x, c.y + 4, c.z, 70, 118, 1 - u, 0, this.reduced ? 1 : 1 + 0.4 * smooth(u));
+        p.frames.add(c.x, c.y + 2, c.z, 64, 100, 1 - u, 0, this.reduced ? 1 : 1 + 0.4 * smooth(u));
       }
     }
     if (this.freedT >= 0) this.freedT += dt;
 
-    // "SAVED!": the hero in a screenshot frame, his pose held.
+    // SAVED: the hero in a screenshot frame, his pose held.
     const chars = this.host.characters;
     if (this.savedT >= 0) {
       const u = this.savedT / SAVED_SECONDS;
@@ -317,13 +319,10 @@ export class ChapterScene {
     this.host.burst("gm", { x: centre.x, y: centre.y + 64, z: centre.z }, { size: 96, life: 1.4, rise: 30 });
   }
 
-  /** "SAVED!": the hero's frame, his held pose and the word. */
+  /** SAVED: the hero in a screenshot frame, his pose held (the word is the HUD's "Saved!"). */
   private saved(): void {
-    const chars = this.host.characters;
     this.savedT = 0;
-    chars.freezeHero(SAVED_SECONDS);
-    const at = chars.jointOf("hero", "head", _a);
-    if (at) this.host.burst("SAVED!", { x: at.x, y: at.y + 40, z: at.z }, { size: 104, life: SAVED_SECONDS, rise: 12 });
+    this.host.characters.freezeHero(SAVED_SECONDS);
   }
 
   /** The chapter's sim events (session/effects.ts passes them on). */
