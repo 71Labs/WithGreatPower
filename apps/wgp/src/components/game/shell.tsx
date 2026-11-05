@@ -390,7 +390,10 @@ const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(ma
 function Dock({ pathname, save }: { pathname: string | null; save: Save | null }) {
   const picks = save?.hero?.pendingPicks ?? 0;
   const unread = useUnreadEdition(save);
-  const newCase = useNewCase(save);
+  const new001 = useNewCase(save);
+  // Case File 003 counts as new too, until its folder or intro is opened.
+  const new003 = useNewCase(save, "case-003");
+  const newCase = new001 || new003;
   return (
     <nav
       aria-label="Game"
