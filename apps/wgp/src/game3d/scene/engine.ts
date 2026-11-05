@@ -31,6 +31,8 @@ import { MoonShadows, SHADOW_LAYER } from "./render/shadows";
 import { buildSky, type Sky } from "./sky";
 import { ChapterScene } from "./chapter/chapter";
 import type { ChapterEvent } from "./chapter/contract";
+import type { FeeEvent } from "./fee-strike/contract";
+import { FeeScene, type FeeBlast } from "./fee-strike/fee-strike";
 import { CharacterSystem } from "./characters/characters";
 import type { WebLine } from "./web";
 
@@ -66,6 +68,8 @@ export class SceneEngine {
   readonly sparks: Sparks;
   /** Case file 001's clues, copies, captive and SCREENSHOT (built on a chapter night's first frame). */
   readonly chapter: ChapterScene;
+  /** Case file 003's clues, stalls, fee meter and bakery (built on a case-003 night's first frame). */
+  readonly fee: FeeScene;
   /** Moon shadows, on tiers with a shadow map (the compositor draws their depth pass). */
   shadows: MoonShadows | null = null;
   /** Camera far plane, from the city's size. */
@@ -114,12 +118,13 @@ export class SceneEngine {
     this.pools = new LightPools(this.city.layout.boxes, this.uniforms);
     this.sparks = new Sparks(this.uniforms);
     this.chapter = new ChapterScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
+    this.fee = new FeeScene(cityData, this.solids, this.uniforms, { crowd: this.crowd, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
     // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
     for (const child of this.city.root.children) {
       if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
     }
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.fee.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -132,6 +137,7 @@ export class SceneEngine {
     this.characters.setTier(preset.tier);
     this.crowd.setTier(preset.tier);
     this.chapter.setTier(preset.tier);
+    this.fee.setTier(preset.tier);
     this.sky.setStars(preset.stars);
     this.sky.skyline.visible = preset.skyline;
     this.city.setDetail(preset.detail);
@@ -160,6 +166,7 @@ export class SceneEngine {
     this.characters.setReducedMotion(on);
     this.crowd.reducedMotion = on;
     this.chapter.setReducedMotion(on);
+    this.fee.setReducedMotion(on);
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
 
@@ -193,6 +200,11 @@ export class SceneEngine {
   /** A Case file 001 sim event (a clue found, a SCREENSHOT that hit, a copy popped…). */
   chapterEvent(ev: ChapterEvent): void {
     this.chapter.event(ev);
+  }
+
+  /** A Case file 003 sim event (a clue, the grab, a checkpoint, a spike, the fees cooled…) or a blast. */
+  feeEvent(ev: FeeEvent | FeeBlast): void {
+    this.fee.event(ev);
   }
 
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
@@ -295,6 +307,7 @@ export class SceneEngine {
       this.hazards.update(frame, frame.mode === "fight" ? (this.cityData.zones[frame.stop]?.stage?.y ?? null) : null);
       this.pickups.update(frame, time);
       this.chapter.update(frame, camera, size, dt, time);
+      this.fee.update(frame, camera, dt, time);
       // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
       const stuck = this.characters.stuck;
       this.bursts.setAnchor(stuck);
@@ -347,5 +360,6 @@ export class SceneEngine {
     this.hazards.dispose();
     this.pickups.dispose();
     this.chapter.dispose();
+    this.fee.dispose();
   }
 }

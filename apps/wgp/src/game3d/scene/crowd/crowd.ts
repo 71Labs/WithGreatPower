@@ -86,6 +86,19 @@ export interface ManualPerson {
   channel: number;
 }
 
+/** Someone stood on top of the night's people (setExtras): a body by its id, a spot, a way to face, an idle and a reaction. */
+export interface ExtraPerson {
+  who: string;
+  look: number;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  /** Channel ids (crowd/clips.ts CHANNELS). */
+  idle: string;
+  react: string;
+}
+
 export interface CrowdStats {
   near: number;
   far: number;
@@ -118,6 +131,8 @@ export class CrowdSystem {
   private loading: Promise<void> | null = null;
   private people: Person[] = [];
   private manual: ManualPerson[] | null = null;
+  private extras: ExtraPerson[] = [];
+  private extrasKey = "[]";
   /** Clip measurements still to make, a couple per frame. */
   private warm: { body: number; clip: CrowdClip }[] = [];
   private clock = 0;
@@ -232,6 +247,18 @@ export class CrowdSystem {
     this.plan();
   }
 
+  /**
+   * People stood by hand on top of the night's own (case file 003's shopkeepers at their stalls):
+   * each by body id, on a channel. An empty list (every other night) adds nobody.
+   */
+  setExtras(list: ExtraPerson[]): void {
+    const key = JSON.stringify(list);
+    if (key === this.extrasKey) return;
+    this.extrasKey = key;
+    this.extras = list;
+    this.plan();
+  }
+
   /** Place the night's people for this tier (or the manual lineup). */
   private plan(): void {
     const b = this.built;
@@ -253,6 +280,13 @@ export class CrowdSystem {
       walkAt(path, w.s, _walk);
       people.push({ kind: "walk", x: _walk.x, y: 0, z: _walk.z, yaw: _walk.yaw, baseYaw: _walk.yaw, body: w.body, look: w.body * LOOKS_PER_BODY + w.look, idle: w.channel, react: w.react, channel: w.channel, zone: -1, seed: w.seed, reacting: false, since: -10, path, s: w.s, dir: w.dir });
     }
+    this.extras.forEach((e, i) => {
+      const found = b.files.metas.findIndex((m) => m.who === e.who);
+      const body = found >= 0 ? found : i % b.skeletons.length;
+      const idle = CHANNEL[e.idle] ?? CHANNEL["stand-a"];
+      const react = CHANNEL[e.react] ?? CHANNEL.wave;
+      people.push({ kind: "roof", x: e.x, y: e.y, z: e.z, yaw: e.yaw, baseYaw: e.yaw, body, look: body * LOOKS_PER_BODY + (e.look % LOOKS_PER_BODY), idle, react, channel: idle, zone: -1, seed: 9001 + i, reacting: false, since: -10, path: null, s: 0, dir: 1 });
+    });
     this.people = people;
     this.dist = new Float32Array(people.length);
     this.order = people.map((_, i) => i);

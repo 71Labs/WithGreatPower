@@ -54,7 +54,8 @@ export class GoblinAnimator extends ActorAnimator {
     // Bank from sideways acceleration, pitch from climb or dive.
     const left = _a.set(Math.cos(this.turn.value), 0, -Math.sin(this.turn.value));
     const lateral = this.acc.vx * left.x + this.acc.vz * left.z;
-    const fast = this.state === "attack" ? 0.45 : 0;
+    // (Case file 003's chase: "flee" leans him into the run.)
+    const fast = this.state === "attack" ? 0.45 : this.state === "flee" ? 0.15 : 0;
     // The sim's own bank when it sends one (v1.2); else from the sideways acceleration.
     this.bank.step(this.bankIn ?? clamp(-lateral / 1100, -0.55, 0.55), dt);
     this.pitch.step(clamp(-this.vel.y / 850, -0.35, 0.5) + fast, dt);
@@ -75,7 +76,8 @@ export class GoblinAnimator extends ActorAnimator {
 
   protected spineTarget(): [number, number] {
     // He leans back to throw, into the dive, and holds his head up through a bank.
-    const p = this.state === "windup" ? -0.3 : this.state === "attack" ? 0.35 : 0.1;
+    // (Case file 003's chase: he leans back to lob a fee bomb, and to cackle.)
+    const p = this.state === "windup" || this.state === "throw" ? -0.3 : this.state === "attack" ? 0.35 : this.state === "taunt" ? -0.22 + Math.sin(this.time * 9) * 0.05 : 0.1;
     return [p, -this.bank.value * 0.5];
   }
 
@@ -85,7 +87,11 @@ export class GoblinAnimator extends ActorAnimator {
     const wob = Math.sin(this.time * 3 + i * 2) * 2;
     switch (this.state) {
       case "windup":
+      case "throw":
         return i === 1 ? out.set(-9, 30, -6) : out.set(16, 8, 6);
+      case "taunt":
+        // Case file 003: hands on his belly, laughing at you.
+        return out.set(s * 7, 2 + wob * 1.5, 9);
       case "attack":
         return out.set(s * 11, 3, -13);
       case "guard":
@@ -111,6 +117,8 @@ export class GoblinAnimator extends ActorAnimator {
   protected onState(next: string, ctx: Ctx): void {
     super.onState(next, ctx);
     if (next === "attack") this.clips?.play("spell-shoot", { rate: 0.8, weight: 0.95 });
+    // Case file 003: a fee bomb lobbed back over his shoulder.
+    if (next === "throw") this.clips?.play("spell-shoot", { rate: 1.3, weight: 0.85 });
   }
 
   protected clipNames(): string[] {
@@ -121,7 +129,8 @@ export class GoblinAnimator extends ActorAnimator {
     const c = this.clips!;
     if (this.cocoonClips()) return;
     const st = this.state;
-    const amount = st === "windup" ? 0.35 : st === "stunned" ? 0.55 : 0.9;
+    const wound = st === "windup" || st === "throw";
+    const amount = wound ? 0.35 : st === "stunned" ? 0.55 : 0.9;
     // A thrower's stance, hunched into the ride.
     c.loops(
       [
@@ -135,7 +144,7 @@ export class GoblinAnimator extends ActorAnimator {
     c.over(1);
     this.lookAfterClips(0.15);
     // The free arm out for balance; the wound-up arm back for the throw.
-    this.reachHands(st === "windup" ? 0.8 : 0.4, st === "windup" ? 0.85 : 0);
+    this.reachHands(wound ? 0.8 : 0.4, wound ? 0.85 : 0);
     this.plantLegs(1);
   }
 

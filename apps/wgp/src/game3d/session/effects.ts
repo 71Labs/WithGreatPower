@@ -7,6 +7,8 @@
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { isChapterEvent, type ChapterEvent } from "@/game3d/scene/chapter/contract";
+import { isFeeEvent, type FeeEvent } from "@/game3d/scene/fee-strike/contract";
+import type { FeeBlast } from "@/game3d/scene/fee-strike/fee-strike";
 
 import type { LoopEvent3D } from "./loop3d";
 
@@ -21,6 +23,8 @@ export interface EffectsTarget {
   punch?(): void;
   /** Case file 001's sim events (scene/chapter): its clues, SCREENSHOT, copies and captive. */
   chapter?(ev: ChapterEvent): void;
+  /** Case file 003's sim events (scene/fee-strike), and the blasts its burns come from. */
+  fee?(ev: FeeEvent | FeeBlast): void;
 }
 
 /**
@@ -32,6 +36,8 @@ const TELEGRAPH: Record<string, string> = {
   "Front-run": "FRONT-RUN!",
   "Cross-chain slam": "SLAM!",
   "Front-runs your web": "HOP!",
+  // Case file 003: the fee meter winds up a spike while it cools.
+  "Fee spike": "HISS!",
 };
 
 /** Bursts sit a little above the point they mark, so they don't hide the sticker. */
@@ -44,6 +50,11 @@ export function sceneEffects(target: () => EffectsTarget | null) {
     // Case file 001's events (typed locally until the sim's contract carries them).
     if (isChapterEvent(ev)) {
       t.chapter?.(ev);
+      return;
+    }
+    // Case file 003's events (a case-003 night is the only one that sends them).
+    if (isFeeEvent(ev)) {
+      t.fee?.(ev);
       return;
     }
     switch (ev.type) {
@@ -85,6 +96,8 @@ export function sceneEffects(target: () => EffectsTarget | null) {
         break;
       case "blast":
         t.burst(ev.kind === "bomb" ? "WHAM!" : "POW!", above(ev.x, ev.y, ev.z, 20), { size: 100 });
+        // Case file 003 scorches the roof where a fee bomb lands (off its nights, nothing).
+        t.fee?.(ev);
         break;
       case "fizzle":
         t.fizzle?.();
