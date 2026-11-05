@@ -731,7 +731,7 @@ class Kit:
     def decal(self, shape, x, y, rx, ry, fill=None, rot=0.0, ink=0.0, clip=False, mirror=False, n=0.0, amp=0.0):
         """A sticker feature on the face, in cm from between the eyes (x toward the
         character's left, y up), drawn by the shader: shape is ellipse, ring, lower, stroke,
-        upper, arc, jag or teeth."""
+        upper, arc, jag, teeth or rect (a rounded rectangle)."""
         self.decals.append({"shape": shape, "x": x, "y": y, "rx": rx, "ry": ry, "rot": rot, "fill": -1 if fill is None else self.pal(fill), "ink": ink, "clip": clip, "mirror": mirror, "n": n, "amp": amp})
 
     def face_frame(self, centre, half_w, top, bottom, depth=0.0, any_bone=False):
@@ -848,6 +848,8 @@ def meta(k):
         "names": [n for n, _h in k.palette],
         "flat": sorted(k.pal(n) for n in k.flat),
         "gloss": sorted(k.pal(n) for n in k.gloss),
+        # Entries that glow when a decal is filled with them (only bodies that have any).
+        **({"glow": sorted(k.pal(n) for n in k.spec["glow"])} if k.spec.get("glow") else {}),
         "decals": k.decals,
         "sockets": k.sockets,
         "web": k.lenses,

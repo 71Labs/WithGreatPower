@@ -302,8 +302,10 @@ apps/wgp/scripts/models/compress.sh apps/wgp/public/models/cast-right-clicker.gl
   ribbed hem and a kangaroo pocket, joggers, black gloves, dark sneakers; drawstrings; a small
   white cursor badge on the chest. The hood is `hood_mb` with a peak (`extra` metaballs: a
   ridge over the brow), so its brim hangs over his eyes; dark hair under it.
-- **Face:** the cast's sticker decals: the hood's flat shade across the upper face, white eyes
-  with ink pupils glinting in it, angry brows, a lopsided smirk.
+- **Face:** as his 2D sticker (`components/cases/art.tsx`, `RightClickerArt`): the hood's dark
+  across the upper face down to the nose, two glowing cyan pixel eyes in it (the `rect` decal,
+  filled with a palette entry in the file's `glow` list, which the cast shader leaves unshaded
+  and blooms), slanted brows, a lopsided smirk on the lower face.
 - **The cursor:** `CURSOR`, the classic 12 × 20 pointer, extruded 3.8 cm and 56 cm long, rigid on
   `hand_r`. Its stem runs through the fist and the arrow points along the hand, its plane
   across the palm (upright in a pistol grip); white faces, ink walls.

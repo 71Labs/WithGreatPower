@@ -39,7 +39,7 @@ export function castModelUrl(id: CastBodyId, low: boolean): string {
   return fileUrl(id, low);
 }
 
-export type DecalShapeName = "ellipse" | "ring" | "lower" | "stroke" | "upper" | "arc" | "jag" | "teeth";
+export type DecalShapeName = "ellipse" | "ring" | "lower" | "stroke" | "upper" | "arc" | "jag" | "teeth" | "rect";
 
 export interface CastDecal {
   shape: DecalShapeName;
@@ -68,6 +68,8 @@ export interface CastMeta {
   /** Entries drawn flat (no bands) and glossy (a hard white highlight). */
   flat: number[];
   gloss: number[];
+  /** Entries that glow when a decal is filled with them (the Right-Clicker's eyes); older files have none. */
+  glow?: number[];
   decals: CastDecal[];
   /** Attachment points in the rest pose (metres), by name: Doc's chain booms. */
   sockets: Record<string, { bone: string; at: [number, number, number] }>;

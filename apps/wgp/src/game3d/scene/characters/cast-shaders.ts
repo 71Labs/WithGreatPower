@@ -175,7 +175,7 @@ void main() {
 export const CAST_FRAGMENT = /* glsl */ `
 #define MAX_DECALS ${CAST_MAX_DECALS}
 uniform vec3 uPal[${CAST_PALETTE}];
-uniform float uPalFlags[${CAST_PALETTE}];  // 1 flat, 2 gloss
+uniform float uPalFlags[${CAST_PALETTE}];  // 1 flat, 2 gloss, 4 glow (a decal fill)
 uniform vec4 uDecA[MAX_DECALS];   // x, y, rx, ry (cm)
 uniform vec4 uDecB[MAX_DECALS];   // rotation, fill (−1 none), ink px, shape + 16·clip
 uniform vec4 uDecC[MAX_DECALS];   // spikes or teeth, depth
@@ -270,6 +270,8 @@ void main() {
 #endif
 
   // The painted face, flat like the sticker art (under the bands, so it shades with the head).
+  float decalGlow = 0.0;
+  vec3 glowCol = vec3(0.0);
   if (vFace.z > 0.5) {
     vec2 uv = vFace.xy;
     float pxw = max(length(fwidth(uv)) * 0.7071, 1e-4);
@@ -305,13 +307,18 @@ void main() {
         float k0 = length(q / r);
         float edge = 1.0 - c.y * (1.0 - tri(ang * c.x));
         d = (k0 - edge) * min(r.x, r.y);
-      } else {
+      } else if (shape < 7.5) {
         // Teeth: two rows of c.x points each, c.y of the half height long.
         float u = (q.x / r.x + 1.0) * 0.5 * c.x;
         float t = tri(u - 0.5);
         float top = r.y * (1.0 - 2.0 * c.y * t) - q.y;
         float bot = q.y + r.y * (1.0 - 2.0 * c.y * tri(u));
         d = max(min(top, bot), abs(q.x) - r.x);
+      } else {
+        // A rounded rectangle (the Right-Clicker's pixel eyes).
+        float cr = 0.22 * min(r.x, r.y);
+        vec2 e = abs(q) - r + cr;
+        d = length(max(e, 0.0)) + min(max(e.x, e.y), 0.0) - cr;
       }
       if (clip) d = max(d, lastD);
       else lastD = d;
@@ -322,6 +329,14 @@ void main() {
         if (b.y >= 0.0) col = mix(col, uPal[fill], 0.3 * (1.0 - smoothstep(-aa, aa, d)));
       } else if (b.y >= 0.0) {
         col = mix(col, uPal[fill], 1.0 - smoothstep(-aa, aa, d));
+        // A glowing fill (flag 4) keeps its colour through the bands and blooms.
+        if (mod(floor(uPalFlags[fill] / 4.0), 2.0) > 0.5) {
+          float inside = 1.0 - smoothstep(-aa, aa, d + (b.z > 0.0 ? rim : 0.0));
+          if (inside > decalGlow) {
+            decalGlow = inside;
+            glowCol = uPal[fill];
+          }
+        }
       }
       if (b.z > 0.0 && (shape < 4.5 || shape > 5.5)) col = mix(col, uPal[0], 1.0 - smoothstep(rim - aa, rim + aa, abs(d)));
     }
@@ -361,6 +376,12 @@ void main() {
       col = mix(col, vec3(1.0), smoothstep(0.86, 0.9, s) * 0.85);
       col = mix(col, vec3(0.42, 0.44, 0.52), smoothstep(0.55, 0.62, 1.0 - abs(dot(n, v))) * 0.5);
     }
+  }
+
+  // Glowing decals (the Right-Clicker's eyes in the hood's shade): unshaded, and blooming.
+  if (decalGlow > 0.0) {
+    col = mix(col, glowCol, decalGlow);
+    glow = max(glow, decalGlow * 0.7);
   }
 
   // Webbed up: two families of wrapped strands over a paled body.

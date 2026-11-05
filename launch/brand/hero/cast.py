@@ -1098,10 +1098,11 @@ def right_clicker(k):
     human_face(k, top=0.05)
     my = face_y(k, k.mouth.z)
     # The hood's shade across the upper face (the sticker's flat shadow), the eyes glinting in it.
-    k.decal("ellipse", 0.0, 6.2, 10.5, 8.6, fill="shade")
-    k.decal("ellipse", 3.05, -0.2, 1.45, 0.72, rot=0.12, fill="white", ink=2.0, mirror=True)
-    k.decal("ellipse", 2.7, -0.28, 0.36, 0.46, fill="ink", clip=True, mirror=True)
-    k.decal("stroke", 3.0, 1.35, 1.3, 0.3, rot=0.38, fill="ink", mirror=True)
+    # As his sticker (components/cases/art.tsx): the hood's dark down to the nose, two glowing
+    # pixel eyes in it under slanted brows, and a smirk on the lower face.
+    k.decal("ellipse", 0.0, 4.5, 10.5, 9.3, fill="shade")
+    k.decal("rect", 3.1, 0.2, 1.4, 0.95, fill="eye", ink=1.6, mirror=True)
+    k.decal("stroke", 3.3, 2.4, 1.35, 0.3, rot=0.25, fill="ink", mirror=True)
     # A sly, lopsided smirk.
     k.decal("arc", 0.8, my + 0.9, 1.9, 0.75, rot=0.2, fill="ink", ink=2.4)
     k.decal("stroke", 2.75, my + 1.05, 0.35, 0.12, rot=1.1, fill="ink")
@@ -1300,12 +1301,12 @@ CAST = {
         "details": {},
         "palette": {
             "ink": INK,
-            "skin": "#D9A07A",
-            "shade": "#8A5C49",
-            "hoodie": "#363A4D",
-            "rib": "#2A2D3B",
-            "pocket": "#41465C",
-            "lining": "#14151C",
+            "skin": "#E9B98F",
+            "shade": "#151829",
+            "hoodie": "#2E3350",
+            "rib": "#23273F",
+            "pocket": "#3A4062",
+            "lining": "#10121F",
             "pants": "#1E2029",
             "glove": "#18191E",
             "shoe": "#3A3D4A",
@@ -1313,9 +1314,11 @@ CAST = {
             "string": "#C9CBD6",
             "badge": "#FFFFFF",
             "cursor": "#FFFFFF",
-            "white": "#FFFFFF",
+            "eye": "#9BF2FF",
         },
         "flat": ["ink", "badge"],
+        # The pixel eyes glow in the hood's dark (the cast shader's glow flag).
+        "glow": ["eye"],
         "tris": (7000, 2600),
         "build": right_clicker,
     },

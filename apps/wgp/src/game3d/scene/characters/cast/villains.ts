@@ -301,10 +301,9 @@ export const SYBIL_COPY: CastDef = {
 const RIGHT_CLICKER_BODY = scaleBody(HERO_BODY, 0.98, { shoulderX: 11, hipWidth: 5.2 });
 
 const RIGHT_CLICKER_DECALS: DecalSpec[] = [
-  { shape: "ellipse", x: 0, y: 0.5, rx: 0.95, ry: 0.62, fill: "shade" },
-  { shape: "ellipse", x: -0.32, y: 0.02, rx: 0.15, ry: 0.075, rot: -0.12, fill: "white", ink: 2, mirror: true },
-  { shape: "ellipse", x: -0.28, y: 0.01, rx: 0.05, ry: 0.065, fill: "ink", clip: true, mirror: true },
-  { shape: "stroke", x: -0.32, y: 0.17, rx: 0.17, ry: 0.035, rot: -0.38, fill: "ink", mirror: true },
+  { shape: "ellipse", x: 0, y: 0.42, rx: 0.95, ry: 0.66, fill: "shade" },
+  { shape: "ellipse", x: -0.32, y: 0.02, rx: 0.15, ry: 0.09, fill: "eye", ink: 1.6, mirror: true },
+  { shape: "stroke", x: -0.34, y: 0.22, rx: 0.15, ry: 0.035, rot: -0.25, fill: "ink", mirror: true },
   { shape: "stroke", x: 0.08, y: -0.45, rx: 0.2, ry: 0.025, rot: 0.2, fill: "ink" },
 ];
 
@@ -346,7 +345,7 @@ export const RIGHT_CLICKER: CastDef = {
   body: RIGHT_CLICKER_BODY,
   height: 90,
   motion: "runner",
-  colors: () => ({ skin: "#D9A07A", shade: "#8A5C49", hoodie: "#363A4D", pants: "#1E2029", glove: "#18191E", shoe: "#3A3D4A", cursor: "#FFFFFF" }),
+  colors: () => ({ skin: "#E9B98F", shade: "#151829", eye: "#9BF2FF", hoodie: "#2E3350", pants: "#1E2029", glove: "#18191E", shoe: "#3A3D4A", cursor: "#FFFFFF" }),
   decals: RIGHT_CLICKER_DECALS,
   build(k) {
     const y = k.y;
