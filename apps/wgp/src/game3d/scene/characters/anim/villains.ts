@@ -26,7 +26,7 @@ import { Spring } from "../physics/spring";
 import type { Rig } from "../rig";
 import { ActorAnimator } from "./actor";
 import type { AnimContext as Ctx } from "./types";
-import { bodyPoint, clamp, frameQuat, Plant, smoothstep, UP, yawQuat } from "./common";
+import { angleTo, bodyPoint, clamp, frameQuat, Plant, smoothstep, UP, yawQuat } from "./common";
 import type { Pose } from "./pose";
 import type { AnimContext } from "./types";
 
@@ -182,7 +182,10 @@ export class SandwichAnimator extends ActorAnimator {
     if (!this.grounded && this.wasGrounded && this.vel.y > 150) this.clips?.play("jump-start", { t: 0.45, rate: 1.8, weight: 0.6 });
     this.wasGrounded = this.grounded;
     const hs = Math.hypot(this.V.x, this.V.z);
-    if (this.grounded) this.phase += (hs * dt) / (70 + hs * 0.1);
+    // Steps come with distance, and with turning on the spot (squaring up to the hero in his
+    // guard): turning on planted feet would wind the legs round each other.
+    const turning = Math.abs(angleTo(this.turn.prev, this.turn.value)) / Math.max(dt, 1e-3);
+    if (this.grounded) this.phase += (hs * dt) / (70 + hs * 0.1) + (turning > 0.3 ? dt * 2.6 : 0);
     this.airT = this.grounded ? 0 : this.airT + dt;
     const c = this.clips;
     if (c && this.grounded) {
@@ -321,7 +324,9 @@ export class SandwichAnimator extends ActorAnimator {
     const hs = Math.hypot(this.V.x, this.V.z);
     const runW = smoothstep(25, 160, hs);
     const yawQ = yawQuat(this.turn.value, _q);
-    const fwd = _a.set(0, 0, 1).applyQuaternion(yawQ);
+    // Steps go the way he's moving (backing off a blow, sidestepping in his guard), not just the
+    // way he faces: placed ahead of a body that's going backwards, the planted feet trail and cross.
+    const dir = hs > 20 ? _a.set(this.V.x / hs, 0, this.V.z / hs) : _a.set(0, 0, 1).applyQuaternion(yawQ);
     const body = _b.set(this.P.x, this.ground + this.rig.spec.ankle, this.P.z);
     const H = this.H;
     const project = (p: Vector3) => {
@@ -331,7 +336,7 @@ export class SandwichAnimator extends ActorAnimator {
     for (let i = 0; i < 2; i++) {
       const off = _c.set(i === 0 ? 6 : -6, 0, 0).applyQuaternion(yawQ);
       const L = 70 + hs * 0.1;
-      const t = this.plants[i].update(this.phase + i * 0.5, 0.45, body, fwd, L * Math.max(0.15, runW), off, 4 + 6 * runW, UP, project);
+      const t = this.plants[i].update(this.phase + i * 0.5, 0.45, body, dir, L * Math.max(0.15, runW), off, 4 + 6 * runW, UP, project);
       pose.foot[i].lerp(t, w);
       if (w > 0.5) pose.footRot[i].copy(yawQ);
     }

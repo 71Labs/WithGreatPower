@@ -215,6 +215,23 @@ export abstract class ActorAnimator {
       this.clips.step(dt);
       if (this.caughtT >= 0) this.caughtT += dt;
       this.layerClips?.(ctx, dt);
+      if (!this.dangle.active && this.state !== "webbed") this.feetOutOfRoof(ctx);
+    }
+  }
+
+  /**
+   * Whatever the clips did with the legs (a hop's tucked legs a hand's breadth over the roof, a
+   * landing laid over them), no ankle ends up under the surface below it: such a leg is bent
+   * back up onto the surface.
+   */
+  private feetOutOfRoof(ctx: AnimContext): void {
+    const rig = this.rig;
+    rig.bones[0].updateMatrixWorld(true);
+    for (let i = 0; i < 2; i++) {
+      const leg = rig.legs[i];
+      const ankle = worldPos(leg.end, _a);
+      const floor = ctx.ground(ankle.x, ankle.z, this.H.y) + rig.spec.ankle;
+      if (ankle.y < floor - 0.3) reachLimb(rig, leg, ankle.setY(floor), this.pose.knee[i]);
     }
   }
 
@@ -402,6 +419,13 @@ export abstract class ActorAnimator {
       pose.spine.z += Math.sin(this.time * 3.1) * 0.06;
     } else {
       this.finish?.(pose, a, ctx);
+      // Never a foot through the roof: a landing's dangling feet (the springs still swinging
+      // under the hips while the planted targets fade in) stop on the surface under them.
+      for (let i = 0; i < 2; i++) {
+        const f = pose.foot[i];
+        const floor = ctx.ground(f.x, f.z, H.y) + rig.spec.ankle;
+        if (f.y < floor) f.y = floor;
+      }
     }
     this.extras?.(pose);
     this.targets[0].copy(pose.hand[0]);
