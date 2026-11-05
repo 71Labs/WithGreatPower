@@ -1,6 +1,7 @@
 /**
  * What a run's public page and card show: a verified run's score, night, dates and who
- * played it. Unverified, unknown and banned players' runs aren't public. A verified run
+ * played it. Unverified, unknown and banned players' runs aren't public, nor story chapters'
+ * (unscored, unranked). A verified run
  * never changes, so readers may cache it for long (src/server/social/run-cache.ts).
  */
 import { and, eq, isNull } from "drizzle-orm";
@@ -47,7 +48,8 @@ export async function publicRun(db: Db, runId: string): Promise<PublicRun | null
     })
     .from(runs)
     .innerJoin(players, eq(players.id, runs.playerId))
-    .where(and(eq(runs.id, runId), eq(runs.status, "verified"), isNull(players.bannedAt)))
+    // Patrol nights only: a story chapter's run (runs.mode = its id) has no score to show.
+    .where(and(eq(runs.id, runId), eq(runs.status, "verified"), eq(runs.mode, "patrol"), isNull(players.bannedAt)))
     .limit(1);
   if (!row || row.score == null) return null;
   const hero = (row.startSave as Save | null)?.hero ?? null;

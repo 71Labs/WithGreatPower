@@ -36,6 +36,8 @@ export const RATE_LIMITS = {
   actionsPerPlayer: { limit: 60, windowMs: 60_000 },
   /** GET /api/me. */
   mePerIp: { limit: 120, windowMs: 60_000 },
+  /** GET /api/cases (the case files). */
+  casesPerIp: { limit: 120, windowMs: 60_000 },
   /** POST /api/migrate: once per player, so a handful of tries is plenty. */
   migratePerPlayer: { limit: 5, windowMs: 10 * 60_000 },
   /** POST /api/auth/dev. */
