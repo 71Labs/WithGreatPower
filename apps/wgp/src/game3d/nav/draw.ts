@@ -11,6 +11,7 @@
 import type { Building, City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 import { BLOCK, GRID, PITCH } from "@wgp/game-core/sim3d/constants";
 
+import { chapterOf, drawChapterPins } from "./chapter-pins";
 import { NAV_COLORS as K } from "./colors";
 import { clampToDisc, mapAngle, remainingRoute, stopPoint, toMap, type MapView } from "./map";
 
@@ -317,18 +318,21 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
     ctx.restore();
   }
 
-  // The route: the leg you're on in ink, the legs after it fainter.
-  const travelling = frame.mode === "travel" || frame.mode === "intro";
+  // The route: the leg you're on in ink, the legs after it fainter (a patrol's; a case's marks lead instead).
+  const travelling = (frame.mode === "travel" || frame.mode === "intro") && !chapterOf(frame);
   const route = remainingRoute(city, frame);
-  const pts = [toMap(view, hero.x, hero.z), ...route.map((p) => toMap(view, p.x, p.z))];
+  const pts = chapterOf(frame) ? [] : [toMap(view, hero.x, hero.z), ...route.map((p) => toMap(view, p.x, p.z))];
   if (pts.length > 2) dottedPath(ctx, pts.slice(1), K.routeLater, 2.5, 6);
   if (pts.length > 1 && travelling) dottedPath(ctx, pts.slice(0, 2), K.route, 3, 6);
 
   const rim = R - 3;
   pickupDots(ctx, frame, view, 3, (x, y) => Math.hypot(x - R, y - R) < rim - 3);
 
+  // A case night has its own marks (drawChapterPins below), not the patrol's stops.
+  const patrol = !chapterOf(frame);
+
   // Later stops, faint and small, when they're on the map.
-  for (let i = city.zones.length - 1; i > frame.stop; i--) {
+  for (let i = city.zones.length - 1; patrol && i > frame.stop; i--) {
     const p = stopPoint(city.zones[i]);
     const m = toMap(view, p.x, p.z);
     if (Math.hypot(m.x - R, m.y - R) > rim - 10) continue;
@@ -338,7 +342,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
   }
 
   // The next stop: its sticker, ringed and pulsing, pinned to the rim when it's off the map.
-  if (zone && frame.mode !== "done") {
+  if (patrol && zone && frame.mode !== "done") {
     const p = stopPoint(zone);
     const m = toMap(view, p.x, p.z);
     const c = clampToDisc(m.x, m.y, R, R, rim - 15);
@@ -377,6 +381,9 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
     ctx.stroke();
     stickerAt(ctx, s.sticker(frame.stop), c.x, c.y, 24);
   }
+
+  // A case night's clues and the bridge (nothing on a normal night).
+  drawChapterPins(ctx, frame, city, view, R, rim);
 
   const h = heading(frame);
   heroArrow(ctx, R, R, mapAngle(view, h.x, h.z), 9, s.heroColor);
@@ -438,7 +445,9 @@ export function drawFullMap(ctx: CanvasRenderingContext2D, s: FullMapScene): voi
   ctx.clearRect(0, 0, width, height);
   drawCity(ctx, city, view, null, 1.25);
 
-  const all: Vec3[] = [city.start, ...city.zones.map(stopPoint)];
+  // A case night's marks are pinned by the page; its one patrol stop has no route to draw.
+  const patrol = !chapterOf(frame);
+  const all: Vec3[] = patrol ? [city.start, ...city.zones.map(stopPoint)] : [];
   const done = all.slice(0, Math.min(all.length, frame.stop + 1)).map((p) => toMap(view, p.x, p.z));
   if (done.length > 1) {
     ctx.save();
@@ -451,7 +460,7 @@ export function drawFullMap(ctx: CanvasRenderingContext2D, s: FullMapScene): voi
     ctx.restore();
   }
   const hero = frame.hero.pos;
-  const ahead = [toMap(view, hero.x, hero.z), ...remainingRoute(city, frame).map((p) => toMap(view, p.x, p.z))];
+  const ahead = patrol ? [toMap(view, hero.x, hero.z), ...remainingRoute(city, frame).map((p) => toMap(view, p.x, p.z))] : [];
   if (ahead.length > 2) dottedPath(ctx, ahead.slice(1), K.routeLater, 3, 8);
   if (ahead.length > 1 && frame.mode !== "done") dottedPath(ctx, ahead.slice(0, 2), K.route, 3.5, 8);
   pickupDots(ctx, frame, view, 3.5, () => true);

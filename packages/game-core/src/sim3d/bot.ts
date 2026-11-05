@@ -8,7 +8,9 @@
  * pickup when one is close and on the way, else at the next stop.
  */
 import { abilityBlocked, gweiBlocked } from "./abilities";
+import { besideCaptive, COPY_RADIUS, RESTORE_REACH } from "./chapter";
 import { docVulnerable, isVulnerable, mercy, nearestTarget, takesHit } from "./combat";
+import { inShotCone } from "./right-clicker";
 import { DT } from "./constants";
 import type { InputFrame } from "./contract";
 import { DIR64, dirIndex, len2, len3 } from "./dmath";
@@ -221,6 +223,37 @@ function sideways(s: SimState, dx: number, dz: number, pref: number): number {
 }
 
 /**
+ * Case File 001's rescue: to Mary and hold the web there; let go and strike a paper copy that
+ * winds up a slap in reach (a fresh press), then back to holding.
+ */
+function rescueFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"]): InputFrame {
+  const h = s.hero;
+  const c = s.chapter!;
+  const v = s.villain!;
+  const m = c.captive;
+  const frame: InputFrame = { dir: 0, mag: 0, web: false, shot };
+  const dx = m.x - h.x;
+  const dz = m.z - h.z;
+  if (len2(dx, dz) > RESTORE_REACH * 0.5) {
+    frame.dir = dirIndex(dx, dz);
+    frame.mag = 3;
+  }
+  // A copy about to slap, within a blow: punch it (a fresh press, so let go first).
+  let threat = false;
+  for (const b of v.bodies) {
+    if (!b.alive) continue;
+    const gap = len3(b.x - h.x, b.y - h.y, b.z - h.z) - COPY_RADIUS - 26;
+    if (gap < 110 && c.copyWind[b.slot] > 0) threat = true;
+  }
+  if (threat && fightPress(s).kind === "strike") {
+    frame.web = !mem.holding;
+    return frame;
+  }
+  frame.web = besideCaptive(s) && h.strike < 0;
+  return frame;
+}
+
+/**
  * v4: the bot in a fight, on its feet. It sidesteps a dive or a lunge as it comes, a shot or a
  * fee bomb about to land on it, and keeps clear of Doc's arms and bread traps; with the villain
  * open it runs in and strikes (or zips in from further out), and while he guards it circles at
@@ -229,14 +262,34 @@ function sideways(s: SimState, dx: number, dz: number, pref: number): number {
 function fightFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"], dt: number): InputFrame {
   const h = s.hero;
   const v = s.villain!;
+  if (s.chapter && s.chapter.phase === "rescue" && s.mode === "fight") return rescueFrame(s, mem, shot);
   const frame: InputFrame = { dir: 0, mag: 0, web: false, shot };
   const t = nearestTarget(s, h.x, h.y, h.z) ?? { x: v.x, y: v.y, z: v.z, r: v.radius, body: -1 };
   const dx = t.x - h.x;
   const dz = t.z - h.z;
   const hd = len2(dx, dz);
   const gap = len3(dx, t.y - h.y, dz) - t.r - 26;
-  const open = takesHit(v) && s.mode === "fight";
+  // Case File 001: a paper copy in the way is always worth a blow.
+  const open = (takesHit(v) || (v.kind === "right-clicker" && t.body >= 0)) && s.mode === "fight";
   mem.dodgeT = Math.max(0, mem.dodgeT - dt);
+
+  // Case File 001: out of the SCREENSHOT's cone, sideways; a blow breaks the DRAG.
+  if (v.kind === "right-clicker" && s.mode === "fight" && s.chapter) {
+    const c = s.chapter;
+    if (mem.dodgeT <= 0 && v.phase === "aim" && inShotCone(s, v)) {
+      mem.dodgeT = 0.3;
+      mem.dodgeDir = sideways(s, c.aimX, c.aimZ, mem.circle);
+    }
+    if (v.phase === "drag" && mem.dodgeT <= 0) {
+      const press = fightPress(s);
+      if (press.kind === "strike" || press.kind === "zip") {
+        frame.dir = dirIndex(v.x - h.x, v.z - h.z);
+        frame.mag = 3;
+        frame.web = !mem.holding;
+        return frame;
+      }
+    }
+  }
 
   // Threats first: a dive or a lunge in flight at us, a shot closing in, a bomb coming down.
   if (mem.dodgeT <= 0 && s.mode === "fight") {
@@ -338,8 +391,10 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
   mem.lastZ = h.z;
   const shot = pickShot(s, mem);
   const fight = s.mode === "fight" || s.mode === "intro";
-  if (mem.stop !== s.index) {
-    mem.stop = s.index;
+  // The watchdog measures one goal: the stop, or (Case File 001) each clue in turn.
+  const goalKey = s.chapter ? s.index * 8 + s.chapter.clues.filter((k) => k.found).length : s.index;
+  if (mem.stop !== goalKey) {
+    mem.stop = goalKey;
     mem.bestD = Infinity;
     mem.stuckT = 0;
   }

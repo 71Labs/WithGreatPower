@@ -10,6 +10,8 @@
  */
 import { COMBO_TICKS, DT, ERRAND_REACH, ERRAND_TOUCH, HERO_RADIUS, INTRO_SECONDS } from "./constants";
 import { callGwei, fireAbility, makeSlots, stepAbilities } from "./abilities";
+import { chapterCity, findClues, setupChapter } from "./chapter";
+import { chapterInput, chapterWonEnd, stepRescue } from "./chapter-step";
 import { CityIndex, generateCity, groundBelow } from "./city";
 import { knockOut, winFight } from "./combat";
 import type { InputFrame, Zone } from "./contract";
@@ -34,8 +36,10 @@ function spawnPoint(s: Pick<SimState, "city" | "grid">, index: number): { x: num
 }
 
 export function createSim(config: SimConfig): SimState {
-  const city = generateCity(config.seed, config.stops);
+  // Case File 001 builds its own city (the bridge with a wider deck) and its clues and captive.
+  const city = config.chapter ? chapterCity(config.chapter, config.seed) : generateCity(config.seed, config.stops);
   const grid = new CityIndex(city);
+  const chapter = config.chapter ? setupChapter(config.chapter, city, grid, config.seed) : null;
   const sp = spawnPoint({ city, grid }, config.index);
   const s: SimState = {
     config,
@@ -73,6 +77,7 @@ export function createSim(config: SimConfig): SimState {
     slowmo: 0,
     input: IDLE_FRAME,
     events: [],
+    chapter,
   };
   // Face the first stop.
   const b = travelBearing(s);
@@ -198,6 +203,8 @@ function nextStop(s: SimState) {
 function checkArrival(s: SimState) {
   const z = s.city.zones[s.index];
   if (!z) return;
+  // Case File 001: the bridge waits until every clue is found.
+  if (s.chapter && s.chapter.phase === "investigate") return;
   const h = s.hero;
   const b = z.bounds;
   if (z.kind === "fight") {
@@ -247,6 +254,7 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
       stepAbilities(s, DT);
       collectPickups(s);
       stepCombo(s);
+      if (s.chapter) findClues(s);
       checkArrival(s);
       break;
     case "intro":
@@ -261,11 +269,16 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
       }
       break;
     case "fight":
-      stepHero(s, input, DT);
+      if (s.chapter) {
+        // Case File 001: SAVED, the lasso's pull and the rescue shape the hero's input.
+        stepHero(s, chapterInput(s, input), DT);
+        s.hero.holdPrev = input.web;
+      } else stepHero(s, input, DT);
       stepVillain(s, DT);
       stepHazards(s, DT);
       stepAbilities(s, DT);
       stepCombo(s);
+      if (s.chapter) stepRescue(s, input);
       break;
     case "won":
       stepHero(s, input, DT);
@@ -274,8 +287,11 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
       stepCombo(s);
       s.modeT -= DT;
       if (s.modeT <= 0) {
-        s.events.push({ type: "stop-done", index: s.index });
-        nextStop(s);
+        if (s.chapter) chapterWonEnd(s);
+        else {
+          s.events.push({ type: "stop-done", index: s.index });
+          nextStop(s);
+        }
       }
       break;
     case "ko":

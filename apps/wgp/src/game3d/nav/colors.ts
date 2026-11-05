@@ -31,6 +31,8 @@ export const NAV_COLORS = {
   bits: CITY.windowLit,
   bitsDeep: "#E9A23B",
   ring: "#2FD3F0",
-  /** A stop that's done, on the full map. */
+  /** A stop that's done, on the full map (and a case's clue once found). */
   done: "#16A36A",
+  /** A case's clue still out there: the game's reward gold (--game-gold), with a magnifier on it. */
+  clue: "#FFD95A",
 } as const;

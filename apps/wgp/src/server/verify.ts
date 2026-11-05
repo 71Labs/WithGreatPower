@@ -4,11 +4,12 @@
  * `replayRun` (packages/game-core/src/replay.ts); it is injected through `Verifier`
  * so tests can use a fake and the server can swap rulesets in one place.
  */
+import { CHAPTERS } from "@wgp/game-core/chapters";
 import { reduce } from "@wgp/game-core/engine";
 import { replayRun } from "@wgp/game-core/replay";
 import { RULESET_VERSION, SIM_HZ } from "@wgp/game-core/sim3d/constants";
 import type { ReplayInput, ReplayResult } from "@wgp/game-core/sim3d/contract";
-import type { Save } from "@wgp/game-core/types";
+import type { ChapterId, Save } from "@wgp/game-core/types";
 
 export interface Verifier {
   /** Pinned in every run at issue; a submit against another ruleset is rejected. */
@@ -41,6 +42,24 @@ export function setVerifier(verifier: Verifier | undefined): void {
   current = verifier ?? defaultVerifier;
 }
 
+/**
+ * A story chapter's verifier (Case File 001): game-core's replay as that chapter, pinned to
+ * its CHAPTER_RULESET ("c001-1"). A chapter log never replays as a patrol night, nor the
+ * reverse (the log's ruleset field says which it is).
+ */
+const chapterVerifier = (id: ChapterId): Verifier => ({ ruleset: CHAPTERS[id].ruleset, tickHz: SIM_HZ, replay: (input) => replayRun(input, { chapter: id }) });
+
+let chapterOverride: Verifier | undefined;
+
+export function getChapterVerifier(id: ChapterId): Verifier {
+  return chapterOverride ?? chapterVerifier(id);
+}
+
+/** Swaps every chapter's verifier (tests), or restores the defaults with undefined. */
+export function setChapterVerifier(verifier: Verifier | undefined): void {
+  chapterOverride = verifier;
+}
+
 /** The save the replay starts from: the server's copy at run start with tonight's patrol started from the server-issued seed. */
 export function startPatrol(save: Save, seed: number): Save {
   return reduce(save, { type: "start-patrol", seed });
@@ -67,8 +86,25 @@ export async function verifyRun(
   clientHash: string,
   opts: { now?: Date; verifier?: Verifier } = {},
 ): Promise<Verdict> {
-  const verifier = opts.verifier ?? current;
-  const now = opts.now ?? new Date();
+  return verifyWith(opts.verifier ?? current, run, () => startPatrol(run.startSave, run.seed), log, clientHash, opts.now);
+}
+
+/**
+ * A story chapter's run: replayed as the chapter from the save at issue (a chapter starts no
+ * patrol), under the same plausibility rules. A verified chapter run's `stats.cleared` (0 or
+ * 1) says whether it closed the case. Never throws.
+ */
+export async function verifyChapterRun(
+  run: RunToVerify & { chapter: ChapterId },
+  log: Uint8Array,
+  clientHash: string,
+  opts: { now?: Date; verifier?: Verifier } = {},
+): Promise<Verdict> {
+  return verifyWith(opts.verifier ?? getChapterVerifier(run.chapter), run, () => run.startSave, log, clientHash, opts.now);
+}
+
+async function verifyWith(verifier: Verifier, run: RunToVerify, startSave: () => Save, log: Uint8Array, clientHash: string, at?: Date): Promise<Verdict> {
+  const now = at ?? new Date();
 
   if (run.ruleset !== verifier.ruleset) return { ok: false, reason: "ruleset_mismatch" };
   if (log.byteLength === 0) return { ok: false, reason: "log_empty" };
@@ -76,7 +112,7 @@ export async function verifyRun(
 
   let result: ReplayResult;
   try {
-    result = await verifier.replay({ save: startPatrol(run.startSave, run.seed), seed: run.seed, log });
+    result = await verifier.replay({ save: startSave(), seed: run.seed, log });
   } catch (error) {
     return { ok: false, reason: `replay_error: ${error instanceof Error ? error.message : String(error)}`.slice(0, 200) };
   }

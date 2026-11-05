@@ -10,6 +10,7 @@
     "./engine": "./src/rules/engine.ts",
     "./cast": "./src/rules/cast.ts",
     "./content": "./src/rules/content.ts",
+    "./chapters": "./src/rules/chapters.ts",
     "./sim3d/contract": "./src/sim3d/contract.ts",
     "./sim3d/constants": "./src/sim3d/constants.ts",
     "./sim3d": "./src/sim3d/index.ts",

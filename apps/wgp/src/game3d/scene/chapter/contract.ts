@@ -1,78 +1,36 @@
 /**
- * Case file 001's render contract (v1.5), as the scene reads it. The gameplay build owns the
- * real types in `packages/game-core/src/sim3d/contract.ts`; until they land, these match the
- * spec (launch/out/chapters/case-001-spec.md) field for field, all optional on the frame, so
- * the merge is a type-level no-op:
- *
- * - `RenderFrame3D.chapter`: the chapter's phase, its clues, captive Mary and the paper copies;
- * - the villain union's `"right-clicker"`, its phases and its `aim` cone;
- * - the chapter's sim events.
- *
- * Nothing here is read back by the sim.
+ * Case file 001's render contract as the scene reads it: names for game-core's own types
+ * (`RenderFrame3D.chapter`, the Right-Clicker among `villains` with his `aim`, and the
+ * chapter's sim events; docs/chapters/case-001.md), plus small readers. Nothing here is read
+ * back by the sim.
  */
-import type { RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
+import { CHAPTER_ID } from "@wgp/game-core/chapters";
+import type { SimEvent } from "@wgp/game-core/sim3d";
+import type { RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 
-export const CHAPTER_ID = "case-001";
+export { CHAPTER_ID };
+export type { ClueId } from "@wgp/game-core/chapters";
 
-export type ChapterPhase = "investigate" | "standoff" | "rescue" | "done";
-export type ClueId = "tabs" | "cursor" | "pixels";
+/** `RenderFrame3D.chapter` (v1.5): null on patrol nights. */
+export type ChapterFrame = NonNullable<RenderFrame3D["chapter"]>;
+export type ChapterPhase = ChapterFrame["phase"];
+export type ChapterClue = ChapterFrame["clues"][number];
+export type ChapterCaptive = NonNullable<ChapterFrame["captive"]>;
+export type ChapterCopy = ChapterFrame["copies"][number];
 
-export interface ChapterClue {
-  id: ClueId;
-  pos: Vec3;
-  found: boolean;
-}
+/** A frame villain, the Right-Clicker among them. */
+export type SceneVillain = RenderFrame3D["villains"][number];
+export type SceneVillainId = SceneVillain["id"];
+/** The SCREENSHOT's cone: a unit xz direction and the half-angle (radians). */
+export type VillainAim = NonNullable<SceneVillain["aim"]>;
 
-export interface ChapterCaptive {
-  pos: Vec3;
-  /** 0 (saved: fully compressed) … 1 (restored to full quality). */
-  restore: number;
-  freed: boolean;
-}
-
-export interface ChapterCopy {
-  id: number;
-  pos: Vec3;
-  yaw: number;
-  alive: boolean;
-}
-
-/** `RenderFrame3D.chapter` (v1.5). */
-export interface ChapterFrame {
-  id: "case-001";
-  phase: ChapterPhase;
-  clues: ChapterClue[];
-  captive: ChapterCaptive | null;
-  copies: ChapterCopy[];
-}
-
-/** The Right-Clicker's villain phases (the frame villain's `state`). */
-export type RightClickerPhase = "idle" | "aim" | "flash" | "recover" | "copy" | "drag" | "stunned";
+/** The Right-Clicker's state words; "webbed" from the win on. */
+export type RightClickerPhase = "idle" | "aim" | "flash" | "recover" | "copy" | "drag" | "stunned" | "webbed";
+/** The phases a fight runs through (the lab's choices). */
 export const RIGHT_CLICKER_PHASES: readonly RightClickerPhase[] = ["idle", "aim", "flash", "recover", "copy", "drag", "stunned"];
 
-/** The SCREENSHOT's cone: a unit direction and the half-angle (radians). */
-export interface VillainAim {
-  dir: Vec3;
-  half: number;
-}
-
-type FrameVillain = RenderFrame3D["villains"][number];
-
-export type SceneVillainId = FrameVillain["id"] | "right-clicker";
-
-/** A frame villain as the scene reads it: the contract's, widened by the chapter's fields. */
-export type SceneVillain = Omit<FrameVillain, "id"> & { id: SceneVillainId; aim?: VillainAim | null };
-
 /** The chapter's sim events. */
-export type ChapterEvent =
-  | { type: "clue-found"; id: ClueId }
-  | { type: "screenshot"; hit: boolean }
-  | { type: "copy-spawn"; id: number }
-  | { type: "copy-pop"; id: number }
-  | { type: "drag"; from: Vec3; to: Vec3 }
-  | { type: "captive-restore"; p: number }
-  | { type: "captive-freed" }
-  | { type: "case-closed" };
+export type ChapterEvent = Extract<SimEvent, { type: "clue-found" | "screenshot" | "copy-spawn" | "copy-pop" | "drag" | "captive-restore" | "captive-freed" | "case-closed" }>;
 
 const EVENT_TYPES: ReadonlySet<string> = new Set(["clue-found", "screenshot", "copy-spawn", "copy-pop", "drag", "captive-restore", "captive-freed", "case-closed"]);
 
@@ -82,16 +40,16 @@ export function isChapterEvent(ev: { type: string }): ev is ChapterEvent {
 
 /** The frame's chapter, or null on a normal night. */
 export function chapterOf(frame: RenderFrame3D): ChapterFrame | null {
-  return (frame as RenderFrame3D & { chapter?: ChapterFrame | null }).chapter ?? null;
+  return frame.chapter ?? null;
 }
 
-/** The frame's villains, widened to the chapter's. */
+/** The frame's villains. */
 export function villainsOf(frame: RenderFrame3D): readonly SceneVillain[] {
-  return frame.villains as readonly SceneVillain[];
+  return frame.villains;
 }
 
 /** The Right-Clicker in this frame, if he's there. */
 export function rightClickerOf(frame: RenderFrame3D): SceneVillain | null {
-  for (const v of villainsOf(frame)) if (v.id === "right-clicker" && !v.copy) return v;
+  for (const v of frame.villains) if (v.id === "right-clicker" && !v.copy) return v;
   return null;
 }

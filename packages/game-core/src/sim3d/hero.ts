@@ -77,6 +77,7 @@ import {
   WEB_TAP,
   ZIP_RANGE,
 } from "./constants";
+import { nextClue } from "./chapter";
 import { collideSphere, groundBelow, overRiver, supported, type AnchorPick, type SphereHit } from "./city";
 import { nearestTarget } from "./combat";
 import type { InputFrame, Vec3, Zone } from "./contract";
@@ -144,8 +145,13 @@ export function arenaZone(s: SimState): Zone | null {
   return inArena(s) ? (s.city.zones[s.index] ?? null) : null;
 }
 
-/** Where the route goes next: the arena's centre, or the ally. */
+/**
+ * Where the route goes next: the arena's centre, or the ally. Case File 001, investigating:
+ * the nearest clue not yet found (the bridge only after all three).
+ */
 export function stopTarget(s: SimState): Vec3 | null {
+  const clue = s.chapter ? nextClue(s) : null;
+  if (clue) return clue;
   const z = s.city.zones[s.index];
   if (!z) return null;
   return z.kind === "errand" ? (z.allyAt ?? z.center) : z.center;

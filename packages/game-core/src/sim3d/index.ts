@@ -35,3 +35,22 @@ export { inReleaseWindow, pickForecast } from "./swing";
 export { comboMultiplier, nextPickup, placePickups } from "./pickups";
 export { botFrame, newBotMemory, type BotMemory } from "./bot";
 export { fillRenderFrame, heroAction, newRenderFrame } from "./render";
+export {
+  besideCaptive,
+  CHAPTER_DECK_HALF,
+  CHAPTER_HITS,
+  CHAPTER_LEVEL,
+  chapterCity,
+  chapterLogRuleset,
+  chapterStops,
+  CLUE_REACH,
+  CLUE_TALL,
+  COPY_HALF_H,
+  COPY_RADIUS,
+  FREED_SECONDS,
+  MARY_ALONG,
+  nextClue,
+  RESTORE_REACH,
+  RESTORE_TICKS,
+} from "./chapter";
+export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, rightClickerAim, rightClickerState, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";

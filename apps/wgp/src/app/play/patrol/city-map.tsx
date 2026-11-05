@@ -12,6 +12,7 @@ import { useEffect, useId, useRef } from "react";
 import type { SuitColors } from "@/components/cast";
 import { StickerEyebrow, StickerIconButton, StickerPanel } from "@/components/game/kit";
 import { Check, X } from "@/components/icons";
+import { chapterOf } from "@/game3d/nav/chapter-pins";
 import { drawFullMap } from "@/game3d/nav/draw";
 import { compass, fitCity, metres, stopPoint, toMap } from "@/game3d/nav/map";
 import { Chip, Face, HeroFace, Kbd } from "@/sim/ui/bits";
@@ -20,6 +21,8 @@ import { ALLY_CAST, DISTRICTS, VILLAINS } from "@wgp/game-core/data";
 import { castById } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 import type { Stop, StopResult } from "@wgp/game-core/types";
+
+import { ChapterMapList, ChapterPinsLayer, chapterWhere } from "./chapter-map";
 
 /** Padding around the city, as a share of the map's side. */
 const PAD = 0.035;
@@ -82,7 +85,13 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
   const h = frame.hero.pos;
   const next = city.zones[current];
   const togo = next && frame.mode === "travel" ? stopPoint(next) : null;
-  const where = togo ? `${stopName(stops[current])} is ${metres(Math.hypot(togo.x - h.x, togo.z - h.z))} m ${compass(togo.x - h.x, togo.z - h.z)} of you.` : null;
+  // A case night: its clues and the bridge on the map, and its case file beside it.
+  const chapter = chapterOf(frame);
+  const where = chapter
+    ? chapterWhere(chapter, city, h)
+    : togo
+      ? `${stopName(stops[current])} is ${metres(Math.hypot(togo.x - h.x, togo.z - h.z))} m ${compass(togo.x - h.x, togo.z - h.z)} of you.`
+      : null;
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-game-night/70 p-3 sm:p-4">
@@ -97,7 +106,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1.5">
             <StickerEyebrow>
-              <span className="num">{current < stops.length ? `Stop ${current + 1} of ${stops.length}` : "Route done"}</span>
+              <span className="num">{chapter ? "Case file 001" : current < stops.length ? `Stop ${current + 1} of ${stops.length}` : "Route done"}</span>
             </StickerEyebrow>
             <h2 id={`${id}-title`} className="text-[24px] font-bold leading-7 tracking-[-0.02em] text-game-ink">
               City map
@@ -117,7 +126,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
           <div className="relative mx-auto aspect-square w-full max-w-[min(100%,calc(100dvh-220px),560px)] shrink-0 overflow-hidden rounded-[18px] border-[2.5px] border-game-ink bg-game-paper-2 md:w-[min(56vw,calc(100dvh-200px),560px)]">
             <canvas ref={canvas} aria-hidden className="absolute inset-0 block size-full" />
             <ol aria-hidden className="contents">
-              {stops.map((stop, i) => {
+              {(chapter ? [] : stops).map((stop, i) => {
                 const p = toMap(unit, stopPoint(city.zones[i]).x, stopPoint(city.zones[i]).z);
                 const s = statusOf(i, current, results[i]);
                 return (
@@ -140,10 +149,12 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
                 );
               })}
             </ol>
+            {chapter ? <ChapterPinsLayer chapter={chapter} city={city} unit={unit} still={still} /> : null}
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <ol aria-label="Tonight’s stops" className="flex flex-col gap-2">
+            {chapter ? <ChapterMapList chapter={chapter} /> : null}
+            <ol aria-label="Tonight’s stops" className={`flex flex-col gap-2 ${stops.length && !chapter ? "" : "hidden"}`}>
               {stops.map((stop, i) => {
                 const s = statusOf(i, current, results[i]);
                 return (
@@ -171,7 +182,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
             </ol>
             <p className="flex items-center gap-2 text-[13px] leading-5 text-game-muted">
               <HeroFace colors={hero} className="size-6 rounded-full" />
-              The arrow is you; the dots lead to the next stop.
+              {chapter ? "The arrow is you; the pins are the case’s." : "The arrow is you; the dots lead to the next stop."}
             </p>
             <label htmlFor={`${id}-n`} className="flex min-h-11 cursor-pointer items-center justify-between gap-3 border-t-2 border-dashed border-game-ink/30 pt-3">
               <span className="flex flex-col gap-0.5">

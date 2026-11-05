@@ -56,6 +56,8 @@ const LOOP_LEN = LOOP.reduce((s, [, d]) => s + d, 0);
 
 const v = (x = 0, y = 0, z = 0): Vec3 => ({ x, y, z });
 const HERO_R = 26;
+/** A copy's pos is its centre, this far over the deck (the sim's COPY_HALF_H). */
+const COPY_UP = 44;
 
 export interface CaseSite {
   id: ClueId;
@@ -243,7 +245,7 @@ export class CaseScript {
     // Clues: unfound while investigating (one found per few seconds walking), all found after.
     for (const c of ch.clues) {
       const want = this.scene !== "investigate" || this.found.has(c.id);
-      if (want && !c.found) events.push({ type: "clue-found", id: c.id });
+      if (want && !c.found) events.push({ type: "clue-found", id: c.id, ...c.pos, found: ch.clues.filter((x) => x.found).length + 1, of: ch.clues.length });
       c.found = want;
     }
     if (this.scene === "investigate") this.investigate(dt, events);
@@ -331,7 +333,7 @@ export class CaseScript {
       aim: phase === "aim" || phase === "flash" ? { dir, half: 0.3 } : null,
     });
     if (phase !== this.lastPhase) {
-      if (phase === "flash") events.push({ type: "screenshot", hit: !miss });
+      if (phase === "flash") events.push({ type: "screenshot", hit: !miss, ...rcAt });
       if (phase === "drag") events.push({ type: "drag", from: { ...hp }, to: this.deck(70, -20, HERO_R) });
       this.lastPhase = phase;
       this.loopIndex = index;
@@ -345,10 +347,10 @@ export class CaseScript {
       // The prints face the hero.
       const yaw = Math.atan2(dir.x, dir.z);
       this.ch.copies = [
-        { id: a, pos: this.deck(40, -30), yaw: yaw - 0.15, alive: true },
-        { id: b, pos: this.deck(95, 25), yaw: yaw + 0.2, alive: true },
+        { id: a, pos: this.deck(40, -30, COPY_UP), yaw: yaw - 0.15, alive: true },
+        { id: b, pos: this.deck(95, 25, COPY_UP), yaw: yaw + 0.2, alive: true },
       ];
-      events.push({ type: "copy-spawn", id: a }, { type: "copy-spawn", id: b });
+      events.push({ type: "copy-spawn", id: a, ...this.ch.copies[0].pos }, { type: "copy-spawn", id: b, ...this.ch.copies[1].pos });
     } else if (!want && this.copiesUp) this.clearCopies(events, true);
   }
 
@@ -370,7 +372,7 @@ export class CaseScript {
         events.push({ type: "captive-restore", p: q / 4 });
       }
     }
-    if (freed && !this.freed) events.push({ type: "captive-freed" });
+    if (freed && !this.freed) events.push({ type: "captive-freed", ...at });
     if (!freed && this.freed && !done) {
       this.lastRestoreQ = -1;
     }
@@ -387,16 +389,16 @@ export class CaseScript {
       const a = this.nextCopy++;
       const b = this.nextCopy++;
       this.ch.copies = [
-        { id: a, pos: this.deck(0, 45), yaw: Math.PI * 0.8, alive: true },
-        { id: b, pos: this.deck(120, -30), yaw: -Math.PI * 0.6, alive: true },
+        { id: a, pos: this.deck(0, 45, COPY_UP), yaw: Math.PI * 0.8, alive: true },
+        { id: b, pos: this.deck(120, -30, COPY_UP), yaw: -Math.PI * 0.6, alive: true },
       ];
-      events.push({ type: "copy-spawn", id: a }, { type: "copy-spawn", id: b });
+      events.push({ type: "copy-spawn", id: a, ...this.ch.copies[0].pos }, { type: "copy-spawn", id: b, ...this.ch.copies[1].pos });
     } else if (done && this.copiesUp) this.clearCopies(events, true);
   }
 
   private clearCopies(events: ChapterEvent[], pop: boolean): void {
     if (!this.copiesUp && !this.ch.copies.length) return;
-    if (pop) for (const c of this.ch.copies) if (c.alive) events.push({ type: "copy-pop", id: c.id });
+    if (pop) for (const c of this.ch.copies) if (c.alive) events.push({ type: "copy-pop", id: c.id, ...c.pos });
     this.ch.copies = [];
     this.copiesUp = false;
   }

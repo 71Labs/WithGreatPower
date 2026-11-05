@@ -201,7 +201,15 @@ function planZones(rng: Rng, stops: Stop[]): { plans: ZonePlan[]; river: RiverPl
 
 /* ------------------------------------------------------------------ generation */
 
-export function generateCity(seed: number, stops: Stop[]): City {
+export interface CityOptions {
+  /**
+   * Case File 001: the bridge deck's half width, wider than a patrol's DECK_HALF so the
+   * standoff has room to sidestep a SCREENSHOT. Unset (every patrol night): DECK_HALF.
+   */
+  deckHalf?: number;
+}
+
+export function generateCity(seed: number, stops: Stop[], opts: CityOptions = {}): City {
   const rng = new Rng(mix(seed, 0x3d1c17));
   const { plans, river: rp } = planZones(rng, stops);
   const buildings: Building[] = [];
@@ -513,7 +521,7 @@ export function generateCity(seed: number, stops: Stop[]): City {
       const D = BRIDGE_DECK;
       const U = BRIDGE_TOWER;
       // v4: a wider deck (DECK_HALF either side; v3: 90), so a fight has room to sidestep.
-      const W = DECK_HALF;
+      const W = opts.deckHalf ?? DECK_HALF;
       const deck = box(-D, D, -W, W);
       const towers: Vec3[] = [];
       // Legs flush against the deck's sides, so nothing can wedge between them; v2 stands
@@ -536,8 +544,10 @@ export function generateCity(seed: number, stops: Stop[]): City {
       for (const t of towers) anchors.push({ at: { x: t.x, y: towerTop + 8, z: t.z }, kind: "tower" });
       const arena = box(-BRIDGE_HALF, BRIDGE_HALF, -BRIDGE_ACROSS, BRIDGE_ACROSS);
       // The lots kept clear around the deck are ruleset 3's (a 90-wide deck and 60 more), so the
-      // rest of the city is unchanged; the arena's own margin covers the wider deck's legs.
-      const clear = box(-D - 60, D + 60, -90 - 60, 90 + 60);
+      // rest of the city is unchanged; the arena's own margin covers the wider deck's legs. A
+      // chapter's wider deck keeps its whole width clear, out to its ends.
+      const keep = opts.deckHalf === undefined ? 90 + 60 : W + 60;
+      const clear = box(-D - 60, D + 60, -keep, keep);
       docAvoid.push({ x0: arena.x0 - 20, z0: arena.z0 - 20, x1: arena.x1 + 20, z1: arena.z1 + 20 }, clear);
       zones.push({
         index,

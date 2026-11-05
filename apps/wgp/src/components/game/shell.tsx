@@ -9,10 +9,12 @@ import { playMusic, setSoundEnabled, soundEnabled, subscribeSound } from "@/audi
 import { SoundSliders } from "@/components/game/sound-sliders";
 import { AccountCenter, AccountChip } from "@/components/account/account-center";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { ArrowUpRight, City, HelpCircle, Medal, Newspaper, Settings, Shirt, Store, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
+import { ArrowUpRight, City, FolderSearch, HelpCircle, Medal, Newspaper, Settings, Shirt, Store, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
 import type { CastId } from "@wgp/game-core/cast";
 import { XP_TO_NEXT } from "@wgp/game-core/data";
 import { useAccount, useGame } from "@/game/store";
+import { CASE_PATHS } from "@/lib/cases/content";
+import { useNewCase } from "@/lib/cases/local";
 import type { Hero, Save } from "@wgp/game-core/types";
 
 import { GameBackdrop, type BackdropVariant } from "./backdrop";
@@ -26,6 +28,7 @@ export const GAME_NAV = [
   { href: "/play/market", label: "Market", icon: Store },
   { href: "/play/album", label: "Album", icon: Medal },
   { href: "/play/rug", label: "Daily Rug", icon: Newspaper },
+  { href: CASE_PATHS.list, label: "Cases", icon: FolderSearch },
   { href: "/play/leaderboard", label: "Ranks", icon: Award },
 ] as const;
 
@@ -166,6 +169,7 @@ const HOW_TO: { who: CastId; title: string; text: string }[] = [
   { who: "aunt-mainnet", title: "Help the neighbors", text: "Errands raise your responsibility and fill your sticker album." },
   { who: "uncle-gen", title: "Level up, learn powers", text: "Each level brings a new power. Up to four ride along on patrol." },
   { who: "bearson", title: "Read The Daily Rug", text: "Bearson writes up every night. Vote in his poll and take his quest for bonus XP." },
+  { who: "mary-jpeg", title: "Open a case file", text: "Special nights from Bearson’s desk: one mystery and one new villain, played off the boards." },
 ];
 
 function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -386,29 +390,39 @@ const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(ma
 function Dock({ pathname, save }: { pathname: string | null; save: Save | null }) {
   const picks = save?.hero?.pendingPicks ?? 0;
   const unread = useUnreadEdition(save);
+  const newCase = useNewCase(save);
   return (
     <nav
       aria-label="Game"
       className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-2 sm:px-6"
     >
+      {/* Eight tabs: on a 360px phone the labels go a hair smaller and tighter so each fits its column. */}
       <ul
-        className={`pointer-events-auto grid w-full max-w-[680px] grid-cols-7 sm:max-w-[800px] gap-1 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 ${ON_PAPER}`}
+        className={`pointer-events-auto grid w-full max-w-[720px] grid-cols-8 gap-0.5 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 min-[400px]:gap-1 min-[400px]:px-2 sm:max-w-[900px] ${ON_PAPER}`}
       >
         {GAME_NAV.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
-          const badge = item.href === "/play/hero" && picks > 0 ? { value: `+${picks}`, label: `${plural(picks, "new power")} to pick` } : item.href === "/play/rug" && unread ? { value: "New", label: "new edition" } : null;
+          const badge =
+            item.href === "/play/hero" && picks > 0
+              ? { value: `+${picks}`, label: `${plural(picks, "new power")} to pick` }
+              : item.href === "/play/rug" && unread
+                ? { value: "New", label: "new edition" }
+                : item.href === CASE_PATHS.list && newCase
+                  ? { value: "New", label: "new case file" }
+                  : null;
           return (
             <li key={item.href} className="min-w-0">
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[18px] px-1 text-[11px] font-semibold leading-3 focus-visible:outline-offset-1 sm:h-12 sm:text-[13px] [@media(max-height:520px)]:h-11 [@media(max-height:520px)]:text-[13px] ${ROW} ${
+                className={`relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[18px] px-0.5 text-[10.5px] font-semibold leading-3 tracking-[-0.01em] focus-visible:outline-offset-1 min-[400px]:px-1 min-[400px]:text-[11px] min-[400px]:tracking-normal sm:h-12 sm:text-[13px] [@media(max-height:520px)]:h-11 [@media(max-height:520px)]:text-[13px] ${ROW} ${
                   active ? "bg-game-ink text-game-paper" : "text-game-ink pointer-fine:hover:bg-game-paper-2"
                 }`}
               >
                 <Icon aria-hidden className="size-[22px] shrink-0 sm:size-5" strokeWidth={active ? 2.25 : 1.9} />
-                <span className="truncate">{item.label}</span>
+                {/* A line tall enough for descenders, which `truncate` would otherwise clip ("Daily Rug"). */}
+                <span className="truncate leading-[14px] sm:leading-4">{item.label}</span>
                 {badge ? (
                   <>
                     <StickerBadge className="absolute right-[calc(50%-26px)] top-0.5 sm:-top-1.5 sm:right-1 [@media(max-height:520px)]:-top-1.5 [@media(max-height:520px)]:right-1">
@@ -453,7 +467,8 @@ function useRouteMusic(pathname: string | null) {
  * The frame round every game screen: the living city behind, the hero, account, help
  * and settings chips floating along the top, and the tab dock seated on the bottom edge.
  * The game itself (/play/patrol) gets the whole screen; onboarding (/play/bitten) keeps
- * the city and the account chip but brings its own back control. The account sheet,
+ * the city and the account chip but brings its own back control, and a case's intro comic
+ * (/play/cases/001) keeps the city and brings its own way back. The account sheet,
  * the import offer and toasts float over all of them.
  */
 export function GameShell({ children }: { children: ReactNode }) {
@@ -461,8 +476,10 @@ export function GameShell({ children }: { children: ReactNode }) {
   const { save } = useGame();
   const game = !!pathname?.startsWith("/play/patrol");
   const onboarding = !!pathname?.startsWith("/play/bitten");
-  const chrome = !game && !onboarding;
-  const variant: BackdropVariant = pathname === "/play" ? "home" : onboarding ? "flow" : "tab";
+  /** A case's intro comic: the whole screen, with its own way back. */
+  const comic = pathname === CASE_PATHS.intro;
+  const chrome = !game && !onboarding && !comic;
+  const variant: BackdropVariant = pathname === "/play" ? "home" : onboarding || comic ? "flow" : "tab";
   useRouteMusic(pathname);
 
   return (

@@ -12,8 +12,10 @@
 import { DT } from "./constants";
 import type { HeroAction, RenderFrame3D, Vec3 } from "./contract";
 import { datan2, dcos, dsin, len2 } from "./dmath";
+import { RESTORE_TICKS } from "./chapter";
 import { inOpening } from "./combat";
 import { comboMultiplier } from "./pickups";
+import { rightClickerAim, rightClickerState } from "./right-clicker";
 import { armShoulder, armTip } from "./villains";
 import type { SimState, Villain } from "./types";
 
@@ -48,6 +50,7 @@ export function newRenderFrame(): RenderFrame3D {
     pickups: [],
     combo: { count: 0, multiplier: 1, ticksLeft: 0 },
     route: [],
+    chapter: null,
   };
 }
 
@@ -160,6 +163,7 @@ function zipTarget(s: SimState): Vec3 | null {
 /** A short state word for a villain, for animation. */
 function villainState(s: SimState): string {
   const v = s.villain!;
+  if (v.kind === "right-clicker") return rightClickerState(s, v);
   if (s.mode === "won") return "webbed";
   if (v.stun > 0) return "stunned";
   // v4: Gas Goblin's stall and Sandwich Man's stumble are openings: they read as dazed.
@@ -331,6 +335,15 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
       slot.bank = v.kind === "gas-goblin" ? v.bank : 0;
       if (v.kind === "doc-octochain") fillArms(v, slot);
       else delete slot.arms;
+      if (v.kind === "right-clicker") {
+        // v1.5: the SCREENSHOT cone.
+        const a = rightClickerAim(s, v);
+        if (a) {
+          const aim = slot.aim ?? (slot.aim = { dir: v3(), half: a.half });
+          set(aim.dir, a.x, 0, a.z);
+          aim.half = a.half;
+        } else slot.aim = null;
+      } else delete slot.aim;
       vs[n++] = slot;
     };
     if (v.kind === "sybil") v.bodies.forEach((b, i) => b.alive && push(b, !b.real, i));
@@ -364,5 +377,46 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   // Gwei swings in on her own web: `to` is the anchor she hangs from.
   if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck, s.gwei.anchor);
   hz.length = m;
+  fillChapter(s, out);
   return out;
+}
+
+/** v1.5: a chapter night's clues, captive and paper copies (null on a patrol night). */
+function fillChapter(s: SimState, out: RenderFrame3D) {
+  const c = s.chapter;
+  if (!c) {
+    out.chapter = null;
+    return;
+  }
+  const ch = out.chapter ?? (out.chapter = { id: c.id, phase: c.phase, clues: [], captive: null, copies: [] });
+  ch.id = c.id;
+  ch.phase = c.phase;
+  for (let i = 0; i < c.clues.length; i++) {
+    const k = c.clues[i];
+    const slot = ch.clues[i] ?? (ch.clues[i] = { id: k.id, pos: v3(), found: false });
+    slot.id = k.id;
+    set(slot.pos, k.x, k.y, k.z);
+    slot.found = k.found;
+  }
+  ch.clues.length = c.clues.length;
+  const m = c.captive;
+  const cap = ch.captive ?? (ch.captive = { pos: v3(), restore: 0, freed: false });
+  set(cap.pos, m.x, m.y, m.z);
+  cap.restore = Math.min(1, m.restore / RESTORE_TICKS);
+  cap.freed = m.freed;
+  const v = s.villain;
+  const h = s.hero;
+  let n = 0;
+  if (v && v.kind === "right-clicker") {
+    for (const b of v.bodies) {
+      const slot = ch.copies[n] ?? (ch.copies[n] = { id: b.slot, pos: v3(), yaw: 0, alive: true });
+      slot.id = b.slot;
+      set(slot.pos, b.x, b.y, b.z);
+      // Facing the hero: the cutout's front (+z) turned to (sin yaw, cos yaw).
+      slot.yaw = datan2(h.x - b.x, h.z - b.z);
+      slot.alive = b.alive;
+      n += 1;
+    }
+  }
+  ch.copies.length = n;
 }

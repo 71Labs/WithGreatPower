@@ -7,24 +7,32 @@
  *
  * Idempotent: resubmitting the same log returns the stored outcome; a different log for
  * a finished run is a 409.
+ *
+ * Story chapters (Case File 001; cases.ts) go through the same start and submit with
+ * `runs.mode` = the chapter id and `runs.ruleset` = its CHAPTER_RULESET. They are replayed as
+ * the chapter (verify.ts verifyChapterRun), can be played on any night, have their own daily
+ * budget, and are unranked: no board, no Bits. A clear closes the case in the save.
  */
 import { createHash, createHmac, randomUUID } from "node:crypto";
 
 import { and, eq, lte } from "drizzle-orm";
 
-import type { Save } from "@wgp/game-core/types";
+import { applyCaseClear, caseRecord, CHAPTERS, isChapterId } from "@wgp/game-core/chapters";
+import type { ReplayResult } from "@wgp/game-core/sim3d/contract";
+import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import { nightBits } from "@/lib/market/rewards";
 import { secret } from "@/server/auth/secrets";
 import { HttpError, conflict, notFound } from "@/server/http";
 import { reserveBudget, releaseBudget, utcDay } from "@/server/rate-limit";
-import { getVerifier, verifyRun, type Verifier } from "@/server/verify";
+import { getChapterVerifier, getVerifier, verifyChapterRun, verifyRun, type Verifier } from "@/server/verify";
 
+import { badgeKey, badgeView, CASE_BUDGET_SCOPE, CASE_RUNS_PER_DAY, type CaseOutcome } from "./cases";
 import type { Db } from "./client";
 import { recordScore } from "./leaderboard";
 import { BITS_TOKEN_ID, enqueueRewardMint, lootDiff, withBits, type MintItem } from "./outbox";
 import { ensureSave, getPlayer, writeSave } from "./players";
-import { chainOps, players, runs, type Run } from "./schema";
+import { chainOps, players, runs, saves, type Run } from "./schema";
 
 export const RUN_TTL_MS = 45 * 60_000;
 export const RUNS_PER_DAY = 20;
@@ -61,20 +69,25 @@ export interface StartedRun {
   night: number;
   expiresAt: string;
   assist: boolean;
+  /** The story chapter this run plays (startChapterRun on the client), or null for a ranked night. */
+  chapter: ChapterId | null;
 }
 
 export async function startRun(
   db: Db,
-  input: { playerId: string; assist?: boolean; abandon?: boolean; now?: Date; verifier?: Verifier },
+  input: { playerId: string; assist?: boolean; abandon?: boolean; chapter?: ChapterId; now?: Date; verifier?: Verifier },
 ): Promise<StartedRun> {
   const now = input.now ?? new Date();
-  const verifier = input.verifier ?? getVerifier();
+  const chapter = input.chapter ?? null;
+  if (chapter !== null && !isChapterId(chapter)) throw new HttpError(400, "no_chapter", "There’s no such case file");
+  const verifier = input.verifier ?? (chapter ? getChapterVerifier(chapter) : getVerifier());
   const { playerId } = input;
 
   const { save, rev } = await ensureSave(db, playerId);
   if (!save.hero) throw conflict("no_hero", "Create a hero first");
-  if (save.nightDone) throw conflict("night_done", "Tonight’s patrol is done; sleep first");
-  if (save.patrol) throw conflict("patrol_in_progress", "A patrol is already under way in this save");
+  // A chapter needs no patrol: it can be played on any night, before or after tonight's.
+  if (!chapter && save.nightDone) throw conflict("night_done", "Tonight’s patrol is done; sleep first");
+  if (!chapter && save.patrol) throw conflict("patrol_in_progress", "A patrol is already under way in this save");
 
   // Runs past their deadline no longer count as in flight.
   await db
@@ -95,22 +108,26 @@ export async function startRun(
       .where(and(eq(runs.id, active.id), eq(runs.status, "issued")));
   }
 
-  const budget = { scope: RUN_BUDGET_SCOPE, key: playerId, period: utcDay(now) };
-  const reserved = await reserveBudget(db, { ...budget, limit: RUNS_PER_DAY }, now);
+  const limit = chapter ? CASE_RUNS_PER_DAY : RUNS_PER_DAY;
+  const budget = { scope: chapter ? CASE_BUDGET_SCOPE : RUN_BUDGET_SCOPE, key: playerId, period: utcDay(now) };
+  const reserved = await reserveBudget(db, { ...budget, limit }, now);
   if (!reserved.ok) {
     const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
     const retryAfterSeconds = Math.max(1, Math.ceil((midnight - now.getTime()) / 1000));
-    throw new HttpError(429, "daily_cap", `That’s ${RUNS_PER_DAY} runs today. The city resets at midnight UTC.`, { limit: RUNS_PER_DAY, retryAfterSeconds });
+    const message = chapter ? `That’s ${limit} tries at this case today. Bearson’s door opens again at midnight UTC.` : `That’s ${limit} runs today. The city resets at midnight UTC.`;
+    throw new HttpError(429, "daily_cap", message, { limit, retryAfterSeconds });
   }
 
   const runId = randomUUID();
   const seed = seedFor(runId);
   const expiresAt = new Date(now.getTime() + RUN_TTL_MS);
-  const assist = !!input.assist;
+  // Chapter runs are never ranked, so assist (slow motion) changes nothing there.
+  const assist = chapter ? false : !!input.assist;
   try {
     await db.insert(runs).values({
       id: runId,
       playerId,
+      mode: chapter ?? "patrol",
       night: save.night,
       seed,
       ruleset: verifier.ruleset,
@@ -127,7 +144,7 @@ export async function startRun(
     throw error;
   }
 
-  return { runId, seed, ruleset: verifier.ruleset, saveRev: rev, night: save.night, expiresAt: expiresAt.toISOString(), assist };
+  return { runId, seed, ruleset: verifier.ruleset, saveRev: rev, night: save.night, expiresAt: expiresAt.toISOString(), assist, chapter };
 }
 
 /* ------------------------------------------------------------------ submit */
@@ -148,6 +165,8 @@ export type SubmitResult =
       /** Cache tags of the boards this run changed; the route revalidates them. */
       tags: string[];
       idempotent: boolean;
+      /** A chapter run (never ranked, no Bits): what it did to the case. */
+      chapter?: CaseOutcome;
     }
   | { status: "rejected"; runId: string; reason: string; idempotent: boolean };
 
@@ -178,21 +197,108 @@ async function storedOutcome(db: Db, run: Run, log: Uint8Array, clientHash: stri
   }
   if (run.status === "verified") {
     const { save, rev } = await ensureSave(db, run.playerId);
+    const chapter = isChapterId(run.mode) ? run.mode : null;
     return {
       status: "verified",
       runId: run.id,
       score: run.verifiedScore ?? 0,
       ticks: run.ticks ?? 0,
       digest: run.digest ?? "",
-      bits: await mintedBitsFor(db, run.id),
-      ranked: !run.assist,
+      bits: chapter ? 0 : await mintedBitsFor(db, run.id),
+      ranked: !run.assist && !chapter,
       save,
       rev,
       tags: [],
       idempotent: true,
+      ...(chapter ? { chapter: await storedCase(db, run, chapter, save) } : {}),
     };
   }
   return { status: "rejected", runId: run.id, reason: run.rejectReason ?? "rejected", idempotent: true };
+}
+
+/** A verified chapter run's case outcome, read back (an idempotent resubmit). */
+async function storedCase(db: Db, run: Run, chapter: ChapterId, save: Save): Promise<CaseOutcome> {
+  const cleared = (run.stats as Record<string, number> | null)?.cleared === 1;
+  const [op] = await db.select({ payload: chainOps.payload }).from(chainOps).where(eq(chainOps.dedupeKey, badgeKey(chapter, run.playerId))).limit(1);
+  const firstClear = (op?.payload as { runId?: string } | undefined)?.runId === run.id;
+  return { id: chapter, cleared, firstClear, record: caseRecord(save, chapter), badge: await badgeView(db, chapter, run.playerId) };
+}
+
+/**
+ * A verified chapter run: unranked, no Bits. A clear closes the case in the save as it is now
+ * (the case is added to whatever else changed since the run began, so it never conflicts),
+ * and the first clear queues the badge (one per player, by its outbox key) and pays the XP.
+ */
+async function closeCase(
+  db: Db,
+  run: Run,
+  chapter: ChapterId,
+  result: ReplayResult,
+  ctx: { log: Uint8Array; clientHash: string; now: Date; submitted: Record<string, unknown> },
+): Promise<SubmitResult> {
+  const { log, clientHash, now, submitted } = ctx;
+  const playerId = run.playerId;
+  const cleared = (result.stats.cleared ?? 0) === 1;
+  const digest = runDigest(run, log, result.hash, result.score, result.ticks);
+  const player = await getPlayer(db, playerId);
+  if (!player) throw notFound("No such player");
+  try {
+    const out = await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(runs)
+        .set({ ...submitted, status: "verified", verifiedScore: result.score, ticks: result.ticks, stats: result.stats, checkpoints: result.checkpoints, digest, assist: false })
+        .where(and(eq(runs.id, run.id), eq(runs.status, "issued")))
+        .returning({ id: runs.id });
+      if (claimed.length === 0) throw new Abort("raced");
+      await ensureSave(tx, playerId);
+      const [row] = await tx.select({ state: saves.state, rev: saves.rev }).from(saves).where(eq(saves.playerId, playerId)).for("update");
+      let save = row!.state as Save;
+      let rev = row!.rev;
+      let firstClear = false;
+      if (cleared) {
+        const level = save.hero?.level ?? 0;
+        const closed = applyCaseClear(save, chapter, result.ticks, now.toISOString(), true);
+        firstClear = closed.firstClear;
+        if (JSON.stringify(closed.record) !== JSON.stringify(caseRecord(save, chapter)) || closed.save.hero !== save.hero) {
+          const next = await writeSave(tx, playerId, closed.save, rev, now);
+          if (next === null) throw new Abort("raced");
+          save = closed.save;
+          rev = next;
+        }
+        if (firstClear) {
+          const after = save.hero?.level ?? 0;
+          await enqueueRewardMint(
+            tx,
+            {
+              kind: "mint_reward",
+              dedupeKey: badgeKey(chapter, playerId),
+              playerId,
+              payload: { runId: run.id, playerId, accountId: player.nearAccountId, items: [], badges: [CHAPTERS[chapter].badge], ...(after > level ? { level: after } : {}), digest },
+            },
+            now,
+          );
+        }
+      }
+      return { save, rev, firstClear };
+    });
+    return {
+      status: "verified",
+      runId: run.id,
+      score: result.score,
+      ticks: result.ticks,
+      digest,
+      bits: 0,
+      ranked: false,
+      save: out.save,
+      rev: out.rev,
+      tags: [],
+      idempotent: false,
+      chapter: { id: chapter, cleared, firstClear: out.firstClear, record: caseRecord(out.save, chapter), badge: await badgeView(db, chapter, playerId) },
+    };
+  } catch (error) {
+    if (!(error instanceof Abort)) throw error;
+    return storedOutcome(db, (await loadRun(db, run.id))!, log, clientHash);
+  }
 }
 
 export async function submitRun(
@@ -215,10 +321,11 @@ export async function submitRun(
   }
 
   const startSave = run.startSave as Save;
-  const verdict = await verifyRun({ ruleset: run.ruleset, seed: run.seed, startSave, issuedAt: run.issuedAt }, log, clientHash, {
-    now,
-    verifier: input.verifier,
-  });
+  const chapter = isChapterId(run.mode) ? run.mode : null;
+  const toVerify = { ruleset: run.ruleset, seed: run.seed, startSave, issuedAt: run.issuedAt };
+  const verdict = chapter
+    ? await verifyChapterRun({ ...toVerify, chapter }, log, clientHash, { now, verifier: input.verifier })
+    : await verifyRun(toVerify, log, clientHash, { now, verifier: input.verifier });
   const submitted = { inputLog: log, logBytes: log.byteLength, clientHash, submittedAt: now };
 
   if (!verdict.ok) {
@@ -240,6 +347,8 @@ export async function submitRun(
   }
 
   const { result } = verdict;
+  // A chapter: no board, no Bits; a clear closes the case.
+  if (chapter) return closeCase(db, run, chapter, result, { log, clientHash, now, submitted });
   const assist = run.assist || (result.stats.assist ?? 0) > 0;
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
   // Bits come from the verified replay alone (its score and, since ruleset 3, the Bits tokens it
@@ -324,15 +433,15 @@ export async function submitRun(
 
 /* ------------------------------------------------------------------ reads */
 
-/** The player's run in flight, if any. */
-export async function activeRun(db: Db, playerId: string, now = new Date()): Promise<{ runId: string; expiresAt: string; night: number } | null> {
+/** The player's run in flight, if any. `chapter`: a story chapter's run (it blocks a ranked night too, one run at a time). */
+export async function activeRun(db: Db, playerId: string, now = new Date()): Promise<{ runId: string; expiresAt: string; night: number; chapter: ChapterId | null } | null> {
   const [row] = await db
-    .select({ id: runs.id, expiresAt: runs.expiresAt, night: runs.night })
+    .select({ id: runs.id, expiresAt: runs.expiresAt, night: runs.night, mode: runs.mode })
     .from(runs)
     .where(and(eq(runs.playerId, playerId), eq(runs.status, "issued")))
     .limit(1);
   if (!row || row.expiresAt.getTime() <= now.getTime()) return null;
-  return { runId: row.id, expiresAt: row.expiresAt.toISOString(), night: row.night };
+  return { runId: row.id, expiresAt: row.expiresAt.toISOString(), night: row.night, chapter: isChapterId(row.mode) ? row.mode : null };
 }
 
 export interface PublicReplay {
@@ -342,6 +451,8 @@ export interface PublicReplay {
   night: number;
   seed: number;
   ruleset: string;
+  /** A story chapter's run: replay it with replayRun(…, { chapter }) from startSave itself (no patrol). */
+  chapter: ChapterId | null;
   /** The save at run start; replay with startPatrol(startSave, seed) and the log. */
   startSave: Save;
   /** The input log, base64. */
@@ -374,6 +485,7 @@ export async function getReplay(db: Db, runId: string): Promise<PublicReplay | n
     night: r.night,
     seed: r.seed,
     ruleset: r.ruleset,
+    chapter: isChapterId(r.mode) ? r.mode : null,
     startSave: r.startSave as Save,
     log: Buffer.from(r.inputLog!).toString("base64"),
     score: r.verifiedScore ?? 0,
