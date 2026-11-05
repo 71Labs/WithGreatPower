@@ -15,11 +15,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import type { Save } from "@wgp/game-core/types";
 
+import { CaseClosed, type CaseFiling } from "@/components/cases/case-closed";
 import { useAccount, useGame, type AccountState } from "@/game/store";
 import { beginLocal, beginRanked, clearRecording, endNight, loadRecording, resumeRecording, type NightSession, type RankedStart, type Recording } from "@/game3d/session";
 
 import { NightResults, type Ending } from "./night-results";
-import { PlaySurface } from "./play-surface";
+import { PlaySurface, type ChapterEnd } from "./play-surface";
 import { Choice, Loading, Notice, PatrolGame } from "./status";
 
 type Phase =
@@ -118,6 +119,26 @@ function botMayPlay(session: NightSession): boolean {
   return process.env.NODE_ENV !== "production" || session.mode !== "ranked";
 }
 
+/** A case night's ending as its results show it: the clear, its time, and where the filing stands. */
+function caseResults(session: NightSession, ending: Ending, end: ChapterEnd) {
+  const o = ending.kind === "done" ? ending.outcome : null;
+  let filing: CaseFiling;
+  if (!o) filing = { kind: "filing" };
+  else if (o.kind === "verified") filing = { kind: "filed" };
+  else if (o.kind === "guest") filing = { kind: "guest" };
+  else if (o.kind === "rejected") filing = { kind: "not-filed", reason: "The server’s replay of your night ended somewhere different, so this clear wasn’t filed. You can play the case again." };
+  else if (o.kind === "unranked") filing = { kind: "not-filed", reason: "This one was played off the record, so nothing was filed." };
+  else filing = { kind: "failed", message: o.message };
+  const banked = o && (o.kind === "verified" || o.kind === "guest") ? o.save : session.run.save;
+  return {
+    heroName: session.run.start.hero?.name?.trim() || "The Node",
+    closed: end.closed,
+    ticks: end.ticks,
+    filing,
+    edition: banked.editions[0]?.night ?? 0,
+  };
+}
+
 function useUrlFlag(name: string): boolean {
   const [on] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get(name) === "1");
   return on;
@@ -168,8 +189,11 @@ export function Night3D() {
   };
 
   const session = phase.kind === "play" ? phase.session : null;
-  const finish = useCallback(async () => {
+  /** A case night's ending (PlaySurface says how it went): it gets the case's results. */
+  const [chapterEnd, setChapterEnd] = useState<ChapterEnd | null>(null);
+  const finish = useCallback(async (chapter?: ChapterEnd) => {
     if (!session) return;
+    if (chapter) setChapterEnd(chapter);
     setEnding({ kind: "submitting" });
     try {
       setEnding({ kind: "done", outcome: await endNight(session) });
@@ -201,7 +225,11 @@ export function Night3D() {
     body = (
       <>
         <PlaySurface key={phase.session.runId ?? phase.session.run.seed} session={phase.session} autopilot={autopilot && botMayPlay(phase.session)} debug={debug} ended={!!ending} onDone={finish} onFallback={fallback} />
-        {ending ? <NightResults session={phase.session} ending={ending} onRetry={() => void finish()} /> : null}
+        {ending && chapterEnd ? (
+          <CaseClosed {...caseResults(phase.session, ending, chapterEnd)} onRetry={() => void finish()} />
+        ) : ending ? (
+          <NightResults session={phase.session} ending={ending} onRetry={() => void finish()} />
+        ) : null}
       </>
     );
   }
