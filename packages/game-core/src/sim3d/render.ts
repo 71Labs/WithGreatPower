@@ -425,6 +425,12 @@ function fillFee(s: SimState, out: RenderFrame3D) {
     });
   fe.id = f.id;
   fe.phase = f.phase;
+  // The route is fixed for a night: rebuilt only when the frame is filled from another night.
+  const r0 = f.route[0];
+  if (fe.route.length !== f.route.length || (r0 && (fe.route[0].pos.x !== r0.x || fe.route[0].pos.z !== r0.z))) {
+    fe.route = f.route.map((p) => ({ pos: { x: p.x, y: p.y, z: p.z }, roof: p.roof ? { x: p.rx, y: p.ry, z: p.rz } : null }));
+    if (st) set(fe.bakery, (st.x0 + st.x1) / 2, st.y, (st.z0 + st.z1) / 2);
+  }
   for (let i = 0; i < f.clues.length; i++) {
     const k = f.clues[i];
     const slot = fe.clues[i] ?? (fe.clues[i] = { id: k.id, pos: v3(), found: false });
