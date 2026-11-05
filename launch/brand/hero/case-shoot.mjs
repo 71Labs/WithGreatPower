@@ -11,9 +11,10 @@
  *   and Mary freed, on a desktop (1280 × 800) and a phone (390 × 844 at 3×), high tier.
  * - lineup: /lab/cast, the Right-Clicker beside the cast (same angle and zoom each), for
  *   case-sheet composition; plus his states.
- * - perf: the standoff's full loop and the rescue at high and low, desktop and phone (the
- *   phone's low tier with the CPU throttled ×4): frame rate, draw calls, triangles and the
- *   cast's CPU time, from the scene's own counters. Writes perf.json.
+ * - perf: the investigation, the standoff's full loop and the rescue at high and low, desktop
+ *   and phone (the low tier with the CPU throttled ×4): frame rate, draw calls, triangles and
+ *   the cast's CPU time, from the scene's own counters. Writes perf.json. `--chapter 0` runs the
+ *   same frames with the chapter off (a normal night's baseline).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -174,7 +175,7 @@ try {
     const secs = Number(opt("seconds", 12));
     const runs = [
       { dev: "desktop", tier: "high", cpu: 1 },
-      { dev: "desktop", tier: "low", cpu: 1 },
+      { dev: "desktop", tier: "low", cpu: 4 },
       { dev: "phone", tier: "high", cpu: 1 },
       { dev: "phone", tier: "low", cpu: 4 },
     ];
@@ -183,7 +184,7 @@ try {
       await device(r.dev);
       await send("Emulation.setCPUThrottlingRate", { rate: r.cpu });
       for (const scene of ["investigate", "standoff", "rescue"]) {
-        await open(`/lab/case?debug=1&tier=${r.tier}&scene=${scene}&clue=walk&panel=0`, 10000);
+        await open(`/lab/case?debug=1&tier=${r.tier}&scene=${scene}&clue=walk&panel=0&chapter=${opt("chapter", "1")}`, 10000);
         const samples = [];
         const t0 = Date.now();
         while (Date.now() - t0 < secs * 1000) {
@@ -204,7 +205,7 @@ try {
       await send("Emulation.setCPUThrottlingRate", { rate: 1 });
     }
     mkdirSync(out, { recursive: true });
-    writeFileSync(join(out, "perf.json"), JSON.stringify(res, null, 2));
+    writeFileSync(join(out, opt("chapter", "1") === "0" ? "perf-baseline.json" : "perf.json"), JSON.stringify(res, null, 2));
   }
 
   const errs = logs.filter((l) => (l.startsWith("exception") || l.startsWith("error")) && !/404|Failed to load resource/.test(l));

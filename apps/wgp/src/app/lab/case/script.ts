@@ -127,7 +127,9 @@ export function caseCity(seed = 7): City {
 }
 
 export class CaseScript {
-  readonly frame: RenderFrame3D & { chapter: ChapterFrame };
+  readonly frame: RenderFrame3D & { chapter: ChapterFrame | null };
+  /** The chapter the script writes (the frame carries it unless `bare`). */
+  private readonly ch: ChapterFrame;
   readonly sites: CaseSite[];
   /** The fight zone on the deck, and its axis. */
   private readonly stop: number;
@@ -149,7 +151,11 @@ export class CaseScript {
   private found = new Set<ClueId>();
   private lastRestoreQ = -1;
 
-  constructor(readonly city: City) {
+  /** `bare`: a normal night's baseline, the same frames with no chapter and no Right-Clicker. */
+  constructor(
+    readonly city: City,
+    readonly bare = false,
+  ) {
     this.sites = pickClueRoofs(city);
     const zi = city.zones.findIndex((z) => z.stage);
     this.stop = Math.max(0, zi);
@@ -159,6 +165,13 @@ export class CaseScript {
     // The lab's two-shot zone (caseCity), when the city has it.
     const ri = city.zones.findIndex((z) => z.kind === "errand" && !z.ally && !!z.allyAt && Math.abs(z.allyAt.y - centre.y) < 1);
     this.rescueStop = ri >= 0 ? ri : this.stop;
+    this.ch = {
+      id: "case-001",
+      phase: "investigate",
+      clues: this.sites.map((s) => ({ id: s.id, pos: { ...s.pos }, found: false })),
+      captive: null,
+      copies: [],
+    };
     this.frame = {
       tick: 0,
       alpha: 1,
@@ -169,13 +182,7 @@ export class CaseScript {
       mode: "travel",
       timeScale: 1,
       route: [],
-      chapter: {
-        id: "case-001",
-        phase: "investigate",
-        clues: this.sites.map((s) => ({ id: s.id, pos: { ...s.pos }, found: false })),
-        captive: null,
-        copies: [],
-      },
+      chapter: this.ch,
     };
   }
 
@@ -228,7 +235,8 @@ export class CaseScript {
     this.t += dt;
     this.sceneT += dt;
     const f = this.frame;
-    const ch = f.chapter;
+    const ch = this.ch;
+    f.chapter = ch;
     f.tick++;
     f.hazards.length = 0;
     ch.phase = this.scene;
@@ -241,6 +249,12 @@ export class CaseScript {
     if (this.scene === "investigate") this.investigate(dt, events);
     else if (this.scene === "standoff") this.standoff(events);
     else this.rescue(events);
+    if (this.bare) {
+      // The baseline: the same night with nothing of the chapter in it.
+      f.chapter = null;
+      f.villains.length = 0;
+      events.length = 0;
+    }
   }
 
   private investigate(dt: number, events: ChapterEvent[]): void {
@@ -248,7 +262,7 @@ export class CaseScript {
     f.mode = "travel";
     f.stop = this.stop;
     f.villains.length = 0;
-    f.chapter.captive = null;
+    this.ch.captive = null;
     this.clearCopies(events, false);
     const sites = this.sites;
     if (!sites.length) return;
@@ -287,7 +301,7 @@ export class CaseScript {
     const f = this.frame;
     f.mode = "fight";
     f.stop = this.stop;
-    f.chapter.captive = { pos: this.deck(-330, 60), restore: 0, freed: false };
+    this.ch.captive = { pos: this.deck(-330, 60), restore: 0, freed: false };
     const rcAt = this.deck(-140);
     const heroAt = this.deck(250, -30);
     const [phase, st, index] = this.phaseNow();
@@ -330,7 +344,7 @@ export class CaseScript {
       const b = this.nextCopy++;
       // The prints face the hero.
       const yaw = Math.atan2(dir.x, dir.z);
-      f.chapter.copies = [
+      this.ch.copies = [
         { id: a, pos: this.deck(40, -30), yaw: yaw - 0.15, alive: true },
         { id: b, pos: this.deck(95, 25), yaw: yaw + 0.2, alive: true },
       ];
@@ -348,7 +362,7 @@ export class CaseScript {
     const fill = this.restore ?? Math.min(1, (this.sceneT % 5) / 3);
     const restore = done ? 1 : fill;
     const freed = done || (this.restore === null && this.sceneT % 5 > 3.4);
-    f.chapter.captive = { pos: at, restore, freed };
+    this.ch.captive = { pos: at, restore, freed };
     if (!done) {
       const q = Math.floor(restore * 4);
       if (q !== this.lastRestoreQ) {
@@ -372,7 +386,7 @@ export class CaseScript {
       this.copiesUp = true;
       const a = this.nextCopy++;
       const b = this.nextCopy++;
-      f.chapter.copies = [
+      this.ch.copies = [
         { id: a, pos: this.deck(0, 45), yaw: Math.PI * 0.8, alive: true },
         { id: b, pos: this.deck(120, -30), yaw: -Math.PI * 0.6, alive: true },
       ];
@@ -381,10 +395,9 @@ export class CaseScript {
   }
 
   private clearCopies(events: ChapterEvent[], pop: boolean): void {
-    const f = this.frame;
-    if (!this.copiesUp && !f.chapter.copies.length) return;
-    if (pop) for (const c of f.chapter.copies) if (c.alive) events.push({ type: "copy-pop", id: c.id });
-    f.chapter.copies = [];
+    if (!this.copiesUp && !this.ch.copies.length) return;
+    if (pop) for (const c of this.ch.copies) if (c.alive) events.push({ type: "copy-pop", id: c.id });
+    this.ch.copies = [];
     this.copiesUp = false;
   }
 }

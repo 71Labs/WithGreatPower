@@ -105,7 +105,8 @@ function pick<T extends string>(v: string | null, list: readonly T[], fallback: 
 export default function CaseBench() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const city = useMemo(() => caseCity(Number(params.get("seed")) || 7), [params]);
-  const script = useMemo(() => new CaseScript(city), [city]);
+  // `?chapter=0`: the same frames with the chapter off, a normal night's baseline for perf.
+  const script = useMemo(() => new CaseScript(city, params.get("chapter") === "0"), [city, params]);
   const frame = useRef<RenderFrame3D | null>(null);
   // A night under way (no countdown), so the director runs its beats: the rescue's two-shot.
   const cue = useRef<SceneCue | null>({ status: "live", introLeft: 0, introTotal: 0 });
