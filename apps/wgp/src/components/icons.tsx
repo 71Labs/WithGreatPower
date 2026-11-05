@@ -102,6 +102,11 @@ import {
   ReplayIcon,
   NewTwitterIcon,
   Download04Icon,
+  Search01Icon,
+  Folder01Icon,
+  FolderSearch01Icon,
+  Camera01Icon,
+  Cursor01Icon,
 } from "@hugeicons/core-free-icons";
 
 export type IconProps = Omit<ComponentProps<"svg">, "ref"> & { strokeWidth?: number; size?: number | string };
@@ -213,6 +218,11 @@ export const Replay = make(ReplayIcon, "Replay");
 /** The X (Twitter) logo. */
 export const XLogo = make(NewTwitterIcon, "XLogo");
 export const Download = make(Download04Icon, "Download");
+export const Search = make(Search01Icon, "Search");
+export const Folder = make(Folder01Icon, "Folder");
+export const FolderSearch = make(FolderSearch01Icon, "FolderSearch");
+export const Camera = make(Camera01Icon, "Camera");
+export const Cursor = make(Cursor01Icon, "Cursor");
 
 /** Lucide's `LucideIcon` type, for components that take an icon as a prop. */
 export type LucideIcon = Icon;

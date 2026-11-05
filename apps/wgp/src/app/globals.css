@@ -112,6 +112,8 @@
   --game-gold: #ffd95a; /* lit windows, rewards */
   --game-mint: #16a36a; /* success, with an icon or word */
   --game-night: #22264f; /* behind the city */
+  --game-folder: #f2dcab; /* case-file folders: ink 13:1, muted text 5:1 */
+  --game-folder-2: #e6c98a; /* the folder’s tab and back, behind the papers */
   --game-shadow: 0 4px 0 var(--game-ink); /* the hard sticker drop */
   --game-shadow-sm: 0 2px 0 var(--game-ink);
 }
@@ -200,6 +202,8 @@
   --color-game-gold: var(--game-gold);
   --color-game-mint: var(--game-mint);
   --color-game-night: var(--game-night);
+  --color-game-folder: var(--game-folder);
+  --color-game-folder-2: var(--game-folder-2);
   --color-accent: var(--vs-accent);
   --color-accent-subtle: var(--vs-accent-subtle);
   --color-on-accent: var(--vs-on-accent);
