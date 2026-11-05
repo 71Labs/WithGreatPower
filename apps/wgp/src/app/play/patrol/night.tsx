@@ -14,6 +14,7 @@
  *   three ways (game3d/session/night.ts): the server's chapter run when signed in, a local
  *   one for a guest, unranked when the server can't start one. Any night, done or not.
  */
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { isChapterId } from "@wgp/game-core/chapters";
@@ -147,16 +148,16 @@ async function bootSignedInChapter(account: Extract<AccountState, { status: "sig
   return rankedPhase(await beginRanked({ chapter }));
 }
 
-/** `?case=001` (or `?case=case-001`): the chapter this page plays, or null for tonight's patrol. */
+/**
+ * `?case=001` (or `?case=case-001`): the chapter this page plays, or null for tonight's patrol.
+ * Read from the router, not window.location: a client navigation (the intro's "Start the
+ * case") renders this page before the browser's address changes.
+ */
 function useChapterParam(): ChapterId | null {
-  const [chapter] = useState<ChapterId | null>(() => {
-    if (typeof window === "undefined") return null;
-    const raw = new URLSearchParams(window.location.search).get("case");
-    if (!raw) return null;
-    const id = raw.startsWith("case-") ? raw : `case-${raw}`;
-    return isChapterId(id) ? id : null;
-  });
-  return chapter;
+  const raw = useSearchParams().get("case");
+  if (!raw) return null;
+  const id = raw.startsWith("case-") ? raw : `case-${raw}`;
+  return isChapterId(id) ? id : null;
 }
 
 const CHOICES = {
