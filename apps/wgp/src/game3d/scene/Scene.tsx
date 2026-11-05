@@ -50,6 +50,8 @@ export interface SceneHandle {
   skip?(): void;
   /** The last chase pose, for HUD projection. */
   pose(): ChasePose | null;
+  /** The scene itself, for headless checks (`?debug=1`, launch/brand/hero/qa-anomalies.mjs). */
+  inspect?(): SceneEngine;
 }
 
 export interface SceneStats {
@@ -118,6 +120,7 @@ export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cas
       cut: () => engine.cut(),
       skip: () => engine.skip(),
       pose: () => lastPose.current,
+      inspect: () => engine,
     }),
     [engine],
   );
