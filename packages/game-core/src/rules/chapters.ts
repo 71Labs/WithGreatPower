@@ -7,8 +7,8 @@
  *
  * Pure: the clock comes in as an argument.
  */
-import { HP_PER_LEVEL, POWERS, XP_TO_NEXT } from "./data";
-import type { CaseRecord, ChapterId, Hero, Save } from "./types";
+import { HP_PER_LEVEL, POWERS, VILLAINS, XP_TO_NEXT } from "./data";
+import type { CaseRecord, ChapterId, Hero, Save, VillainId } from "./types";
 
 /** Case File 001, "Missing: Mary Jpeg". */
 export const CHAPTER_ID = "case-001" satisfies ChapterId;
@@ -67,6 +67,12 @@ export const RIGHT_CLICKER_MOVES: readonly { label: string; value: number }[] = 
 export const CASE_XP = 100;
 
 export const isChapterId = (v: unknown): v is ChapterId => typeof v === "string" && (CHAPTER_IDS as readonly string[]).includes(v);
+
+/** A villain's name and lines: a patrol villain's, or a chapter's (the Right-Clicker, who isn't in VILLAINS). */
+export function villainCard(id: VillainId | "right-clicker"): { name: string; taunt: string; defeat: string } {
+  const v = id === "right-clicker" ? CHAPTERS["case-001"].villain : VILLAINS[id];
+  return { name: v.name, taunt: v.taunt, defeat: v.defeat };
+}
 
 /** The save's record of a case, or an open one. */
 export function caseRecord(save: Pick<Save, "cases">, id: ChapterId): CaseRecord {

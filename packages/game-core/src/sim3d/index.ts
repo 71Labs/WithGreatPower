@@ -53,4 +53,4 @@ export {
   RESTORE_REACH,
   RESTORE_TICKS,
 } from "./chapter";
-export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";
+export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, rightClickerAim, rightClickerState, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";
