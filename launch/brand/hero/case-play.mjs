@@ -8,7 +8,8 @@
  * Per player and device: /play/cases, the intro (/play/cases/001), then
  * /play/patrol?case=001&autopilot=1 with the bot playing. Shots at every beat (each clue found,
  * the standoff's aim cone, the flash, SAVED, the copies, the rescue at restore ~0, ~0.5 and
- * freed, "Case closed"), the beats' times from the page's load, the scene's draw calls per
+ * freed, "Case closed"; the copies from the front and, the camera swung round to the nearest
+ * one's back side, from behind), the beats' times from the page's load, the scene's draw calls per
  * phase, and the console's errors. Writes <out>/<who>-<device>/*.png and <out>/play.json.
  * `--perf low` plays one more night per device at the low tier (the CPU ×4) for the numbers.
  */
@@ -129,6 +130,41 @@ const AT_FLASH = `new Promise((res) => {
   f();
 })`;
 
+/**
+ * In the page: swing the chase camera round (orbit input, held) to the nearest standing copy's
+ * back side, so the standee's back is in shot. Resolves with the copy and the bearing error
+ * left, or null when no copy stands.
+ */
+const BEHIND_COPY = `new Promise((res) => {
+  const p = window.__wgpPlay;
+  const h = p && p.handle();
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const aim = () => {
+    const f = p.loop.view;
+    const hp = f.hero.pos;
+    const cs = ((f.chapter && f.chapter.copies) || []).filter((c) => c.alive);
+    if (!cs.length) return null;
+    const d = (c) => Math.hypot(c.pos.x - hp.x, c.pos.z - hp.z);
+    const c = cs.sort((a, b) => d(a) - d(b))[0];
+    // A point out from the copy along its back, as a bearing from the hero (the camera's pivot).
+    const bx = c.pos.x - Math.sin(c.yaw) * 400 - hp.x;
+    const bz = c.pos.z - Math.cos(c.yaw) * 400 - hp.z;
+    return { id: c.id, want: Math.atan2(bx, bz), dist: Math.round(d(c)) };
+  };
+  if (!h || !aim()) return res(null);
+  let n = 0;
+  const step = () => {
+    const a = aim();
+    const q = h.pose();
+    if (!a || !q) return res(null);
+    const e = wrap(a.want - Math.atan2(q.position.x - q.target.x, q.position.z - q.target.z));
+    if ((Math.abs(e) < 0.1 && n > 3) || n++ > 60) return res({ id: a.id, dist: a.dist, err: +e.toFixed(2), steps: n });
+    h.orbit(e * 0.4, 0, true);
+    requestAnimationFrame(step);
+  };
+  step();
+})`;
+
 const port = 9720 + Math.floor(Math.random() * 30);
 const report = { base, tier, runs: [] };
 
@@ -197,6 +233,16 @@ async function playOnce(who, dev, opts = {}) {
         if (done.has(w)) continue;
         done.add(w);
         await shot(w);
+        // The copies again from behind: the standee's back (cardboard, never a pale body).
+        if (w === "copies" || w === "rescue-copies") {
+          const behind = await evaluate(BEHIND_COPY).catch(() => null);
+          if (behind) {
+            await sleep(250);
+            await shot(`${w}-back`);
+            run.behind = [...(run.behind ?? []), { shot: w, ...behind }];
+          }
+          await evaluate(`window.__wgpPlay.handle()?.orbit(0, 0, false)`).catch(() => {});
+        }
       }
       const st = await evaluate(`(() => { const s = window.__caseWatch; return s ? s.beats.map((b) => b.name) : []; })()`).catch(() => null);
       if (st && st.includes("night-over") && !ended) ended = true;

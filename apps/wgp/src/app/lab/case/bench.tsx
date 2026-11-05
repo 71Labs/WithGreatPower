@@ -31,6 +31,8 @@ interface CaseApi {
   stats(): SceneStats | null;
   /** The fixture frame the scene reads. */
   frame(): RenderFrame3D;
+  /** Turns the chase camera by these radians and holds it there (`hold: false` lets it recentre). */
+  orbit(dYaw: number, dPitch?: number, hold?: boolean): void;
 }
 
 declare global {
@@ -154,6 +156,7 @@ export default function CaseBench() {
       },
       stats: () => lastStats.current,
       frame: () => script.frame,
+      orbit: (dYaw, dPitch = 0, hold = true) => handle.current?.orbit(dYaw, dPitch, hold),
     };
     return () => {
       delete window.__wgpCase;

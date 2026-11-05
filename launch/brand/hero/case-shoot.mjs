@@ -5,10 +5,13 @@
  *   node launch/brand/hero/case-shoot.mjs lineup --out <dir>
  *   node launch/brand/hero/case-shoot.mjs perf   --out <dir> [--seconds 12]
  *   node launch/brand/hero/case-shoot.mjs probe  --out <dir> --q "scene=standoff&phase=aim"
+ *   node launch/brand/hero/case-shoot.mjs backs  --out <dir> [--turns 0.8,1.6]
  *
  * - shots: /lab/case (fixture chapter frames): each clue prop, the paper copies, the aim cone,
  *   the SCREENSHOT flash and its reduced-motion pulse, captive Mary at restore 0, 0.5 and 1,
  *   and Mary freed, on a desktop (1280 × 800) and a phone (390 × 844 at 3×), high tier.
+ * - backs: the paper copies from behind (the chase camera swung round by each turn, radians),
+ *   in the standoff and the rescue: the standee's back must read as cardboard.
  * - lineup: /lab/cast, the Right-Clicker beside the cast (same angle and zoom each), for
  *   case-sheet composition; plus his states.
  * - perf: the investigation, the standoff's full loop and the rescue at high and low, desktop
@@ -130,6 +133,32 @@ try {
       await shot(join(dir, `mary-freed.png`));
       await sleep(1600);
       await shot(join(dir, `mary-freed-wave.png`));
+    }
+  }
+
+  if (mode === "backs") {
+    // The paper copies from behind (the camera swung round): the standee's back must read as
+    // cardboard, never a pale body. The standoff's copies, then the rescue's two by Mary.
+    const turns = opt("turns", "0.8,1.6").split(",").map(Number);
+    for (const dev of opt("devices", "desktop,phone").split(",")) {
+      const dir = join(out, dev);
+      mkdirSync(dir, { recursive: true });
+      await device(dev);
+      await open(`/lab/case?debug=1&tier=${opt("tier", "high")}&scene=standoff&phase=copy&panel=0`);
+      for (const scene of ["standoff", "rescue"]) {
+        await set(scene === "standoff" ? { scene, phase: "copy" } : { scene, restore: 0.4 });
+        await sleep(2600);
+        await shot(join(dir, `${scene}-chase.png`));
+        let at = 0;
+        for (const t of turns) {
+          await evaluate(`window.__wgpCase.orbit(${t - at}, 0, true)`);
+          at = t;
+          await sleep(1400);
+          await shot(join(dir, `${scene}-back-${t.toFixed(1).replace(".", "")}.png`));
+        }
+        await evaluate(`window.__wgpCase.orbit(${-at}, 0, false)`);
+        await sleep(1500);
+      }
     }
   }
 
