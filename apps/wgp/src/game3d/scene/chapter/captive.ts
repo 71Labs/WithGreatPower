@@ -29,6 +29,8 @@ import { jpegLook } from "./math";
 const MARY_TALL = 86;
 /** Seconds her pose runs before it freezes (she settles into her idle, then the shot holds it). */
 const SETTLE = 1.2;
+/** Her full body within this distance of the camera (the cast's high-tier range). */
+const NEAR = 950;
 
 const _a = new Vector3();
 const _b = new Vector3();
@@ -177,6 +179,9 @@ export class Captive {
     const grid = u.uJpegGrid.value as Vector3;
     grid.set((mid.x * 0.5 + 0.5) * size.width, (mid.y * 0.5 + 0.5) * size.height, tall / look.pixelsTall);
     model.fill.uniforms.uFogMix.value = 0;
+    // Her full body up close (the rescue); the light one across the city (she's there all night).
+    const far = camera.position.distanceTo(this.at) > NEAR;
+    model.setLod(far ? "lo" : "hi");
     return _a.set(this.at.x, this.at.y + MARY_TALL * 0.5, this.at.z);
   }
 

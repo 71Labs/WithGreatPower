@@ -31,13 +31,14 @@ import {
   Quaternion,
   ShaderMaterial,
   Shape,
+  Vector2,
   Vector3,
   BackSide,
   type Texture,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-import type { City, Vec3 } from "@wgp/game-core/sim3d/contract";
+import type { City, Prop, Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { surfaceBelow, type CitySolids } from "../camera/raycast";
 import type { SharedUniforms } from "../city/materials";
@@ -143,6 +144,58 @@ void main() {
 }
 `;
 
+/** The scorch alone, burnt into a city billboard's face (a transparent overlay just in front of it). */
+const SCORCH_VERTEX = /* glsl */ `
+varying vec2 vUv;
+varying vec3 vWorld;
+void main() {
+  vec4 world = modelMatrix * vec4(position, 1.0);
+  vUv = uv;
+  vWorld = world.xyz;
+  gl_Position = projectionMatrix * viewMatrix * world;
+}
+`;
+
+const SCORCH_FRAGMENT = /* glsl */ `
+uniform vec2 uSize;
+uniform float uTime;
+uniform float uStill;
+varying vec2 vUv;
+varying vec3 vWorld;
+${FOG_PARS}
+${CURSOR_SDF}
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void main() {
+  vec2 p = (vUv - 0.5) * uSize;
+  // The pointer, tilted, burnt in left of the middle, sized to the board.
+  float s = min(3.3, uSize.y * 0.04);
+  float a = -0.32;
+  vec2 o = vec2(p.x + uSize.x * 0.14, p.y);
+  vec2 r = vec2(cos(a) * o.x - sin(a) * o.y, sin(a) * o.x + cos(a) * o.y);
+  vec2 q = vec2(r.x / s + 6.0, -r.y / s + 10.0);
+  float d = sdCursor(q) * s;
+  float n = vnoise(p * 0.35) * 0.6 + vnoise(p * 1.3) * 0.4;
+  // Soot round it, streaked upward; the char's rim; the char, its edge still glowing.
+  float halo = 1.0 - smoothstep(2.0 * s / 3.3, (13.0 + 10.0 * n) * s / 3.3, d - max(0.0, p.y + 10.0) * 0.12);
+  vec4 col = vec4(0.1, 0.07, 0.06, 0.62 * halo * (0.7 + 0.3 * n));
+  if (d < 2.4) col = mix(vec4(0.24, 0.15, 0.1, 1.0), col, smoothstep(0.0, 2.4, d));
+  if (d < 0.0) {
+    col = vec4(mix(vec3(0.09, 0.07, 0.06), vec3(0.17, 0.12, 0.09), n), 1.0);
+    float flick = uStill > 0.5 ? 0.85 : 0.7 + 0.3 * vnoise(vec2(uTime * 3.0, p.x * 0.2));
+    float ember = (1.0 - smoothstep(0.0, 1.8, -d)) * flick;
+    col.rgb = mix(col.rgb, vec3(1.0, 0.48, 0.18), ember * 0.9);
+  }
+  if (col.a < 0.01) discard;
+  gl_FragColor = vec4(mix(col.rgb, uFog, fogAmount(vWorld) * 0.6), col.a);
+}
+`;
+
 const GLOW_VERTEX = /* glsl */ `
 attribute vec4 aGlow;  // kind (0 halo, 1 beam), strength, width, height
 varying vec2 vUv;
@@ -195,6 +248,8 @@ interface Site {
   floor: number;
   /** Which way it faces (toward where the night starts). */
   yaw: number;
+  /** The city's own billboard the cursor clue stands under (the sim puts it at its foot), if any. */
+  board: Prop | null;
 }
 
 const _m = new Matrix4();
@@ -213,6 +268,9 @@ export class ClueProps {
   private readonly cube = new BoxGeometry(1, 1, 1);
   private readonly quad = new PlaneGeometry(1, 1);
   private fill: Mesh | null = null;
+  /** The scorch on a city billboard's face (the cursor clue under one). */
+  private scorch: Mesh | null = null;
+  private readonly scorchMat: ShaderMaterial;
   private hull: Mesh | null = null;
   private crumbs: InstancedMesh | null = null;
   private readonly crumbColour: InstancedBufferAttribute;
@@ -256,6 +314,17 @@ export class ClueProps {
     });
     this.glowAttr = new InstancedBufferAttribute(new Float32Array(6 * 4), 4).setUsage(DynamicDrawUsage);
     this.quad.setAttribute("aGlow", this.glowAttr);
+    this.scorchMat = new ShaderMaterial({
+      name: "wgp-chapter-scorch",
+      vertexShader: SCORCH_VERTEX,
+      fragmentShader: SCORCH_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+      uniforms: { uSize: { value: new Vector2(100, 50) }, uTime: shared.uTime, uStill: this.fillMat.uniforms.uStill, ...fog },
+    });
     this.glowMat = new ShaderMaterial({
       name: "wgp-chapter-glow",
       vertexShader: GLOW_VERTEX,
@@ -333,13 +402,17 @@ export class ClueProps {
     this.key = key;
     this.clearMeshes();
     this.sites = clues.map((c) => {
+      // The cursor clue at a city billboard's foot: that billboard, scorched.
+      const board = c.id === "cursor" ? billboardAt(this.city, c.pos) : null;
+      if (board) return { id: c.id, at: new Vector3(board.at.x, board.at.y, board.at.z), floor: board.at.y, yaw: (board.facing & 3) * (Math.PI / 2), board };
       // Clear of the roof's own props (a water tower, a billboard), within reach of the clue.
       const p = cluePlacement(this.city, this.solids, c.id, c.pos);
-      return { id: c.id, at: new Vector3(p.x, c.pos.y, p.z), floor: p.floor, yaw: p.yaw };
+      return { id: c.id, at: new Vector3(p.x, c.pos.y, p.z), floor: p.floor, yaw: p.yaw, board: null };
     });
     const parts: BufferGeometry[] = [];
     for (const s of this.sites) {
       if (s.id === "tabs") this.pole(s, parts);
+      else if (s.id === "cursor" && s.board) this.scorchOn(s.board);
       else if (s.id === "cursor") this.billboard(s, parts);
     }
     if (parts.length) {
@@ -416,6 +489,22 @@ export class ClueProps {
     out.push(piece(new BoxGeometry(150, 2.4, 10), at(0, 49, 2), 0, STEEL_DARK));
   }
 
+  /** The scorch burnt into a city billboard's face (city/layout.ts: a box on 34-unit legs, its front +z). */
+  private scorchOn(b: Prop): void {
+    const yaw = (b.facing & 3) * (Math.PI / 2);
+    const geo = new PlaneGeometry(b.w * 0.98, b.h * 0.96);
+    const mesh = new Mesh(geo, this.scorchMat);
+    const out = b.d / 2 + 0.8;
+    mesh.position.set(b.at.x + Math.sin(yaw) * out, b.at.y + 34 + b.h / 2, b.at.z + Math.cos(yaw) * out);
+    mesh.rotation.y = yaw;
+    mesh.name = "chapter-clue-scorch";
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 2;
+    (this.scorchMat.uniforms.uSize.value as Vector2).set(b.w * 0.98, b.h * 0.96);
+    this.scorch = mesh;
+    this.root.add(mesh);
+  }
+
   /** The pixel trail toward the bridge. */
   private pixels(s: Site): void {
     const deck = this.city.bridge?.deck;
@@ -449,6 +538,11 @@ export class ClueProps {
   }
 
   private clearMeshes(): void {
+    if (this.scorch) {
+      this.root.remove(this.scorch);
+      this.scorch.geometry.dispose();
+      this.scorch = null;
+    }
     if (this.fill) {
       this.root.remove(this.fill, this.hull!);
       this.fill.geometry.dispose();
@@ -467,10 +561,16 @@ export class ClueProps {
     this.hullMat.dispose();
     this.crumbMat.dispose();
     this.glowMat.dispose();
+    this.scorchMat.dispose();
     this.cube.dispose();
     this.quad.dispose();
     this.glows.dispose();
   }
+}
+
+/** The city billboard whose foot is at `pos` (the sim stands the cursor clue there when one fits). */
+export function billboardAt(city: City, pos: Vec3): Prop | null {
+  return city.props.find((p) => p.kind === "billboard" && Math.abs(p.at.x - pos.x) < 1 && Math.abs(p.at.z - pos.z) < 1 && Math.abs(p.at.y - pos.y) < 2) ?? null;
 }
 
 /** Where a clue's prop stands and which way it faces. */

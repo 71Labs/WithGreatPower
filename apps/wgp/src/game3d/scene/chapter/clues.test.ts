@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { City, Prop } from "@wgp/game-core/sim3d/contract";
 
 import { citySolids, surfaceBelow } from "../camera/raycast";
-import { cluePlacement } from "./clues";
+import { billboardAt, cluePlacement } from "./clues";
 
 /** One roof 600 × 400 at y 300, a lower one beside it, and whatever props the test puts up. */
 function roofCity(props: Prop[]): City {
@@ -51,6 +51,14 @@ describe("where a clue's prop stands", () => {
     const gap = Math.hypot(Math.max(0, Math.abs(p.x) - 35), Math.max(0, Math.abs(p.z) - 35));
     expect(gap).toBeGreaterThan(40);
     expect(Math.hypot(p.x, p.z)).toBeLessThanOrEqual(110 + 1e-6);
+  });
+
+  it("finds the city billboard the cursor clue stands under, and only that one", () => {
+    const board: Prop = { kind: "billboard", at: { x: 40, y: 300, z: -20 }, facing: 1, w: 120, h: 50, d: 6, text: "GAS 400% OFF", buildingId: 0 };
+    const city = roofCity([tower(-150, 0), board]);
+    expect(billboardAt(city, { x: 40, y: 300, z: -20 })).toBe(board);
+    expect(billboardAt(city, { x: 0, y: 300, z: 0 })).toBeNull();
+    expect(billboardAt(city, { x: -150, y: 300, z: 0 })).toBeNull();
   });
 
   it("turns to the side with open roof in front when the start's side is blocked", () => {
