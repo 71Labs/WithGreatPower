@@ -42,6 +42,7 @@ import type { City, Prop, Vec3 } from "@wgp/game-core/sim3d/contract";
 
 import { surfaceBelow, type CitySolids } from "../camera/raycast";
 import type { SharedUniforms } from "../city/materials";
+import { OCC_VERTEX, SCREEN_FRAGMENT } from "../city/shaders";
 import { KEY_LIGHT } from "../characters/materials";
 import { C, rgb, type RGB } from "../palette";
 import type { ChapterClue, ClueId } from "./contract";
@@ -144,14 +145,26 @@ void main() {
 }
 `;
 
-/** The scorch alone, burnt into a city billboard's face (a transparent overlay just in front of it). */
+/**
+ * The scorch alone, burnt into a city billboard's face (a transparent overlay just in front of
+ * it, placed in world space). It fades with the board when the city's occlusion thins the
+ * board out of the way of the camera (city/shaders.ts: the board's box, `uBoard`).
+ */
 const SCORCH_VERTEX = /* glsl */ `
+float sdBox3(vec3 p, vec3 c, vec3 h) {
+  vec3 q = abs(p - c) - h;
+  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+${OCC_VERTEX}
+uniform mat4 uBoard;
 varying vec2 vUv;
 varying vec3 vWorld;
+flat varying float vOcc;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vUv = uv;
   vWorld = world.xyz;
+  vOcc = occlusion(uBoard);
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
@@ -162,6 +175,8 @@ uniform float uTime;
 uniform float uStill;
 varying vec2 vUv;
 varying vec3 vWorld;
+flat varying float vOcc;
+${SCREEN_FRAGMENT}
 ${FOG_PARS}
 ${CURSOR_SDF}
 float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -172,6 +187,9 @@ float vnoise(vec2 p) {
   return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 void main() {
+  // The board thinned out of the camera's way: no scorch floating where it was.
+  occDiscard(vOcc);
+  if (vOcc > 0.25) discard;
   vec2 p = (vUv - 0.5) * uSize;
   // The pointer, tilted, burnt in left of the middle, sized to the board.
   float s = min(3.3, uSize.y * 0.04);
@@ -323,7 +341,22 @@ export class ClueProps {
       polygonOffset: true,
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
-      uniforms: { uSize: { value: new Vector2(100, 50) }, uTime: shared.uTime, uStill: this.fillMat.uniforms.uStill, ...fog },
+      uniforms: {
+        uSize: { value: new Vector2(100, 50) },
+        uBoard: { value: new Matrix4() },
+        uTime: shared.uTime,
+        uStill: this.fillMat.uniforms.uStill,
+        uDpr: shared.uDpr,
+        uHalftone: shared.uHalftone,
+        uHalftoneCell: shared.uHalftoneCell,
+        uOccCam: shared.uOccCam,
+        uOccA: shared.uOccA,
+        uOccB: shared.uOccB,
+        uOccR: shared.uOccR,
+        uOccHero: shared.uOccHero,
+        uOccNear: shared.uOccNear,
+        ...fog,
+      },
     });
     this.glowMat = new ShaderMaterial({
       name: "wgp-chapter-glow",
@@ -492,11 +525,14 @@ export class ClueProps {
   /** The scorch burnt into a city billboard's face (city/layout.ts: a box on 34-unit legs, its front +z). */
   private scorchOn(b: Prop): void {
     const yaw = (b.facing & 3) * (Math.PI / 2);
+    const q = new Quaternion().setFromAxisAngle(Y, yaw);
+    // The board's own box, as the city draws it (legs 34, base at its foot, front +z).
+    (this.scorchMat.uniforms.uBoard.value as Matrix4).compose(new Vector3(b.at.x, b.at.y + 34, b.at.z), q, new Vector3(b.w, b.h, b.d));
+    // In world space (an identity model matrix), so the occlusion test reads the board's box.
     const geo = new PlaneGeometry(b.w * 0.98, b.h * 0.96);
-    const mesh = new Mesh(geo, this.scorchMat);
     const out = b.d / 2 + 0.8;
-    mesh.position.set(b.at.x + Math.sin(yaw) * out, b.at.y + 34 + b.h / 2, b.at.z + Math.cos(yaw) * out);
-    mesh.rotation.y = yaw;
+    geo.applyMatrix4(new Matrix4().compose(new Vector3(b.at.x + Math.sin(yaw) * out, b.at.y + 34 + b.h / 2, b.at.z + Math.cos(yaw) * out), q, new Vector3(1, 1, 1)));
+    const mesh = new Mesh(geo, this.scorchMat);
     mesh.name = "chapter-clue-scorch";
     mesh.frustumCulled = false;
     mesh.renderOrder = 2;
