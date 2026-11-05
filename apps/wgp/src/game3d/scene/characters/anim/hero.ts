@@ -30,9 +30,12 @@
  * Everything stateful steps on the kit's fixed 120 Hz sub-step and is drawn interpolated,
  * so nothing shakes with the sim's 60 Hz ticks or the display's rate.
  */
-import { Quaternion, Vector3, type Group } from "three";
+import { Quaternion, Vector3, type Bone, type Group } from "three";
 
+import { HERO_RADIUS } from "@wgp/game-core/sim3d/constants";
 import type { HeroAction, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
+
+import type { Footing } from "../../camera/raycast";
 
 import { Spring, Spring3 } from "../physics/spring";
 import { FixedStepper } from "../physics/stepper";
@@ -74,6 +77,16 @@ const PIVOT_DIP = 3.5;
 /** The torso leads a turn by this share of what's left of it, up to TWIST_MAX (rad). */
 const TWIST = 0.55;
 const TWIST_MAX = 0.5;
+/** A drawn move this much further than his speed covers in a frame is a jump (units). */
+const TELEPORT = 48;
+/** A roof more than this far below the one he stands on is a drop: no foot reaches down to it. */
+const DROP = 12;
+/**
+ * Swinging into a roof at speed, he's on it for this long (s) before the body takes a stance:
+ * a swing that skims the roof (down for a tick, then off on the next web) stays a hop.
+ */
+const SKIM = 0.1;
+const SKIM_SPEED = 350;
 
 export class HeroAnimator {
   readonly pose: Pose = newPose();
@@ -153,6 +166,16 @@ export class HeroAnimator {
   private readonly aim = new Vector3();
   private readonly sa = new Vector3();
   private readonly sb = new Vector3();
+  /** The balls of the feet (an MPFB rig), and their height above the soles at rest. */
+  private readonly balls: ({ bone: Bone; rest: number } | null)[];
+  /** The roof he stands on (standOn), and the frame's context, for the feet. */
+  private readonly footing: Footing = { top: 0, x0: -Infinity, z0: -Infinity, x1: Infinity, z1: Infinity };
+  private ctx: AnimContext | null = null;
+  /** The roof under a moving foot for the clips' terrain lift: never a drop off his footing. */
+  private readonly stepGround = (x: number, z: number, y: number): number => {
+    const top = this.ctx!.ground(x, z, y);
+    return top < this.footing.top - DROP ? this.footing.top : top;
+  };
 
   constructor(
     private readonly rig: Rig,
@@ -162,6 +185,11 @@ export class HeroAnimator {
     this.ragdoll = new Ragdoll(ctx.ground);
     for (let i = 0; i < 8; i++) this.targets.push(new Vector3());
     this.legK = (rig.legs[0].l1 + rig.legs[0].l2) / TUNED_LEG;
+    this.balls = (["ball_l", "ball_r"] as const).map((n) => {
+      const i = rig.index.get(n);
+      const rest = rig.joints.get(n);
+      return i !== undefined && rest ? { bone: rig.bones[i], rest: rest.y } : null;
+    });
     this.shoulder = rig.joints.get("armL")!.clone().sub(rig.joints.get("hips")!);
     this.reach = rig.arms[0].l1 + rig.arms[0].l2;
   }
@@ -237,13 +265,27 @@ export class HeroAnimator {
   update(f: RenderFrame3D, dt: number, ctx: AnimContext): void {
     const h = f.hero;
     const P = this.P.set(h.pos.x, h.pos.y, h.pos.z);
-    if (!this.started || P.distanceTo(this.lastPos) > 260) this.reset(f, ctx);
+    this.ctx = ctx;
+    // A jump no motion this frame could make (placed beside an errand ally, set down for a
+    // fight, a resume): start over where he is, planted feet and all, instead of leaving a
+    // planted foot behind for the leg to stretch back to.
+    const jump = P.distanceTo(this.lastPos);
+    if (!this.started || jump > 260 || jump > TELEPORT + Math.hypot(h.vel.x, h.vel.y, h.vel.z) * Math.max(dt, 1 / 60) * 2) this.reset(f, ctx);
     this.time += dt;
     if (!this.live && ((h.actionTicks ?? 0) > 0 || (h.action !== undefined && h.action !== "idle"))) this.live = true;
     this.act = this.live ? h.action : undefined;
     this.fac = this.live ? h.facing : undefined;
     const speed = Math.hypot(h.vel.x, h.vel.y, h.vel.z);
-    const base = this.deriveBase(f, speed, ctx);
+    let base = this.deriveBase(f, speed, ctx);
+    // A swing that runs into a roof at speed: a hop until it has stayed down a beat, so a
+    // touch-and-go doesn't plant the trailing feet and drop the body into a stance for a tick.
+    if (base === "ground" && (this.wasBase === "swing" || this.skim > 0) && this.skim < SKIM && Math.hypot(h.vel.x, h.vel.z) > SKIM_SPEED) {
+      this.skim += dt;
+      base = "air";
+    } else this.skim = 0;
+    // Down by the sim's word with nothing under him a sphere could rest on (wedged against a
+    // wall for a tick): the air pose, never feet reaching down to the street far below.
+    if (base === "ground" && ctx.footing && P.y - this.standOn(P, true, ctx) > HERO_RADIUS + 14) base = "air";
     this.action = this.act ?? (base === "ground" ? (Math.hypot(h.vel.x, h.vel.z) > 40 ? "run" : "idle") : base === "ko" ? "ko" : (base as HeroAction));
     const grounded = base === "ground";
     if (h.anchor) this.anchor.set(h.anchor.x, h.anchor.y, h.anchor.z);
@@ -251,7 +293,7 @@ export class HeroAnimator {
     // Events read off the motion: a landing, a hit, the end of a slam.
     if (grounded && !this.wasGrounded) {
       const impact = Math.max(-this.lastVy, 0) + Math.hypot(h.vel.x, h.vel.z) * 0.15;
-      const ground = ctx.ground(P.x, P.z, P.y + 4);
+      const ground = this.standOn(P, true, ctx);
       if (this.mocap) this.mocap.land(impact, _a.set(P.x, ground + this.rig.spec.ankle, P.z), this.turn.value);
       else this.squash.impulse(-clamp(impact * 0.2, 40, 330));
       for (let i = 0; i < 2; i++) this.plants[i].plantAt(_a.set(P.x + (i === 0 ? 5 : -5), ground + this.rig.spec.ankle, P.z));
@@ -298,7 +340,7 @@ export class HeroAnimator {
     if (!grounded) this.holdYaw = this.turn.value;
     this.lastFac = facing;
 
-    const ground = ctx.ground(P.x, P.z, P.y + 4);
+    const ground = this.standOn(P, grounded, ctx);
     const rig = this.rig;
     this.lead = clamp(angleTo(this.turn.value, yaw), -1.1, 1.1);
     const runW = grounded && !this.mocap ? smoothstep(25, 140, hs) : 0;
@@ -327,7 +369,7 @@ export class HeroAnimator {
       const wasMoving = mc.isMoving;
       const air = base === "air" && this.flipT < 0 && h.vel.y > -250;
       const onFeet = grounded && this.impactT <= 0 && !held && mc.dying < 0;
-      const project = (p: Vector3) => ((p.y = ctx.ground(p.x, p.z, ground + 20) + rig.spec.ankle), p);
+      const project = (p: Vector3) => ((p.y = this.footOn(p, ground, ground + 20, ctx) + rig.spec.ankle), p);
       if (onFeet && !mc.stand.pivoting) this.maybePivot(mc, h.vel, ground, project);
       if (!onFeet) mc.stand.cancelPivot();
       mc.step(dt, { ground: grounded && this.impactT <= 0 && !held, air, pivot: mc.stand.pivoting, speed: grounded ? Math.hypot(this.vel.x, this.vel.z) : 0, moved: grounded ? moved : 0 });
@@ -346,7 +388,10 @@ export class HeroAnimator {
     }
     this.compose(f, pb, ground, runW, L, ctx);
     applyPose(rig, this.group, this.pose, this.solved);
-    if (mc && !this.ragdolled) mc.layer(this.pose, this.gripW.lerp(this.clock.alpha), this.headY.lerp(this.clock.alpha) + (this.lead - this.twist) * 0.7, 0, ctx.ground, ground, this.twist);
+    if (mc && !this.ragdolled) mc.layer(this.pose, this.gripW.lerp(this.clock.alpha), this.headY.lerp(this.clock.alpha) + (this.lead - this.twist) * 0.7, 0, grounded ? this.stepGround : ctx.ground, ground, this.twist);
+    // On his feet, never a toe through the roof: the stride's clips carry the hips at the
+    // cycle's average floor, so at the bottom of a stride a pointed foot can dip below it.
+    if (mc && grounded && !this.ragdolled) this.keepSolesUp();
     // The fist: the rig's grip point in the right hand.
     this.grip.copy(rig.grip).applyMatrix4(rig.arms[1].end.matrixWorld);
   }
@@ -404,6 +449,8 @@ export class HeroAnimator {
   }
 
   private lastAction: HeroAction = "idle";
+  /** How long a swing's touch on a roof has lasted (SKIM). */
+  private skim = 0;
 
   private hurt(): void {
     this.hurtT = 0.35;
@@ -411,6 +458,50 @@ export class HeroAnimator {
     this.spineR.impulse((Math.random() - 0.5) * 8);
     this.headP.impulse(-12);
     for (const s of this.hands) s.impulse((Math.random() - 0.5) * 500, 260, (Math.random() - 0.5) * 500);
+  }
+
+  /** Lift the body by however far its lowest sole (heel or ball) is below the roof under that foot. */
+  private keepSolesUp(): void {
+    const rig = this.rig;
+    let deficit = 0;
+    for (let i = 0; i < 2; i++) {
+      const ankle = worldPos(rig.legs[i].end, _a);
+      const roof = this.stepGround(ankle.x, ankle.z, ankle.y + 20);
+      deficit = Math.max(deficit, roof - (ankle.y - rig.spec.ankle));
+      const ball = this.balls[i];
+      if (ball) deficit = Math.max(deficit, roof - (worldPos(ball.bone, _b).y - ball.rest));
+    }
+    if (deficit <= 0.05 || deficit > 20) return;
+    this.group.position.y += deficit;
+    this.group.updateMatrixWorld(true);
+  }
+
+  /**
+   * The roof he stands on, as the sim stands him: under his centre, or (his sphere resting on a
+   * roof's edge with its centre out over a drop) that roof, never the street below. Kept in
+   * `footing` (height and footprint) for the feet.
+   */
+  private standOn(P: Vector3, grounded: boolean, ctx: AnimContext): number {
+    const f = this.footing;
+    if (grounded && ctx.footing) return ctx.footing(P.x, P.z, P.y + 0.5, HERO_RADIUS + 1.5, HERO_RADIUS + 4, f).top;
+    f.top = ctx.ground(P.x, P.z, P.y + 4);
+    f.x0 = f.z0 = -Infinity;
+    f.x1 = f.z1 = Infinity;
+    return f.top;
+  }
+
+  /**
+   * The roof under a foot at p (at or below `below`), unless that's a drop off the roof he
+   * stands on (past its edge, the street): then the foot comes back onto that roof's edge and
+   * stands at its height. A step up onto a lip or a setback is kept.
+   */
+  private footOn(p: Vector3, ground: number, below: number, ctx: AnimContext): number {
+    const top = ctx.ground(p.x, p.z, below);
+    if (top >= ground - DROP) return top;
+    const f = this.footing;
+    if (f.x1 - f.x0 > 8) p.x = clamp(p.x, f.x0 + 3, f.x1 - 3);
+    if (f.z1 - f.z0 > 8) p.z = clamp(p.z, f.z0 + 3, f.z1 - 3);
+    return ground;
   }
 
   private footOff(P: Vector3, ground: number): number {
@@ -435,7 +526,8 @@ export class HeroAnimator {
     this.lastFac = Number.NaN;
     this.orient.snap(yawQuat(yaw, _q));
     this.limbQ.copy(_q);
-    const ground = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 4);
+    this.mocap?.stand.reset();
+    const ground = this.standOn(this.P, h.grounded, ctx);
     this.lift.snap(h.grounded ? ground + this.rig.hipHeight - 1.2 - h.pos.y : 0);
     this.squash.snap(0);
     this.groundW.snap(h.grounded ? 1 : 0);
@@ -769,7 +861,7 @@ export class HeroAnimator {
     const yawQ = yawQuat(this.turn.lerp(a), _q2);
     const fwd = _a.set(0, 0, 1).applyQuaternion(yawQ);
     const project = (p: Vector3) => {
-      const top = ctx.ground(p.x, p.z, H.y);
+      const top = base === "ground" ? this.footOn(p, ground, H.y, ctx) : ctx.ground(p.x, p.z, H.y);
       p.y = Math.max(top, H.y - rig.hipHeight - 26) + spec.ankle;
       return p;
     };

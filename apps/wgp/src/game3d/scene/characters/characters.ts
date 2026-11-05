@@ -22,7 +22,7 @@ import type { City, RenderFrame3D, Vec3, Zone } from "@wgp/game-core/sim3d/contr
 
 import { NODE_COLORS, type SuitColors } from "@/components/cast";
 
-import { raycastSolids, surfaceBelow, type CitySolids } from "../camera/raycast";
+import { footingBelow, raycastSolids, surfaceBelow, type CitySolids } from "../camera/raycast";
 import type { SharedUniforms } from "../city/materials";
 import { C, FOG } from "../palette";
 import type { QualityTier } from "../quality";
@@ -162,6 +162,7 @@ export class CharacterSystem {
     this.root.name = "wgp-cast";
     this.ctx = {
       ground: (x, z, y) => surfaceBelow(solids, x, z, y),
+      footing: (x, z, y, r, reach, out) => footingBelow(solids, x, z, y, r, reach, out),
       ray: (o, d, max) => raycastSolids(solids, o, d, max),
       reducedMotion: false,
       secondary: true,
