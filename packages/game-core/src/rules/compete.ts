@@ -151,30 +151,30 @@ export interface CourseInfo {
   seed: number;
   gates: number;
   /**
-   * The time to beat for each medal, sim ticks (60 a second). "dev" is the course designer's
-   * verified run (the golden log, test/golden/trial-<id>.bin); gold, silver and bronze are
-   * slower by fixed margins. Pinned by TRIAL_RULESET.
+   * The time to beat for each medal, sim ticks (60 a second), from the course designer's
+   * practice: the trial bot raced the course in 243 styles (test/trial-golden.test.ts). "dev" is
+   * the fastest of them, the verified golden run (test/golden/trial-<id>.bin); gold beats nine
+   * practice runs in ten, silver three in four, bronze half of them. Pinned by TRIAL_RULESET.
    */
   medals: Record<Medal, number>;
 }
 
-/** The medal times from the dev time: gold +15%, silver +40%, bronze +80%, rounded to a tenth of a second. */
-function medalsFrom(devTicks: number): Record<Medal, number> {
-  const tenth = SIM_HZ / 10;
-  const round = (t: number) => Math.ceil(t / tenth) * tenth;
-  return { dev: devTicks, gold: round(devTicks * 1.15), silver: round(devTicks * 1.4), bronze: round(devTicks * 1.8) };
-}
+/**
+ * The medal times by course (ticks), written by the golden regeneration from the practice runs'
+ * fastest, 10th, 25th and 50th percentile finishes, rounded up to a tenth of a second.
+ */
+// <medal-ticks>
+export const MEDAL_TICKS: Record<TrialCourseId, Record<Medal, number>> = {
+  "rooftop-sprint": { "dev": 489, "gold": 666, "silver": 744, "bronze": 912 },
+  "bridge-run": { "dev": 403, "gold": 624, "silver": 672, "bronze": 1056 },
+  "canyon-swing": { "dev": 324, "gold": 630, "silver": 1110, "bronze": 1476 },
+  "tower-climb": { "dev": 488, "gold": 678, "silver": 822, "bronze": 1164 },
+  "gauntlet": { "dev": 1116, "gold": 1464, "silver": 1758, "bronze": 2028 }
+};
+// </medal-ticks>
 
 /** The dev times (ticks): the golden runs' finishes (test/trial-golden.test.ts checks they match). */
-// <dev-ticks>
-export const DEV_TICKS: Record<TrialCourseId, number> = {
-  "rooftop-sprint": 489,
-  "bridge-run": 403,
-  "canyon-swing": 324,
-  "tower-climb": 488,
-  "gauntlet": 1116
-};
-// </dev-ticks>
+export const DEV_TICKS = Object.fromEntries(Object.entries(MEDAL_TICKS).map(([id, m]) => [id, m.dev])) as Record<TrialCourseId, number>;
 
 const course = (id: TrialCourseId, number: string, name: string, blurb: string, district: string): CourseInfo => ({
   id,
@@ -184,7 +184,7 @@ const course = (id: TrialCourseId, number: string, name: string, blurb: string, 
   district,
   seed: COURSE_GEOMETRY[id].seed,
   gates: COURSE_GEOMETRY[id].gates.length,
-  medals: medalsFrom(DEV_TICKS[id]),
+  medals: MEDAL_TICKS[id],
 });
 
 export const COURSES: Record<TrialCourseId, CourseInfo> = {

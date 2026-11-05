@@ -9,7 +9,8 @@
  *
  * races each course with the trial bot in a grid of styles (as a designer practises a line),
  * keeps the fastest finish, and rewrites the logs, the JSON, src/golden-trial.ts's data block
- * and the DEV_TICKS block in src/rules/compete.ts.
+ * and the MEDAL_TICKS block in src/rules/compete.ts: dev is the fastest practice run, gold the
+ * 10th percentile, silver the 25th and bronze the median (rounded up to a tenth of a second).
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -64,13 +65,15 @@ function styles(): TrialBotStyle[] {
 if (UPDATE) {
   const logs: Partial<Record<TrialCourseId, string>> = {};
   const expect: Partial<Record<TrialCourseId, TrialGoldenExpect>> = {};
-  const dev: Partial<Record<TrialCourseId, number>> = {};
+  const medals: Partial<Record<TrialCourseId, Record<string, number>>> = {};
   for (const course of TRIAL_COURSE_IDS) {
     let best: { run: Run; style: TrialBotStyle } | null = null;
+    const finishes: number[] = [];
     for (const style of styles()) {
       const run = raceBot(course, style);
       const t = run.sim.trial!;
       if (!t.finished) continue;
+      finishes.push(run.sim.tick);
       if (!best || run.sim.tick < best.run.sim.tick) best = { run, style };
     }
     if (!best) throw new Error(`no style finished ${course}`);
@@ -82,7 +85,9 @@ if (UPDATE) {
     writeFileSync(json(course), `${JSON.stringify(file, null, 2)}\n`);
     logs[course] = toBase64(log);
     expect[course] = want;
-    dev[course] = res.ticks;
+    finishes.sort((x, y) => x - y);
+    const at = (q: number) => Math.ceil(finishes[Math.floor(q * (finishes.length - 1))] / 6) * 6;
+    medals[course] = { dev: res.ticks, gold: at(0.1), silver: at(0.25), bronze: at(0.5) };
   }
   const block = [
     "// <trial-golden-data>",
@@ -92,8 +97,9 @@ if (UPDATE) {
     "// </trial-golden-data>",
   ].join("\n");
   writeFileSync(src, readFileSync(src, "utf8").replace(/\/\/ <trial-golden-data>[\s\S]*\/\/ <\/trial-golden-data>/, block));
-  const devBlock = ["// <dev-ticks>", `export const DEV_TICKS: Record<TrialCourseId, number> = ${JSON.stringify(dev, null, 2)};`, "// </dev-ticks>"].join("\n");
-  writeFileSync(competeSrc, readFileSync(competeSrc, "utf8").replace(/\/\/ <dev-ticks>[\s\S]*\/\/ <\/dev-ticks>/, devBlock));
+  const rows = Object.entries(medals).map(([id, m]) => `  ${JSON.stringify(id)}: ${JSON.stringify(m).replace(/,/g, ", ").replace(/:/g, ": ").replace(/^\{/, "{ ").replace(/\}$/, " }")}`);
+  const medalBlock = ["// <medal-ticks>", "export const MEDAL_TICKS: Record<TrialCourseId, Record<Medal, number>> = {", rows.join(",\n"), "};", "// </medal-ticks>"].join("\n");
+  writeFileSync(competeSrc, readFileSync(competeSrc, "utf8").replace(/\/\/ <medal-ticks>[\s\S]*\/\/ <\/medal-ticks>/, medalBlock));
 }
 
 describe("the time trials' golden replays", () => {
@@ -125,6 +131,10 @@ describe("the time trials' golden replays", () => {
       expect(COURSES[course].medals.dev).toBe(file.case.ticks);
       expect(medalFor(course, file.case.ticks)).toBe("dev");
       expect(medalFor(course, file.case.ticks + 1)).toBe("gold");
+      const m = COURSES[course].medals;
+      // Each medal a tenth of a second on the clock, each slower than the last.
+      for (const t of [m.gold, m.silver, m.bronze]) expect(t % 6).toBe(0);
+      expect(m.dev < m.gold && m.gold < m.silver && m.silver < m.bronze).toBe(true);
     });
   }
 });

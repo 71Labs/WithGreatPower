@@ -34,6 +34,7 @@ export { armShoulder, armTip, villainLines } from "./villains";
 export { inReleaseWindow, pickForecast } from "./swing";
 export { comboMultiplier, nextPickup, placePickups } from "./pickups";
 export { botFrame, newBotMemory, type BotMemory } from "./bot";
+export { TRIAL_BOT_STYLE, trialBotFrame, type TrialBotStyle } from "./trial-bot";
 export { fillRenderFrame, heroAction, newRenderFrame } from "./render";
 export {
   besideCaptive,
