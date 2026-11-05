@@ -21,6 +21,7 @@ import { isChapterId } from "@wgp/game-core/chapters";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import { CaseClosed, type CaseFiling } from "@/components/cases/case-closed";
+import { FeeCaseClosed } from "@/components/cases/fee-strike/case-closed";
 import { badgeView } from "@/lib/cases/view";
 import { useAccount, useGame, type AccountState } from "@/game/store";
 import {
@@ -331,7 +332,9 @@ export function Night3D() {
     body = (
       <>
         <PlaySurface key={phase.session.runId ?? phase.session.run.seed} session={phase.session} autopilot={autopilot && botMayPlay(phase.session)} debug={debug} ended={!!ending} onDone={finish} onFallback={fallback} />
-        {ending && phase.session.chapter ? (
+        {ending && phase.session.chapter === "case-003" ? (
+          <FeeCaseClosed {...caseResults(phase.session, ending, chapterEnd)} onRetry={() => void finish()} />
+        ) : ending && phase.session.chapter ? (
           <CaseClosed {...caseResults(phase.session, ending, chapterEnd)} onRetry={() => void finish()} />
         ) : ending ? (
           <NightResults session={phase.session} ending={ending} onRetry={() => void finish()} />

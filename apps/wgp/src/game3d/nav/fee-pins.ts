@@ -59,13 +59,12 @@ export function feeNext(fee: FeeFrame, frame: RenderFrame3D): { point: Vec3; mar
 export function feeWaypoint(fee: FeeFrame, frame: RenderFrame3D): { point: Vec3; target: "clue" | "meter" | "stop" } | null {
   const next = feeNext(fee, frame);
   if (!next) return null;
-  const hero = frame.hero.pos;
-  const far = (d: number) => Math.hypot(next.point.x - hero.x, next.point.z - hero.z) > d;
   switch (next.mark) {
     case "clue":
       return { point: next.point, target: "clue" };
     case "meter":
-      return fee.phase === "cool" ? (far(260) ? { point: next.point, target: "meter" } : null) : { point: next.point, target: "meter" };
+      // Cooling, the cooling bar over the meter marks it (a pin there would sit on top of it).
+      return fee.phase === "cool" ? null : { point: next.point, target: "meter" };
     case "goblin":
       return { point: next.point, target: "stop" };
     case "bakery":

@@ -8,6 +8,7 @@ import { markEditionRead, useUnreadEdition } from "@/components/game/shell";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight } from "@/components/icons";
 import { AVATARS } from "@/components/cast";
+import { CaseRugLead003 } from "@/components/cases/fee-strike/rug-lead";
 import { CaseRugLead } from "@/components/cases/rug-lead";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { rugLeadFor, useCaseMarks } from "@/lib/cases/local";
@@ -159,7 +160,11 @@ export function DailyRugScreen() {
           dateline={caseLead ? `${latest ? `Night ${latest.night}` : `Night ${save.night}`} · Extra edition` : latest ? `Night ${latest.night} · Late edition` : `Night ${save.night}`}
           issue={latest ? `No. ${latest.night}` : caseLead ? "Extra" : "No edition yet"}
         />
-        {caseLead ? <CaseRugLead hero={caseLead.hero || save.hero.name.trim()} /> : null}
+        {caseLead?.id === "case-003" ? (
+          <CaseRugLead003 hero={caseLead.hero || save.hero.name.trim()} />
+        ) : caseLead ? (
+          <CaseRugLead hero={caseLead.hero || save.hero.name.trim()} />
+        ) : null}
         {latest ? <FrontPage save={save} edition={latest} second={!!caseLead} /> : caseLead ? null : <EmptyFrontPage />}
         <MarketMovers />
       </article>

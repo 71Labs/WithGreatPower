@@ -3,8 +3,8 @@
 /**
  * /play/cases, "Case files": Bearson's open cases as paper folders on the night city.
  * Case 001 is a big folder (the MISSING poster clipped in, its status, the best time once
- * closed and the "Case closed" badge's state); 002 and 003 are locked folders still in
- * his drafts. Loading keeps the folder and checks the status and badge in place; an error
+ * closed and the "Case closed" badge's state); case 003, "Fee Strike", has its folder below it
+ * (fee-strike/folder.tsx); the rest are locked folders still in his drafts. Loading keeps the folder and checks the status and badge in place; an error
  * says so above it and leaves what this browser knows on screen.
  */
 import { useEffect, type ReactNode } from "react";
@@ -18,7 +18,11 @@ import { CHAPTER_ID } from "@/lib/cases/types";
 import { formatTicks, spokenTicks } from "@/lib/cases/view";
 
 import { MissingPoster } from "./art";
+import { FeeStrikeFolder } from "./fee-strike/folder";
 import { BadgeBlock, CaseTime, StatusPill } from "./shared";
+
+/** Case numbers with a playable folder of their own: never listed among the locked drafts. */
+const OPEN_CASES: ReadonlySet<string> = new Set(["003"]);
 
 /** The folder's tab, sitting on its top edge: the case number on the folder's darker card. */
 function FolderTab({ children, locked = false }: { children: ReactNode; locked?: boolean }) {
@@ -173,6 +177,7 @@ function EmptyCases() {
 export function CaseFiles() {
   const files = useCaseFiles();
   const file = files.cases[0] ?? null;
+  const locked = LOCKED_CASES.filter((c) => !OPEN_CASES.has(c.number));
   // Opening the files is enough for the dock to stop calling the case new.
   useEffect(() => markCaseSeen(CHAPTER_ID), []);
   return (
@@ -190,18 +195,21 @@ export function CaseFiles() {
 
       {files.failed ? <ErrorNotice onRetry={files.retry} /> : null}
       {file ? <CaseFolder file={file} checking={files.loading && files.signedIn} /> : <EmptyCases />}
+      {file ? <FeeStrikeFolder /> : null}
 
-      <section aria-labelledby="locked-title" className="flex flex-col gap-3">
-        <h2 id="locked-title" className="flex items-center gap-2 text-[12px] font-bold uppercase leading-4 tracking-[0.1em] text-game-paper/80">
-          <span aria-hidden className="h-[3px] w-4 rounded-full bg-game-hero" />
-          Still in Bearson’s drafts
-        </h2>
-        <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
-          {LOCKED_CASES.map((c) => (
-            <LockedFolder key={c.number} number={c.number} line={c.line} />
-          ))}
-        </ul>
-      </section>
+      {locked.length ? (
+        <section aria-labelledby="locked-title" className="flex flex-col gap-3">
+          <h2 id="locked-title" className="flex items-center gap-2 text-[12px] font-bold uppercase leading-4 tracking-[0.1em] text-game-paper/80">
+            <span aria-hidden className="h-[3px] w-4 rounded-full bg-game-hero" />
+            Still in Bearson’s drafts
+          </h2>
+          <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
+            {locked.map((c) => (
+              <LockedFolder key={c.number} number={c.number} line={c.line} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }
