@@ -1,0 +1,30 @@
+{
+  "ruleset": "trial-1",
+  "logRuleset": 127993092,
+  "patrolRuleset": 4,
+  "course": "gauntlet",
+  "style": {
+    "run": 320,
+    "release": 800,
+    "glide": 600,
+    "climb": 560,
+    "gain": 1.6
+  },
+  "case": {
+    "ok": true,
+    "hash": "af06c53b",
+    "checkpoints": [
+      "9f5ce2e6",
+      "8b6932a2",
+      "8db304a3",
+      "9cefde3f",
+      "34fd55ae",
+      "c0d54c3f",
+      "af06c53b"
+    ],
+    "score": 0,
+    "ticks": 1116,
+    "bytes": 449,
+    "finished": 1
+  }
+}

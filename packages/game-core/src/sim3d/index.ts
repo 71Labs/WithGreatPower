@@ -53,4 +53,5 @@ export {
   RESTORE_REACH,
   RESTORE_TICKS,
 } from "./chapter";
+export { COURSE_GEOMETRY, isTrialCourse, nextGate, openAir, roofAt, TRIAL_COURSE_IDS, TRIAL_MAX_SECONDS, TRIAL_MAX_TICKS, trialCity, trialGates, trialLogRuleset } from "./trial";
 export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, rightClickerAim, rightClickerState, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";
