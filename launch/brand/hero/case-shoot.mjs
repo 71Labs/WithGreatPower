@@ -56,17 +56,21 @@ const set = (o) => evaluate(`window.__wgpCase.set(${JSON.stringify(o)})`);
 const stats = () => evaluate("window.__wgpCase.stats()");
 
 /** Wait for the standoff loop's flash (the frame's villain state) and shoot right after it fires. */
-async function atFlash(file, after = 70) {
-  for (let i = 0; i < 400; i++) {
-    const s = await evaluate(`(() => { const v = window.__wgpCase.frame().villains[0]; return v ? v.state : ""; })()`);
-    if (s === "flash") {
-      await sleep(after);
-      await shot(file);
-      return;
-    }
-    await sleep(15);
-  }
-  console.error("no flash seen for", file);
+async function atFlash(file, after = 0) {
+  // Watched in the page, frame by frame, so the shot follows the flash as closely as CDP allows.
+  const seen = await evaluate(`new Promise((res) => {
+    const t0 = performance.now();
+    const f = () => {
+      const v = window.__wgpCase.frame().villains[0];
+      if (v && v.state === "flash") return res(true);
+      if (performance.now() - t0 > 20000) return res(false);
+      requestAnimationFrame(f);
+    };
+    f();
+  })`);
+  if (!seen) console.error("no flash seen for", file);
+  if (after) await sleep(after);
+  await shot(file);
 }
 
 try {
@@ -107,12 +111,12 @@ try {
       // The loop: the flash, "SAVED!", then the reduced-motion pulse.
       await set({ scene: "standoff", phase: "cycle", reduced: false, restart: true });
       await sleep(600);
-      await atFlash(join(dir, `flash.png`), 40);
+      await atFlash(join(dir, `flash.png`), 0);
       await sleep(260);
       await shot(join(dir, `saved.png`));
       await set({ scene: "standoff", phase: "cycle", reduced: true, restart: true });
       await sleep(600);
-      await atFlash(join(dir, `flash-reduced.png`), 220);
+      await atFlash(join(dir, `flash-reduced.png`), 200);
       await set({ reduced: false });
       // Captive Mary.
       for (const r of [0, 0.5, 1]) {

@@ -28,7 +28,7 @@ import { jpegLook } from "./math";
 /** Her height for the "image" (units; the file's own is about 1.8 m). */
 const MARY_TALL = 86;
 /** Seconds her pose runs before it freezes (she settles into her idle, then the shot holds it). */
-const SETTLE = 0.35;
+const SETTLE = 1.2;
 
 const _a = new Vector3();
 const _b = new Vector3();
