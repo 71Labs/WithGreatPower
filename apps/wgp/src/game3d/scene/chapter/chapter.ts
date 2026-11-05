@@ -183,7 +183,7 @@ export class ChapterScene {
     const hero = this.heroCentre(frame);
 
     // Clues.
-    p.clues.update(ch.clues, time);
+    p.clues.update(ch.clues, time, ch.phase !== "investigate");
     for (const c of ch.clues) {
       if (c.found && !this.found.has(c.id)) this.clueFound(c.id, !first);
       else if (!c.found) this.found.delete(c.id);

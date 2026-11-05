@@ -10,9 +10,10 @@
  *   clue and thinning out toward the bridge; past the roof's edge they float, drifting.
  *
  * Each clue has a soft pickup glow (a halo and a tall beam to find it by) that dims once it's
- * found. Draw calls: the props' fill and ink hull (all three sites in one mesh), the crumbs,
- * the glows: four. Low tier: fewer crumbs, none floating. Reduced motion: nothing bobs,
- * spins, flickers or pulses.
+ * found, and goes out after the investigation. Draw calls, each culled when off screen: a
+ * fill and an ink hull per site with props (or the scorch on a city billboard), the crumbs,
+ * and the glows while the clues are being hunted. Low tier: fewer crumbs, none floating.
+ * Reduced motion: nothing bobs, spins, flickers or pulses.
  */
 import {
   AdditiveBlending,
@@ -285,11 +286,11 @@ export class ClueProps {
   private readonly glowMat: ShaderMaterial;
   private readonly cube = new BoxGeometry(1, 1, 1);
   private readonly quad = new PlaneGeometry(1, 1);
-  private fill: Mesh | null = null;
+  /** Each site's props, a fill and an ink hull, culled on their own (the sites are far apart). */
+  private props: Mesh[] = [];
   /** The scorch on a city billboard's face (the cursor clue under one). */
   private scorch: Mesh | null = null;
   private readonly scorchMat: ShaderMaterial;
-  private hull: Mesh | null = null;
   private crumbs: InstancedMesh | null = null;
   private readonly crumbColour: InstancedBufferAttribute;
   private readonly glows: InstancedMesh;
@@ -385,7 +386,8 @@ export class ClueProps {
     return out;
   }
 
-  update(clues: readonly ChapterClue[], time: number): void {
+  /** `spent`: the investigation is over (the found clues' glows go out once they've dimmed). */
+  update(clues: readonly ChapterClue[], time: number, spent = false): void {
     const key = clues.map((c) => `${c.id}:${Math.round(c.pos.x)},${Math.round(c.pos.y)},${Math.round(c.pos.z)}`).join("|") + (this.light ? "L" : "H");
     if (key !== this.key) this.build(clues, key);
     const still = this.reducedMotion;
@@ -399,6 +401,7 @@ export class ClueProps {
       if (!s) continue;
       if (c.found && !this.foundAt.has(c.id)) this.foundAt.set(c.id, time);
       if (!c.found) this.foundAt.delete(c.id);
+      if (spent && c.found && time - (this.foundAt.get(c.id) ?? time) > 1) continue;
       const g = clueGlow(c.found, c.found ? time - (this.foundAt.get(c.id) ?? time) : 0);
       _m.makeTranslation(s.at.x, s.floor + 34, s.at.z);
       this.glows.setMatrixAt(n, _m);
@@ -442,27 +445,26 @@ export class ClueProps {
       const p = cluePlacement(this.city, this.solids, c.id, c.pos);
       return { id: c.id, at: new Vector3(p.x, c.pos.y, p.z), floor: p.floor, yaw: p.yaw, board: null };
     });
-    const parts: BufferGeometry[] = [];
     for (const s of this.sites) {
+      const parts: BufferGeometry[] = [];
       if (s.id === "tabs") this.pole(s, parts);
       else if (s.id === "cursor" && s.board) this.scorchOn(s.board);
       else if (s.id === "cursor") this.billboard(s, parts);
-    }
-    if (parts.length) {
+      if (!parts.length) continue;
       const geo = mergeGeometries(parts, false);
       for (const p of parts) p.dispose();
-      if (geo) {
-        geo.setAttribute("aHullN", weldedNormals(geo));
-        this.fill = new Mesh(geo, this.fillMat);
-        this.hull = new Mesh(geo, this.hullMat);
-        for (const m of [this.fill, this.hull]) {
-          m.frustumCulled = false;
-          m.renderOrder = 1;
-        }
-        this.fill.name = "chapter-clue-props";
-        this.hull.name = "chapter-clue-props-ink";
-        this.root.add(this.fill, this.hull);
-      }
+      if (!geo) continue;
+      geo.setAttribute("aHullN", weldedNormals(geo));
+      // A little room for the hull's push, then culled like any prop.
+      geo.computeBoundingSphere();
+      if (geo.boundingSphere) geo.boundingSphere.radius += 12;
+      const fill = new Mesh(geo, this.fillMat);
+      const hull = new Mesh(geo, this.hullMat);
+      fill.name = `chapter-clue-${s.id}`;
+      hull.name = `chapter-clue-${s.id}-ink`;
+      for (const m of [fill, hull]) m.renderOrder = 1;
+      this.props.push(fill, hull);
+      this.root.add(fill, hull);
     }
     const px = this.sites.find((s) => s.id === "pixels");
     if (px) this.pixels(px);
@@ -534,7 +536,6 @@ export class ClueProps {
     geo.applyMatrix4(new Matrix4().compose(new Vector3(b.at.x + Math.sin(yaw) * out, b.at.y + 34 + b.h / 2, b.at.z + Math.cos(yaw) * out), q, new Vector3(1, 1, 1)));
     const mesh = new Mesh(geo, this.scorchMat);
     mesh.name = "chapter-clue-scorch";
-    mesh.frustumCulled = false;
     mesh.renderOrder = 2;
     (this.scorchMat.uniforms.uSize.value as Vector2).set(b.w * 0.98, b.h * 0.96);
     this.scorch = mesh;
@@ -569,6 +570,10 @@ export class ClueProps {
     });
     this.crumbColour.needsUpdate = true;
     mesh.count = this.trail.length;
+    // Culled with the trail's own bounds (with room for the floating ones' bob).
+    mesh.frustumCulled = true;
+    mesh.computeBoundingSphere();
+    if (mesh.boundingSphere) mesh.boundingSphere.radius += 24;
     this.crumbs = mesh;
     this.root.add(mesh);
   }
@@ -579,11 +584,11 @@ export class ClueProps {
       this.scorch.geometry.dispose();
       this.scorch = null;
     }
-    if (this.fill) {
-      this.root.remove(this.fill, this.hull!);
-      this.fill.geometry.dispose();
-      this.fill = this.hull = null;
+    for (const m of this.props) {
+      this.root.remove(m);
+      if (m.material === this.fillMat) m.geometry.dispose();
     }
+    this.props = [];
     if (this.crumbs) {
       this.root.remove(this.crumbs);
       this.crumbs.dispose();
