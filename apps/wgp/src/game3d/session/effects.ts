@@ -6,6 +6,8 @@
  */
 import type { Vec3 } from "@wgp/game-core/sim3d/contract";
 
+import { isChapterEvent, type ChapterEvent } from "@/game3d/scene/chapter/contract";
+
 import type { LoopEvent3D } from "./loop3d";
 
 /** The slice of the scene handle effects need. */
@@ -17,6 +19,8 @@ export interface EffectsTarget {
   fizzle?(): void;
   /** A strike at a villain in reach (ruleset 4): the hero throws a punch. */
   punch?(): void;
+  /** Case file 001's sim events (scene/chapter): its clues, SCREENSHOT, copies and captive. */
+  chapter?(ev: ChapterEvent): void;
 }
 
 /**
@@ -37,6 +41,11 @@ export function sceneEffects(target: () => EffectsTarget | null) {
   return (ev: LoopEvent3D) => {
     const t = target();
     if (!t) return;
+    // Case file 001's events (typed locally until the sim's contract carries them).
+    if (isChapterEvent(ev)) {
+      t.chapter?.(ev);
+      return;
+    }
     switch (ev.type) {
       case "thwip":
         t.burst("THWIP!", above(ev.ax, ev.ay, ev.az, 40), { size: 64, life: 0.55, rise: 20 });

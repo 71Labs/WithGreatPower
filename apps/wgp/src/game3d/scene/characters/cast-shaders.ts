@@ -18,7 +18,43 @@
  * The hull is the cast's own (shaders.ts HULL_VERTEX) for single bodies; the copies use
  * CAST_HULL_VERTEX, which skins through the same packed poses.
  */
-import { GLITCH, SCREEN } from "./shaders";
+import { GLITCH, JPEG_SNAP, SCREEN } from "./shaders";
+
+/**
+ * Case file 001's captive Mary (USE_JPEG): saved as a compressed screenshot, by `uJpeg` (0 clean
+ * … 1 fully compressed). Her face's features snap to blocks, her shading to a few facets, and
+ * her colours to `uJpegLevels` levels (luma dithered per image pixel, chroma coarser), in 8×8
+ * blocks of an "image" anchored on her (`uJpegGrid`: her centre in CSS px, CSS px per image
+ * pixel), each block a little off in tone with a faint seam.
+ */
+const JPEG_PARS = /* glsl */ `
+#ifdef USE_JPEG
+uniform float uJpeg;
+uniform float uJpegLevels;
+uniform vec3 uJpegGrid;
+float jHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+#endif
+`;
+
+const JPEG_COLOUR = /* glsl */ `
+#ifdef USE_JPEG
+  if (uJpeg > 0.01) {
+    vec2 vp = (gl_FragCoord.xy / uDpr - uJpegGrid.xy) / max(uJpegGrid.z, 0.05);
+    vec2 blk = floor(vp / 8.0);
+    vec2 inb = vp - blk * 8.0;
+    float h = jHash(blk);
+    float dither = jHash(floor(vp) + 17.0) - 0.5;
+    float L = uJpegLevels;
+    float Y = dot(col, vec3(0.299, 0.587, 0.114));
+    vec3 ch = col - Y;
+    float Yq = floor(Y * L + 0.5 + dither * 0.9) / L + (h - 0.5) * 0.09 * uJpeg;
+    vec3 chq = floor(ch * L * 0.5 + 0.5) / (L * 0.5) + (jHash(blk + 5.0) - 0.5) * 0.05 * uJpeg;
+    vec3 q = clamp(vec3(Yq) + chq, 0.0, 1.0);
+    float seam = (step(7.0, inb.x) + step(7.0, inb.y)) > 0.5 ? 0.14 * uJpeg : 0.0;
+    col = mix(col, q * (1.0 - seam), smoothstep(0.0, 0.35, uJpeg));
+  }
+#endif
+`;
 
 export const CAST_MAX_DECALS = 24;
 export const CAST_PALETTE = 16;
@@ -47,6 +83,7 @@ export const CAST_VERTEX = /* glsl */ `
 #include <common>
 #include <skinning_pars_vertex>
 ${GLITCH}
+${JPEG_SNAP}
 ${POSE_PARS}
 attribute float aPal;
 attribute vec3 aFace;
@@ -81,6 +118,9 @@ void main() {
   seed = float(gl_InstanceID) + 1.0;
 #endif
   vec4 world = model * vec4(transformed, 1.0);
+#ifdef USE_JPEG
+  world.xyz = jpegSnap(world.xyz);
+#endif
   world.xyz += glitchOffset(position, seed);
   vNormalW = normalize(mat3(model) * objectNormal);
   vWorld = world.xyz;
@@ -171,6 +211,7 @@ flat varying float vPal;
 flat varying float vSeed;
 
 ${SCREEN}
+${JPEG_PARS}
 
 float ellipseD(vec2 q, vec2 r) {
   float k0 = length(q / r);
@@ -232,6 +273,12 @@ void main() {
   if (vFace.z > 0.5) {
     vec2 uv = vFace.xy;
     float pxw = max(length(fwidth(uv)) * 0.7071, 1e-4);
+#ifdef USE_JPEG
+    if (uJpeg > 0.01) {
+      float q = 0.3 + 1.1 * uJpeg;
+      uv = (floor(uv / q) + 0.5) * q;
+    }
+#endif
     float lastD = 1e3;
     for (int i = 0; i < MAX_DECALS; i++) {
       if (i >= uDecN) break;
@@ -281,6 +328,12 @@ void main() {
   }
 
   vec3 n = normalize(vNormalW);
+#ifdef USE_JPEG
+  if (uJpeg > 0.01) {
+    float k = mix(6.0, 1.6, uJpeg);
+    n = normalize(floor(n * k + 0.5) + n * 0.001);
+  }
+#endif
   vec3 v = normalize(cameraPosition - vWorld);
   float l = dot(n, uLight);
   float glow = 0.0;
@@ -330,6 +383,7 @@ void main() {
     col = mix(col, vec3(0.55, 0.95, 1.0), band * 0.5 * uGlitch);
   }
 
+${JPEG_COLOUR}
   col = mix(col, vec3(1.0), uFlash);
   // Alpha: the bloom's inverted glow (render/post-shaders.ts).
   gl_FragColor = vec4(mix(col, uFog, uFogMix), 1.0 - glow * (1.0 - uFogMix));

@@ -24,6 +24,7 @@ import { NODE_COLORS, type SuitColors } from "@/components/cast";
 
 import type { ChasePose, Raycast } from "./camera/chase";
 import type { SceneCue } from "./camera/director";
+import type { ChapterEvent } from "./chapter/contract";
 import { watchContextRecovery } from "./context-recovery";
 import type { BurstOptions } from "./effects";
 import { ALL_CAST, SceneEngine } from "./engine";
@@ -39,6 +40,8 @@ export interface SceneHandle {
   fizzle?(): void;
   /** A strike at a villain in reach (ruleset 4): the hero throws a punch. */
   punch?(): void;
+  /** A Case file 001 sim event: the chapter's clues, SCREENSHOT, copies and captive (scene/chapter). */
+  chapter?(ev: ChapterEvent): void;
   /** Manual camera orbit: radians to add this frame, and whether a pointer holds the camera. */
   orbit(dYaw: number, dPitch: number, holding: boolean): void;
   /** Cut the camera to its wanted pose (a teleport, a new stop). */
@@ -110,6 +113,7 @@ export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cas
       flip: () => engine.flip(),
       fizzle: () => engine.fizzle(),
       punch: () => engine.punch(),
+      chapter: (ev) => engine.chapterEvent(ev),
       orbit: (dy, dp, holding) => engine.orbit(dy, dp, holding),
       cut: () => engine.cut(),
       skip: () => engine.skip(),

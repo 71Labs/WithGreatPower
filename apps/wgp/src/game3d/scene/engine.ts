@@ -29,6 +29,8 @@ import type { QualityPreset } from "./quality";
 import type { PostFrame } from "./render/post";
 import { MoonShadows, SHADOW_LAYER } from "./render/shadows";
 import { buildSky, type Sky } from "./sky";
+import { ChapterScene } from "./chapter/chapter";
+import type { ChapterEvent } from "./chapter/contract";
 import { CharacterSystem } from "./characters/characters";
 import type { WebLine } from "./web";
 
@@ -62,6 +64,8 @@ export class SceneEngine {
   readonly pools: LightPools;
   /** Impact debris and the web splat. */
   readonly sparks: Sparks;
+  /** Case file 001's clues, copies, captive and SCREENSHOT (built on a chapter night's first frame). */
+  readonly chapter: ChapterScene;
   /** Moon shadows, on tiers with a shadow map (the compositor draws their depth pass). */
   shadows: MoonShadows | null = null;
   /** Camera far plane, from the city's size. */
@@ -109,12 +113,13 @@ export class SceneEngine {
     this.speedLines = new SpeedLines();
     this.pools = new LightPools(this.city.layout.boxes, this.uniforms);
     this.sparks = new Sparks(this.uniforms);
+    this.chapter = new ChapterScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
     // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
     for (const child of this.city.root.children) {
       if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
     }
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -126,6 +131,7 @@ export class SceneEngine {
     this.city.setPropOutlines(preset.propOutlines);
     this.characters.setTier(preset.tier);
     this.crowd.setTier(preset.tier);
+    this.chapter.setTier(preset.tier);
     this.sky.setStars(preset.stars);
     this.sky.skyline.visible = preset.skyline;
     this.city.setDetail(preset.detail);
@@ -153,6 +159,7 @@ export class SceneEngine {
     this.pickups.reducedMotion = on;
     this.characters.setReducedMotion(on);
     this.crowd.reducedMotion = on;
+    this.chapter.setReducedMotion(on);
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
 
@@ -181,6 +188,11 @@ export class SceneEngine {
   /** A strike at a villain in reach: the hero throws a punch. */
   punch(): void {
     this.characters.punch();
+  }
+
+  /** A Case file 001 sim event (a clue found, a SCREENSHOT that hit, a copy popped…). */
+  chapterEvent(ev: ChapterEvent): void {
+    this.chapter.event(ev);
   }
 
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
@@ -264,6 +276,7 @@ export class SceneEngine {
       const e = camera.matrixWorld.elements;
       this.shadows.follow(frame ? frame.hero.pos : this.cityData.start, -e[8], -e[10]);
       this.shadows.scanCast(this.characters.root);
+      if (this.chapter.active) this.shadows.scanCast(this.chapter.root);
     }
     u.uPxScale.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height);
     this.city.updateLod(camera.position.x, camera.position.z);
@@ -281,6 +294,7 @@ export class SceneEngine {
       this.castCost[this.castAt++ % this.castCost.length] = performance.now() - t0;
       this.hazards.update(frame, frame.mode === "fight" ? (this.cityData.zones[frame.stop]?.stage?.y ?? null) : null);
       this.pickups.update(frame, time);
+      this.chapter.update(frame, camera, size, dt, time);
       // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
       const stuck = this.characters.stuck;
       this.bursts.setAnchor(stuck);
@@ -332,5 +346,6 @@ export class SceneEngine {
     this.bursts.dispose();
     this.hazards.dispose();
     this.pickups.dispose();
+    this.chapter.dispose();
   }
 }

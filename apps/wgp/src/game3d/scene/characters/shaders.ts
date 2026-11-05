@@ -243,10 +243,25 @@ void main() {
 }
 `;
 
+/**
+ * Case file 001's captive Mary (scene/chapter/captive.ts): with USE_JPEG her vertices snap to a
+ * world grid `uJpegSnap` units wide, a blocky silhouette; her fill and her hull snap alike.
+ */
+export const JPEG_SNAP = /* glsl */ `
+#ifdef USE_JPEG
+uniform float uJpegSnap;
+vec3 jpegSnap(vec3 w) {
+  if (uJpegSnap < 0.05) return w;
+  return (floor(w / uJpegSnap) + 0.5) * uJpegSnap;
+}
+#endif
+`;
+
 export const HULL_VERTEX = /* glsl */ `
 #include <common>
 #include <skinning_pars_vertex>
 ${GLITCH}
+${JPEG_SNAP}
 attribute vec4 aHull;     // push direction (bind space), width multiplier
 uniform float uPxScale;   // world units per CSS px at view depth 1
 uniform vec4 uHullPx;     // near px, far px, near depth, far depth
@@ -265,6 +280,9 @@ void main() {
   seed = float(gl_InstanceID) + 1.0;
 #endif
   vec4 world = model * vec4(transformed, 1.0);
+#ifdef USE_JPEG
+  world.xyz = jpegSnap(world.xyz);
+#endif
   world.xyz += glitchOffset(position, seed);
   vec3 dir = normalize(mat3(model) * objectNormal);
   float depth = max(1.0, -(viewMatrix * world).z);

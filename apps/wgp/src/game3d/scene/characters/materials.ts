@@ -135,14 +135,19 @@ export function bodyMaterial(shared: SharedUniforms, palette: Vector3[], decals:
   });
 }
 
-export function hullMaterial(shared: SharedUniforms, body: ShaderMaterial, skin?: SharedSkin): ShaderMaterial {
+export function hullMaterial(shared: SharedUniforms, body: ShaderMaterial, skin?: SharedSkin, opts: { jpeg?: boolean } = {}): ShaderMaterial {
   const u = body.uniforms;
+  const defines: Record<string, string> = {};
+  if (skin) defines.USE_SKINNING = "";
+  // The body's JPEG snap (Case file 001's captive Mary): the hull snaps with it.
+  const jpeg = !!opts.jpeg && !!u.uJpegSnap;
+  if (jpeg) defines.USE_JPEG = "";
   return new ShaderMaterial({
     name: "wgp-cast-hull",
     vertexShader: HULL_VERTEX,
     fragmentShader: HULL_FRAGMENT,
     side: BackSide,
-    defines: skin ? { USE_SKINNING: "" } : {},
+    defines,
     uniforms: {
       uTime: shared.uTime,
       uPxScale: shared.uPxScale,
@@ -155,6 +160,7 @@ export function hullMaterial(shared: SharedUniforms, body: ShaderMaterial, skin?
       uFade: u.uFade,
       uFogMix: u.uFogMix,
       uGlitch: u.uGlitch,
+      ...(jpeg ? { uJpegSnap: u.uJpegSnap } : {}),
       ...(skin ? skinUniforms(skin) : {}),
     },
   });
