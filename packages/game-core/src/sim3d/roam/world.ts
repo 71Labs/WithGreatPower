@@ -100,7 +100,9 @@ function dressCity(city: City): City {
     props.push({ kind: "antenna", at: { x: free[0], y: r.y, z: free[1] }, facing: 0, w: MAST_HALF * 2, h: MAST_H, d: MAST_HALF * 2, buildingId: best.id });
     anchors.push({ at: { x: free[0], y: r.y + MAST_H, z: free[1] }, kind: "antenna" });
   }
-  return { ...city, props, anchors };
+  // Nobody fights here: the bridge's stage stays, its villain doesn't (no body is fetched for him).
+  const zones = city.zones.map((z) => (z.villain ? { ...z, villain: null } : z));
+  return { ...city, props, anchors, zones };
 }
 
 let cached: { city: City; world: RoamWorld } | null = null;

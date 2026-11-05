@@ -312,6 +312,11 @@ export interface CityRecord {
   at: CitySpot | null;
   /** Outings filed. */
   outings: number;
+  /**
+   * Signed in: the outing the server last filed and the base it started from, so the same
+   * outing filed again as it grows replays from where it began (src/server/db/city.ts).
+   */
+  outing?: { id: string; base: CityBase } | null;
 }
 
 export const emptyCity = (): CityRecord => ({ tasks: {}, items: {}, pages: 0, views: 0, xp: 0, at: null, outings: 0 });
@@ -330,8 +335,8 @@ const bitCount = (n: number) => {
 
 const finiteSpot = (a: CitySpot | null | undefined): a is CitySpot => !!a && [a.x, a.y, a.z, a.fx, a.fz].every((v) => typeof v === "number" && Number.isFinite(v));
 
-/** Where an outing starts from a record: its progress and spot (an outing's talks always start fresh). */
-export function roamStartFrom(rec: CityRecord): RoamStart {
+/** Where an outing starts from a record (or its base): its progress and spot (an outing's talks always start fresh). */
+export function roamStartFrom(rec: CityBase): RoamStart {
   return {
     stage: TASK_IDS.map((id) => {
       const v = rec.tasks[id] ?? 0;
@@ -343,6 +348,30 @@ export function roamStartFrom(rec: CityRecord): RoamStart {
     talks: [],
     at: finiteSpot(rec.at) ? { ...rec.at } : null,
   };
+}
+
+/**
+ * What an outing starts from: the record's progress and spot. The server files an outing only
+ * from its own record's base (the first filing of an outing must match it exactly).
+ */
+export interface CityBase {
+  tasks: Partial<Record<TaskId, number>>;
+  items: Partial<Record<TaskId, number>>;
+  pages: number;
+  views: number;
+  at: CitySpot | null;
+}
+
+export const cityBase = (rec: CityRecord): CityBase => ({ tasks: { ...rec.tasks }, items: { ...rec.items }, pages: rec.pages, views: rec.views, at: rec.at ? { ...rec.at } : null });
+
+/** Whether two bases are the same start (every task's stage and items, pages, views and the spot). */
+export function sameBase(a: CityBase, b: CityBase): boolean {
+  for (const id of TASK_IDS) {
+    if ((a.tasks[id] ?? 0) !== (b.tasks[id] ?? 0) || (a.items[id] ?? 0) !== (b.items[id] ?? 0)) return false;
+  }
+  if (a.pages >>> 0 !== b.pages >>> 0 || a.views >>> 0 !== b.views >>> 0) return false;
+  if (!a.at || !b.at) return !a.at && !b.at;
+  return a.at.x === b.at.x && a.at.y === b.at.y && a.at.z === b.at.z && a.at.fx === b.at.fx && a.at.fz === b.at.fz;
 }
 
 /** What an outing ended with (sim3d/roam's final progress and spot). */

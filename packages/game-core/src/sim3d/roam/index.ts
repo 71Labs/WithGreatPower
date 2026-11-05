@@ -15,4 +15,4 @@ export { roamHeading } from "./move";
 export { zipTarget, type ZipTarget } from "./zip";
 export { clearAt, MAST_H, MAST_HALF, ROAM_AC_H, ROAM_STOPS, roamCity, roamGrid, roamWorld } from "./world";
 export { columnTop, ledgeOpen } from "./geometry";
-export { roamBotFrame, newRoamBot, type RoamBotGoal, type RoamBotMemory } from "./bot";
+export { roamBotFrame, newRoamBot, roamTour, streetRoute, type RoamBotGoal, type RoamBotMemory } from "./bot";

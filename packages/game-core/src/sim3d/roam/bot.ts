@@ -10,6 +10,7 @@ import type { InputFrame } from "../contract";
 import { dirIndex, len2 } from "../dmath";
 import type { SimState } from "../types";
 import { SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP } from "./constants";
+import type { RoamWorld } from "./types";
 
 export type RoamBotGoal =
   /**
@@ -47,6 +48,34 @@ export interface RoamBotMemory {
 }
 
 export const newRoamBot = (goals: RoamBotGoal[]): RoamBotMemory => ({ goals, i: 0, t: 0, route: null, stuck: 0, lastX: 0, lastZ: 0 });
+
+/**
+ * The golden tour (src/golden-roam.ts) and `?autopilot=1`: from the spawn roof a walk, a run
+ * and a sprint off its edge, down to Dev for the pickpocket chase over the roofs and back, a
+ * Daily Rug page in the street, a swing on the web (held, then let go) and a zip.
+ */
+export function roamTour(w: RoamWorld): RoamBotGoal[] {
+  const s = w.spawn;
+  const dev = w.folks.find((f) => f.key === "dev")!;
+  const page = w.pages.find((p) => p.y === 0)!;
+  return [
+    { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 1 },
+    { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 3 },
+    { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 120, sprint: true },
+    { kind: "wait", ticks: 30 },
+    { kind: "go", x: dev.x, z: dev.z, r: 90, street: true },
+    { kind: "act" },
+    { kind: "wait", ticks: 30 },
+    { kind: "chase", ticks: 60 * 90 },
+    { kind: "go", x: dev.x, z: dev.z, r: 100, street: true },
+    { kind: "act" },
+    { kind: "go", x: page.x, z: page.z, r: 10, street: true },
+    { kind: "web", x: page.x, z: page.z + 3000, ticks: 150 },
+    { kind: "wait", ticks: 90 },
+    { kind: "press", shot: "zip", x: page.x, z: page.z + 3000 },
+    { kind: "wait", ticks: 60 },
+  ];
+}
 
 const IDLE: InputFrame = { dir: 0, mag: 0, web: false, shot: 0 };
 const SHOTS = { jump: SHOT_JUMP, zip: SHOT_ZIP, drop: SHOT_DROP } as const;

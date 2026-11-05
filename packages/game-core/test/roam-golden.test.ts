@@ -21,7 +21,7 @@ import { hashState } from "../src/hash";
 import { RULESET_VERSION } from "../src/score";
 import { chapterLogRuleset } from "../src/sim3d/chapter";
 import { ROAM_LOG_RULESET, ROAM_RULESET } from "../src/sim3d/roam/constants";
-import { newRoamBot, roamBotFrame, type RoamBotGoal } from "../src/sim3d/roam/bot";
+import { newRoamBot, roamBotFrame, roamTour } from "../src/sim3d/roam/bot";
 import { roamWorld } from "../src/sim3d/roam/world";
 import { TASK_DONE } from "../src/sim3d/roam/types";
 
@@ -39,34 +39,9 @@ interface RoamFile {
   outing: RoamGoldenExpect;
 }
 
-/** The golden tour: what the bot plays to make the log. */
-function tour(): RoamBotGoal[] {
-  const w = roamWorld();
-  const s = w.spawn;
-  const dev = w.folks.find((f) => f.key === "dev")!;
-  const page = w.pages.find((p) => p.y === 0)!;
-  return [
-    { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 1 },
-    { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 3 },
-    { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 120, sprint: true },
-    { kind: "wait", ticks: 30 },
-    { kind: "go", x: dev.x, z: dev.z, r: 90, street: true },
-    { kind: "act" },
-    { kind: "wait", ticks: 30 },
-    { kind: "chase", ticks: 60 * 90 },
-    { kind: "go", x: dev.x, z: dev.z, r: 100, street: true },
-    { kind: "act" },
-    { kind: "go", x: page.x, z: page.z, r: 10, street: true },
-    { kind: "web", x: page.x, z: page.z + 3000, ticks: 150 },
-    { kind: "wait", ticks: 90 },
-    { kind: "press", shot: "zip", x: page.x, z: page.z + 3000 },
-    { kind: "wait", ticks: 60 },
-  ];
-}
-
 function playTour() {
   const run = startRoamRun(roamGoldenStart());
-  const goals = tour();
+  const goals = roamTour(roamWorld());
   const mem = newRoamBot(goals);
   while (mem.i < goals.length && run.sim.tick < 60 * 60 * 5) stepRoamRun(run, roamBotFrame(run.sim, mem));
   return run;
