@@ -327,17 +327,15 @@ function check(drawn: Drawn): void {
               }
           }
           if (worst > 4 && shown > 0) {
+            // Every pair counts; the first few in a city say where.
             zf++;
-            if (zf <= 3) {
-              const ka = Object.entries(KIND).find(([, v]) => v === flat[i].b.kind)?.[0];
-              const kb = Object.entries(KIND).find(([, v]) => v === flat[j].b.kind)?.[0];
-              add("z-fighting", "high", worst, `${ka} ${r(flat[i].b.x)},${r(flat[i].b.y)},${r(flat[i].b.z)} and ${kb} ${r(flat[j].b.x)},${r(flat[j].b.y)},${r(flat[j].b.z)}`);
-            }
+            const ka = Object.entries(KIND).find(([, v]) => v === flat[i].b.kind)?.[0];
+            const kb = Object.entries(KIND).find(([, v]) => v === flat[j].b.kind)?.[0];
+            add("z-fighting", "high", worst, zf <= 3 ? `${ka} ${r(flat[i].b.x)},${r(flat[i].b.y)},${r(flat[i].b.z)} and ${kb} ${r(flat[j].b.x)},${r(flat[j].b.y)},${r(flat[j].b.z)}` : "");
           }
         }
       }
     }
-    if (zf > 3) add("z-fighting (more in this city)", "high", zf - 3, "");
 
     // Web anchors with nothing drawn near them.
     const index = new CityIndex(city);
@@ -440,7 +438,7 @@ function report(): void {
         {
           cities: cities.length,
           table: table.map((t) => ({ ...t, cities: t.cities.size })),
-          issues: issues.slice(0, 2000),
+          issues: issues.filter((i) => i.at).slice(0, 4000),
         },
         null,
         1,
