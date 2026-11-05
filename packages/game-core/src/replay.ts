@@ -143,8 +143,11 @@ function dispatch(run: Run, events: SimEvent[]) {
     if (ev.type === "ability") run.abilities += 1;
     if (ev.type === "gwei") run.gwei += 1;
     if (run.chapter) {
-      // A chapter's checkpoints: each clue, the win, and Mary's release.
-      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed") run.checkpoints.push(hashState(run.sim));
+      // A chapter's checkpoints: each clue, the win, and Mary's release (Case File 003: each clue,
+      // the grab, the bakery, the win and the cooled meter).
+      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed" || ev.type === "fee-clue" || ev.type === "meter-grab" || ev.type === "chase-end" || ev.type === "fees-cooled") {
+        run.checkpoints.push(hashState(run.sim));
+      }
       if (ev.type === "night-over") run.over = true;
       continue;
     }
@@ -305,25 +308,31 @@ export function runStats(run: Run, score: ScoreBreakdown | null): Record<string,
   };
 }
 
-/** Whether a chapter run closed its case: Mary freed and the night ended on it. */
+/** Whether a chapter run closed its case: Mary freed (Case File 003: the fees cooled) and the night ended on it. */
 export function chapterCleared(run: Run): boolean {
   const c = run.sim?.chapter;
-  return !!run.chapter && !!c && c.phase === "done" && c.captive.freed && run.over && !run.error && run.sim.mode === "done" && run.sim.hp > 0;
+  const f = run.sim?.fee;
+  const closed = run.chapter === "case-003" ? !!f && f.phase === "done" && f.meter.cooled : !!c && c.phase === "done" && c.captive.freed;
+  return !!run.chapter && closed && run.over && !run.error && run.sim.mode === "done" && run.sim.hp > 0;
 }
 
 /** A chapter run's stats, as the server stores them: `cleared` (0 or 1) decides the case. */
 export function chapterStats(run: Run): Record<string, number> {
   const s = run.sim;
   const c = s?.chapter;
+  const f = s?.fee;
+  const clues = c?.clues ?? f?.clues;
   return {
     chapter: 1,
     cleared: chapterCleared(run) ? 1 : 0,
     ticks: s?.tick ?? 0,
     seconds: Math.floor((s?.tick ?? 0) / SIM_HZ),
-    cluesFound: c ? c.clues.filter((k) => k.found).length : 0,
-    clues: c ? c.clues.length : 0,
-    fightsWon: c && (c.phase === "rescue" || c.phase === "done") ? 1 : 0,
-    restore: c ? c.captive.restore : 0,
+    cluesFound: clues ? clues.filter((k) => k.found).length : 0,
+    clues: clues ? clues.length : 0,
+    fightsWon: (c && (c.phase === "rescue" || c.phase === "done")) || (f && (f.phase === "cool" || f.phase === "done")) ? 1 : 0,
+    restore: c ? c.captive.restore : f ? f.meter.cool : 0,
+    // Case File 003's chase: losses, the last checkpoint and its seconds.
+    ...(f ? { losses: f.losses, checkpoint: f.checkpoint, chaseSeconds: Math.floor(f.chaseT) } : {}),
     perfect: s?.total.perfect ?? 0,
     good: s?.total.good ?? 0,
     miss: s?.total.miss ?? 0,

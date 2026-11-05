@@ -196,8 +196,11 @@ export interface Stats {
   nights: number;
 }
 
-/** A story chapter ("case file"), played as its own night (rules/chapters.ts, sim3d/chapter.ts). */
-export type ChapterId = "case-001";
+/**
+ * A story chapter ("case file"), played as its own night (rules/chapters.ts, sim3d/chapter.ts).
+ * Case File 003, "Fee Strike", is its own sim branch (sim3d/fee-strike*.ts).
+ */
+export type ChapterId = "case-001" | "case-003";
 
 /** A case file in the save: whether it's closed, when, and the fastest clear. */
 export interface CaseRecord {

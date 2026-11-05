@@ -54,3 +54,7 @@ export {
   RESTORE_TICKS,
 } from "./chapter";
 export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, rightClickerAim, rightClickerState, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";
+// Case File 003, "Fee Strike".
+export { besideMeter, COOL_TICKS, FEE_LEVEL, feeCity, feeStops, feeTarget, GRAB_REACH, METER_REACH, meterHeat, meterPlant, nextFeeClue } from "./fee-strike";
+export { CHASE_FAST, chaseGap, chaseSpeed, ESCAPE_GAP, HOLD_SECONDS, MAX_LOSSES, SAFE_GAP } from "./fee-chase";
+export { LOAF_SHARE, SPIKE_REACH, spikeWindSeconds } from "./fee-strike-step";

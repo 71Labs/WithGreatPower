@@ -7,16 +7,20 @@
  *
  * Pure: the clock comes in as an argument.
  */
+import { FEE_STRIKE_ID, FEE_STRIKE_INFO, type FeeClueId } from "./case-003";
 import { HP_PER_LEVEL, POWERS, VILLAINS, XP_TO_NEXT } from "./data";
 import type { CaseRecord, ChapterId, Hero, Save, VillainId } from "./types";
+
+export { FEE_STRIKE_ID, FEE_STRIKE_INFO, FEE_STRIKE_LINES, FEE_STRIKE_RULESET, type FeeClueId } from "./case-003";
 
 /** Case File 001, "Missing: Mary Jpeg". */
 export const CHAPTER_ID = "case-001" satisfies ChapterId;
 /** The chapter's rules version, recorded with every chapter run (`runs.ruleset`). Bump it with any change to the chapter's sim. */
 export const CHAPTER_RULESET = "c001-1";
 
-export const CHAPTER_IDS: readonly ChapterId[] = [CHAPTER_ID];
+export const CHAPTER_IDS: readonly ChapterId[] = [CHAPTER_ID, FEE_STRIKE_ID];
 
+/** Case File 001's clues (Case File 003's are FeeClueId, rules/case-003.ts). */
 export type ClueId = "tabs" | "cursor" | "pixels";
 
 export interface ChapterInfo {
@@ -30,7 +34,7 @@ export interface ChapterInfo {
   villain: { name: string; tagline: string; taunt: string; defeat: string };
   captive: { name: string; freed: string };
   /** Each clue's case note, in the order the city places them (any order to find). */
-  clues: { id: ClueId; name: string; note: string }[];
+  clues: { id: ClueId | FeeClueId; name: string; note: string }[];
 }
 
 export const CHAPTERS: Record<ChapterId, ChapterInfo> = {
@@ -53,6 +57,7 @@ export const CHAPTERS: Record<ChapterId, ChapterInfo> = {
       { id: "pixels", name: "Loose pixels", note: "Pixels. Big ones. Someone's been compressing." },
     ],
   },
+  "case-003": FEE_STRIKE_INFO,
 };
 
 /** The Right-Clicker's moves and their damage at level 1 (scaled by damageScale like every villain's). */

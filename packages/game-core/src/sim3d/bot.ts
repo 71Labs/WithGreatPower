@@ -10,6 +10,7 @@
 import { abilityBlocked, gweiBlocked } from "./abilities";
 import { besideCaptive, COPY_RADIUS, RESTORE_REACH } from "./chapter";
 import { docVulnerable, isVulnerable, mercy, nearestTarget, takesHit } from "./combat";
+import { coolFrame, feeGoalDist, feeGoalKey } from "./fee-bot";
 import { inShotCone } from "./right-clicker";
 import { DT } from "./constants";
 import type { InputFrame } from "./contract";
@@ -263,6 +264,8 @@ function fightFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"], dt: n
   const h = s.hero;
   const v = s.villain!;
   if (s.chapter && s.chapter.phase === "rescue" && s.mode === "fight") return rescueFrame(s, mem, shot);
+  // Case File 003: cooling the meter, Gas Goblin webbed.
+  if (s.fee && s.fee.phase === "cool" && s.mode === "fight") return coolFrame(s, shot);
   const frame: InputFrame = { dir: 0, mag: 0, web: false, shot };
   const t = nearestTarget(s, h.x, h.y, h.z) ?? { x: v.x, y: v.y, z: v.z, r: v.radius, body: -1 };
   const dx = t.x - h.x;
@@ -392,14 +395,15 @@ export function botFrame(s: SimState, mem: BotMemory, dt = DT): InputFrame {
   const shot = pickShot(s, mem);
   const fight = s.mode === "fight" || s.mode === "intro";
   // The watchdog measures one goal: the stop, or (Case File 001) each clue in turn.
-  const goalKey = s.chapter ? s.index * 8 + s.chapter.clues.filter((k) => k.found).length : s.index;
+  // (Case File 003: each clue, phase and checkpoint; through the chase, the route left.)
+  const goalKey = s.chapter ? s.index * 8 + s.chapter.clues.filter((k) => k.found).length : s.fee ? feeGoalKey(s) : s.index;
   if (mem.stop !== goalKey) {
     mem.stop = goalKey;
     mem.bestD = Infinity;
     mem.stuckT = 0;
   }
   const goal = stopTarget(s);
-  const dist = goal ? len2(goal.x - h.x, goal.z - h.z) : 0;
+  const dist = (s.fee ? feeGoalDist(s) : null) ?? (goal ? len2(goal.x - h.x, goal.z - h.z) : 0);
   if (fight || dist < mem.bestD - 40) {
     mem.bestD = fight ? Infinity : Math.min(mem.bestD, dist);
     mem.stuckT = 0;

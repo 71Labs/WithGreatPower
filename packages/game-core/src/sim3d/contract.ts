@@ -266,6 +266,34 @@ export interface RenderFrame3D {
     captive: { pos: Vec3; restore: number; freed: boolean } | null;
     copies: { id: number; pos: Vec3; yaw: number; alive: boolean }[];
   } | null;
+  /**
+   * Case File 003, "Fee Strike" (case ruleset c003-1), else null or absent. v1.6, additive.
+   * Gas Goblin is the frame's villain from the meter phase on (through the chase in mode
+   * "travel" too); his state words there are "perch" (on the meter), "flee", "throw" (a fee
+   * bomb just lobbed back), "taunt" (waiting after a loss, or drifting while you're far behind)
+   * and "circle" (over the bakery roof, before the fight); from the fight on, as any night's.
+   * - phase: investigate (three clues), meter (to the fee meter), chase, showdown (land on the
+   *   bakery roof and fight), cool (hold web on the meter), done.
+   * - clues: on roofs, feet level, found within 140 (210 up and down) like Case File 001's.
+   * - meter: its base (feet level): on its roof, under his glider while `carried`, then on the
+   *   bakery roof. `heat` 1 (jammed at MAX) → 0 (cooled); `spike` 0–1 through a fee spike's
+   *   wind-up while it cools (0: none coming).
+   * - route: his route, fixed for the night, meter to bakery: each point's flight position and,
+   *   when it has one, the roof under it (a checkpoint).
+   * - chase: the chase's live numbers (null before the grab): the route point he's flying to,
+   *   the hero's last checkpoint, the escape meter 0–1, the gap (units, across), losses so far
+   *   and how many end the case.
+   * - bakery: the middle of Aunt Mainnet's roof (the fight's stage), floor level.
+   */
+  fee?: {
+    id: "case-003";
+    phase: "investigate" | "meter" | "chase" | "showdown" | "cool" | "done";
+    clues: { id: "burn" | "pretzel" | "florist"; pos: Vec3; found: boolean }[];
+    meter: { pos: Vec3; carried: boolean; heat: number; cooled: boolean; spike: number };
+    route: { pos: Vec3; roof: Vec3 | null }[];
+    chase: { next: number; checkpoint: number; escape: number; gap: number; losses: number; maxLosses: number } | null;
+    bakery: Vec3;
+  } | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

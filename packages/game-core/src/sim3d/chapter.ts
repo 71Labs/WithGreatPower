@@ -24,6 +24,7 @@ import { generateCity, type CityIndex } from "./city";
 import { HERO_RADIUS, RULESET_VERSION } from "./constants";
 import type { City, Zone } from "./contract";
 import { len2 } from "./dmath";
+import { FEE_LOG_RULESET_BASE, feeCity, feeStops } from "./fee-strike";
 import { mix, Rng } from "./rng";
 import type { ChapterClue, ChapterState, SimState, Villain } from "./types";
 
@@ -66,16 +67,21 @@ export function chapterLogRuleset(id: ChapterId): number {
   switch (id) {
     case "case-001":
       return 0x0c001100 + RULESET_VERSION;
+    case "case-003":
+      // Case File 003 ("C 003 1 04"): fee-strike.ts.
+      return FEE_LOG_RULESET_BASE + RULESET_VERSION;
   }
 }
 
-/** The chapter's one stop, as the city sees it: Doc's bridge in the Bridge District (he isn't there tonight). */
-export function chapterStops(_id: ChapterId): Stop[] {
+/** The chapter's one stop, as the city sees it: Doc's bridge in the Bridge District (he isn't there tonight); Case File 003's is Gas Goblin's arena (fee-strike.ts). */
+export function chapterStops(id: ChapterId): Stop[] {
+  if (id === "case-003") return feeStops();
   return [{ kind: "fight", villain: "doc-octochain", district: "bridge-district", level: CHAPTER_LEVEL, boss: false, quest: false }];
 }
 
 /** The chapter's city from the run's seed: the bridge city with the wide deck, its zone the Right-Clicker's. */
 export function chapterCity(id: ChapterId, seed: number): City {
+  if (id === "case-003") return feeCity(seed);
   const city = generateCity(seed, chapterStops(id), { deckHalf: CHAPTER_DECK_HALF });
   if (city.zones[0]) city.zones[0].villain = "right-clicker";
   return city;

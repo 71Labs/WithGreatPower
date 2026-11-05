@@ -13,6 +13,8 @@ import { callGwei, fireAbility, makeSlots, stepAbilities } from "./abilities";
 import { chapterCity, findClues, setupChapter } from "./chapter";
 import { chapterInput, chapterWonEnd, stepRescue } from "./chapter-step";
 import { CityIndex, generateCity, groundBelow } from "./city";
+import { feeCity, setupFee } from "./fee-strike";
+import { feeInput, feeWonEnd, showdownVillain, stepCool, stepFeeTravel } from "./fee-strike-step";
 import { knockOut, winFight } from "./combat";
 import type { InputFrame, Zone } from "./contract";
 import { len2, len3 } from "./dmath";
@@ -36,10 +38,12 @@ function spawnPoint(s: Pick<SimState, "city" | "grid">, index: number): { x: num
 }
 
 export function createSim(config: SimConfig): SimState {
-  // Case File 001 builds its own city (the bridge with a wider deck) and its clues and captive.
-  const city = config.chapter ? chapterCity(config.chapter, config.seed) : generateCity(config.seed, config.stops);
+  // Case File 001 builds its own city (the bridge with a wider deck) and its clues and captive;
+  // Case File 003 its Market District, the clues, the meter and Gas Goblin's route.
+  const fee = config.chapter === "case-003";
+  const city = fee ? feeCity(config.seed) : config.chapter ? chapterCity(config.chapter, config.seed) : generateCity(config.seed, config.stops);
   const grid = new CityIndex(city);
-  const chapter = config.chapter ? setupChapter(config.chapter, city, grid, config.seed) : null;
+  const chapter = config.chapter && !fee ? setupChapter(config.chapter, city, grid, config.seed) : null;
   const sp = spawnPoint({ city, grid }, config.index);
   const s: SimState = {
     config,
@@ -78,6 +82,7 @@ export function createSim(config: SimConfig): SimState {
     input: IDLE_FRAME,
     events: [],
     chapter,
+    ...(fee ? { fee: setupFee(city, grid, config.seed) } : {}),
   };
   // Face the first stop.
   const b = travelBearing(s);
@@ -134,7 +139,8 @@ function enterZone(s: SimState, z: Zone) {
   if (z.kind === "fight") {
     s.mode = "intro";
     s.modeT = INTRO_SECONDS;
-    s.villain = spawnVillain(s, z);
+    // Case File 003: Gas Goblin carries on from where the chase left him.
+    s.villain = s.fee ? showdownVillain(s, z) : spawnVillain(s, z);
     s.events.push({ type: "encounter", index: z.index, villain: s.villain.kind });
   } else {
     s.mode = "errand";
@@ -205,6 +211,8 @@ function checkArrival(s: SimState) {
   if (!z) return;
   // Case File 001: the bridge waits until every clue is found.
   if (s.chapter && s.chapter.phase === "investigate") return;
+  // Case File 003: the bakery roof only once Gas Goblin has landed on it.
+  if (s.fee && s.fee.phase !== "showdown") return;
   const h = s.hero;
   const b = z.bounds;
   if (z.kind === "fight") {
@@ -255,6 +263,7 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
       collectPickups(s);
       stepCombo(s);
       if (s.chapter) findClues(s);
+      if (s.fee) stepFeeTravel(s);
       checkArrival(s);
       break;
     case "intro":
@@ -273,12 +282,17 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
         // Case File 001: SAVED, the lasso's pull and the rescue shape the hero's input.
         stepHero(s, chapterInput(s, input), DT);
         s.hero.holdPrev = input.web;
+      } else if (s.fee) {
+        // Case File 003: cooling, a held web on the meter cools it instead of swinging.
+        stepHero(s, feeInput(s, input), DT);
+        s.hero.holdPrev = input.web;
       } else stepHero(s, input, DT);
       stepVillain(s, DT);
       stepHazards(s, DT);
       stepAbilities(s, DT);
       stepCombo(s);
       if (s.chapter) stepRescue(s, input);
+      if (s.fee) stepCool(s, input);
       break;
     case "won":
       stepHero(s, input, DT);
@@ -288,6 +302,7 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
       s.modeT -= DT;
       if (s.modeT <= 0) {
         if (s.chapter) chapterWonEnd(s);
+        else if (s.fee) feeWonEnd(s);
         else {
           s.events.push({ type: "stop-done", index: s.index });
           nextStop(s);

@@ -14,6 +14,9 @@ import type { HeroAction, RenderFrame3D, Vec3 } from "./contract";
 import { datan2, dcos, dsin, len2 } from "./dmath";
 import { RESTORE_TICKS } from "./chapter";
 import { inOpening } from "./combat";
+import { chaseGap, MAX_LOSSES } from "./fee-chase";
+import { meterHeat } from "./fee-strike";
+import { spikeWindSeconds } from "./fee-strike-step";
 import { comboMultiplier } from "./pickups";
 import { rightClickerAim, rightClickerState } from "./right-clicker";
 import { armShoulder, armTip } from "./villains";
@@ -164,6 +167,8 @@ function zipTarget(s: SimState): Vec3 | null {
 function villainState(s: SimState): string {
   const v = s.villain!;
   if (v.kind === "right-clicker") return rightClickerState(s, v);
+  // Case File 003: the chase (travel), and webbed through the cooling.
+  if (s.fee && (s.mode === "travel" || s.fee.phase === "cool" || s.fee.phase === "done")) return feeVillainState(s, v);
   if (s.mode === "won") return "webbed";
   if (v.stun > 0) return "stunned";
   // v4: Gas Goblin's stall and Sandwich Man's stumble are openings: they read as dazed.
@@ -378,8 +383,75 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck, s.gwei.anchor);
   hz.length = m;
   fillChapter(s, out);
+  fillFee(s, out);
   return out;
 }
+
+/** v1.6: Gas Goblin's state word through Case File 003's chase and cooling (see contract.ts). */
+function feeVillainState(s: SimState, v: Villain): string {
+  const f = s.fee!;
+  switch (f.phase) {
+    case "meter":
+      return "perch";
+    case "chase":
+      if (f.holdT > 0 || chaseGap(s) > 1150) return "taunt";
+      return v.phase === "telegraph" ? "throw" : "flee";
+    case "showdown":
+      return "circle";
+    default:
+      return "webbed";
+  }
+}
+
+/** v1.6: Case File 003's clues, meter, route and chase (null on every other night). */
+function fillFee(s: SimState, out: RenderFrame3D) {
+  const f = s.fee;
+  if (!f) {
+    out.fee = null;
+    return;
+  }
+  const zone = s.city.zones[0];
+  const st = zone?.stage;
+  const fe =
+    out.fee ??
+    (out.fee = {
+      id: f.id,
+      phase: f.phase,
+      clues: [],
+      meter: { pos: v3(), carried: false, heat: 1, cooled: false, spike: 0 },
+      route: f.route.map((p) => ({ pos: { x: p.x, y: p.y, z: p.z }, roof: p.roof ? { x: p.rx, y: p.ry, z: p.rz } : null })),
+      chase: null,
+      bakery: st ? { x: (st.x0 + st.x1) / 2, y: st.y, z: (st.z0 + st.z1) / 2 } : { ...(zone?.center ?? s.city.start) },
+    });
+  fe.id = f.id;
+  fe.phase = f.phase;
+  for (let i = 0; i < f.clues.length; i++) {
+    const k = f.clues[i];
+    const slot = fe.clues[i] ?? (fe.clues[i] = { id: k.id, pos: v3(), found: false });
+    slot.id = k.id;
+    set(slot.pos, k.x, k.y, k.z);
+    slot.found = k.found;
+  }
+  fe.clues.length = f.clues.length;
+  const m = f.meter;
+  set(fe.meter.pos, m.x, m.y, m.z);
+  fe.meter.carried = m.carried;
+  fe.meter.heat = meterHeat(f);
+  fe.meter.cooled = m.cooled;
+  fe.meter.spike = f.phase === "cool" && f.spikeWind > 0 ? Math.max(0, Math.min(1, 1 - f.spikeWind / spikeWindSeconds(s))) : 0;
+  if (f.phase === "chase") {
+    const c = fe.chase ?? (fe.chase = { next: 0, checkpoint: 0, escape: 0, gap: 0, losses: 0, maxLosses: MAX_LOSSES });
+    c.next = f.next;
+    c.checkpoint = f.checkpoint;
+    c.escape = f.escape;
+    c.gap = chaseGap(s);
+    c.losses = f.losses;
+    c.maxLosses = MAX_LOSSES;
+  } else fe.chase = null;
+}
+
+type Case001 = NonNullable<RenderFrame3D["chapter"]>;
+type Case001Clue = Case001["clues"][number]["id"];
 
 /** v1.5: a chapter night's clues, captive and paper copies (null on a patrol night). */
 function fillChapter(s: SimState, out: RenderFrame3D) {
@@ -388,13 +460,15 @@ function fillChapter(s: SimState, out: RenderFrame3D) {
     out.chapter = null;
     return;
   }
-  const ch = out.chapter ?? (out.chapter = { id: c.id, phase: c.phase, clues: [], captive: null, copies: [] });
-  ch.id = c.id;
+  // Case File 001's ids (ChapterId and ClueId also name Case File 003's, which has its own `fee`).
+  const id = c.id as Case001["id"];
+  const ch = out.chapter ?? (out.chapter = { id, phase: c.phase, clues: [], captive: null, copies: [] });
+  ch.id = id;
   ch.phase = c.phase;
   for (let i = 0; i < c.clues.length; i++) {
     const k = c.clues[i];
-    const slot = ch.clues[i] ?? (ch.clues[i] = { id: k.id, pos: v3(), found: false });
-    slot.id = k.id;
+    const slot = ch.clues[i] ?? (ch.clues[i] = { id: k.id as Case001Clue, pos: v3(), found: false });
+    slot.id = k.id as Case001Clue;
     set(slot.pos, k.x, k.y, k.z);
     slot.found = k.found;
   }

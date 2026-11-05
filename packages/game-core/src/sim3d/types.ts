@@ -4,6 +4,7 @@
  * here: the scene animates from events and positions.
  */
 import type { CastId } from "../rules/cast";
+import type { FeeClueId } from "../rules/case-003";
 import type { ClueId } from "../rules/chapters";
 import type { ChapterId, PowerId, Stop, VillainId } from "../rules/types";
 import type { CityIndex } from "./city";
@@ -326,7 +327,28 @@ export type SimEvent =
   | { type: "captive-restore"; p: number }
   | { type: "captive-freed"; x: number; y: number; z: number }
   /** The chapter is cleared after `ticks`: the night ends with it (night-over, "route"). */
-  | { type: "case-closed"; id: ChapterId; ticks: number };
+  | { type: "case-closed"; id: ChapterId; ticks: number }
+  /* Case File 003 (sim3d/fee-strike*.ts): its nights only. */
+  /** One of its clues found (as Case File 001's clue-found); `found` of `of` so far. */
+  | { type: "fee-clue"; id: FeeClueId; x: number; y: number; z: number; found: number; of: number }
+  /** Gas Goblin rips the fee meter off its roof at (x, y, z) and flees: the chase is on. */
+  | { type: "meter-grab"; x: number; y: number; z: number }
+  /** The hero kept up past route point `index` (of `of`), the roof at (x, y, z): a loss puts him back here. */
+  | { type: "chase-checkpoint"; index: number; of: number; x: number; y: number; z: number }
+  /** He got away for now: the hero is put back on the last checkpoint's roof at (x, y, z); `losses` so far. */
+  | { type: "chase-lost"; losses: number; checkpoint: number; x: number; y: number; z: number }
+  /** Lost once too often: he's gone with the meter, and the night ends uncleared (night-over, "route"). */
+  | { type: "chase-escaped"; losses: number }
+  /** He reached Aunt Mainnet's roof and planted the meter at (x, y, z): land on the roof to fight. */
+  | { type: "chase-end"; x: number; y: number; z: number }
+  /** Landing on her roof under half health: Aunt Mainnet's last loaf patches the hero up to `hp` (`gained` more). */
+  | { type: "loaf"; hp: number; gained: number }
+  /** The meter vents a fee spike at (x, y, z) while it cools: `hit` when it caught the hero. */
+  | { type: "fee-spike"; hit: boolean; x: number; y: number; z: number }
+  /** The meter's cooling so far, 0–1: every quarter second of holding the web on it, and at 1. */
+  | { type: "meter-cool"; p: number }
+  /** The fees are cooled at the meter (x, y, z): the bread is back. */
+  | { type: "fees-cooled"; x: number; y: number; z: number };
 
 export interface SimConfig {
   seed: number;
@@ -442,4 +464,74 @@ export interface SimState {
   events: SimEvent[];
   /** A story chapter's state (Case File 001), or null on a patrol night. */
   chapter: ChapterState | null;
+  /**
+   * Case File 003's state (sim3d/fee-strike.ts), on its nights only; absent (or null) on every
+   * other night, whose hashes never see it.
+   */
+  fee?: FeeState | null;
+}
+
+/* ------------------------------------------------------------------ Case File 003 */
+
+/**
+ * Case File 003's phases: investigate (three clues), meter (to the fee meter), chase (after
+ * Gas Goblin across the roofs), showdown (land on the bakery roof and beat him), cool (hold
+ * web on the meter), done.
+ */
+export type FeePhase = "investigate" | "meter" | "chase" | "showdown" | "cool" | "done";
+
+/** A point on Gas Goblin's route: where he flies through, and the roof under it (a checkpoint). */
+export interface FeeWaypoint {
+  x: number;
+  y: number;
+  z: number;
+  /** The roof below, feet level: where a loss puts the hero back. `roof` false: no roof fits (never a checkpoint). */
+  rx: number;
+  ry: number;
+  rz: number;
+  roof: boolean;
+  /** Route distance from the meter's roof to here, in units (xz). */
+  at: number;
+}
+
+/** One of Case File 003's clues: on a roof (feet level), found or not. */
+export interface FeeClue {
+  id: FeeClueId;
+  x: number;
+  y: number;
+  z: number;
+  found: boolean;
+}
+
+/** Case File 003's own state. Hashed after everything else, and only on its nights. */
+export interface FeeState {
+  id: "case-003";
+  phase: FeePhase;
+  clues: FeeClue[];
+  /**
+   * The fee meter: where it stands (its base, feet level). On its roof until he grabs it,
+   * carried under his glider through the chase, then planted on the bakery roof. `cool` is
+   * ticks of cooling so far (of COOL_TICKS); `cooled` once the fees are back to normal.
+   */
+  meter: { x: number; y: number; z: number; carried: boolean; cool: number; cooled: boolean };
+  /** His route, meter to bakery (route[0] over the meter, the last over the bakery roof). */
+  route: FeeWaypoint[];
+  /** The route point he flies to next. */
+  next: number;
+  /** The last route point the hero kept up past (a checkpoint), and his best progress along the route (units). */
+  checkpoint: number;
+  progress: number;
+  /** The escape meter, 0–1: it fills while the hero is too far behind; full, he's lost. */
+  escape: number;
+  losses: number;
+  /** Seconds he holds at his route point after a loss, giving the hero a start. */
+  holdT: number;
+  /** Seconds to his next fee bomb. */
+  bombT: number;
+  /** Seconds since the chase began. */
+  chaseT: number;
+  /** The cooling: seconds in; seconds to the meter's next fee spike, and the spike's wind-up left (0: none). */
+  coolT: number;
+  spikeT: number;
+  spikeWind: number;
 }
