@@ -4,7 +4,7 @@
  * (unscored, unranked). A verified run
  * never changes, so readers may cache it for long (src/server/social/run-cache.ts).
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Save, SuitId } from "@wgp/game-core/types";
@@ -26,6 +26,9 @@ export interface PublicRun {
   issuedAt: string;
   submittedAt: string | null;
   digest: string | null;
+  /** "patrol" (a ranked night) or "daily" (a Daily Run, raced by everyone on its day); `course` is the Daily's day. */
+  mode: string;
+  course: string | null;
 }
 
 export const isRunId = (id: string) => z.uuid().safeParse(id).success;
@@ -43,13 +46,16 @@ export async function publicRun(db: Db, runId: string): Promise<PublicRun | null
       issuedAt: runs.issuedAt,
       submittedAt: runs.submittedAt,
       digest: runs.digest,
+      mode: runs.mode,
+      course: runs.course,
       handle: players.handle,
       nearAccountId: players.nearAccountId,
     })
     .from(runs)
     .innerJoin(players, eq(players.id, runs.playerId))
-    // Patrol nights only: a story chapter's run (runs.mode = its id) has no score to show.
-    .where(and(eq(runs.id, runId), eq(runs.status, "verified"), eq(runs.mode, "patrol"), isNull(players.bannedAt)))
+    // Patrol nights and Daily Runs only: a story chapter's run (runs.mode = its id) has no score to
+    // show, and a trial's or a duel's lives on its board (src/server/db/compete.ts).
+    .where(and(eq(runs.id, runId), eq(runs.status, "verified"), inArray(runs.mode, ["patrol", "daily"]), isNull(players.bannedAt)))
     .limit(1);
   if (!row || row.score == null) return null;
   const hero = (row.startSave as Save | null)?.hero ?? null;
@@ -66,5 +72,7 @@ export async function publicRun(db: Db, runId: string): Promise<PublicRun | null
     issuedAt: row.issuedAt.toISOString(),
     submittedAt: row.submittedAt?.toISOString() ?? null,
     digest: row.digest,
+    mode: row.mode,
+    course: row.course,
   };
 }

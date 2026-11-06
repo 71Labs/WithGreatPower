@@ -272,6 +272,23 @@ export interface RenderFrame3D {
     /** Case File 002 (v1.6), else absent. */
     vote?: VoteFrame | null;
   } | null;
+  /**
+   * A time trial (ruleset "trial-1"), else null or absent. v1.6, additive. The gates are the
+   * frame's `pickups` (rings, in course order; `taken` once passed) and its `route` the gates
+   * still ahead.
+   * - next: the gate to pass next (0-based), `gates` once through the finish.
+   * - ticks: the clock (sim ticks, 60 a second); it stops at the finish (`endTick`).
+   * - splits: the tick each gate was passed at.
+   */
+  trial?: {
+    course: "rooftop-sprint" | "bridge-run" | "canyon-swing" | "tower-climb" | "gauntlet";
+    next: number;
+    gates: number;
+    ticks: number;
+    splits: number[];
+    finished: boolean;
+    over: boolean;
+  } | null;
 }
 
 /** A Case File 002 look: whether a voter casts a shadow, blinks, and holds his ballot in his left hand. */

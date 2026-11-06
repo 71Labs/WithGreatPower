@@ -316,6 +316,14 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
     const at = route[r] ?? (route[r] = v3());
     set(at, to.x, to.y, to.z);
   }
+  // A time trial (no zones): the gates still ahead.
+  if (s.trial) {
+    for (let i = s.trial.next; i < s.pickups.length; i++, r++) {
+      const g = s.pickups[i];
+      const at = route[r] ?? (route[r] = v3());
+      set(at, g.x, g.y, g.z);
+    }
+  }
   route.length = r;
 
   const vs = out.villains;
@@ -384,7 +392,26 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
   if (s.gwei) put("gwei", s.gwei.x, s.gwei.y, s.gwei.z, 30, !s.gwei.struck, s.gwei.anchor);
   hz.length = m;
   fillChapter(s, out);
+  fillTrial(s, out);
   return out;
+}
+
+/** v1.6: a time trial's clock, gates and splits (null otherwise). */
+function fillTrial(s: SimState, out: RenderFrame3D) {
+  const t = s.trial;
+  if (!t) {
+    if (out.trial) out.trial = null;
+    return;
+  }
+  const tr = out.trial ?? (out.trial = { course: t.course, next: 0, gates: 0, ticks: 0, splits: [], finished: false, over: false });
+  tr.course = t.course;
+  tr.next = t.next;
+  tr.gates = s.pickups.length;
+  tr.ticks = t.endTick >= 0 ? t.endTick : s.tick;
+  for (let i = 0; i < t.splits.length; i++) tr.splits[i] = t.splits[i];
+  tr.splits.length = t.splits.length;
+  tr.finished = t.finished;
+  tr.over = t.endTick >= 0;
 }
 
 /** v1.5: a chapter night's clues, captive and paper copies (null on a patrol night). */

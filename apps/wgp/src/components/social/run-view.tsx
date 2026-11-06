@@ -6,6 +6,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { RaceGhostLink } from "@/components/compete/race-link";
 import { StickerLink, StickerPanel } from "@/components/game/kit";
 import { HeroTile } from "@/components/game/ui";
 import { ArrowRight, BadgeCheck, ExternalLink } from "@/components/icons";
@@ -38,6 +39,11 @@ export function RunView({ run }: { run: PublicRun }) {
               <BadgeCheck aria-hidden className="size-4" strokeWidth={2.25} />
               Replay-verified
             </span>
+            {run.mode === "daily" ? (
+              <span className="inline-flex h-8 items-center whitespace-nowrap rounded-full border-2 border-game-ink bg-[#8fe7ff] px-3 text-[13px] font-semibold text-game-ink">
+                Daily Run{run.course ? `, ${utcDate(`${run.course}T12:00:00Z`)}` : ""}
+              </span>
+            ) : null}
             {run.assist ? (
               <span className="inline-flex h-8 items-center whitespace-nowrap rounded-full border-2 border-game-ink bg-game-paper-2 px-3 text-[13px] font-semibold text-game-ink">
                 Assist on: not ranked
@@ -61,7 +67,7 @@ export function RunView({ run }: { run: PublicRun }) {
             <p className="num font-display text-[64px] font-bold leading-[64px] tracking-[-0.04em] text-game-ink sm:text-[88px] sm:leading-[88px]">{points.format(run.score)}</p>
           </div>
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Fact label="Night">{run.night}</Fact>
+            <Fact label={run.mode === "daily" ? "Mode" : "Night"}>{run.mode === "daily" ? "Daily Run" : run.night}</Fact>
             <Fact label="Date (UTC)">{utcDate(run.submittedAt ?? run.issuedAt)}</Fact>
             <Fact label="Night length">{length(run.ticks)}</Fact>
           </dl>
@@ -73,6 +79,8 @@ export function RunView({ run }: { run: PublicRun }) {
               Play tonight
               <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
             </StickerLink>
+            {/* Every verified run is a ghost: race this one (its night again, or today’s Daily beside it). */}
+            <RaceGhostLink runId={run.runId} size="lg" label={`Race ${run.handle}’s ghost`} className="w-full sm:w-auto" />
             <a
               href={`/api/runs/${run.runId}/replay`}
               target="_blank"
