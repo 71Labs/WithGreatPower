@@ -4,6 +4,7 @@
  * found, and the hero's `action` read off the move for the animator. Presentation only:
  * nothing here is read back by the sim or hashed.
  */
+import { HERO_RADIUS } from "../constants";
 import type { HeroAction, RenderFrame3D, RoamFrame, Vec3 } from "../contract";
 import { len2 } from "../dmath";
 import type { SimState } from "../types";
@@ -82,6 +83,12 @@ export function fillRoamFrame(s: SimState, out: RenderFrame3D): RenderFrame3D {
   out.hero.action = action;
   out.hero.actionTicks = s.tick - t.start;
   out.hero.grounded = b.move === "ground" || b.move === "roll";
+  // A zip's web, stuck where it pulls him: the roof's edge he lands over, or the perch's top.
+  if (b.move === "zip") {
+    const a = out.hero.anchor ?? (out.hero.anchor = v3());
+    if (b.land === 1) set(a, b.bx, b.by - HERO_RADIUS, b.bz);
+    else set(a, b.bx - b.wnx * (HERO_RADIUS + 6), b.by - HERO_RADIUS - 8, b.bz - b.wnz * (HERO_RADIUS + 6));
+  }
 
   if (b.move === "climb" || b.move === "hang" || b.move === "mantle" || b.move === "wallrun") {
     const w = f.wall ?? (f.wall = { nx: 0, nz: 0, top: 0 });

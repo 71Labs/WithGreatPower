@@ -701,7 +701,8 @@ export class CharacterSystem {
       if (!show) continue;
       ctx.secondary = allyCtx;
       const near = Math.hypot(this.heroPos.x - a.at.x, this.heroPos.z - a.at.z) < 520;
-      const open = frame.mode === "errand" && frame.stop === a.zone.index;
+      // An errand open with them, or (free roam) a line they're saying to you.
+      const open = (frame.mode === "errand" && frame.stop === a.zone.index) || !!frame.roam?.folks.some((f) => f.talking && f.cast === a.zone.ally);
       a.anim.update({ pos: a.at, state: open ? "talk" : near ? "wave" : "idle" }, dt, ctx);
       // Allies take their full body only up close (an errand), villains from further out.
       this.lodFor(a.model, a.at, cam, 0.6);
