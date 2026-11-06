@@ -98,8 +98,9 @@ export function buildCityMeshes(city: City, shared: SharedUniforms): CityMeshes 
   const fillMat = toonMaterial(shared, atlas);
   const hullMat = hullMaterial(shared);
   const tankMat = toonMaterial(shared, atlas, true);
+  const tankHullMat = hullMaterial(shared, true);
   const geometries: BufferGeometry[] = [box];
-  const materials: Material[] = [fillMat, hullMat, tankMat];
+  const materials: Material[] = [fillMat, hullMat, tankMat, tankHullMat];
   const sectors: { bounds: { x0: number; z0: number; x1: number; z1: number }; fill: InstancedMesh; upTo: number[]; hull: InstancedMesh | null; hullUpTo: number[]; hullBase: number }[] = [];
   let propOutlines = true;
   let detail = 2;
@@ -185,9 +186,12 @@ export function buildCityMeshes(city: City, shared: SharedUniforms): CityMeshes 
       info.set([KIND.tank, t.seed, 0, 0], i * 4);
       ref.set([t.ref.x, t.ref.z], i * 2);
     });
+    // A tower an ally stands on is drawn with a flat lid (TankSpec.flat).
+    const roof = new Float32Array(layout.tanks.map((t) => (t.flat ? 1 : 0)));
     fillGeo.setAttribute("aColor", new InstancedBufferAttribute(color, 3));
     fillGeo.setAttribute("aInfo", new InstancedBufferAttribute(info, 4));
     fillGeo.setAttribute("aRef", new InstancedBufferAttribute(ref, 2));
+    fillGeo.setAttribute("aRoof", new InstancedBufferAttribute(roof, 1));
     const hullGeo = new BufferGeometry();
     hullGeo.setAttribute("position", tank.getAttribute("position"));
     hullGeo.setAttribute("normal", tank.getAttribute("normal"));
@@ -195,8 +199,9 @@ export function buildCityMeshes(city: City, shared: SharedUniforms): CityMeshes 
     hullGeo.setIndex(tank.getIndex());
     hullGeo.setAttribute("aHull", new InstancedBufferAttribute(new Float32Array(n).fill(0.9), 1));
     hullGeo.setAttribute("aRef", new InstancedBufferAttribute(ref.slice(), 2));
+    hullGeo.setAttribute("aRoof", new InstancedBufferAttribute(roof.slice(), 1));
     const fill = new InstancedMesh(fillGeo, tankMat, n);
-    const hull = new InstancedMesh(hullGeo, hullMat, n);
+    const hull = new InstancedMesh(hullGeo, tankHullMat, n);
     layout.tanks.forEach((t, i) => {
       _m.compose(_p.set(t.x, t.y, t.z), _q.identity(), _s.set(t.w, t.h, t.w));
       fill.setMatrixAt(i, _m);

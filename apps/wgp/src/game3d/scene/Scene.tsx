@@ -27,6 +27,7 @@ import type { SceneCue } from "./camera/director";
 import type { ChapterEvent } from "./chapter/contract";
 import type { FeeEvent } from "./fee-strike/contract";
 import type { FeeBlast } from "./fee-strike/fee-strike";
+import type { RoamSceneEvent } from "./roam/roam";
 import { watchContextRecovery } from "./context-recovery";
 import type { BurstOptions } from "./effects";
 import { ALL_CAST, SceneEngine } from "./engine";
@@ -46,6 +47,8 @@ export interface SceneHandle {
   chapter?(ev: ChapterEvent): void;
   /** A Case file 003 sim event, or a blast to scorch the roof with (scene/fee-strike). */
   fee?(ev: FeeEvent | FeeBlast): void;
+  /** A free-roam sim event (scene/roam): a page found, a photo, a sync, the bot caught. */
+  roam?(ev: RoamSceneEvent): void;
   /** Manual camera orbit: radians to add this frame, and whether a pointer holds the camera. */
   orbit(dYaw: number, dPitch: number, holding: boolean): void;
   /** Cut the camera to its wanted pose (a teleport, a new stop). */
@@ -54,6 +57,10 @@ export interface SceneHandle {
   skip?(): void;
   /** The last chase pose, for HUD projection. */
   pose(): ChasePose | null;
+  /** Debug: the hero's solved ankles and his body's left axis (headless checks that the legs never cross). */
+  heroLegs?(): { ankles: [Vec3, Vec3]; hips: Vec3; left: Vec3; base: string } | null;
+  /** The scene itself, for headless checks (`?debug=1`, launch/brand/hero/qa-anomalies.mjs). */
+  inspect?(): SceneEngine;
 }
 
 export interface SceneStats {
@@ -119,10 +126,13 @@ export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cas
       punch: () => engine.punch(),
       chapter: (ev) => engine.chapterEvent(ev),
       fee: (ev) => engine.feeEvent(ev),
+      roam: (ev) => engine.roamEvent(ev),
       orbit: (dy, dp, holding) => engine.orbit(dy, dp, holding),
       cut: () => engine.cut(),
       skip: () => engine.skip(),
       pose: () => lastPose.current,
+      heroLegs: () => engine.heroLegs(),
+      inspect: () => engine,
     }),
     [engine],
   );

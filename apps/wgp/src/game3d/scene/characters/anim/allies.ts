@@ -81,8 +81,10 @@ export class AllyAnimator extends ActorAnimator {
     const c = this.clips!;
     const t = this.time + this.seed;
     if (this.kind === "perch") {
-      // Crouched on the tower: the whole body in the crouch idle, looking up at the hero.
+      // Crouched on the tower's lid: the whole body in the crouch idle, its soles set down on
+      // the lid (the clip's own hips would hold them a little above it), looking up at the hero.
       c.loops([["crouch-idle", t, 1]], 1, c.full, 1);
+      this.soleTo(this.P.y);
       c.over(0.8, c.upper);
       this.lookAfterClips(0.9);
       this.reachHands(0, this.wave.value);

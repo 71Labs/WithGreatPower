@@ -421,7 +421,7 @@ function fillTrial(s: SimState, out: RenderFrame3D) {
 }
 
 
-/** v1.6: Gas Goblin's state word through Case File 003's chase and cooling (see contract.ts). */
+/** v1.8: Gas Goblin's state word through Case File 003's chase and cooling (see contract.ts). */
 function feeVillainState(s: SimState, v: Villain): string {
   const f = s.fee!;
   switch (f.phase) {
@@ -437,7 +437,7 @@ function feeVillainState(s: SimState, v: Villain): string {
   }
 }
 
-/** v1.6: Case File 003's clues, meter, route and chase (null on every other night). */
+/** v1.8: Case File 003's clues, meter, route and chase (null on every other night). */
 function fillFee(s: SimState, out: RenderFrame3D) {
   const f = s.fee;
   if (!f) {

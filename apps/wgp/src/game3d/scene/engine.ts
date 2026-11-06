@@ -5,7 +5,7 @@
  * React here; Scene.tsx creates one per city and calls `update` from `useFrame`, so per-frame
  * data never goes through React state. Scene.tsx's post pass reads `shadows` and `postFrame()`.
  */
-import { Group, PerspectiveCamera, Vector2, type ShaderMaterial } from "three";
+import { Group, PerspectiveCamera, Vector2, Vector3, type ShaderMaterial } from "three";
 
 import type { CastId } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
@@ -30,6 +30,7 @@ import type { PostFrame } from "./render/post";
 import { MoonShadows, SHADOW_LAYER } from "./render/shadows";
 import { buildSky, type Sky } from "./sky";
 import { ChapterScene } from "./chapter/chapter";
+import { RoamScene, type RoamSceneEvent } from "./roam/roam";
 import { VoteScene } from "./chapter/vote/vote-scene";
 import type { ChapterEvent } from "./chapter/contract";
 import type { FeeEvent } from "./fee-strike/contract";
@@ -73,12 +74,16 @@ export class SceneEngine {
   readonly vote: VoteScene;
   /** Case file 003's clues, stalls, fee meter and bakery (built on a case-003 night's first frame). */
   readonly fee: FeeScene;
+  /** Free roam's finds, task markers, zip reticle and pickpocket bot (built on an outing's first frame). */
+  readonly roam: RoamScene;
   /** Moon shadows, on tiers with a shadow map (the compositor draws their depth pass). */
   shadows: MoonShadows | null = null;
   /** Camera far plane, from the city's size. */
   readonly far: number;
   reducedMotion = false;
   private readonly post: PostFrame = { speed: 0, focus: new Vector2() };
+  /** The chase camera's heading while the hero's on a wall (free roam). */
+  private readonly wallVel = { x: 0, y: 0, z: 0 };
   private wasStuck = false;
   private readonly input = createChaseInput();
   private readonly beat: DirectorInput = { cue: null, mode: "travel", hero: { x: 0, y: 0, z: 0 }, goal: null, ally: null, aspect: 1, reducedMotion: false, input: false };
@@ -123,12 +128,13 @@ export class SceneEngine {
     this.chapter = new ChapterScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.vote = new VoteScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.fee = new FeeScene(cityData, this.solids, this.uniforms, { crowd: this.crowd, burst: (w, at, o) => this.bursts.burst(w, at, o) });
+    this.roam = new RoamScene(cityData, this.uniforms, { burst: (w, at, o) => this.bursts.burst(w, at, o) });
     // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
     // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
     for (const child of this.city.root.children) {
       if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
     }
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.vote.root, this.fee.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.vote.root, this.fee.root, this.roam.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -173,6 +179,7 @@ export class SceneEngine {
     this.chapter.setReducedMotion(on);
     this.vote.setReducedMotion(on);
     this.fee.setReducedMotion(on);
+    this.roam.setReducedMotion(on);
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
 
@@ -214,6 +221,27 @@ export class SceneEngine {
     this.fee.event(ev);
   }
 
+  /** A free-roam sim event (a page found, a photo, a sync, the bot caught). */
+  roamEvent(ev: RoamSceneEvent): void {
+    this.roam.event(ev);
+  }
+
+  /**
+   * Debug: the hero's ankles as drawn (the bones after the clips and every IK pass), his hips
+   * and his body's left axis, and the animator's base state (the headless leg-crossing check).
+   */
+  heroLegs(): { ankles: [Vec3, Vec3]; hips: Vec3; left: Vec3; base: string } | null {
+    const a = this.characters.heroAnimator;
+    if (!a) return null;
+    const l = this.characters.jointOf("hero", "footL", new Vector3());
+    const r = this.characters.jointOf("hero", "footR", new Vector3());
+    const hips = this.characters.jointOf("hero", "hips", new Vector3());
+    if (!l || !r || !hips) return null;
+    const left = new Vector3(1, 0, 0).applyQuaternion(a.pose.rot);
+    const v = (p: { x: number; y: number; z: number }) => ({ x: p.x, y: p.y, z: p.z });
+    return { ankles: [v(l), v(r)], hips: v(hips), left: v(left), base: a.base };
+  }
+
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
   cut(): void {
     this.chase.reset();
@@ -240,7 +268,15 @@ export class SceneEngine {
     if (frame) {
       const i = this.input;
       i.hero = frame.hero.pos;
-      i.vel = frame.hero.vel;
+      // Free roam on a wall: his speed there is mostly up, so the camera takes his way into the
+      // wall as his heading and comes round behind him, outside it.
+      const wall = frame.roam?.wall;
+      if (wall && frame.roam!.move !== "wallrun") {
+        this.wallVel.x = -wall.nx * 260;
+        this.wallVel.y = frame.hero.vel.y;
+        this.wallVel.z = -wall.nz * 260;
+        i.vel = this.wallVel;
+      } else i.vel = frame.hero.vel;
       i.anchor = frame.hero.anchor;
       i.facing = frame.hero.facing ?? null;
       i.steer = heldStick;
@@ -317,6 +353,7 @@ export class SceneEngine {
       this.chapter.update(frame, camera, size, dt, time);
       this.vote.update(frame, camera, size, dt, time);
       this.fee.update(frame, camera, dt, time);
+      this.roam.update(frame, dt, time);
       // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
       const stuck = this.characters.stuck;
       this.bursts.setAnchor(stuck);
@@ -371,5 +408,6 @@ export class SceneEngine {
     this.chapter.dispose();
     this.vote.dispose();
     this.fee.dispose();
+    this.roam.dispose();
   }
 }

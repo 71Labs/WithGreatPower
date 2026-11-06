@@ -78,7 +78,7 @@ A knockout in the fight or the cooling ends the night uncleared. Five losses in 
 - **Runs:** `startChapterRun(save, seed, "case-003")`; `runLog` writes `0x0C003104`; `replayRun(input, { chapter: "case-003" })`. A patrol log, a case-001 log and a case-003 log each replay only as themselves (`ruleset 201339140 is not 4`, `… is not chapter case-001's 201330948`, `ruleset 201330948 is not chapter case-003's 201339140`).
 - **Results:** `score` 0. `chapterCleared`: the phase `done`, the meter cooled, the night over on it, health left. `chapterStats` adds `losses`, `checkpoint` and `chaseSeconds`; `restore` is the cooling ticks. Checkpoint hashes: each clue, the grab, the bakery, the win and the cooled meter (7 on a clean night).
 
-## Render contract (v1.6, additive; nothing here is read back by the sim or hashed)
+## Render contract (v1.8, additive; nothing here is read back by the sim or hashed)
 
 ```ts
 // RenderFrame3D (sim3d/contract.ts)

@@ -21,6 +21,7 @@ import { len2, len3 } from "./dmath";
 import { newHero, stepHero, stopTarget, travelBearing } from "./hero";
 import { collectPickups, placePickups, stepCombo } from "./pickups";
 import { mix } from "./rng";
+import { stepRoam } from "./roam/step";
 import { setupTrial, stepTrial, trialCity, trialGates } from "./trial";
 import type { SimConfig, SimState } from "./types";
 import { spawnVillain, stepHazards, stepVillain } from "./villains";
@@ -252,6 +253,8 @@ export const simRunning = (s: SimState) => s.mode !== "errand" && s.mode !== "do
  * Returns false, consuming nothing, while an errand is open or the night is over.
  */
 export function stepSim(s: SimState, frame: InputFrame): boolean {
+  // Free roam (sim3d/roam) steps on its own rules; a night's or a chapter's state never has one.
+  if (s.roam) return stepRoam(s, frame);
   if (!simRunning(s)) return false;
   const input = sane(frame);
   s.tick += 1;

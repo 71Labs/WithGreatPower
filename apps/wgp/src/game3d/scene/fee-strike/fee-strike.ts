@@ -1,6 +1,6 @@
 /**
  * Case file 003, "Fee Strike", in the 3D scene: everything its night draws on top of a normal
- * one, from the frame's v1.6 `fee` and Gas Goblin's villain fields (docs/chapters/case-003.md),
+ * one, from the frame's v1.8 `fee` and Gas Goblin's villain fields (docs/chapters/case-003.md),
  * plus the case's sim events:
  *
  * - the clues: a fee-bomb burn (a big scorch smoking on its roof, a trail of smaller ones leading

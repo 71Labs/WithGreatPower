@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { AVATARS, HeroArt } from "@/components/cast";
 import { CaseTile } from "@/components/cases/case-tile";
 import { CompeteTile } from "@/components/compete/compete-tile";
+import { CityTile } from "@/components/tonight/city-tile";
 import { stickerTileClass, StickerBadge, StickerButton, StickerChip, StickerFrame, StickerLink } from "@/components/game/kit";
 import { useUnreadEdition } from "@/components/game/shell";
 import { GameLoading, useHeroSave, type HeroSave } from "@/components/game/ui";
@@ -290,6 +291,7 @@ export function Tonight() {
         <div className="flex w-full flex-col gap-3 [grid-area:case] lg:max-w-[400px]">
           <CaseTile save={save} />
           <CompeteTile />
+          <CityTile save={save} />
         </div>
       </div>
     </div>

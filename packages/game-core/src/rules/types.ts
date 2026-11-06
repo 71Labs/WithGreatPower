@@ -3,6 +3,7 @@
  * rule in engine.ts is a pure function of (state, action).
  */
 import type { CastId } from "./cast";
+import type { CityRecord } from "./city";
 
 export type PowerId =
   | "web-sling"
@@ -239,4 +240,6 @@ export interface Save {
   stats: Stats;
   /** Story chapters, by id. Absent on saves from before chapters, and until one is cleared. */
   cases?: Partial<Record<ChapterId, CaseRecord>>;
+  /** Free roam's progress (rules/city.ts CityRecord). Absent until the first outing is filed. */
+  city?: CityRecord;
 }

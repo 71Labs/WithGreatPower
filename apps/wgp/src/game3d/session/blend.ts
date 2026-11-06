@@ -4,7 +4,7 @@
  * in place: positions slide by `alpha`, everything else (velocity, facing, the animation
  * state words and their ages, Doc's arms, the Goblin's bank; v1.3's pickups, combo, route and
  * the hero's `controlled`; v1.5's chapter and a villain's aim, though the paper copies slide;
- * v1.6's fee, though its meter slides with Gas Goblin)
+ * v1.8's fee, though its meter slides with Gas Goblin)
  * is the latest tick's. A jump too
  * big for one tick (a teleport beside an errand ally, a resume) snaps instead of sliding.
  * Allocates only when a list grows.
@@ -175,7 +175,7 @@ export function blendFrame(prev: RenderFrame3D, curr: RenderFrame3D, alpha: numb
 }
 
 /**
- * v1.6: Case File 003's clues, meter, route and chase. The meter slides (it rides under Gas
+ * v1.8: Case File 003's clues, meter, route and chase. The meter slides (it rides under Gas
  * Goblin through the chase, whose own position slides); the route never moves, so it's copied
  * once; the rest is the latest tick's.
  */

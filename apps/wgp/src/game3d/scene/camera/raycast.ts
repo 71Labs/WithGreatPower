@@ -15,6 +15,8 @@ import type { Raycast } from "./chase";
 
 export interface CitySolids {
   count: number;
+  /** The first `cityCount` boxes are the city's own (buildings, setbacks, the bridge): what the sim collides with. The big props follow. */
+  cityCount: number;
   minX: Float32Array;
   minY: Float32Array;
   minZ: Float32Array;
@@ -60,10 +62,12 @@ export function citySolids(city: City, opts: { cell?: number; props?: boolean; c
       for (const t of city.bridge.towers) boxes.push([t.x - h, 0, t.z - h, t.x + h, t.y, t.z + h]);
     }
   }
+  const cityCount = boxes.length;
   if (opts.props !== false) boxes.push(...propBoxes(city));
   const n = boxes.length;
   const s: CitySolids = {
     count: n,
+    cityCount,
     minX: new Float32Array(n),
     minY: new Float32Array(n),
     minZ: new Float32Array(n),
@@ -157,4 +161,56 @@ export function surfaceBelow(s: CitySolids, x: number, z: number, y = Infinity):
     if (top <= y + 1 && top > best) best = top;
   }
   return best;
+}
+
+/** A roof a body stands on: its height and its footprint. */
+export interface Footing {
+  top: number;
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+/**
+ * The surface a sphere of radius `r` centred at (x, y, z) stands on, the way the sim stands the
+ * hero (game-core's collideSphere against the city's own boxes, never the props): the highest
+ * roof at or below y under its centre when that is within `reach` below; otherwise (the sphere
+ * rests on a roof's edge with its centre out past it, over a drop) the highest roof it touches.
+ * The street (0, unbounded) when there's neither. Writes `out`.
+ */
+export function footingBelow(s: CitySolids, x: number, z: number, y: number, r: number, reach: number, out: Footing): Footing {
+  out.top = 0;
+  out.x0 = -Infinity;
+  out.z0 = -Infinity;
+  out.x1 = Infinity;
+  out.z1 = Infinity;
+  const c0 = Math.max(0, Math.floor((x - r - s.gx0) / s.cell));
+  const c1 = Math.min(s.cols - 1, Math.floor((x + r - s.gx0) / s.cell));
+  const r0 = Math.max(0, Math.floor((z - r - s.gz0) / s.cell));
+  const r1 = Math.min(s.rows - 1, Math.floor((z + r - s.gz0) / s.cell));
+  let under = -1;
+  let touch = -1;
+  for (let row = r0; row <= r1; row++) {
+    for (let col = c0; col <= c1; col++) {
+      for (const i of s.grid[row * s.cols + col]) {
+        if (i >= s.cityCount) continue;
+        const top = s.maxY[i];
+        if (top > y) continue;
+        const dx = Math.max(s.minX[i] - x, 0, x - s.maxX[i]);
+        const dz = Math.max(s.minZ[i] - z, 0, z - s.maxZ[i]);
+        if (dx === 0 && dz === 0) {
+          if (under < 0 || top > s.maxY[under]) under = i;
+        } else if (dx * dx + dz * dz + (y - top) * (y - top) <= r * r && (touch < 0 || top > s.maxY[touch])) touch = i;
+      }
+    }
+  }
+  const i = under >= 0 && y - s.maxY[under] <= reach ? under : touch >= 0 ? touch : under;
+  if (i < 0) return out;
+  out.top = s.maxY[i];
+  out.x0 = s.minX[i];
+  out.z0 = s.minZ[i];
+  out.x1 = s.maxX[i];
+  out.z1 = s.maxZ[i];
+  return out;
 }

@@ -1,5 +1,5 @@
 /**
- * Case File 003's marks on the maps and the waypoint (`frame.fee`, render contract v1.6): each
+ * Case File 003's marks on the maps and the waypoint (`frame.fee`, render contract v1.8): each
  * clue as a gold magnifier (a mint tick once found, as Case File 001's), the fee meter as a red
  * gauge, and Gas Goblin through the chase as a red diamond. The mark to head for next (the
  * nearest clue, the meter, him, then the bakery and the meter again) holds to the minimap's rim

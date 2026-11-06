@@ -1,0 +1,25 @@
+{
+  "ruleset": "roam-1",
+  "logRuleset": 251662596,
+  "patrolRuleset": 4,
+  "outing": {
+    "ok": true,
+    "hash": "d062175a",
+    "checkpoints": [
+      "2869403b",
+      "932028f4",
+      "56874a90",
+      "6353c0a2"
+    ],
+    "ticks": 1693,
+    "bytes": 648,
+    "stage": [
+      0,
+      9,
+      0,
+      0
+    ],
+    "pages": 128,
+    "views": 0
+  }
+}

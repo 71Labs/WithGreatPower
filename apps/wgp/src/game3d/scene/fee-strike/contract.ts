@@ -1,12 +1,12 @@
 /**
  * Case file 003, "Fee Strike", as the scene reads it: names for game-core's own types (the
- * frame's v1.6 `fee`, Gas Goblin among `villains`, and the case's sim events;
+ * frame's v1.8 `fee`, Gas Goblin among `villains`, and the case's sim events;
  * docs/chapters/case-003.md), plus small readers. Nothing here is read back by the sim.
  */
 import type { SimEvent } from "@wgp/game-core/sim3d";
 import type { RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 
-/** `RenderFrame3D.fee` (v1.6): null or absent on every other night. */
+/** `RenderFrame3D.fee` (v1.8): null or absent on every other night. */
 export type FeeFrame = NonNullable<RenderFrame3D["fee"]>;
 export type FeePhase = FeeFrame["phase"];
 export type FeeClue = FeeFrame["clues"][number];

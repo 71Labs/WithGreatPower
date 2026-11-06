@@ -58,6 +58,8 @@ interface Person {
   path: WalkPath | null;
   s: number;
   dir: number;
+  /** Free roam: one of the city's folks you can talk to (RenderFrame3D.roam.folks), by id. */
+  folk?: number;
 }
 
 interface Built {
@@ -133,6 +135,8 @@ export class CrowdSystem {
   private manual: ManualPerson[] | null = null;
   private extras: ExtraPerson[] = [];
   private extrasKey = "[]";
+  /** Free roam's folks to draw among the crowd (civilians only; allies have their own bodies), once seen. */
+  private folks: { id: number; body: number; x: number; y: number; z: number; yaw: number }[] | null = null;
   /** Clip measurements still to make, a couple per frame. */
   private warm: { body: number; clip: CrowdClip }[] = [];
   private clock = 0;
@@ -280,6 +284,14 @@ export class CrowdSystem {
       walkAt(path, w.s, _walk);
       people.push({ kind: "walk", x: _walk.x, y: 0, z: _walk.z, yaw: _walk.yaw, baseYaw: _walk.yaw, body: w.body, look: w.body * LOOKS_PER_BODY + w.look, idle: w.channel, react: w.react, channel: w.channel, zone: -1, seed: w.seed, reacting: false, since: -10, path, s: w.s, dir: w.dir });
     }
+    // Free roam's folks, in their civilian bodies (mapped onto the bodies this tier loads).
+    const loaded = this.spec.bodies ?? CIVILIANS;
+    for (const f of this.folks ?? []) {
+      const at = loaded.indexOf(CIVILIANS[f.body % CIVILIANS.length]);
+      const body = (at >= 0 ? at : f.body) % b.skeletons.length;
+      const idle = f.id % 3 === 0 && bodies[body]?.phone ? CHANNEL.phone : CHANNEL[f.id % 2 ? "stand-a" : "stand-b"];
+      people.push({ kind: "roof", x: f.x, y: f.y, z: f.z, yaw: f.yaw, baseYaw: f.yaw, body, look: body * LOOKS_PER_BODY + (f.id % LOOKS_PER_BODY), idle, react: CHANNEL.wave, channel: idle, zone: -1, seed: 977 + f.id * 31, reacting: false, since: -10, path: null, s: 0, dir: 1, folk: f.id });
+    }
     this.extras.forEach((e, i) => {
       const found = b.files.metas.findIndex((m) => m.who === e.who);
       const body = found >= 0 ? found : i % b.skeletons.length;
@@ -295,6 +307,8 @@ export class CrowdSystem {
   /** The channel a person plays now, and where they look (or null: their own way). */
   private behave(p: Person, frame: RenderFrame3D | null): { channel: number; face: { x: number; z: number } | null } {
     const hero = frame?.hero.pos ?? null;
+    // A folk mid-line talks to you, facing you.
+    if (p.folk !== undefined && hero && frame?.roam?.folks[p.folk]?.talking) return { channel: CHANNEL.talk, face: hero };
     const atStop = !!frame && p.zone >= 0 && frame.stop === p.zone;
     const cheerFor = (p.seed >>> 3) % 4;
     if (atStop && p.kind === "fight") {
@@ -320,6 +334,11 @@ export class CrowdSystem {
   update(frame: RenderFrame3D | null, camera: PerspectiveCamera, dt: number, time: number): void {
     const t0 = performance.now();
     this.clock += dt;
+    // Free roam: its folks join the crowd the first time an outing's frame says who they are.
+    if (frame?.roam && !this.folks) {
+      this.folks = frame.roam.folks.filter((f) => !f.cast).map((f) => ({ id: f.id, body: f.body, x: f.pos.x, y: f.pos.y, z: f.pos.z, yaw: f.yaw }));
+      this.plan();
+    }
     if (!this.built) {
       if (this.clock > LOAD_DELAY && !this.loading) this.load();
       this.stats.near = this.stats.far = this.stats.calls = this.stats.blocks = 0;
@@ -405,7 +424,9 @@ export class CrowdSystem {
         const floor = b.skeletons[p.body].floor(b.clips.get(ch.clip)!, this.measure);
         let fade = distanceFade(dist[i], spec.farDist);
         if (hero) {
-          fade = Math.max(fade, heroFade(Math.hypot(hero.x - p.x, hero.z - p.z), hero.y - p.y), lineFade(p.x, p.y + 50, p.z, cam.x, cam.y, cam.z, hero.x, hero.y, hero.z));
+          // A folk you can talk to stays solid beside you (only right on top of them do they fade).
+          const near = p.folk !== undefined ? heroFade(Math.hypot(hero.x - p.x, hero.z - p.z) * 2.2, hero.y - p.y) : heroFade(Math.hypot(hero.x - p.x, hero.z - p.z), hero.y - p.y);
+          fade = Math.max(fade, near, lineFade(p.x, p.y + 50, p.z, cam.x, cam.y, cam.z, hero.x, hero.y, hero.z));
           if (rival) fade = Math.max(fade, lineFade(p.x, p.y + 50, p.z, cam.x, cam.y, cam.z, rival.pos.x, rival.pos.y, rival.pos.z));
         }
         batch.add(p.x, p.y - floor, p.z, p.yaw, p.body * C + p.channel, p.body, p.look, fade, fogFor(dist[i]));
