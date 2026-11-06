@@ -372,7 +372,7 @@ export class HeroAnimator {
       const project = (p: Vector3) => ((p.y = this.footOn(p, ground, ground + 20, ctx) + rig.spec.ankle), p);
       if (onFeet && !mc.stand.pivoting) this.maybePivot(mc, h.vel, ground, project);
       if (!onFeet) mc.stand.cancelPivot();
-      mc.step(dt, { ground: grounded && this.impactT <= 0 && !held, air, pivot: mc.stand.pivoting, speed: grounded ? Math.hypot(this.vel.x, this.vel.z) : 0, moved: grounded ? moved : 0 });
+      mc.step(dt, { ground: grounded && this.impactT <= 0 && !held, air, pivot: mc.stand.pivoting, speed: grounded ? Math.hypot(this.vel.x, this.vel.z) : 0, moved: grounded ? moved : 0, raw: hs });
       // A stride's end: the feet stay where it left them, then square up.
       if (wasMoving && !mc.isMoving && !mc.stand.pivoting) mc.plantWhereTheyAre(ground, rig.spec.ankle, this.turn.value, true);
       if (grounded) mc.stand.update(dt, _c.set(P.x, ground + rig.spec.ankle, P.z), this.turn.value, project, yaw, !mc.isMoving || mc.stand.pivoting);
@@ -391,7 +391,12 @@ export class HeroAnimator {
     if (mc && !this.ragdolled) mc.layer(this.pose, this.gripW.lerp(this.clock.alpha), this.headY.lerp(this.clock.alpha) + (this.lead - this.twist) * 0.7, 0, grounded ? this.stepGround : ctx.ground, ground, this.twist);
     // On his feet, never a toe through the roof: the stride's clips carry the hips at the
     // cycle's average floor, so at the bottom of a stride a pointed foot can dip below it.
-    if (mc && grounded && !this.ragdolled) this.keepSolesUp();
+    if (mc && grounded && !this.ragdolled) {
+      // Stopped, the stride's hips can still be up where its flight held them: down onto the
+      // planted foot, never a straight leg dangling it over the roof.
+      if (!mc.isMoving && this.impactT <= 0) this.reachPlanted(mc);
+      this.keepSolesUp();
+    }
     // The fist: the rig's grip point in the right hand.
     this.grip.copy(rig.grip).applyMatrix4(rig.arms[1].end.matrixWorld);
   }
@@ -458,6 +463,26 @@ export class HeroAnimator {
     this.spineR.impulse((Math.random() - 0.5) * 8);
     this.headP.impulse(-12);
     for (const s of this.hands) s.impulse((Math.random() - 0.5) * 500, 260, (Math.random() - 0.5) * 500);
+  }
+
+  /** Lower the body by however far a planted foot's ankle is short of its target (the leg straight, the hips too high for it). */
+  private reachPlanted(mc: Mocap): void {
+    const rig = this.rig;
+    let gap = 0;
+    let leg = -1;
+    for (let i = 0; i < 2; i++) {
+      if (mc.stand.lift[i] > 0.05) continue;
+      const d = worldPos(rig.legs[i].end, _a).y - this.pose.foot[i].y;
+      if (d > gap) {
+        gap = d;
+        leg = i;
+      }
+    }
+    if (leg < 0 || gap <= 0.3) return;
+    // The leg is straight (its target out of reach): lowering the body brings the ankle down
+    // onto it, where the clip layer put it across (its guard on the midline kept).
+    this.group.position.y -= Math.min(gap, 20);
+    this.group.updateMatrixWorld(true);
   }
 
   /** Lift the body by however far its lowest sole (heel or ball) is below the roof under that foot. */

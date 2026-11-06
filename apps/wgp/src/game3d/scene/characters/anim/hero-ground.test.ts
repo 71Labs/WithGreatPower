@@ -107,6 +107,23 @@ describe("the hero's feet where the sim puts him", () => {
     expect(anim.centre.y).toBeGreaterThan(ROOF + 20);
   });
 
+  it("puts a foot down at once when the sim stops him dead mid-sprint, never frozen in the stride's flight", () => {
+    // Stops at every point of the stride (the run's length sets where it ends).
+    for (let run = 40; run < 64; run += 2) {
+      const { rig, anim, ankles } = body();
+      // A jog-sprint (330 a second) across the roof, stopping well short of its edge.
+      let x = -190;
+      for (let i = 0; i < run; i++) anim.update(frame(v((x += 5.5), ROOF + R, 0), { vel: v(330, 0, 0), action: "run", actionTicks: i }), DT, ctx);
+      // Every frame from the stop on, one sole is on the roof (the other may be stepping down).
+      for (let i = 0; i < 20; i++) {
+        anim.update(frame(v(x, ROOF + R, 0), { action: "idle", actionTicks: i }), DT, ctx);
+        if (i < 2) continue;
+        const low = Math.min(...ankles().map((a) => a.y)) - rig.spec.ankle;
+        expect(low - ROOF, `frame ${i} after a stop ${run} frames into the run`).toBeLessThan(4);
+      }
+    }
+  });
+
   it("keeps a swing that skims a roof for a tick in the air, not dropped into a stance", () => {
     const { anim } = body();
     const swing = (x: number) => frame(v(x, ROOF + 60, 0), { grounded: false, anchor: v(x + 200, ROOF + 400, 0), vel: v(700, -100, 0), action: "swing" });
