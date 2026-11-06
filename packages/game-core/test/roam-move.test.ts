@@ -187,6 +187,12 @@ describe("free roam on a keyboard's eight directions", () => {
     expect(chain(p)).toMatch(/air>wallrun/);
     const head = playRoam(at(e.c + e.n * 150, 0, e.lo + 200, -e.n, 0), [{ kind: "hold", x: e.c - e.n * 2000, z: e.lo + 200, ticks: 60 }]);
     expect(chain(head)).toMatch(/^ground>climb/);
+    // No jump at all: sprinting into it on the diagonal runs up onto it and along it.
+    const run = playRoam(start, [{ kind: "hold", ...diag, ticks: 50, sprint: true }]);
+    expect(chain(run)).toMatch(/^ground>wallrun/);
+    // Not sprinting, the same diagonal climbs.
+    const slow = playRoam(start, [{ kind: "hold", ...diag, ticks: 50 }]);
+    expect(slow.moves).not.toContain("wallrun");
   });
 
   it("swings mid-air when the web is held after a jump (it keeps looking while held), never without it", () => {

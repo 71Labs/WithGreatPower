@@ -512,7 +512,16 @@ function wallAction(s: SimState, st: Stick, c: Contact): boolean {
   const speed = Math.max(len2(h.vx, h.vz), c.into);
   // Low: over it at a run, else up onto it.
   if (rise > STEP_UP && rise <= VAULT_MAX && into > 0.5 && tryVault(s, c, speed, speed >= VAULT_SPEED)) return true;
-  if (rise >= CLIMB_MIN && into > 0.55 && s.roam!.body.grabCd <= 0) {
+  // Sprinting into a tall wall at a glancing angle (the stick a little into it): up onto it and
+  // along it, a wall run. Head-on is a climb.
+  const b = s.roam!.body;
+  const along = len2(h.vx, h.vz);
+  const total = len2(along, c.into);
+  if (sprinting(b) && rise >= CLIMB_MIN && into > 0.2 && total >= WALLRUN_SPEED && c.into < total * WALLRUN_ANGLE && b.grabCd <= 0 && b.wallruns < WALLRUN_CHAIN) {
+    startWallrun(s, c);
+    return true;
+  }
+  if (rise >= CLIMB_MIN && into > 0.55 && b.grabCd <= 0) {
     startClimb(s, c.nx, c.nz, CLIMB_RUNUP + CLIMB_RUNUP_K * c.into);
     return true;
   }
