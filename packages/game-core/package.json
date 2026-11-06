@@ -13,6 +13,7 @@
     "./chapters": "./src/rules/chapters.ts",
     "./city": "./src/rules/city.ts",
     "./roam": "./src/roam-run.ts",
+    "./sim3d/parkour": "./src/sim3d/parkour/index.ts",
     "./sim3d/roam": "./src/sim3d/roam/index.ts",
     "./sim3d/contract": "./src/sim3d/contract.ts",
     "./sim3d/constants": "./src/sim3d/constants.ts",

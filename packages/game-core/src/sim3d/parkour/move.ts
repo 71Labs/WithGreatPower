@@ -1,5 +1,5 @@
 /**
- * Free roam's body: walking, running and sprinting on any surface (the street included: the
+ * The parkour movement set (sim3d/parkour; free roam is its first user): walking, running and sprinting on any surface (the street included: the
  * ground is never lava), jumps, vaults, wall climbs, wall runs, ledge grabs and mantles, drops,
  * rolls on hard landings, the web-zip and, only while the web button is held, the swing (let go
  * and it ends; held, it keeps looking for an anchor and chains swings at the top of each arc).
@@ -95,9 +95,10 @@ import type { InputFrame } from "../contract";
 import { clamp, datan2, dcos, DIR64, dsin, len2, len3, MAG_SCALE } from "../dmath";
 import { flightStep, inReleaseWindow, launchFromGround, pickAnchor, wrapRope, type FlightInput } from "../swing";
 import type { Hero, SimState } from "../types";
-import { clearAt } from "./world";
+import { clearAt } from "./geometry";
+import { parkourOf } from "./host";
 import { zipTarget } from "./zip";
-import type { RoamBody, RoamMove } from "./types";
+import type { ParkourBody as RoamBody, ParkourMove as RoamMove } from "./types";
 
 const R = HERO_RADIUS;
 /** cos SKID_ANGLE: the stick this far round from the motion at speed is a skid. */
@@ -132,10 +133,10 @@ const sprinting = (b: RoamBody) => b.sprintT > 0;
 const feet = (h: Hero) => h.y - R;
 
 function setMove(s: SimState, move: RoamMove) {
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   if (b.move === move) return;
   const h = s.hero;
-  s.roam!.events.push({ type: "roam-move", move, from: b.move, x: h.x, y: h.y, z: h.z, speed: len3(h.vx, h.vy, h.vz) });
+  parkourOf(s).events.push({ type: "roam-move", move, from: b.move, x: h.x, y: h.y, z: h.z, speed: len3(h.vx, h.vy, h.vz) });
   b.move = move;
   b.moveT = 0;
   h.grounded = move === "ground" || move === "roll";
@@ -193,7 +194,7 @@ export const roamHeading = (s: SimState) => heading(s.hero, stickOf(s.input));
 /** One tick of the body. */
 export function stepMove(s: SimState, input: InputFrame, press: Presses, dt: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   b.moveT += dt;
   b.jumpBuf = press.jump ? JUMP_BUFFER : Math.max(0, b.jumpBuf - dt);
   b.grabCd = Math.max(0, b.grabCd - dt);
@@ -272,7 +273,7 @@ export function stepMove(s: SimState, input: InputFrame, press: Presses, dt: num
 /** Facing: the stick on foot (wide turns at a sprint), the wall on a wall, the motion elsewhere. */
 function face(s: SimState, st: Stick, dt: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   switch (b.move) {
     case "ground": {
       // On foot the turn is the run's own (stepGround turns the body; the run follows it).
@@ -344,7 +345,7 @@ function drive(h: Hero, target: number, crouched: boolean, dt: number) {
 
 function doJump(s: SimState, st: Stick, kind: "jump" | "launch") {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const hs = len2(h.vx, h.vz);
   if (kind === "launch") {
     const d = len2(b.bx - b.ax, b.bz - b.az) || 1;
@@ -369,7 +370,7 @@ function doJump(s: SimState, st: Stick, kind: "jump" | "launch") {
   b.coyote = COYOTE;
   b.launchT = 0;
   setMove(s, "air");
-  s.roam!.events.push({ type: "roam-jump", kind, x: h.x, y: h.y, z: h.z });
+  parkourOf(s).events.push({ type: "roam-jump", kind, x: h.x, y: h.y, z: h.z });
 }
 
 /** Ground speed for the stick: walk, jog, run by tilt; sprint (held) at any tilt. */
@@ -441,7 +442,7 @@ function moveOnFoot(s: SimState, dt: number): Contact {
 
 function stepGround(s: SimState, st: Stick, press: Presses, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   if (b.launchT > 0 && b.jumpBuf > 0) return doJump(s, st, "launch"), stepAir(s, st, press, dt);
   if (b.jumpBuf > 0 && h.landT < HARD_LAND * 0.5) return doJump(s, st, "jump"), stepAir(s, st, press, dt);
   if (press.drop && dropToHang(s, st)) return;
@@ -491,7 +492,7 @@ function stepGround(s: SimState, st: Stick, press: Presses, dt: number): void {
   }
   if (speed >= LEAP_SPEED && st.mag > 0) {
     h.vy = LEAP_VY;
-    s.roam!.events.push({ type: "roam-jump", kind: "leap", x: h.x, y: h.y, z: h.z });
+    parkourOf(s).events.push({ type: "roam-jump", kind: "leap", x: h.x, y: h.y, z: h.z });
   }
   setMove(s, "air");
 }
@@ -515,7 +516,7 @@ function wallAction(s: SimState, st: Stick, c: Contact): boolean {
   if (rise > STEP_UP && rise <= VAULT_MAX && into > 0.5 && tryVault(s, c, speed, speed >= VAULT_SPEED)) return true;
   // Sprinting into a tall wall at a glancing angle (the stick a little into it): up onto it and
   // along it, a wall run. Head-on is a climb.
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const along = len2(h.vx, h.vz);
   const total = len2(along, c.into);
   if (sprinting(b) && rise >= CLIMB_MIN && into > 0.2 && total >= WALLRUN_SPEED && c.into < total * WALLRUN_ANGLE && b.grabCd <= 0 && b.wallruns < WALLRUN_CHAIN) {
@@ -534,7 +535,7 @@ function wallAction(s: SimState, st: Stick, c: Contact): boolean {
 /** Down on a top face (or the street): a roll, a three-point landing, or a soft one. Never damage. */
 function land(s: SimState, impact: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const hs = len2(h.vx, h.vz);
   s.events.push({ type: "land", x: h.x, y: feet(h), z: h.z, speed: len3(h.vx, impact, h.vz) });
   h.vy = 0;
@@ -560,7 +561,7 @@ function land(s: SimState, impact: number) {
 
 function stepRoll(s: SimState, st: Stick, press: Presses, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   if (b.jumpBuf > 0 && b.moveT > 0.12) return doJump(s, st, "jump"), stepAir(s, st, press, dt);
   // A little steering through the roll, and almost no friction.
   if (st.mag > 0 && b.moveT > ROLL_SECONDS * 0.5) turnFacing(h, st.x, st.z, dt, 4);
@@ -586,7 +587,7 @@ function stepRoll(s: SimState, st: Stick, press: Presses, dt: number): void {
 
 function stepAir(s: SimState, st: Stick, press: Presses, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   // A point launch off the end of a zip, or a late jump just off an edge.
   if (b.launchT > 0 && b.jumpBuf > 0) return doJump(s, st, "launch"), stepAir(s, st, press, dt);
   if (b.jumpBuf > 0 && b.coyote < COYOTE && h.vy <= LEAP_VY + 1) return doJump(s, st, "jump"), stepAir(s, st, press, dt);
@@ -619,7 +620,7 @@ function stepAir(s: SimState, st: Stick, press: Presses, dt: number): void {
 /** In the air against a wall: catch its ledge, run along it, or climb it. */
 function airWall(s: SimState, st: Stick, c: Contact) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   if (b.grabCd > 0) return;
   const into = st.mag > 0 ? -(st.x * c.nx + st.z * c.nz) : 0;
   const top = columnTop(s.grid, h.x - c.nx * (R + 2), h.z - c.nz * (R + 2), h.y) ;
@@ -646,7 +647,7 @@ function airWall(s: SimState, st: Stick, c: Contact) {
  */
 function tryWeb(s: SimState, st: Stick, pressed: boolean): boolean {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const head = heading(h, st);
   // The anchor choice reads the hero as a night's does: on his feet, or in the air.
   h.grounded = b.move === "ground" || b.move === "roll";
@@ -725,7 +726,7 @@ function boost(h: Hero, k: number) {
 
 function stepSwing(s: SimState, st: Stick, input: InputFrame, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const head = heading(h, st);
   if (h.rope) {
     // Let go of the web, and the swing ends there: a graded release (a boost in the window).
@@ -781,7 +782,7 @@ function stepSwing(s: SimState, st: Stick, input: InputFrame, dt: number): void 
 
 function startClimb(s: SimState, nx: number, nz: number, vy: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   b.wnx = nx;
   b.wnz = nz;
   b.awayT = 0;
@@ -794,7 +795,7 @@ function startClimb(s: SimState, nx: number, nz: number, vy: number) {
 
 function letGo(s: SimState, push: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   h.vx = b.wnx * push;
   h.vz = b.wnz * push;
   h.vy = Math.min(h.vy, 0);
@@ -805,7 +806,7 @@ function letGo(s: SimState, push: number) {
 /** Off a wall on a jump: out along the stick (or straight out), and up. */
 function wallJump(s: SimState, st: Stick, alongX = 0, alongZ = 0) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   let dx = b.wnx;
   let dz = b.wnz;
   if (st.mag > 0) {
@@ -825,12 +826,12 @@ function wallJump(s: SimState, st: Stick, alongX = 0, alongZ = 0) {
   b.grabCd = GRAB_CD * 0.7;
   b.jumpBuf = 0;
   setMove(s, "air");
-  s.roam!.events.push({ type: "roam-jump", kind: "wall", x: h.x, y: h.y, z: h.z });
+  parkourOf(s).events.push({ type: "roam-jump", kind: "wall", x: h.x, y: h.y, z: h.z });
 }
 
 function stepClimb(s: SimState, st: Stick, press: Presses, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const nx = b.wnx;
   const nz = b.wnz;
   const tx = -nz;
@@ -844,7 +845,7 @@ function stepClimb(s: SimState, st: Stick, press: Presses, dt: number): void {
       h.vy = CLIMB_LEAP;
       b.leapCd = CLIMB_LEAP_CD;
       b.jumpBuf = 0;
-      s.roam!.events.push({ type: "roam-jump", kind: "climb", x: h.x, y: h.y, z: h.z });
+      parkourOf(s).events.push({ type: "roam-jump", kind: "climb", x: h.x, y: h.y, z: h.z });
     }
   }
   b.awayT = into < -0.5 ? b.awayT + dt : 0;
@@ -913,7 +914,7 @@ function stepClimb(s: SimState, st: Stick, press: Presses, dt: number): void {
 
 function startHang(s: SimState, nx: number, nz: number, top: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   b.wnx = nx;
   b.wnz = nz;
   b.wtop = top;
@@ -927,7 +928,7 @@ function startHang(s: SimState, nx: number, nz: number, top: number) {
 
 function stepHang(s: SimState, st: Stick, press: Presses, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const nx = b.wnx;
   const nz = b.wnz;
   const tx = -nz;
@@ -980,7 +981,7 @@ function dropToHang(s: SimState, st: Stick): boolean {
 /** Up over a ledge whose top is at `top`: a scripted pull-up to MANTLE_IN in from the edge (the middle of a perch). */
 function startMantle(s: SimState, top: number) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const to = ledgeOpen(s.grid, h.x, h.z, b.wnx, b.wnz, top, true);
   if (!to) return;
   b.ax = h.x;
@@ -999,7 +1000,7 @@ function startMantle(s: SimState, top: number) {
 
 function startWallrun(s: SimState, c: Contact) {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   b.wnx = c.nx;
   b.wnz = c.nz;
   // Along the wall, the way he was going.
@@ -1022,7 +1023,7 @@ function startWallrun(s: SimState, c: Contact) {
 
 function stepWallrun(s: SimState, st: Stick, press: Presses, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const into = st.mag > 0 ? -(st.x * b.wnx + st.z * b.wnz) : 0;
   const along = h.vx * b.wdx + h.vz * b.wdz;
   if (b.jumpBuf > 0) return wallJump(s, st, b.wdx * along * 0.85, b.wdz * along * 0.85);
@@ -1107,7 +1108,7 @@ function vaultArc(s: SimState, tx: number, ty: number, tz: number, top: number):
  */
 function tryVault(s: SimState, c: Contact, speed: number, over: boolean): boolean {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const g = s.grid;
   const dx = -c.nx;
   const dz = -c.nz;
@@ -1166,7 +1167,7 @@ function tryVault(s: SimState, c: Contact, speed: number, over: boolean): boolea
 
 function stepScripted(s: SimState, dt: number): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const u = Math.min(1, b.moveT / b.dur);
   const px = h.x;
   const py = h.y;
@@ -1225,7 +1226,7 @@ function stepScripted(s: SimState, dt: number): void {
 /** The web-zip toward the point zipTarget picks for this heading; false (a fizzle) with nothing there. */
 function startZip(s: SimState, st: Stick): boolean {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   const head = heading(h, st);
   const t = zipTarget(s, head.x, head.z);
   if (!t) {
@@ -1251,7 +1252,7 @@ function startZip(s: SimState, st: Stick): boolean {
   h.vx = 0;
   h.vy = 0;
   h.vz = 0;
-  s.roam!.events.push({ type: "roam-zip", x: h.x, y: h.y, z: h.z, tx: t.x, ty: t.y, tz: t.z });
+  parkourOf(s).events.push({ type: "roam-zip", x: h.x, y: h.y, z: h.z, tx: t.x, ty: t.y, tz: t.z });
   setMove(s, "zip");
   return true;
 }
@@ -1260,8 +1261,8 @@ function startZip(s: SimState, st: Stick): boolean {
 
 function startSplash(s: SimState) {
   const h = s.hero;
-  const b = s.roam!.body;
-  s.roam!.events.push({ type: "roam-splash", x: h.x, y: 0, z: h.z });
+  const b = parkourOf(s).body;
+  parkourOf(s).events.push({ type: "roam-splash", x: h.x, y: 0, z: h.z });
   b.ax = h.x;
   b.az = h.z;
   // The way he was going: he swims on out the far side if that's where he was headed.
@@ -1277,7 +1278,7 @@ function startSplash(s: SimState) {
 
 function stepSplash(s: SimState): void {
   const h = s.hero;
-  const b = s.roam!.body;
+  const b = parkourOf(s).body;
   h.vx = 0;
   h.vy = 0;
   h.vz = 0;
@@ -1285,7 +1286,7 @@ function stepSplash(s: SimState): void {
   // Out on the nearest bank the way he was going (across the river), else the nearest.
   let best = -1;
   let bd = Infinity;
-  const banks = s.roam!.world.banks;
+  const banks = parkourOf(s).world.banks;
   for (let pass = 0; pass < 2 && best < 0; pass++) {
     for (let i = 0; i < banks.length; i++) {
       const dx = banks[i].x0 - b.ax;
@@ -1298,10 +1299,10 @@ function stepSplash(s: SimState): void {
       }
     }
   }
-  const spot = best >= 0 ? { x: banks[best].x0, z: banks[best].z0 } : { x: s.roam!.world.spawn.x, z: s.roam!.world.spawn.z };
+  const spot = best >= 0 ? { x: banks[best].x0, z: banks[best].z0 } : { x: parkourOf(s).world.spawn.x, z: parkourOf(s).world.spawn.z };
   h.x = spot.x;
   h.z = spot.z;
-  h.y = best >= 0 ? R : s.roam!.world.spawn.y + R;
+  h.y = best >= 0 ? R : parkourOf(s).world.spawn.y + R;
   const fx = spot.x - b.ax;
   const fz = spot.z - b.az;
   const fl = len2(fx, fz);
@@ -1313,5 +1314,5 @@ function stepSplash(s: SimState): void {
 }
 
 /** Whether the hero is in a move a talk can happen in (on his feet, or hanging still). */
-export const canTalk = (s: SimState) => s.roam!.body.move === "ground" || s.roam!.body.move === "hang" || s.roam!.body.move === "climb";
+export const canTalk = (s: SimState) => parkourOf(s).body.move === "ground" || parkourOf(s).body.move === "hang" || parkourOf(s).body.move === "climb";
 

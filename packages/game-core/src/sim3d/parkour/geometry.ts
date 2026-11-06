@@ -1,14 +1,28 @@
 /**
- * Questions free roam's body asks the city's boxes: how high a wall goes, whether a ledge has
+ * Questions the parkour body asks the city's boxes: how high a wall goes, whether a ledge has
  * room on top to stand, where the next face is when a climb runs off the end of one, and where
  * to hang when dropping over a roof's edge. Pure, deterministic, allocation-light.
  */
-import { groundBelow, raycastCity, type CityIndex } from "../city";
+import { collideSphere, groundBelow, raycastCity, type CityIndex, type SphereHit } from "../city";
 import { HERO_RADIUS } from "../constants";
 import { HANG_DOWN, MANTLE_IN } from "./constants";
-import { clearAt } from "./world";
 
 const R = HERO_RADIUS;
+
+const NO_HIT: SphereHit = { hit: false, top: false, topY: 0, wall: false, wallNx: 0, wallNz: 0, wallTop: 0, ceiling: false };
+const probe = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
+
+/** Whether a sphere of radius r at (x, y, z) touches nothing solid. */
+export function clearAt(grid: CityIndex, x: number, y: number, z: number, r: number): boolean {
+  probe.x = x;
+  probe.y = y;
+  probe.z = z;
+  probe.vx = 0;
+  probe.vy = 0;
+  probe.vz = 0;
+  return !collideSphere(grid, probe, r, NO_HIT).hit;
+}
+
 const ids: number[] = [];
 /** Offsets along a ledge to look for room to pull up onto (units), nearest first. */
 const LATERAL = [0, 16, -16, 32, -32, 48, -48];

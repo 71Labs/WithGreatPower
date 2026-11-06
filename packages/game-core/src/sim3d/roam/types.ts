@@ -7,6 +7,7 @@
  */
 import type { CastId } from "../../rules/cast";
 import type { DistrictId, RoamMoveName, Vec3 } from "../contract";
+import type { ParkourBody, ParkourEvent } from "../parkour/types";
 
 /** The tasks the city's people hand out, in their fixed order (progress arrays are indexed by it). */
 export const TASK_IDS = ["bread", "pickpocket", "pixels", "graffiti"] as const;
@@ -26,52 +27,8 @@ export const TASK_DONE = 9;
 export type RoamMove = RoamMoveName;
 export const ROAM_MOVES: readonly RoamMove[] = ["ground", "air", "climb", "hang", "mantle", "vault", "wallrun", "roll", "zip", "swing", "splash"];
 
-/** The parkour state on top of the hero's (SimState.hero). */
-export interface RoamBody {
-  move: RoamMove;
-  /** Seconds in `move`. */
-  moveT: number;
-  /** Ticks of sprint left (SPRINT_GRACE after the last sprint one-shot). */
-  sprintT: number;
-  /** A buffered jump press, seconds left. */
-  jumpBuf: number;
-  /** Seconds since last standing (or holding a wall), for a late jump. */
-  coyote: number;
-  /** Seconds before a wall or ledge may be grabbed again. */
-  grabCd: number;
-  /** Seconds before a zip may go again, and before another jump up a wall. */
-  zipCd: number;
-  leapCd: number;
-  /** Seconds the stick has been held away from the wall (letting go). */
-  awayT: number;
-  /** Wall runs since last on the ground. */
-  wallruns: number;
-  /** The wall (climb, hang, wall run): its outward normal, the top of its face, and the face's plane. */
-  wnx: number;
-  wnz: number;
-  wtop: number;
-  wface: number;
-  /** A wall run's direction along the wall (unit xz). */
-  wdx: number;
-  wdz: number;
-  /** A scripted move (vault, mantle, zip, splash): from, to, how long, how high the arc. */
-  ax: number;
-  ay: number;
-  az: number;
-  bx: number;
-  by: number;
-  bz: number;
-  dur: number;
-  arc: number;
-  /** The velocity a vault hands back at its end; a zip's landing: 0 on a roof edge, 1 a perch. */
-  ex: number;
-  ez: number;
-  land: number;
-  /** After a zip: seconds left for a point launch. */
-  launchT: number;
-  /** A swing's web button: held last tick (the hero's holdPrev is the input's). */
-  webHeld: boolean;
-}
+/** The parkour state on top of the hero's (sim3d/parkour/types.ts ParkourBody). */
+export type RoamBody = ParkourBody;
 
 /** Someone in the city to talk to. */
 export interface RoamFolk {
@@ -208,14 +165,8 @@ export interface RoamStart {
 }
 
 export type RoamEvent =
-  /** A jump: from the ground, off a roof's edge (a leap), off a wall, up a wall, or a point launch after a zip. */
-  | { type: "roam-jump"; kind: "jump" | "leap" | "wall" | "climb" | "launch"; x: number; y: number; z: number }
-  /** The body changed what it's doing (a vault, a grab, a roll…), for animation and sound. */
-  | { type: "roam-move"; move: RoamMove; from: RoamMove; x: number; y: number; z: number; speed: number }
-  /** A web-zip toward (tx, ty, tz). */
-  | { type: "roam-zip"; x: number; y: number; z: number; tx: number; ty: number; tz: number }
-  /** Into the river, and out on the bank. */
-  | { type: "roam-splash"; x: number; y: number; z: number }
+  /** The movement set's: jumps, moves, zips, splashes (parkour/types.ts). */
+  | ParkourEvent
   /** Talked to someone: their line (an index into their lines). */
   | { type: "roam-talk"; folk: number; line: number; task: TaskId | null }
   /** A task moved on: its new stage (TASK_DONE when finished; `xp` paid on the first finish). */

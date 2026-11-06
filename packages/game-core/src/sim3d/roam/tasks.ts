@@ -31,7 +31,7 @@ import {
   TALK_REACH,
   TALK_RISE,
 } from "./constants";
-import { canTalk, type Presses } from "./move";
+import { canTalk, type Presses } from "../parkour/move";
 import { TASK_DONE, TASK_IDS, type RoamFolk, type RoamRoof, type TaskId } from "./types";
 
 const R = HERO_RADIUS;

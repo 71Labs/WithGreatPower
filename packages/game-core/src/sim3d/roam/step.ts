@@ -15,7 +15,7 @@ import { newHero } from "../hero";
 import { mix } from "../rng";
 import type { SimState } from "../types";
 import { ROAM_CITY_SEED, SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP, SPRINT_GRACE } from "./constants";
-import { stepMove, type Presses } from "./move";
+import { stepMove, type Presses } from "../parkour/move";
 import { stepPeople } from "./tasks";
 import { TASK_DONE, TASK_IDS, type RoamBody, type RoamStart, type RoamState } from "./types";
 import { clearAt, roamCity, roamGrid, roamWorld } from "./world";

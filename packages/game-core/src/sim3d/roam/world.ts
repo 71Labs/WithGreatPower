@@ -14,7 +14,8 @@
  * Pure and deterministic: placement is by hashed rank (mix) and plain arithmetic.
  */
 import type { Stop } from "../../rules/types";
-import { CityIndex, collideSphere, groundBelow, lineClear, overRiver, type SphereHit } from "../city";
+import { CityIndex, groundBelow, lineClear, overRiver } from "../city";
+import { clearAt } from "../parkour/geometry";
 import { HERO_RADIUS, WATER_TOWER_TOP } from "../constants";
 import type { Building, City, DistrictId, Prop, Vec3 } from "../contract";
 import { generateCity } from "../city";
@@ -42,19 +43,8 @@ const TANK_HALF = 26;
 /** Antenna poles are solid this far either side. */
 const POLE_HALF = 5;
 
-const NO_HIT: SphereHit = { hit: false, top: false, topY: 0, wall: false, wallNx: 0, wallNz: 0, wallTop: 0, ceiling: false };
-const probe = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
-
-/** Whether a sphere of radius r at (x, y, z) touches nothing solid. */
-export function clearAt(grid: CityIndex, x: number, y: number, z: number, r: number): boolean {
-  probe.x = x;
-  probe.y = y;
-  probe.z = z;
-  probe.vx = 0;
-  probe.vy = 0;
-  probe.vz = 0;
-  return !collideSphere(grid, probe, r, NO_HIT).hit;
-}
+/** Whether a sphere touches nothing solid (the movement set's, sim3d/parkour/geometry.ts). */
+export { clearAt };
 
 /** A hashed rank for item i of a kind, so candidates are tried in a fixed shuffled order. */
 const rank = (salt: number, i: number) => mix(ROAM_CITY_SEED ^ salt, i + 1);

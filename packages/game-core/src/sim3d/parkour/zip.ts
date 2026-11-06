@@ -10,7 +10,7 @@ import { HERO_RADIUS, WATER_TOWER_TOP } from "../constants";
 import { len2, len3 } from "../dmath";
 import type { SimState } from "../types";
 import { ZIP_CONE, ZIP_DROP, ZIP_LAND_IN, ZIP_MIN, ZIP_RANGE, ZIP_RISE } from "./constants";
-import { clearAt } from "./world";
+import { clearAt } from "./geometry";
 
 const R = HERO_RADIUS;
 const ids: number[] = [];

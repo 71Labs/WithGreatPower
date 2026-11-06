@@ -8,10 +8,10 @@ import { HERO_RADIUS } from "../constants";
 import type { HeroAction, RenderFrame3D, RoamFrame, Vec3 } from "../contract";
 import { len2 } from "../dmath";
 import type { SimState } from "../types";
-import { roamHeading } from "./move";
+import { roamHeading } from "../parkour/move";
 import { actTarget } from "./tasks";
 import { TASK_IDS } from "./types";
-import { zipTarget } from "./zip";
+import { zipTarget } from "../parkour/zip";
 
 const v3 = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 const set = (o: Vec3, x: number, y: number, z: number) => {
