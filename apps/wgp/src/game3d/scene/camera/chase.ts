@@ -128,7 +128,7 @@ export const CHASE_TUNING = {
    * little above the hero, so the climber fills the frame from behind with the wall above him,
    * and the camera stays in the street rather than climbing over the buildings across it.
    */
-  wallDist: 300,
+  wallDist: 260,
   wallPitch: 0.07,
   /** Shortest arm a collision can force (travel, arenas), and the gap kept from what the ray hit. */
   minArm: 120,
