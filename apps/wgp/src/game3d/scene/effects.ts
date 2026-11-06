@@ -54,13 +54,19 @@ export const BURST_WORDS = {
   "NO QUORUM!": [CITY.windowLit, INK],
   "RECOUNT!": [PAPER, INK],
   "COUNTED!": [CITY.neonMint, INK],
+  /** Free roam (scene/roam): a Daily Rug page, a tag photographed, one of Mary's pixels, a viewpoint synced. */
+  "GOT IT!": [CITY.windowLit, INK],
+  "SNAP!": [PAPER, INK],
+  "PIXEL!": [CITY.neonMint, INK],
+  "SYNCED!": [CITY.neonMint, PAPER],
 } as const;
 
 export type BurstWord = keyof typeof BURST_WORDS;
 
 const WORDS = Object.keys(BURST_WORDS) as BurstWord[];
 const COLS = 2;
-const ROWS = 11;
+/** Enough rows for every word (two to a row). */
+const ROWS = Math.ceil(Object.keys(BURST_WORDS).length / COLS);
 const CELL_W = 512;
 const CELL_H = 256;
 

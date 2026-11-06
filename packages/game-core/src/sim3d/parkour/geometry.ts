@@ -77,9 +77,10 @@ export function ledgeOpen(grid: CityIndex, x: number, z: number, nx: number, nz:
   const fz = z - nz * (R + 2);
   const b = boxAt(grid, fx, fz, top);
   if (b && (b.x1 - b.x0 < 2 * MANTLE_IN || b.z1 - b.z0 < 2 * MANTLE_IN)) {
-    // A small top: stand on its middle.
-    const cx = (b.x0 + b.x1) / 2;
-    const cz = (b.z0 + b.z1) / 2;
+    // A small top: stand on its middle across its narrow way, and where he grabbed it along a
+    // long one (a billboard, a rail), never slid along it (roam-2).
+    const cx = b.x1 - b.x0 < 2 * MANTLE_IN ? (b.x0 + b.x1) / 2 : Math.min(b.x1 - 4, Math.max(b.x0 + 4, fx));
+    const cz = b.z1 - b.z0 < 2 * MANTLE_IN ? (b.z0 + b.z1) / 2 : Math.min(b.z1 - 4, Math.max(b.z0 + 4, fz));
     const ok = clearAt(grid, cx, top + R + 1, cz, R - 1);
     return spot ? (ok ? { x: cx, z: cz } : null) : ok;
   }

@@ -52,12 +52,14 @@ export const newRoamBot = (goals: RoamBotGoal[]): RoamBotMemory => ({ goals, i: 
 /**
  * The golden tour (src/golden-roam.ts) and `?autopilot=1`: from the spawn roof a walk, a run
  * and a sprint off its edge, down to Dev for the pickpocket chase over the roofs and back, a
- * Daily Rug page in the street, a swing on the web (held, then let go) and a zip.
+ * Daily Rug page in the street, a swing on the web (held, then let go), a zip, and a dart
+ * back and forth across the street in the traffic.
  */
 export function roamTour(w: RoamWorld): RoamBotGoal[] {
   const s = w.spawn;
   const dev = w.folks.find((f) => f.key === "dev")!;
   const page = w.pages.find((p) => p.y === 0)!;
+  const cross = streetLine(page.x);
   return [
     { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 1 },
     { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 3 },
@@ -74,6 +76,11 @@ export function roamTour(w: RoamWorld): RoamBotGoal[] {
     { kind: "wait", ticks: 90 },
     { kind: "press", shot: "zip", x: page.x, z: page.z + 3000 },
     { kind: "wait", ticks: 60 },
+    // roam-2: dart back and forth across the page's street in the traffic, so a car knocks him
+    // down (and he gets up) whatever the pace of the moves before.
+    { kind: "go", x: cross, z: page.z, r: 20, street: true },
+    ...[0, 1, 2, 3, 4, 5, 6, 7].map((k): RoamBotGoal => ({ kind: "hold", x: cross + (k % 2 ? -120 : 120), z: page.z + 2000, ticks: 60, sprint: true })),
+    { kind: "wait", ticks: 120 },
   ];
 }
 
@@ -180,6 +187,9 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
       const dz = b.z - h.z;
       const d = len2(dx, dz);
       const up = b.y - (h.y - HERO_RADIUS);
+      // On a wall with it behind him: let go (the stick back only climbs down, roam-2).
+      const body = s.roam.body;
+      if ((move === "climb" || move === "hang") && body.moveT > 0.3 && -(dx * body.wnx + dz * body.wnz) < -0.3 * d) return { ...IDLE, shot: SHOT_DROP };
       // Up and away: zip at it (the zip finds the roof edge nearest the way to it).
       const zip = (up > 80 || d > 380) && d < 760 && move !== "climb" && move !== "hang" && m.t % 45 === 0;
       // Stuck: hop.
@@ -207,8 +217,18 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
         next(m);
         return IDLE;
       }
+      // Hanging under a lip it can't pull up over (something stands on the roof at the edge) with
+      // the way on over that roof: shimmy along the wall a while, then try the pull-up again, as a
+      // player would, rather than letting go and climbing straight back up.
+      const b = s.roam.body;
+      const over = (tx - h.x) * -b.wnx + (tz - h.z) * -b.wnz > 0;
+      if (move === "hang" && over && b.moveT > 0.8) {
+        const shimmy = Math.floor((b.moveT - 0.8) / 1.2) % 2 === 0;
+        if (shimmy) return { ...toward(s, h.x - b.wnz * 400, h.z + b.wnx * 400, 2), web: false, shot: 0 };
+        return { ...toward(s, h.x - b.wnx * 400, h.z - b.wnz * 400, 2), web: false, shot: 0 };
+      }
       // On a wall or a ledge with somewhere lower to be: let go.
-      if ((move === "hang" || move === "climb") && feet > want + 60 && s.roam.body.moveT > 0.6) return { ...IDLE, shot: SHOT_DROP };
+      if ((move === "hang" || move === "climb") && !(move === "hang" && over) && feet > want + 60 && b.moveT > 0.6) return { ...IDLE, shot: SHOT_DROP };
       // Stuck against something: hop it.
       const moved = len2(h.x - m.lastX, h.z - m.lastZ);
       m.lastX = h.x;

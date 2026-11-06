@@ -123,6 +123,13 @@ export const CHASE_TUNING = {
   armInTime: 0.08,
   armHold: 0.35,
   armOutTime: 0.5,
+  /**
+   * On a wall (free roam's climb, hang and mantle): the arm at most this long and pitched this
+   * little above the hero, so the climber fills the frame from behind with the wall above him,
+   * and the camera stays in the street rather than climbing over the buildings across it.
+   */
+  wallDist: 260,
+  wallPitch: 0.07,
   /** Shortest arm a collision can force (travel, arenas), and the gap kept from what the ray hit. */
   minArm: 120,
   arenaMinArm: 280,
@@ -217,6 +224,8 @@ export interface ChaseInput {
    * end and a knockout, which keep the plain chase (the fight camera's to frame).
    */
   framing?: boolean;
+  /** Free roam: the hero is on a wall (climbing, hanging, mantling); its velocity is the way into it. */
+  wall?: boolean;
 }
 
 export interface ChasePose {
@@ -449,6 +458,11 @@ export class ChaseCamera {
     let yawTarget = this.travelYaw;
     let distWant = chaseDistance(this.speedAvg, t);
     let pitchWant = t.pitch + clamp(-this.vyAvg * t.pitchPerFall, -t.pitchRiseMax, t.pitchFallMax);
+    // On a wall: close behind the climber, nearly level (tuning.wallDist, wallPitch).
+    if (input.wall) {
+      distWant = Math.min(distWant, t.wallDist);
+      pitchWant = t.wallPitch;
+    }
     let focusY = hero.y;
     let fovBoost = 0;
     let roomWant = distWant;
@@ -626,7 +640,7 @@ export class ChaseCamera {
     if (first) this.climb.snap(climbWant);
     pitch += Math.max(0, this.climb.step(climbWant, t.arenaClimbTime, step));
     // Travel: in a tight spot, climb for room rather than close right in on the hero.
-    if (shots) pitch += this.travel.climbFor(this.raycast, pivot, yaw, pitch, want, t.probePad, step);
+    if (shots && !input.wall) pitch += this.travel.climbFor(this.raycast, pivot, yaw, pitch, want, t.probePad, step);
 
     // The arm points back along the yaw and up by the pitch.
     const cp = Math.cos(pitch);

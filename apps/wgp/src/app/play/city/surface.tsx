@@ -107,9 +107,20 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         setFiling(res.verified ? "Filed with the server: what you found is kept." : "Saved in this browser.");
       } else if (res.kind === "failed") setFiling(`${res.message} It’ll try again.`);
       else if (res.kind === "stale") setFiling("This city moved on in another tab. Reload to pick up from there.");
+      else if (res.kind === "old-rules") {
+        // Played under older rules: nothing of it filed, the record keeps everything it had.
+        if (res.fresh && res.record && s === session.current) {
+          const next = nextSession(s, res.record);
+          session.current = next;
+          loop.replace(next.run);
+          handle.current?.cut();
+          toast({ tone: "info", title: "A fresh outing", body: "The city’s rules changed. Everything you’d filed is kept." });
+          setFiling("A fresh outing from where the city stands.");
+        } else setFiling("The city’s been updated. Reload to carry on; everything you’ve filed is kept.");
+      }
       return res;
     },
-    [toast],
+    [toast, loop],
   );
   const fileSoon = useCallback(() => {
     if (fileTimer.current !== null) return;
@@ -179,6 +190,12 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
           break;
         case "roam-splash":
           playSfx("street-thud", { volume: 0.5 });
+          break;
+        case "roam-car-hit":
+          // roam-2: knocked down by a car (the scene bursts and shakes; he gets up on his own).
+          playSfx("pow", { volume: 0.55 + 0.35 * Math.min(1, ev.speed / 330) });
+          playSfx("street-thud", { volume: 0.4 });
+          setAnnounce("Hit by a car. Getting up.");
           break;
         case "teleport":
           handle.current?.cut();

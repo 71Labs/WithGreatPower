@@ -14,11 +14,18 @@
  * it found is merged into the save (rules/city.ts applyOuting): stages only move on, finds are
  * kept, and each first finish pays its XP once, ever. Never ranked, never a Bits mint, no
  * chain op: a level-up rides on the player's next night's mint, as every save change does.
+ *
+ * An outing played under older roam rules (a tab still running roam-1 after roam-2 shipped) is
+ * refused as stale (409 old_rules) before any replay, with the record as it stands: the record
+ * keeps everything filed so far, and the browser starts a fresh outing from it (an old page,
+ * which reads any 409 as "reload to pick up from there", does just that).
  */
 import { and, eq } from "drizzle-orm";
 
 import { applyOuting, cityBase, cityRecord, roamStartFrom, sameBase, type CityBase, type CityGains, type CityRecord } from "@wgp/game-core/city";
+import { decodeInputCodes } from "@wgp/game-core/input";
 import { replayRoam, ROAM_RULESET } from "@wgp/game-core/roam";
+import { ROAM_OLD_LOG_RULESETS } from "@wgp/game-core/sim3d/roam";
 import type { Save } from "@wgp/game-core/types";
 
 import { HttpError, conflict } from "@/server/http";
@@ -57,6 +64,10 @@ export async function fileOuting(db: Db, input: { playerId: string; outingId: st
   // Replay outside the lock (a long outing takes a moment), then check nothing moved under it.
   const { save: before } = await ensureSave(db, playerId);
   if (!before.hero) throw conflict("no_hero", "Create a hero first");
+  // Older roam rules: a stale outing (start a fresh one from the record; nothing filed is lost).
+  if (logRuleset(log) !== null && ROAM_OLD_LOG_RULESETS.includes(logRuleset(log)!)) {
+    throw conflict("old_rules", "The city’s rules changed since this outing began. Carry on in a fresh outing from where it stands; everything filed is kept.", { city: cityRecord(before), ruleset: ROAM_RULESET });
+  }
   const base = baseFor(cityRecord(before), outingId, input.base);
   if (!base) throw conflict("stale_city", "The city moved on since this outing began (another tab?). Start again from where it stands.");
   const result = replayRoam({ start: roamStartFrom(base), log });
@@ -79,6 +90,15 @@ export async function fileOuting(db: Db, input: { playerId: string; outingId: st
     if (!written) throw conflict("stale_city", "The save moved on while this outing was being filed. Try again.");
     return { outingId, gains: out.gains, city, save: next, rev: written.rev, ticks: result.ticks, ruleset: ROAM_RULESET };
   });
+}
+
+/** The ruleset field a log carries, or null when it doesn't decode (the replay says why). */
+function logRuleset(log: Uint8Array): number | null {
+  try {
+    return decodeInputCodes(log).ruleset;
+  } catch {
+    return null;
+  }
 }
 
 /** The signed-in player's city record (an empty one before the first outing). */

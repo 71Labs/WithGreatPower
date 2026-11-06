@@ -38,6 +38,10 @@ import { FeeScene, type FeeBlast } from "./fee-strike/fee-strike";
 import { CharacterSystem } from "./characters/characters";
 import type { WebLine } from "./web";
 
+/** A camera shake's size (world units at full strength) and length. */
+const SHAKE_UNITS = 9;
+const SHAKE_SECONDS = 0.35;
+
 /** Every cast member a night can show (their bodies are built up front). */
 export const ALL_CAST: CastId[] = ["gas-goblin", "sandwich-man", "doc-octochain", "sybil", "aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei"];
 
@@ -89,6 +93,8 @@ export class SceneEngine {
   private readonly beat: DirectorInput = { cue: null, mode: "travel", hero: { x: 0, y: 0, z: 0 }, goal: null, ally: null, aspect: 1, reducedMotion: false, input: false };
   /** A key or a press the page passed on (skips the countdown's shot). */
   private skipped = false;
+  private shakeAmp = 0;
+  private shakeLeft = 0;
   private orbitYaw = 0;
   private orbitPitch = 0;
   private orbiting = false;
@@ -128,7 +134,7 @@ export class SceneEngine {
     this.chapter = new ChapterScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.vote = new VoteScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.fee = new FeeScene(cityData, this.solids, this.uniforms, { crowd: this.crowd, burst: (w, at, o) => this.bursts.burst(w, at, o) });
-    this.roam = new RoamScene(cityData, this.uniforms, { burst: (w, at, o) => this.bursts.burst(w, at, o) });
+    this.roam = new RoamScene(cityData, this.uniforms, { burst: (w, at, o) => this.bursts.burst(w, at, o), shake: (a) => this.shake(a) });
     // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
     // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
     for (const child of this.city.root.children) {
@@ -193,6 +199,16 @@ export class SceneEngine {
   burst(word: string, at: Vec3, opts?: BurstOptions): void {
     this.bursts.burst(word, at, opts);
     this.sparks.impact(word, at);
+  }
+
+  /**
+   * A short camera shake (free roam: a car knocks the hero down), `amount` 0–1. None on the
+   * Steady camera or with reduced motion.
+   */
+  shake(amount: number): void {
+    if (this.reducedMotion || (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+    this.shakeAmp = Math.max(this.shakeAmp, SHAKE_UNITS * Math.max(0, Math.min(1, amount)));
+    this.shakeLeft = SHAKE_SECONDS;
   }
 
   /** Somersault the hero (a perfect release). */
@@ -269,17 +285,28 @@ export class SceneEngine {
       const i = this.input;
       i.hero = frame.hero.pos;
       // Free roam on a wall: his speed there is mostly up, so the camera takes his way into the
-      // wall as his heading and comes round behind him, outside it.
+      // wall as his heading and comes round behind him, outside it, close (chase.ts wallDist);
+      // the stick there climbs, so it never holds the camera off coming round.
       const wall = frame.roam?.wall;
-      if (wall && frame.roam!.move !== "wallrun") {
+      const onWall = !!wall && frame.roam!.move !== "wallrun";
+      i.wall = onWall;
+      if (wall && onWall) {
         this.wallVel.x = -wall.nx * 260;
         this.wallVel.y = frame.hero.vel.y;
         this.wallVel.z = -wall.nz * 260;
         i.vel = this.wallVel;
+      } else if (wall) {
+        // A wall run: his heading turned a little into the wall, so the camera follows from
+        // behind and out from it rather than along (or inside) its face.
+        const hs = Math.hypot(frame.hero.vel.x, frame.hero.vel.z);
+        this.wallVel.x = frame.hero.vel.x - wall.nx * hs * 0.45;
+        this.wallVel.y = frame.hero.vel.y;
+        this.wallVel.z = frame.hero.vel.z - wall.nz * hs * 0.45;
+        i.vel = this.wallVel;
       } else i.vel = frame.hero.vel;
       i.anchor = frame.hero.anchor;
       i.facing = frame.hero.facing ?? null;
-      i.steer = heldStick;
+      i.steer = onWall ? null : heldStick;
       const zone = this.cityData.zones[frame.stop];
       const rival = frame.mode === "fight" ? (frame.villains.find((v) => !v.copy) ?? frame.villains[0]) : undefined;
       i.rival = rival && zone ? rival.pos : null;
@@ -312,6 +339,15 @@ export class SceneEngine {
       this.skipped = false;
       pose = this.director.update(pose, b, dt);
       camera.position.set(pose.position.x, pose.position.y, pose.position.z);
+      if (this.shakeLeft > 0) {
+        // A decaying jolt (a car hit): the camera knocked about its place, still aimed at him.
+        this.shakeLeft = Math.max(0, this.shakeLeft - dt);
+        const k = this.shakeAmp * (this.shakeLeft / SHAKE_SECONDS) ** 2;
+        camera.position.x += Math.sin(time * 61) * k;
+        camera.position.y += Math.sin(time * 47 + 1.3) * k * 0.7;
+        camera.position.z += Math.sin(time * 53 + 2.1) * k;
+        if (this.shakeLeft === 0) this.shakeAmp = 0;
+      }
       camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
       if (Math.abs(pose.fov - this.lastFov) > 0.01) {
         camera.fov = pose.fov;

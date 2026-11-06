@@ -23,9 +23,10 @@ export const TASK_DONE = 9;
  * - vault: over (or up onto) something low. wallrun: along a facade at speed.
  * - roll: a hard landing carried through. zip: pulled along the web to a point.
  * - swing: on the web. splash: in the river, about to climb out.
+ * - knocked (roam-2): hit by a car: flung, down, getting up (roam/knock.ts).
  */
 export type RoamMove = RoamMoveName;
-export const ROAM_MOVES: readonly RoamMove[] = ["ground", "air", "climb", "hang", "mantle", "vault", "wallrun", "roll", "zip", "swing", "splash"];
+export const ROAM_MOVES: readonly RoamMove[] = ["ground", "air", "climb", "hang", "mantle", "vault", "wallrun", "roll", "zip", "swing", "splash", "knocked"];
 
 /** The parkour state on top of the hero's (sim3d/parkour/types.ts ParkourBody). */
 export type RoamBody = ParkourBody;
@@ -143,12 +144,77 @@ export interface RoamChat {
   ticks: number;
 }
 
+/**
+ * A street the traffic drives (roam/traffic.ts): one lane each way round a stadium loop, out
+ * along `axis` on the +r side from `lo` to `hi`, a half turn, back on the −r side. Fixed.
+ */
+export interface RoamLoop {
+  /** 0: the lanes run along x (the street's centre line is z = c); 1: along z (x = c). */
+  axis: 0 | 1;
+  c: number;
+  lo: number;
+  hi: number;
+  /** Lane offset from the centre line (and the half turns' radius). */
+  r: number;
+  /** Street (0) or the bridge deck's height. */
+  y: number;
+  /** Its length round: 2 (hi − lo) + 2πr. */
+  len: number;
+  /** The street's grid line (the lights' crossings are found by it), or −1 for the deck. */
+  line: number;
+}
+
+/** A car: which loop, how far round it, how fast; what it cruises at, its paint; ticks it stands after a hit. */
+export interface RoamCar {
+  loop: number;
+  s: number;
+  v: number;
+  cruise: number;
+  kind: number;
+  hold: number;
+  /** The car ahead on its loop (cars never pass on a loop, so it never changes). */
+  lead: number;
+  /** Its box in roam's CityIndex (a mover), and where it is now: centre, heading (unit xz), box half sizes. */
+  box: number;
+  x: number;
+  z: number;
+  hx: number;
+  hz: number;
+  ex: number;
+  ez: number;
+  /** Its box is where it is (near the hero), or parked off the map (far from him): derived from the places, never hashed. */
+  live: boolean;
+}
+
+/** Knocked down (roam/knock.ts): seconds since landing (−1 while still flung), the push's way, and seconds of no second hit. */
+export interface RoamKnock {
+  down: number;
+  dx: number;
+  dz: number;
+  immune: number;
+}
+
+/** The street traffic (roam-2). `loops` is fixed; the cars and the knock change, and are hashed. */
+export interface RoamTraffic {
+  loops: RoamLoop[];
+  cars: RoamCar[];
+  knock: RoamKnock;
+  /**
+   * Per crossing (i·(GRID+1) + j), which ways had a car in it after the last tick (bit 0 along x,
+   * bit 1 along z), and the next tick's scratch: derived from the cars' places, never hashed.
+   */
+  occ: Uint8Array;
+  occNext: Uint8Array;
+}
+
 export interface RoamState {
   body: RoamBody;
   world: RoamWorld;
   progress: RoamProgress;
   bot: RoamBot;
   chat: RoamChat | null;
+  /** roam-2: the cars, and being knocked down by one. */
+  traffic: RoamTraffic;
   /** Roam's own events since the driver last drained them (the hero's web events go to SimState.events as on a night). */
   events: RoamEvent[];
 }
@@ -180,4 +246,6 @@ export type RoamEvent =
   /** The pickpocket bot: out (it ran), caught. */
   | { type: "roam-bot"; state: "out" | "caught"; x: number; y: number; z: number }
   /** Nothing to do with the interact button here (a photo with nothing in frame, a talk with nobody near). */
-  | { type: "roam-nothing" };
+  | { type: "roam-nothing" }
+  /** roam-2: a car hit him (its speed then; where he was): he's knocked down, the car stands. */
+  | { type: "roam-car-hit"; speed: number; car: number; x: number; y: number; z: number };

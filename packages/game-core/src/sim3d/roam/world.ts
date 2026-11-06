@@ -4,8 +4,11 @@
  *
  * - The city: a patrol-style city (generateCity) on a fixed stop list, so the four allies keep
  *   their roofs and Doc's bridge crosses the river. Patrol nights never see it.
- * - Solids (added to roam's own CityIndex, never a patrol's): the rooftop AC units (taller here,
- *   to vault), water tanks to climb and stand on, antenna poles, and a sync mast per district.
+ * - Solids (added to roam's own CityIndex, never a patrol's; roam-2): everything the City draws
+ *   in the hero's way, as drawn (roam/furniture.ts): rooftop AC units (taller here, to vault),
+ *   vents, water towers to climb and stand on, antennas and a sync mast per district,
+ *   billboards, cranes, roof doors, street lamps and signals, the bridge's rails; and the
+ *   street traffic's cars, which move (roam/traffic.ts).
  * - People: the four allies on their roofs, a dozen chatty civilians on the sidewalks and a few
  *   up top, and the jogger whose wallet the pickpocket bot took.
  * - Collectibles: twelve Daily Rug pages, five viewpoints, Mary Jpeg's eight pixels, Gas Goblin's
@@ -22,6 +25,7 @@ import { generateCity } from "../city";
 import { len2 } from "../dmath";
 import { mix } from "../rng";
 import { ROAM_CITY_SEED } from "./constants";
+import { furnitureSolids, MAST_HALF, poleHalf, roamFurniture, type KeepClear, type RoamFurniture } from "./furniture";
 import type { RoamFolk, RoamRoof, RoamSpot, RoamTag, RoamView, RoamWorld } from "./types";
 
 /** The stops the roam city is built on: the allies' roofs and Doc's bridge (nobody fights here). */
@@ -37,11 +41,9 @@ export const ROAM_STOPS: Stop[] = [
 export const ROAM_AC_H = 52;
 /** A viewpoint's mast: this tall above its roof, this wide (its top is the perch). */
 export const MAST_H = 150;
-export const MAST_HALF = 7;
-/** Water tanks are solid columns this far either side of their centre. */
+export { MAST_HALF };
+/** roam-1's water tanks: solid columns this far either side of their centre (the placement grid's). */
 const TANK_HALF = 26;
-/** Antenna poles are solid this far either side. */
-const POLE_HALF = 5;
 
 /** Whether a sphere touches nothing solid (the movement set's, sim3d/parkour/geometry.ts). */
 export { clearAt };
@@ -95,7 +97,7 @@ function dressCity(city: City): City {
   return { ...city, props, anchors, zones };
 }
 
-let cached: { city: City; world: RoamWorld } | null = null;
+let cached: { city: City; world: RoamWorld; furniture: RoamFurniture } | null = null;
 
 /** The roam city (built once and shared: nothing mutates it). */
 export function roamCity(): City {
@@ -107,29 +109,65 @@ export function roamWorld(): RoamWorld {
   return build().world;
 }
 
+/** Whether a city is the roam city (the scene draws its furniture and its traffic from the sim). Never builds it. */
+export const isRoamCity = (city: City): boolean => cached?.city === city;
+
+/** Everything the City draws in the hero's way (roam/furniture.ts), built once with the city. */
+export function roamCityFurniture(): RoamFurniture {
+  return build().furniture;
+}
+
 /**
- * Roam's own spatial index: the city's boxes plus its solids (AC units, tanks, poles, masts).
- * A fresh one per run (the index keeps query scratch), the same boxes every time.
+ * Roam's own spatial index (roam-2): the city's boxes plus its furniture, every box of it as
+ * the City draws it (roam/furniture.ts: rooftop props, lamps, signals, roof doors, the
+ * bridge's rails and parts). The traffic adds its cars as movers. A fresh one per run (the
+ * index keeps query scratch and the cars' places), the same boxes every time.
  */
 export function roamGrid(city: City): CityIndex {
+  const g = new CityIndex(city);
+  const f = cached?.city === city ? cached.furniture : roamFurniture(city);
+  for (const b of furnitureSolids(f)) g.addSolid(b.x0, b.y0, b.z0, b.x1, b.y1, b.z1);
+  return g;
+}
+
+/**
+ * The grid everything in the city was placed with (roam-1's solids: every AC unit, tanks and
+ * poles as columns), kept so the pages, pixels, people and perches a save's progress is
+ * indexed by stay exactly where they were.
+ */
+function placementGrid(city: City): CityIndex {
   const g = new CityIndex(city);
   for (const p of city.props) {
     const { x, y, z } = p.at;
     if (p.kind === "ac") g.addSolid(x - p.w / 2, y, z - p.d / 2, x + p.w / 2, y + p.h, z + p.d / 2);
     else if (p.kind === "water-tower") g.addSolid(x - TANK_HALF, y, z - TANK_HALF, x + TANK_HALF, y + WATER_TOWER_TOP, z + TANK_HALF);
     else if (p.kind === "antenna") {
-      const half = p.w >= MAST_HALF * 2 ? MAST_HALF : POLE_HALF;
+      const half = poleHalf(p);
       g.addSolid(x - half, y, z - half, x + half, y + p.h, z + half);
     }
   }
   return g;
 }
 
-function build(): { city: City; world: RoamWorld } {
+/** The content's spots no lamp, signal or roof door may stand on. */
+function keepClear(world: RoamWorld): KeepClear[] {
+  const out: KeepClear[] = [];
+  const s = world.spawn;
+  out.push({ x: s.x, y: s.y, z: s.z, r: 60 });
+  for (const f of world.folks) out.push({ x: f.x, y: f.y, z: f.z, r: 40 });
+  for (const p of [...world.pages, ...world.pixels]) out.push({ x: p.x, y: p.y, z: p.z, r: 36 });
+  for (const v of world.views) out.push({ x: v.x, y: v.roof, z: v.z, r: 40 });
+  for (const b of world.banks) out.push({ x: b.x0, y: 0, z: b.z0, r: 40 });
+  for (const r of world.botPath) out.push({ x: r.x, y: r.y, z: r.z, r: 50 });
+  for (const t of world.tags) out.push({ x: t.x + t.nx * 260, y: 0, z: t.z + t.nz * 260, r: 40 });
+  return out;
+}
+
+function build(): { city: City; world: RoamWorld; furniture: RoamFurniture } {
   if (cached) return cached;
   const city = dressCity(generateCity(ROAM_CITY_SEED, ROAM_STOPS));
-  const grid = roamGrid(city);
-  cached = { city, world: place(city, grid) };
+  const world = place(city, placementGrid(city));
+  cached = { city, world, furniture: roamFurniture(city, keepClear(world)) };
   return cached;
 }
 

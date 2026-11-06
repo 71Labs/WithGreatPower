@@ -773,10 +773,10 @@ export interface Box {
   x1: number;
   y1: number;
   z1: number;
-  /** The building it belongs to, or −1 for the bridge (−2 for a free-roam prop). */
+  /** The building it belongs to, or −1 for the bridge (−2 for a free-roam prop, −3 for a free-roam car). */
   building: number;
-  /** "prop": a free-roam solid (sim3d/roam/world.ts); patrol cities never have one. */
-  kind: "main" | "top" | "deck" | "leg" | "prop";
+  /** "prop" and "car": free-roam solids (sim3d/roam/world.ts, roam/traffic.ts); patrol cities never have one. */
+  kind: "main" | "top" | "deck" | "leg" | "prop" | "car";
 }
 
 /**
@@ -819,6 +819,8 @@ export class CityIndex {
   private edgeSeen: number[] = [];
   private anchorSeen: number[] = [];
   private stamp = 0;
+  /** Free roam's movers (cars): the cells each is filed in. */
+  private readonly moverRange: (Int32Array | undefined)[] = [];
 
   constructor(readonly city: City) {
     const m = 512;
@@ -932,6 +934,53 @@ export class CityIndex {
    */
   addSolid(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) {
     this.addBox({ x0, y0, z0, x1, y1, z1, building: -2, kind: "prop" });
+  }
+
+  /** Free roam only (sim3d/roam/traffic.ts): a solid that moves, a car. Returns its index in `boxes` for moveSolid. */
+  addMover(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): number {
+    this.addBox({ x0, y0, z0, x1, y1, z1, building: -3, kind: "car" });
+    const id = this.boxes.length - 1;
+    this.moverRange[id] = Int32Array.from(this.cellRange(x0, z0, x1, z1));
+    return id;
+  }
+
+  /**
+   * Move a mover's box (addMover) to a new place: its corners in place, and its cells only when
+   * they change. The order of ids in a cell changes with it, the same way on every replay.
+   */
+  moveSolid(id: number, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) {
+    const b = this.boxes[id];
+    b.x0 = x0;
+    b.y0 = y0;
+    b.z0 = z0;
+    b.x1 = x1;
+    b.y1 = y1;
+    b.z1 = z1;
+    const was = this.moverRange[id];
+    if (!was) return;
+    const top = this.nx - 1;
+    const right = this.nz - 1;
+    let cx0 = Math.floor((x0 - this.ox) / CELL);
+    let cz0 = Math.floor((z0 - this.oz) / CELL);
+    let cx1 = Math.floor((x1 - this.ox) / CELL);
+    let cz1 = Math.floor((z1 - this.oz) / CELL);
+    cx0 = cx0 < 0 ? 0 : cx0 > top ? top : cx0;
+    cx1 = cx1 < 0 ? 0 : cx1 > top ? top : cx1;
+    cz0 = cz0 < 0 ? 0 : cz0 > right ? right : cz0;
+    cz1 = cz1 < 0 ? 0 : cz1 > right ? right : cz1;
+    if (cx0 === was[0] && cz0 === was[1] && cx1 === was[2] && cz1 === was[3]) return;
+    for (let cz = was[1]; cz <= was[3]; cz++) {
+      for (let cx = was[0]; cx <= was[2]; cx++) {
+        const cell = this.boxCells[cz * this.nx + cx];
+        const k = cell.indexOf(id);
+        if (k >= 0) cell.splice(k, 1);
+      }
+    }
+    for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) this.boxCells[cz * this.nx + cx].push(id);
+    was[0] = cx0;
+    was[1] = cz0;
+    was[2] = cx1;
+    was[3] = cz1;
   }
 
   addAnchor(a: PropAnchor) {

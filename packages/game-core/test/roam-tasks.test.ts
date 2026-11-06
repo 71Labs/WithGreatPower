@@ -112,9 +112,17 @@ describe("free roam's side tasks", () => {
     let out = roamOuting(first.run);
     expect(out.stage[ti("graffiti")]).toBe(1);
     world.tags.forEach((t, i) => {
-      // In the street in front of the tag, facing it.
-      const run = startRoamRun(at(t.x + t.nx * 260, 0, t.z + t.nz * 260, -t.nx, -t.nz, { stage: out.stage, items: out.items }));
-      stepRoamRun(run, IDLE);
+      // In the street in front of the tag, facing it (a step aside when something solid, a
+      // crane's mast, stands in the line from the spot straight out).
+      let run = startRoamRun(at(t.x + t.nx * 260, 0, t.z + t.nz * 260, -t.nx, -t.nz, { stage: out.stage, items: out.items }));
+      for (const side of [0, 80, -80, 160, -160]) {
+        const x = t.x + t.nx * 260 - t.nz * side;
+        const z = t.z + t.nz * 260 + t.nx * side;
+        const l = Math.hypot(t.x - x, t.z - z);
+        run = startRoamRun(at(x, 0, z, (t.x - x) / l, (t.z - z) / l, { stage: out.stage, items: out.items }));
+        stepRoamRun(run, IDLE);
+        if (actTarget(run.sim)) break;
+      }
       expect(actTarget(run.sim), `tag ${i}`).toEqual({ kind: "photo", tag: i });
       const ev = stepRoamRun(run, ACT);
       expect(ev.some((e) => e.type === "roam-item" && e.task === "graffiti" && e.item === i)).toBe(true);

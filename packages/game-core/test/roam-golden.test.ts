@@ -1,5 +1,5 @@
 /**
- * Free roam's golden replay and determinism (src/golden-roam.ts): test/golden/roam-standard.bin
+ * Free roam's golden replay and determinism (src/golden-roam.ts, ruleset tag roam-2): test/golden/roam-standard.bin
  * must replay, as an outing, to test/golden/roam-standard.json; the same log replays the same
  * way twice and after other runs; a roam log is refused by the night and chapter verifiers and
  * their logs by the roam verifier. The patrol and chapter goldens (golden.test.ts,
@@ -20,9 +20,11 @@ import { replayRoam, roamLog, startRoamRun, stepRoamRun } from "../src/roam-run"
 import { hashState } from "../src/hash";
 import { RULESET_VERSION } from "../src/score";
 import { chapterLogRuleset } from "../src/sim3d/chapter";
-import { ROAM_LOG_RULESET, ROAM_RULESET } from "../src/sim3d/roam/constants";
+import { HERO_RADIUS } from "../src/sim3d/constants";
+import { ROAM_LOG_RULESET, ROAM_OLD_LOG_RULESETS, ROAM_RULESET } from "../src/sim3d/roam/constants";
+import { furnitureSolids } from "../src/sim3d/roam/furniture";
 import { newRoamBot, roamBotFrame, roamTour } from "../src/sim3d/roam/bot";
-import { roamWorld } from "../src/sim3d/roam/world";
+import { roamCityFurniture, roamWorld } from "../src/sim3d/roam/world";
 import { TASK_DONE } from "../src/sim3d/roam/types";
 
 const dir = fileURLToPath(new URL("./golden/", import.meta.url));
@@ -106,6 +108,33 @@ describe("the free-roam golden replay", () => {
     expect(file.outing.checkpoints.length).toBeGreaterThanOrEqual(4);
   });
 
+  it("roam-2: the tour meets the traffic (a car knocks him down, he gets up) and the City's furniture (lamps, cars, rails he slides along or vaults)", () => {
+    const run = startRoamRun(roamGoldenStart());
+    const goals = roamTour(roamWorld());
+    const mem = newRoamBot(goals);
+    const solids = furnitureSolids(roamCityFurniture());
+    const touched = new Set<number>();
+    let hits = 0;
+    let ups = 0;
+    while (mem.i < goals.length && run.sim.tick < 60 * 60 * 5) {
+      for (const e of stepRoamRun(run, roamBotFrame(run.sim, mem))) {
+        if (e.type === "roam-car-hit") hits++;
+        if (e.type === "roam-move" && e.from === "knocked") ups++;
+      }
+      const h = run.sim.hero;
+      solids.forEach((b, i) => {
+        if (h.x < b.x0 - 30 || h.x > b.x1 + 30 || h.z < b.z0 - 30 || h.z > b.z1 + 30) return;
+        const qx = Math.max(b.x0, Math.min(b.x1, h.x));
+        const qy = Math.max(b.y0, Math.min(b.y1, h.y));
+        const qz = Math.max(b.z0, Math.min(b.z1, h.z));
+        if (Math.hypot(h.x - qx, h.y - qy, h.z - qz) < HERO_RADIUS + 1) touched.add(i);
+      });
+    }
+    expect(hits).toBeGreaterThanOrEqual(1);
+    expect(ups).toBe(hits);
+    expect(touched.size).toBeGreaterThanOrEqual(3);
+  });
+
   it("the bot plays the same tour frame for frame, and the live run hashes as the replay does", () => {
     const one = playTour();
     const two = playTour();
@@ -143,6 +172,8 @@ describe("the free-roam golden replay", () => {
     expect(reason(bin.slice(0, bin.length - 1))).toMatch(/bad log/);
     expect(reason(encodeInputLog({ ...decoded, ruleset: RULESET_VERSION }))).toMatch(/ruleset 4 is not free roam/);
     expect(reason(encodeInputLog({ ...decoded, ruleset: chapterLogRuleset("case-001") }))).toMatch(/is not free roam/);
+    // roam-1's outings (before the City's furniture was solid and its cars hit him) aren't roam-2's.
+    for (const old of ROAM_OLD_LOG_RULESETS) expect(reason(encodeInputLog({ ...decoded, ruleset: old }))).toMatch(/is an older free roam's \(stale\)/);
     expect(reason(encodeInputLog({ ...decoded, fromTick: 3 }))).toMatch(/tick 0/);
     expect(reason(encodeInputCodes([0, 0, 0], [{ tick: 1, kind: "errand-choice", value: 0 }], 0, ROAM_LOG_RULESET))).toMatch(/no events/);
     // A night's golden is refused as an outing.
