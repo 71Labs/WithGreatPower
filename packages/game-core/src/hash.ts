@@ -6,6 +6,7 @@
  */
 import { POWERS } from "./rules/data";
 import type { PowerId } from "./rules/types";
+import { TRIAL_COURSE_IDS as TRIAL_COURSES } from "./sim3d/trial";
 import type { SimState } from "./sim3d/types";
 
 const f64 = new Float64Array(1);
@@ -17,8 +18,10 @@ const HI = LITTLE ? 1 : 0;
 
 const MODES = ["travel", "intro", "fight", "won", "errand", "ko", "done"] as const;
 /** Villain phases by index. Case File 001's are appended, so every patrol night hashes as before. */
-const PHASES = ["enter", "idle", "telegraph", "dash", "sweep", "slam-wind", "slam", "retract", "recover", "aim", "flash", "copy", "drag", "stagger"] as const;
-const CHAPTER_PHASES = ["investigate", "standoff", "rescue", "done"] as const;
+const PHASES = ["enter", "idle", "telegraph", "dash", "sweep", "slam-wind", "slam", "retract", "recover", "aim", "flash", "copy", "drag", "stagger", "vote", "count"] as const;
+/** Case File 002's "lineup" is appended, so Case File 001 hashes as before. */
+const CHAPTER_PHASES = ["investigate", "standoff", "rescue", "done", "lineup"] as const;
+const VOTE_STAGES = ["polls", "recount", "runoff"] as const;
 const HAZARDS = ["bomb", "goo", "trap", "blast"] as const;
 const TRAP_STATES = ["open", "armed", "clap", "closed"] as const;
 const POWER_IDS = Object.keys(POWERS) as PowerId[];
@@ -252,6 +255,48 @@ export function hashState(s: SimState): string {
       f.num(c.copyWind[i]);
       f.num(c.copyCd[i]);
     }
+    // Case File 002, after Case File 001's fields: its nights only (`vote` is null on 001's).
+    const vt = c.vote;
+    if (vt) {
+      f.num(vt.real);
+      f.num(vt.tells.length);
+      for (const t of vt.tells) f.num(t);
+      f.num(vt.booths.length);
+      for (const b of vt.booths) {
+        f.num(b.x);
+        f.num(b.z);
+      }
+      f.num(vt.wrong);
+      f.num(VOTE_STAGES.indexOf(vt.stage));
+      f.num(vt.forks);
+      f.num(vt.forkT);
+      f.num(vt.forkAxis);
+      f.num(vt.forkAt);
+      f.num(vt.forkSide);
+      f.num(vt.forkNeed);
+      f.num(vt.forkFrom);
+      f.num(vt.forkLen);
+      f.num(vt.recountT);
+      f.num(vt.ring.length);
+      for (const k of vt.ring) f.num(k);
+      f.num(vt.ballot);
+      f.num(vt.runner);
+      f.num(vt.boxX);
+      f.num(vt.boxZ);
+      // Which body is real (the patrol hash doesn't carry it).
+      if (s.villain) for (const b of s.villain.bodies) f.bool(b.real);
+    }
+  }
+  // A time trial ("trial-1"), after everything else: patrol and chapter nights (no trial) hash
+  // exactly as before. Its gates are the pickups, already hashed above.
+  const t = s.trial;
+  if (t) {
+    f.num(TRIAL_COURSES.indexOf(t.course));
+    f.num(t.next);
+    f.num(t.splits.length);
+    for (const tick of t.splits) f.num(tick);
+    f.bool(t.finished);
+    f.num(t.endTick);
   }
   return f.hex();
 }

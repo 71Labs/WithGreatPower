@@ -16,7 +16,8 @@ import { useAccount, useGame } from "@/game/store";
 
 import { CASES_FIXTURES, isCasesFixture, type CasesFixtureName } from "./fixtures";
 import { useCaseMarks } from "./local";
-import { CHAPTER_ID, type CaseRecordApi, type CasesResponse } from "./types";
+import { CASE_ORDER } from "./registry";
+import type { CaseRecordApi, CasesResponse, ChapterId } from "./types";
 import { badgeView, bestTicks, caseStatus, type BadgeView, type CaseStatus } from "./view";
 
 /** A fixture asked for in the URL, outside production. Read in the browser. */
@@ -38,7 +39,7 @@ export function useFixtureParam<T extends string>(param: string, ok: (v: string 
 }
 
 export interface CaseFile {
-  id: typeof CHAPTER_ID;
+  id: ChapterId;
   status: CaseStatus;
   /** Best clear, in ticks. */
   best: number | null;
@@ -98,20 +99,16 @@ export function useCaseFiles(): CaseFiles {
   const failed = value === "error";
   const list = typeof value === "object" ? value.cases : [];
 
-  // An empty fixture is Bearson with nothing open; otherwise case 001 is always on file.
+  // An empty fixture is Bearson with nothing open; otherwise every case in CASE_ORDER is on file.
   if (fixture === "empty") return { signedIn, loading: false, failed: false, cases: [], retry, fixture };
 
-  const api: CaseRecordApi | null = list.find((c) => c.id === CHAPTER_ID) ?? null;
-  const saved = save?.cases?.[CHAPTER_ID] ?? null;
-  const local = (fx ? fx.local : marks.cases)?.[CHAPTER_ID] ?? null;
-  const sources = { api, saved, local };
-  const status = caseStatus(sources);
-  return {
-    signedIn,
-    loading,
-    failed,
-    cases: [{ id: CHAPTER_ID, status, best: bestTicks(sources), badge: badgeView({ signedIn, status, badge: api?.badge ?? null, failed }) }],
-    retry,
-    fixture,
-  };
+  const cases = CASE_ORDER.map((id): CaseFile => {
+    const api: CaseRecordApi | null = list.find((c) => c.id === id) ?? null;
+    const saved = save?.cases?.[id] ?? null;
+    const local = (fx ? fx.local : marks.cases)?.[id] ?? null;
+    const sources = { api, saved, local };
+    const status = caseStatus(sources);
+    return { id, status, best: bestTicks(sources), badge: badgeView({ signedIn, status, badge: api?.badge ?? null, failed }) };
+  });
+  return { signedIn, loading, failed, cases, retry, fixture };
 }

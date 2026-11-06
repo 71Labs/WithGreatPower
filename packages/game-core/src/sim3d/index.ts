@@ -34,6 +34,7 @@ export { armShoulder, armTip, villainLines } from "./villains";
 export { inReleaseWindow, pickForecast } from "./swing";
 export { comboMultiplier, nextPickup, placePickups } from "./pickups";
 export { botFrame, newBotMemory, type BotMemory } from "./bot";
+export { TRIAL_BOT_STYLE, trialBotFrame, type TrialBotStyle } from "./trial-bot";
 export { fillRenderFrame, heroAction, newRenderFrame } from "./render";
 export {
   besideCaptive,
@@ -53,4 +54,9 @@ export {
   RESTORE_REACH,
   RESTORE_TICKS,
 } from "./chapter";
+export { COURSE_GEOMETRY, isTrialCourse, nextGate, openAir, roofAt, TRIAL_COURSE_IDS, TRIAL_MAX_SECONDS, TRIAL_MAX_TICKS, trialCity, trialGates, trialLogRuleset } from "./trial";
 export { AIM_SECONDS, DRAG_RANGE, inShotCone, RECOVER_SECONDS, rightClickerAim, rightClickerState, SAVED_FREEZE, SHOT_HALF, SHOT_RANGE } from "./right-clicker";
+// Case File 002, "The Sybil Vote".
+export { BOOTH_ROW, BOOTH_STEP, VOTE_CLUES, VOTE_LEVEL, VOTER_LIFT } from "./chapter";
+export { atBallotBox, BALLOT_REACH, knownTells, RECOUNT_AT, RECOUNT_SECONDS, voteHidden, VOTE_HITS, VOTER_RADIUS } from "./vote";
+export { FORK_CALL, FORK_SAFE, forkSideOf, sybilVoteState } from "./sybil-vote";

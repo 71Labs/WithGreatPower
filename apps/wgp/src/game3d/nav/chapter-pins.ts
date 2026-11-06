@@ -20,7 +20,16 @@ export function bridgePoint(city: City): Vec3 | null {
   return d ? { x: (d.x0 + d.x1) / 2, y: d.y, z: (d.z0 + d.z1) / 2 } : null;
 }
 
-/** Where to head next: the nearest clue still out there, then the bridge, then Mary; null once she's freed. */
+/**
+ * Where the case's showdown is: the bridge deck (Case file 001), or the polling station on its
+ * arena's stage (Case file 002); null in a city without one.
+ */
+export function chapterSite(chapter: Pick<ChapterFrame, "id">, city: City): Vec3 | null {
+  if (chapter.id === "case-002") return city.zones[0]?.center ?? null;
+  return bridgePoint(city);
+}
+
+/** Where to head next: the nearest clue still out there, then the bridge, then Mary; null once she's freed. Case file 002: the drop boxes, the station, then the ballot (the runner's, or the box). */
 export function chapterNext(chapter: ChapterFrame, city: City, hero: Vec3): Vec3 | null {
   if (chapter.phase === "investigate") {
     let best: Vec3 | null = null;
@@ -35,12 +44,14 @@ export function chapterNext(chapter: ChapterFrame, city: City, hero: Vec3): Vec3
     }
     return best;
   }
-  if (chapter.phase === "standoff") return bridgePoint(city);
+  if (chapter.phase === "standoff" || chapter.phase === "lineup") return chapterSite(chapter, city);
+  if (chapter.phase === "rescue" && chapter.vote) return chapter.vote.ballot?.state === "carried" ? chapter.vote.box : (chapter.vote.ballot?.pos ?? null);
   if (chapter.phase === "rescue") return chapter.captive && !chapter.captive.freed ? chapter.captive.pos : null;
   return null;
 }
 
-export type ChapterTarget = "clue" | "bridge" | "mary";
+/** "stop": the station (the pin shows the stop's face, the Sybil's); "gen": Uncle Gen's ballot box. */
+export type ChapterTarget = "clue" | "bridge" | "mary" | "stop" | "gen";
 
 /**
  * Where the waypoint points on a case night, or null when there's nothing to point at:
@@ -51,6 +62,11 @@ export function chapterWaypoint(chapter: ChapterFrame, city: City, hero: Vec3): 
   if (!point) return null;
   const far = (d: number) => Math.hypot(point.x - hero.x, point.z - hero.z) > d;
   if (chapter.phase === "investigate") return { point, target: "clue" };
+  if (chapter.vote) {
+    if (chapter.phase === "lineup" || chapter.phase === "standoff") return far(500) ? { point, target: "stop" } : null;
+    if (chapter.phase === "rescue") return chapter.vote.ballot?.state === "carried" && far(160) ? { point, target: "gen" } : null;
+    return null;
+  }
   if (chapter.phase === "standoff") return far(500) ? { point, target: "bridge" } : null;
   if (chapter.phase === "rescue") return far(260) ? { point, target: "mary" } : null;
   return null;
@@ -137,7 +153,7 @@ export function drawChapterPins(ctx: CanvasRenderingContext2D, frame: RenderFram
     }
   }
   ctx.globalAlpha = 1;
-  const bridge = bridgePoint(city);
+  const bridge = chapterSite(chapter, city);
   if (bridge) {
     const m = toMap(view, bridge.x, bridge.z);
     if (inside(m, 12)) bridgePin(ctx, m.x, m.y, 10);

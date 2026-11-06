@@ -159,7 +159,7 @@ export function DailyRugScreen() {
           dateline={caseLead ? `${latest ? `Night ${latest.night}` : `Night ${save.night}`} · Extra edition` : latest ? `Night ${latest.night} · Late edition` : `Night ${save.night}`}
           issue={latest ? `No. ${latest.night}` : caseLead ? "Extra" : "No edition yet"}
         />
-        {caseLead ? <CaseRugLead hero={caseLead.hero || save.hero.name.trim()} /> : null}
+        {caseLead ? <CaseRugLead id={caseLead.id} hero={caseLead.hero || save.hero.name.trim()} /> : null}
         {latest ? <FrontPage save={save} edition={latest} second={!!caseLead} /> : caseLead ? null : <EmptyFrontPage />}
         <MarketMovers />
       </article>

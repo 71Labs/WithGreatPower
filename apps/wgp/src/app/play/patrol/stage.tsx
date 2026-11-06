@@ -6,7 +6,7 @@
  * night's loop once per frame, before the scene reads the frame it writes.
  */
 import { useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, type ReactNode, type RefObject } from "react";
 
 import type { CastId } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
@@ -55,9 +55,11 @@ export interface StageProps {
   paused?: boolean;
   /** Overlays placed from the camera (the waypoint, the minimap), run every frame after the camera moves. */
   tap?: FrameTap;
+  /** More of the scene, inside the canvas (a race's ghosts, game3d/compete). */
+  children?: ReactNode;
 }
 
-export default function Stage({ loop, city, handle, quality, heroColors, cast, reducedMotion, onStats, onTierSuggest, onContextStalled, tap, paused = false }: StageProps) {
+export default function Stage({ loop, city, handle, quality, heroColors, cast, reducedMotion, onStats, onTierSuggest, onContextStalled, tap, paused = false, children }: StageProps) {
   // The scene reads the loop's view through a ref; the view object never changes.
   const frame = useMemo<RefObject<RenderFrame3D | null>>(() => ({ current: loop.view }), [loop]);
   // The camera's beats read the loop's status and countdown the same way (the loop keeps it current).
@@ -81,6 +83,7 @@ export default function Stage({ loop, city, handle, quality, heroColors, cast, r
     >
       <LoopDriver loop={loop} />
       <PauseGate paused={paused} />
+      {children}
     </SceneCanvas>
   );
 }

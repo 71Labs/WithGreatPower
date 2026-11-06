@@ -2,22 +2,23 @@
 
 /**
  * /play/cases, "Case files": Bearson's open cases as paper folders on the night city.
- * Case 001 is a big folder (the MISSING poster clipped in, its status, the best time once
- * closed and the "Case closed" badge's state); 002 and 003 are locked folders still in
- * his drafts. Loading keeps the folder and checks the status and badge in place; an error
+ * Each open case is a big folder (its poster clipped in: 001's MISSING poster, 002's ballot,
+ * its status, the best time once closed and the "Case closed" badge's state); 003 is a
+ * locked folder still in his drafts. Loading keeps the folder and checks the status and badge in place; an error
  * says so above it and leaves what this browser knows on screen.
  */
 import { useEffect, type ReactNode } from "react";
 
 import { ArrowRight, CircleAlert, FileText, FolderSearch, Lock, RotateCcw } from "@/components/icons";
 import { StickerButton, StickerChip, StickerLink, ON_PAPER } from "@/components/game/kit";
-import { CASE_001, CASE_PATHS, LOCKED_CASES, RIGHT_CLICKER } from "@/lib/cases/content";
+import { LOCKED_CASES } from "@/lib/cases/content";
 import { useCaseFiles, type CaseFile } from "@/lib/cases/data";
 import { markCaseSeen, markCaseStarted } from "@/lib/cases/local";
-import { CHAPTER_ID } from "@/lib/cases/types";
+import { CASE_ENTRIES, CASE_ORDER } from "@/lib/cases/registry";
 import { formatTicks, spokenTicks } from "@/lib/cases/view";
 
 import { MissingPoster } from "./art";
+import { BallotPoster } from "./case-002/art";
 import { BadgeBlock, CaseTime, StatusPill } from "./shared";
 
 /** The folder's tab, sitting on its top edge: the case number on the folder's darker card. */
@@ -33,21 +34,28 @@ function FolderTab({ children, locked = false }: { children: ReactNode; locked?:
   );
 }
 
+/** A case's poster, clipped into its folder. */
+function CasePoster({ id, sizes }: { id: CaseFile["id"]; sizes: string }) {
+  if (id === "case-002") return <BallotPoster />;
+  return <MissingPoster sizes={sizes} />;
+}
+
 function CaseActions({ file }: { file: CaseFile }) {
+  const paths = CASE_ENTRIES[file.id].paths;
   if (file.status === "new")
     return (
-      <StickerLink href={CASE_PATHS.intro} variant="hero" size="lg" className="w-full sm:w-auto">
+      <StickerLink href={paths.intro} variant="hero" size="lg" className="w-full sm:w-auto">
         Open the case
         <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
       </StickerLink>
     );
   return (
     <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
-      <StickerLink href={CASE_PATHS.play} onClick={() => markCaseStarted(file.id)} variant="hero" size="lg" className="w-full sm:w-auto">
+      <StickerLink href={paths.play} onClick={() => markCaseStarted(file.id)} variant="hero" size="lg" className="w-full sm:w-auto">
         {file.status === "closed" ? "Replay the case" : "Resume the case"}
         <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
       </StickerLink>
-      <StickerLink href={CASE_PATHS.intro} size="lg" className="w-full sm:w-auto">
+      <StickerLink href={paths.intro} size="lg" className="w-full sm:w-auto">
         <FileText aria-hidden className="size-5" strokeWidth={2.25} />
         Read the case file
       </StickerLink>
@@ -56,10 +64,11 @@ function CaseActions({ file }: { file: CaseFile }) {
 }
 
 function CaseFolder({ file, checking }: { file: CaseFile; checking: boolean }) {
+  const entry = CASE_ENTRIES[file.id];
   return (
-    <article aria-labelledby="case-001-title" className="flex flex-col">
+    <article aria-labelledby={`${file.id}-title`} className="flex flex-col">
       <FolderTab>
-        <span className="num">Case 001</span>
+        <span className="num">Case {entry.number}</span>
       </FolderTab>
       <div className={`rounded-[22px] rounded-tl-none border-[2.5px] border-game-ink bg-game-folder p-2.5 shadow-[var(--game-shadow)] sm:p-3 ${ON_PAPER}`}>
         {/* The case sheet, paper inside the folder: 22 − 10 padding → 12px corners. One title, placed by grid areas: beside the poster on a phone, over the story beside it wider. */}
@@ -68,28 +77,28 @@ function CaseFolder({ file, checking }: { file: CaseFile; checking: boolean }) {
           <div className="relative -rotate-2 self-start [grid-area:poster]">
             <span aria-hidden className="absolute -top-2 left-1/2 z-[1] h-5 w-12 -translate-x-1/2 rotate-3 rounded-[3px] border-2 border-game-ink/30 bg-game-gold/70" />
             <div className="overflow-hidden rounded-[6px] border-2 border-game-ink shadow-[var(--game-shadow-sm)]">
-              <MissingPoster sizes="(min-width: 1024px) 260px, (min-width: 640px) 220px, 118px" />
+              <CasePoster id={file.id} sizes="(min-width: 1024px) 260px, (min-width: 640px) 220px, 118px" />
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-2 self-center [grid-area:head] sm:self-start">
             <Status file={file} checking={checking} />
-            <h2 id="case-001-title" className="font-display text-[22px] font-bold leading-6 tracking-[-0.02em] text-balance sm:text-[34px] sm:leading-9 sm:tracking-[-0.03em]">
-              {CASE_001.title}
+            <h2 id={`${file.id}-title`} className="font-display text-[22px] font-bold leading-6 tracking-[-0.02em] text-balance sm:text-[34px] sm:leading-9 sm:tracking-[-0.03em]">
+              {entry.title}
             </h2>
             <p className="text-[13px] leading-[18px] text-game-muted sm:hidden">
-              {CASE_001.district} · {RIGHT_CLICKER.name}
+              {entry.district} · {entry.suspect.name}
             </p>
           </div>
 
           <div className="flex min-w-0 flex-col gap-4 [grid-area:body]">
-            <p className="max-w-[60ch] text-[15px] leading-[22px] text-pretty">{CASE_001.summary}</p>
+            <p className="max-w-[60ch] text-[15px] leading-[22px] text-pretty">{entry.summary}</p>
 
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 border-y-2 border-dashed border-game-ink/25 py-3 text-[13px] leading-[18px]">
               <dt className="font-bold uppercase tracking-[0.06em] text-game-muted">Where</dt>
-              <dd>{CASE_001.district}</dd>
+              <dd>{entry.district}</dd>
               <dt className="font-bold uppercase tracking-[0.06em] text-game-muted">Suspect</dt>
               <dd>
-                {RIGHT_CLICKER.name}. <span className="text-game-muted">“{RIGHT_CLICKER.tagline}”</span>
+                {entry.suspect.name}. <span className="text-game-muted">“{entry.suspect.tagline}”</span>
               </dd>
               <dt className="font-bold uppercase tracking-[0.06em] text-game-muted">Counts for</dt>
               <dd>Off the boards: a case is its own night.</dd>
@@ -172,9 +181,8 @@ function EmptyCases() {
 
 export function CaseFiles() {
   const files = useCaseFiles();
-  const file = files.cases[0] ?? null;
-  // Opening the files is enough for the dock to stop calling the case new.
-  useEffect(() => markCaseSeen(CHAPTER_ID), []);
+  // Opening the files is enough for the dock to stop calling the cases new.
+  useEffect(() => CASE_ORDER.forEach((id) => markCaseSeen(id)), []);
   return (
     <div className="wgp-rise mx-auto flex w-full max-w-[520px] flex-col gap-6 px-4 pb-4 sm:max-w-[760px] lg:max-w-[980px] lg:px-8">
       <header className="flex flex-col items-center gap-2 text-center">
@@ -189,14 +197,14 @@ export function CaseFiles() {
       </header>
 
       {files.failed ? <ErrorNotice onRetry={files.retry} /> : null}
-      {file ? <CaseFolder file={file} checking={files.loading && files.signedIn} /> : <EmptyCases />}
+      {files.cases.length ? files.cases.map((file) => <CaseFolder key={file.id} file={file} checking={files.loading && files.signedIn} />) : <EmptyCases />}
 
       <section aria-labelledby="locked-title" className="flex flex-col gap-3">
         <h2 id="locked-title" className="flex items-center gap-2 text-[12px] font-bold uppercase leading-4 tracking-[0.1em] text-game-paper/80">
           <span aria-hidden className="h-[3px] w-4 rounded-full bg-game-hero" />
           Still in Bearson’s drafts
         </h2>
-        <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3">
           {LOCKED_CASES.map((c) => (
             <LockedFolder key={c.number} number={c.number} line={c.line} />
           ))}

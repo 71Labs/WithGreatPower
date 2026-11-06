@@ -1,0 +1,29 @@
+{
+  "ruleset": "trial-1",
+  "logRuleset": 127992324,
+  "patrolRuleset": 4,
+  "course": "bridge-run",
+  "style": {
+    "run": 420,
+    "release": 500,
+    "glide": 600,
+    "climb": 380,
+    "gain": 2
+  },
+  "case": {
+    "ok": true,
+    "hash": "1f9742e9",
+    "checkpoints": [
+      "e76ac9a7",
+      "dd62f83e",
+      "73323051",
+      "e823451a",
+      "36fe3501",
+      "1f9742e9"
+    ],
+    "score": 0,
+    "ticks": 403,
+    "bytes": 229,
+    "finished": 1
+  }
+}
