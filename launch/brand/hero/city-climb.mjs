@@ -31,7 +31,7 @@ const base = opt("base", "http://127.0.0.1:3930");
 const out = opt("out", "launch/brand/hero/game-shots/city-climb/after");
 const tier = opt("tier", "high");
 const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
-const port = Number(opt("port", "9771"));
+const port = Number(opt("port", "9931"));
 const profile = opt("profile", `/private/tmp/claude-501/wgp-city-climb-${port}`);
 mkdirSync(out, { recursive: true });
 
@@ -571,67 +571,72 @@ await perf("start");
 // way, a climb down, and on up to the mantle.
 const face = { x: 2988, z: 4059 };
 const wallIn = { x: -1, z: 0 };
-let p = await goTo(face.x + 120, face.z, { street: true, r: 30, low: true, timeout: 70 });
-await lookToward(wallIn);
-console.log("at the street", p.x, p.z, p.move);
-await castStart("climb");
-p = await run("1-runup", 1800, { keys: ["KeyW"], every: 2, done: (q) => q.move === "climb" && q.y - 26 > 110 });
-p = await run("2-climb", 1500, { keys: ["KeyW"], every: 1, done: (q) => q.move === "climb" && q.y - 26 > 90 });
-await castStop();
-await perf("climb");
-p = await run("3-rest", 1400, { every: 2 });
-// From the side (mouse look round 75°): resting, then climbing on (the keys toward the wall as
-// the turned camera sees it), before the camera eases back behind him.
-await evaluate(`window.__wgpCity.handle().orbit(1.3, -0.05, false)`);
-await castStart("sideview");
-p = await run("3b-sideview", 700, { every: 1 });
-p = await run("3b-sideview", 600, { toward: { x: p.x + wallIn.x * 400, z: p.z + wallIn.z * 400 }, every: 1 });
-await castStop();
-await castStart("side");
-p = await run("4-side", 1100, { keys: ["KeyD"], every: 1 });
-p = await run("4-side", 1100, { keys: ["KeyA"], every: 1 });
-await castStop();
-// Down: the stick straight back (S). Roam-2 climbs down; roam-1 let go.
-await castStart("down");
-p = await run("5-down", 1100, { keys: ["KeyS"], every: 1 });
-await castStop();
-if (p.move !== "climb") {
-  // Let go (roam-1): back to the wall and up it again.
+// --only wallrun: just the wall run (it's short, and the route to it after a hang varies).
+const only = opt("only", "");
+let p = await peek();
+if (only !== "wallrun") {
   p = await goTo(face.x + 120, face.z, { street: true, r: 30, low: true, timeout: 70 });
   await lookToward(wallIn);
-}
-p = await run("6-climb-top", 7000, { keys: ["KeyW"], every: 3, done: (q) => q.move !== "climb" || q.y - 26 > 215 });
-// The top of the lower tier (300): the last of the climb and the mantle onto it, then stop.
-await castStart("mantle");
-p = await run("7-mantle", 2500, { keys: ["KeyW"], every: 1, slow: 0.25, done: (q) => q.move === "ground" && q.y - 26 > 280 });
-await castStop();
-p = await run("x", 600, { every: 9 });
-report.beats.climb = { feet: Math.round(p.y - 26), move: p.move };
-console.log("on the roof", p.y - 26, p.move);
-
-// 2. A hang: back to the edge he came over, over it on the drop button (X) to hang by the hands,
-// a moment hanging, a shimmy along the ledge, and up over it again (W).
-{
-  // (The mantle sets him down 44 in from the edge: within reach of it for a drop.) The stick
-  // back toward the edge, and the drop button, until he hangs over it.
-  await castStart("hang");
-  for (let i = 0; i < 8; i++) {
-    await key("KeyS", true);
-    await sleep(40);
-    await tap("KeyX");
-    await key("KeyS", false);
-    await sleep(120);
-    p = await peek();
-    if (p.move !== "ground") break;
-  }
-  console.log("drop", p.move, p.x, p.y - 26);
-  p = await run("9-hang", 1800, { every: 1 });
-  p = await run("9-hang", 1000, { keys: ["KeyD"], every: 1 });
-  p = await run("10-mantle", 1600, { keys: ["KeyW"], every: 1, slow: 0.25, done: (q) => q.move === "ground" && q.wall === null && q.vy === 0 && Math.hypot(q.vx, q.vz) < 5 });
+  console.log("at the street", p.x, p.z, p.move);
+  await castStart("climb");
+  p = await run("1-runup", 1800, { keys: ["KeyW"], every: 2, done: (q) => q.move === "climb" && q.y - 26 > 110 });
+  p = await run("2-climb", 1500, { keys: ["KeyW"], every: 1, done: (q) => q.move === "climb" && q.y - 26 > 90 });
   await castStop();
-  report.beats.hang = { feet: Math.round(p.y - 26), move: p.move, moves: stats["9-hang"]?.moves };
-}
+  await perf("climb");
+  p = await run("3-rest", 1400, { every: 2 });
+  // From the side (mouse look round 75°): resting, then climbing on (the keys toward the wall as
+  // the turned camera sees it), before the camera eases back behind him.
+  await evaluate(`window.__wgpCity.handle().orbit(1.3, -0.05, false)`);
+  await castStart("sideview");
+  p = await run("3b-sideview", 700, { every: 1 });
+  p = await run("3b-sideview", 600, { toward: { x: p.x + wallIn.x * 400, z: p.z + wallIn.z * 400 }, every: 1 });
+  await castStop();
+  await castStart("side");
+  p = await run("4-side", 1100, { keys: ["KeyD"], every: 1 });
+  p = await run("4-side", 1100, { keys: ["KeyA"], every: 1 });
+  await castStop();
+  // Down: the stick straight back (S). Roam-2 climbs down; roam-1 let go.
+  await castStart("down");
+  p = await run("5-down", 1100, { keys: ["KeyS"], every: 1 });
+  await castStop();
+  if (p.move !== "climb") {
+    // Let go (roam-1): back to the wall and up it again.
+    p = await goTo(face.x + 120, face.z, { street: true, r: 30, low: true, timeout: 70 });
+    await lookToward(wallIn);
+  }
+  p = await run("6-climb-top", 7000, { keys: ["KeyW"], every: 3, done: (q) => q.move !== "climb" || q.y - 26 > 215 });
+  // The top of the lower tier (300): the last of the climb and the mantle onto it, then stop.
+  await castStart("mantle");
+  p = await run("7-mantle", 2500, { keys: ["KeyW"], every: 1, slow: 0.25, done: (q) => q.move === "ground" && q.y - 26 > 280 });
+  await castStop();
+  p = await run("x", 600, { every: 9 });
+  report.beats.climb = { feet: Math.round(p.y - 26), move: p.move };
+  console.log("on the roof", p.y - 26, p.move);
 
+  // 2. A hang: back to the edge he came over, over it on the drop button (X) to hang by the hands,
+  // a moment hanging, a shimmy along the ledge, and up over it again (W).
+  {
+    // (The mantle sets him down 44 in from the edge: within reach of it for a drop.) The stick
+    // back toward the edge, and the drop button, until he hangs over it.
+    await castStart("hang");
+    for (let i = 0; i < 8; i++) {
+      await key("KeyS", true);
+      await sleep(40);
+      await tap("KeyX");
+      await key("KeyS", false);
+      await sleep(120);
+      p = await peek();
+      if (p.move !== "ground") break;
+    }
+    console.log("drop", p.move, p.x, p.y - 26);
+    p = await run("9-hang", 1800, { every: 1 });
+    p = await run("9-hang", 1000, { keys: ["KeyD"], every: 1 });
+    p = await run("10-mantle", 1600, { keys: ["KeyW"], every: 1, slow: 0.25, done: (q) => q.move === "ground" && q.wall === null && q.vy === 0 && Math.hypot(q.vx, q.vz) < 5 });
+    await castStop();
+    report.beats.hang = { feet: Math.round(p.y - 26), move: p.move, moves: stats["9-hang"]?.moves };
+  }
+
+}
 // 3. A wall run: down to the street, then a sprint on the diagonal into the spawn building's west
 // face (x 3130, z 3200–3640), running along it north (B's route).
 p = await goTo(3000, 3760, { street: true, r: 40, low: true, timeout: 70 });
@@ -639,6 +644,10 @@ p = await goTo(3000, 3760, { street: true, r: 40, low: true, timeout: 70 });
 await lookToward({ x: 0, z: -1 });
 await run("x", 1500, { keys: ["KeyW", "ShiftLeft"], done: (q) => Math.hypot(q.vx, q.vz) > 520 });
 await castStart("wallrun");
+// The diagonal and a jump at once (as the movement tests' sprint-jump): onto the wall in the air, along it.
+await setHeld(new Set(["KeyW", "KeyD", "ShiftLeft"]));
+await sleep(60);
+await tap("Space");
 p = await run("11-wallrun", 2600, { keys: ["KeyW", "KeyD", "ShiftLeft"], every: 1, slow: 0.35, done: (q) => q.move !== "ground" && q.move !== "wallrun" && (stats["11-wallrun"]?.moves?.wallrun ?? 0) > 3 });
 p = await run("11-wallrun", 600, { every: 1, slow: 0.35 });
 await castStop();
