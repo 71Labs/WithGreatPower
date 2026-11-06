@@ -120,7 +120,7 @@ const PEEK = `(() => {
   const h = c.handle();
   const legs = h && h.heroLegs ? h.heroLegs() : null;
   const f = c.loop.view.roam;
-  return { ...p, legs, zip: f && f.zip, actKind: f && f.act && f.act.kind, chatLine: f && f.chat ? f.chat.line : null };
+  return { ...p, legs, zip: f && f.zip, wall: f && f.wall, actKind: f && f.act && f.act.kind, chatLine: f && f.chat ? f.chat.line : null };
 })()`;
 async function peek() {
   const p = await evaluate(PEEK);
@@ -233,15 +233,25 @@ async function goTo(x, z, { street = false, r = 40, sprint = true, timeout = 60,
   let lastX = p.x;
   let lastZ = p.z;
   let n = 0;
+  /** Off a wall the route ran into: a step out from it, then on. */
+  let detour = null;
   while (Date.now() < end) {
     p = await peek();
     while (route.length > 1 && Math.hypot(route[0].x - p.x, route[0].z - p.z) < 50) route.shift();
     const left = Math.hypot(x - p.x, z - p.z);
     const feet = p.y - 26;
     if (left < r && route.length <= 1 && (!low || feet < 30) && (p.move === "ground" || p.move === "roll")) break;
-    const keys = steerKeys(p, route[0].x - p.x, route[0].z - p.z);
+    if (low && (p.move === "climb" || p.move === "hang") && p.wall) {
+      // Wanting the street: let go, and step out from the wall before heading on.
+      detour = { x: p.x + p.wall.nx * 260, z: p.z + p.wall.nz * 260, until: Date.now() + 900 };
+      await setHeld(new Set(["KeyX"]));
+      await sleep(60);
+      continue;
+    }
+    if (detour && Date.now() > detour.until) detour = null;
+    const aim = detour ?? route[0];
+    const keys = steerKeys(p, aim.x - p.x, aim.z - p.z);
     if (sprint && left > 260) keys.add("ShiftLeft");
-    if ((p.move === "climb" || p.move === "hang") && low && feet > 40) keys.add("KeyX");
     const moved = Math.hypot(p.x - lastX, p.z - lastZ);
     lastX = p.x;
     lastZ = p.z;
@@ -384,7 +394,8 @@ await perf("swing");
 
 // 7. A word with a civilian: whoever's nearest in the street.
 p = await peek();
-const civ = world.folks.filter((f) => f.y === 0 && !["dev"].includes(f.key) && !f.key.match(/^(aunt|uncle|mary|bearson)$/)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+// (The one nearest Dev, whose task is next.)
+const civ = world.folks.filter((f) => f.y === 0 && !["dev"].includes(f.key) && !f.key.match(/^(aunt|uncle|mary|bearson)$/)).sort((a, b) => Math.hypot(a.x - dev.x, a.z - dev.z) - Math.hypot(b.x - dev.x, b.z - dev.z))[0];
 p = await talkTo(civ, "7-civilian");
 beat("talked to a civilian", { key: civ.key, chat: p.chat });
 
