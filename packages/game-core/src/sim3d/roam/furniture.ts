@@ -18,8 +18,8 @@
  *   counterweight, cab, apex, hook and its cable).
  * - Street furniture: lamp posts, traffic signals (taller than a patrol night's, their heads
  *   hung clear of the hero and the cars), roof doors (stair bulkheads), and on Doc's bridge
- *   the rails along both edges, its lamps, the towers' beams and caps, the cables' hangers and
- *   the deck's truss.
+ *   the rails along both edges (its lamps stand in them), the towers' beams and caps, the
+ *   cables' hangers and the deck's truss.
  *
  * Not here (decoration under 6 units that a body passes no differently from paint): the
  * cornice trim. The City doesn't draw a patrol night's 6-unit parapets or fire escapes,
@@ -98,10 +98,12 @@ export const VENT = { stem: 6, stemH: 22, cap: 10, capH: 9 } as const;
 export const ROAM_LAMP = { post: 2, h: 66, head: 8, headH: 8, lean: 7, headAt: 60 } as const;
 /** Traffic signals in the City: the post on the corner, the arm out over the street, the head hung from it clear of the hero and a car. */
 export const ROAM_SIGNAL = { post: 2.5, h: 140, arm: 1.5, head: 5.5, headH: 30, headUp: 100 } as const;
-/** Roof doors: the bulkhead and its cap. */
-export const ROOF_DOOR = { w: 44, d: 36, h: 40, capW: 52, capD: 44, capH: 5 } as const;
-/** Doc's bridge's rails: this tall, this thick, along both deck edges. */
-export const BRIDGE_RAIL = { h: 54, t: 6, cap: 10, capH: 5 } as const;
+/** Roof doors: the bulkhead (taller than STEP_UP: vaulted, not stepped onto) and its cap. */
+export const ROOF_DOOR = { w: 44, d: 36, h: 44, capW: 52, capD: 44, capH: 5 } as const;
+/** Doc's bridge's rails: this tall, this thick (a flush wall, its cap a band of it), along both deck edges. */
+export const BRIDGE_RAIL = { h: 54, t: 10, capH: 5 } as const;
+/** The rails come in lengths about this long. */
+const RAIL_PIECE = 60;
 
 /** Street lamps: spacing along a street, distance from the curb onto the walk (the ground shader paints their pools from the same numbers). */
 const LAMP_SPACING = 260;
@@ -510,13 +512,18 @@ export function roamFurniture(city: City, keep: KeepClear[] = []): RoamFurniture
     /** A box from u/v ranges. */
     const uv = (ua: number, ub: number, y0: number, y1: number, va: number, vb: number) => (alongX ? box(ua, y0, va, ub, y1, vb) : box(va, y0, ua, vb, y1, ub));
     const R = BRIDGE_RAIL;
+    // In lengths (a ledge pulled up onto is stood on near where it's grabbed, not at the middle of the bridge).
+    const pieces = Math.max(1, Math.round((u1 - u0) / RAIL_PIECE));
     for (const [va, vb] of [
       [v0, v0 + R.t],
       [v1 - R.t, v1],
     ]) {
-      const mid = (va + vb) / 2;
-      add(uv(u0, u1, dk.y, dk.y + R.h - R.capH, va, vb), "rail");
-      add(uv(u0, u1, dk.y + R.h - R.capH, dk.y + R.h, mid - R.cap / 2, mid + R.cap / 2), "rail-cap");
+      for (let k = 0; k < pieces; k++) {
+        const ua = u0 + ((u1 - u0) * k) / pieces;
+        const ub = u0 + ((u1 - u0) * (k + 1)) / pieces;
+        add(uv(ua, ub, dk.y, dk.y + R.h - R.capH, va, vb), "rail");
+        add(uv(ua, ub, dk.y + R.h - R.capH, dk.y + R.h, va, vb), "rail-cap");
+      }
     }
     add(uv(u0, u1, dk.y - 44, dk.y - 24, v0, v1), "bridge", false);
     const half = br.towerHalf ?? 25;
@@ -540,12 +547,7 @@ export function roamFurniture(city: City, keep: KeepClear[] = []): RoamFurniture
       const capV = (vb - va + half * 2 + 16) / 2;
       add(uv(u - half - 5, u + half + 5, top, top + 24, mid - capV, mid + capV), "bridge", false);
     }
-    for (let u = u0 + 60; u < u1 - 30; u += 160) {
-      for (const v of [v0 + 4, v1 - 4]) {
-        add(uv(u - 1.5, u + 1.5, dk.y, dk.y + 42, v - 1.5, v + 1.5), "bridge", false);
-        add(uv(u - 5, u + 5, dk.y + 42, dk.y + 52, v - 5, v + 5), "bridge", false);
-      }
-    }
+    // (Its lamps stand in the rails, 4 in from each edge: the rails are their solid.)
     // The hangers from the main cables down to the deck's level (thin, but solid like a lamp post).
     for (const c of city.cables ?? []) {
       if (c.kind !== "bridge") continue;
