@@ -9,9 +9,10 @@
  * bounding sphere and three.js can frustum-cull it.
  */
 import type { Building, Cable, City, Prop, Vec3 } from "@wgp/game-core/sim3d/contract";
+import { ANTENNA_LIGHT, poleHalf, type FurniturePart, type RoamFurniture } from "@wgp/game-core/sim3d/roam";
 
 import { C, buildingFill, mixRgb, type RGB } from "../palette";
-import { addDetails } from "./details";
+import { addDetails, DETAIL_LOD } from "./details";
 import { TANK_EAVE } from "./geometry";
 import { drawnProps } from "./props";
 import { KIND, WINDOW_STYLE, windowStyle, type BoxSpec, type PushBox } from "./kinds";
@@ -75,7 +76,13 @@ function turn(facing: number, lx: number, lz: number): { x: number; z: number } 
   }
 }
 
-export function buildCityLayout(city: City, opts: { details?: boolean } = {}): CityLayout {
+/**
+ * `roam`: the City's furniture (game-core sim3d/roam/furniture.ts): its props are drawn from
+ * that list (the sim's solids are the same boxes), water tanks flat-lidded, antennas as wide as
+ * the sim's poles, and its lamps, signals, roof doors and bridge rails box by box, where a patrol
+ * city draws its own decoration (details.ts: here only the cornices).
+ */
+export function buildCityLayout(city: City, opts: { details?: boolean; roam?: RoamFurniture | null } = {}): CityLayout {
   const boxes: BoxSpec[] = [];
   const tanks: TankSpec[] = [];
   const texts: string[] = [];
@@ -139,22 +146,24 @@ export function buildCityLayout(city: City, opts: { details?: boolean } = {}): C
   // Where allies stand: a water tower with one on top gets a flat roof (TankSpec.flat).
   const allies = city.zones.flatMap((z) => (z.allyAt ? [z.allyAt] : []));
   const carries = (p: Prop) => p.kind === "water-tower" && allies.some((a) => Math.abs(a.x - p.at.x) < 1 && Math.abs(a.z - p.at.z) < 1 && Math.abs(a.y - (p.at.y + p.h)) < 1);
-  // The props as drawn: none inside another or inside a setback (city/props.ts).
-  for (const d of drawnProps(city)) {
+  // The props as drawn: none inside another or inside a setback (city/props.ts; the City's, the sim's list).
+  const roam = opts.roam ?? null;
+  for (const d of roam ? roam.props : drawnProps(city)) {
     const p = d.y === d.prop.at.y && d.h === d.prop.h ? d.prop : { ...d.prop, at: { ...d.prop.at, y: d.y }, h: d.h };
     const owner = p.buildingId !== null ? byId.get(p.buildingId) : undefined;
     const ref = owner ? { x: (owner.x0 + owner.x1) / 2, z: (owner.z0 + owner.z1) / 2 } : { x: p.at.x, z: p.at.z };
-    addProp(p, ref, push, tanks, texts, carries(p), d.bare);
+    addProp(p, ref, push, tanks, texts, roam ? p.kind === "water-tower" : carries(p), d.bare, !!roam);
   }
 
   if (city.bridge) addBridge(city, push);
   for (const c of city.cables ?? []) addCable(c, city, push);
-  if (opts.details !== false) addDetails(city, push);
+  if (opts.details !== false) addDetails(city, push, undefined, { cornicesOnly: !!roam });
+  if (roam) for (const part of roam.parts) if (part.draw) addPart(part, city, push);
 
   return { boxes, tanks, sectors, texts };
 }
 
-function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: TankSpec[], texts: string[], flat = false, bare = false) {
+function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: TankSpec[], texts: string[], flat = false, bare = false, roam = false) {
   const { x, y, z } = p.at;
   const yaw = (p.facing & 3) * QUARTER;
   const at = (lx: number, lz: number) => {
@@ -186,6 +195,15 @@ function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: Tank
       // A bare mast (city/props.ts) has no foot block: it rises straight from where it stands.
       if (!bare) push({ x, y, z, w: 18, h: 12, d: 18, color: C.rooftop, kind: KIND.solid, hull: 0, ref, lod: 1 });
       const foot = bare ? 0 : 10;
+      if (roam) {
+        // The City's: as wide as the sim's pole (it's climbed, and stood on), bands round it
+        // instead of crossbars sticking out, and the light the top of the pole (the perch).
+        const wide = poleHalf(p) * 2;
+        push({ x, y: y + foot, z, w: wide, h: p.h - foot - ANTENNA_LIGHT, d: wide, color: C.ink, kind: KIND.solid, hull: 0.5, ref });
+        for (let i = 1; i <= 2; i++) push({ x, y: y + (p.h * i) / 3, z, w: wide + 1.5, h: 3, d: wide + 1.5, color: C.rooftop, kind: KIND.solid, hull: 0, ref, lod: 1 });
+        push({ x, y: y + p.h - ANTENNA_LIGHT, z, w: wide + 1, h: ANTENNA_LIGHT, d: wide + 1, color: C.neonRed, kind: KIND.light, seed, hull: 0, ref });
+        break;
+      }
       push({ x, y: y + foot, z, w: 5, h: p.h - foot, d: 5, color: C.ink, kind: KIND.solid, hull: 0, ref });
       for (let i = 1; i <= 2; i++) {
         const half = 14 - i * 3;
@@ -242,6 +260,59 @@ function addProp(p: Prop, ref: { x: number; z: number }, push: Push, tanks: Tank
       push({ x: hook.x, y: top - 186, z: hook.z, w: 12, h: 16, d: 12, color: C.rooftop, kind: KIND.solid, hull: 0.6, ref });
       break;
     }
+  }
+}
+
+const LEDGE = mixRgb(C.rooftop, C.ink, 0.15);
+const RAIL_CAP = mixRgb(C.bridge, C.ink, 0.2);
+
+/**
+ * A piece of the City's furniture, box by box (game-core sim3d/roam/furniture.ts: the sim's
+ * solid is this box): lamps and signals as a patrol night's details draw them, a roof door in its
+ * building's colours facing the roof's middle, the bridge's rails in its red. Near sectors draw
+ * them on every tier (a post that stops you is never left out).
+ */
+function addPart(part: FurniturePart, city: City, push: Push) {
+  const x = (part.x0 + part.x1) / 2;
+  const z = (part.z0 + part.z1) / 2;
+  const w = part.x1 - part.x0;
+  const h = part.y1 - part.y0;
+  const d = part.z1 - part.z0;
+  const ref = { x, z };
+  const base = { x, y: part.y0, z, w, h, d, ref, lod: DETAIL_LOD.near };
+  switch (part.look) {
+    case "lamp-post":
+    case "signal-post":
+    case "signal-arm":
+      push({ ...base, color: C.ink, kind: KIND.solid, hull: 0 });
+      break;
+    case "lamp-head":
+      push({ ...base, color: C.windowWarm, kind: KIND.lamp, hull: 0 });
+      break;
+    case "signal-head":
+      push({ ...base, color: C.rooftop, kind: KIND.signal, seed: part.seed, hull: 0.6 });
+      break;
+    case "door":
+    case "door-cap": {
+      // Its own front on +z: turned to face the way it faces, its local width and depth back.
+      const odd = (part.facing & 1) === 1;
+      const turned = { ...base, w: odd ? d : w, d: odd ? w : d, yaw: part.facing * QUARTER };
+      if (part.look === "door-cap") {
+        push({ ...turned, color: LEDGE, kind: KIND.solid, hull: 0 });
+        break;
+      }
+      const owner = city.buildings.find((b) => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && Math.abs(b.h - part.y0) < 0.5);
+      push({ ...turned, color: owner ? buildingFill(owner.tone + 1, owner.accent) : C.rooftop, kind: KIND.door, seed: part.seed, hull: 0.8, ref: owner ? { x: (owner.x0 + owner.x1) / 2, z: (owner.z0 + owner.z1) / 2 } : ref });
+      break;
+    }
+    case "rail":
+      push({ ...base, color: C.bridge, kind: KIND.solid, hull: 0.7, lod: 0 });
+      break;
+    case "rail-cap":
+      push({ ...base, color: RAIL_CAP, kind: KIND.solid, hull: 0.5, lod: 0 });
+      break;
+    default:
+      break;
   }
 }
 

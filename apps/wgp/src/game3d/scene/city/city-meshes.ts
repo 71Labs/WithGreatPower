@@ -26,6 +26,7 @@ import {
 } from "three";
 
 import type { City } from "@wgp/game-core/sim3d/contract";
+import { isRoamCity, roamCityFurniture } from "@wgp/game-core/sim3d/roam";
 
 import { billboardAtlas } from "./billboard-atlas";
 import { tankGeometry, unitBox } from "./geometry";
@@ -90,7 +91,9 @@ function isPropHull(b: BoxSpec): boolean {
 }
 
 export function buildCityMeshes(city: City, shared: SharedUniforms): CityMeshes {
-  const layout = buildCityLayout(city);
+  // Free roam's City draws its furniture from the sim's list, and its cars from the sim's frame (roam/cars.ts).
+  const roam = isRoamCity(city);
+  const layout = buildCityLayout(city, { roam: roam ? roamCityFurniture() : null });
   const root = new Group();
   root.name = "wgp-city";
   const box = unitBox();
@@ -238,6 +241,11 @@ export function buildCityMeshes(city: City, shared: SharedUniforms): CityMeshes 
   root.add(ground);
 
   const traffic = buildTraffic(city, shared);
+  if (roam) {
+    // The City's traffic is the sim's: these decorative cars stay off whatever the tier asks.
+    traffic.setCount(0);
+    traffic.setCount = () => {};
+  }
   root.add(traffic.fill, traffic.hull);
 
   for (let i = 0; i < sectors.length; i++) near.push(true);
