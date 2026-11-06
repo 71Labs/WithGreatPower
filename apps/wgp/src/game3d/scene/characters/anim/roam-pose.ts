@@ -12,6 +12,8 @@
  * - vault: the left hand planted on the obstacle's top, the legs swung through to the right.
  * - wallrun: leaning out from the wall, feet striding along it, arms pumping.
  * - roll: a tucked forward roll over the hard landing.
+ * - zip: pulled along the web, the web hand out ahead on the line, the other arm back, the legs
+ *   trailing together, knees a little bent, then tucked as he comes in to land.
  *
  * Every target is eased by a stiff spring (no pops when a limb steps), the pose blends in from
  * the one the body had, and the feet are kept each on its own side of the body's midline, so
@@ -28,7 +30,7 @@ import type { Pose } from "./pose";
 import type { AnimContext } from "./types";
 
 /** The moves this poser draws (the rest are the hero animator's own). */
-export const ROAM_POSED: ReadonlySet<RoamMoveName> = new Set<RoamMoveName>(["climb", "hang", "mantle", "vault", "wallrun", "roll"]);
+export const ROAM_POSED: ReadonlySet<RoamMoveName> = new Set<RoamMoveName>(["climb", "hang", "mantle", "vault", "wallrun", "roll", "zip"]);
 
 /** The sim's body radius: its centre stands this far off a wall it's on. */
 const R = 26;
@@ -70,6 +72,7 @@ export class RoamPoser {
   private readonly tmp = new Vector3();
   private readonly tmp2 = new Vector3();
   private readonly hipsAt = new Vector3();
+  private readonly aimDir = new Vector3();
   /** Where the hands hold a ledge (hang, mantle), and the obstacle's top under a vault. */
   private readonly ledge = [new Vector3(), new Vector3()];
   private ledgeTop = 0;
@@ -261,6 +264,37 @@ export class RoamPoser {
         grip = 0.6;
         break;
       }
+      case "zip": {
+        const path = r.path;
+        const dir = path ? this.dir.set(path.to.x - path.from.x, path.to.y - path.from.y, path.to.z - path.from.z) : this.dir.set(-n.x, 0, -n.z);
+        if (dir.lengthSq() < 1e-6) dir.set(-n.x, 0, -n.z);
+        dir.normalize();
+        const u = path ? path.u : 0.5;
+        const flat = this.tmp2.set(dir.x, 0, dir.z);
+        if (flat.lengthSq() < 1e-6) flat.copy(fwd);
+        flat.normalize();
+        // Leaning into the pull, more in its middle; upright again as he comes in.
+        const lean = 0.85 * Math.sin(Math.PI * clamp(u * 1.15, 0, 1));
+        up.lerp(dir, lean * 0.6).normalize();
+        frameQuat(up, flat, this.rot);
+        const left = this.left.set(1, 0, 0).applyQuaternion(this.rot);
+        H.copy(P);
+        const tuck = smoothstep(0.7, 1, u);
+        // The web hand out along the line, the other back by the hip.
+        targets[1].copy(H).addScaledVector(dir, this.reach * 0.95).addScaledVector(UP, this.shoulderY * 0.9).addScaledVector(left, -6);
+        targets[0].copy(H).addScaledVector(left, 13).addScaledVector(flat, -10).addScaledVector(UP, -2);
+        for (let i = 0; i < 2; i++) {
+          const s = i === 0 ? 1 : -1;
+          // Trailing, apart, knees a little bent; tucked under him for the landing.
+          targets[2 + i]
+            .copy(H)
+            .addScaledVector(left, s * 6)
+            .addScaledVector(UP, lerp(-36, -28, tuck) * this.legK)
+            .addScaledVector(flat, lerp(-10, 6, tuck) + (i === 0 ? 2 : -2));
+        }
+        grip = 1;
+        break;
+      }
       case "roll":
       default: {
         // A tucked forward roll: hands to the shins, knees up, turning once about the left axis.
@@ -290,16 +324,6 @@ export class RoamPoser {
       }
     }
 
-    // No crossing: each foot (and hand) stays on its own side of the midline.
-    const left = _c.set(1, 0, 0).applyQuaternion(this.rot);
-    for (let i = 0; i < 2; i++) {
-      const s = i === 0 ? 1 : -1;
-      for (const t of [targets[i], targets[2 + i]]) {
-        const side = (t.x - H.x) * left.x + (t.y - H.y) * left.y + (t.z - H.z) * left.z;
-        if (side * s < MIDLINE) t.addScaledVector(left, s * MIDLINE - side);
-      }
-    }
-
     // Ease every target (snap them on entry, from where the body's limbs were).
     const k = clamp(this.since / BLEND, 0, 1);
     const e = k * k * (3 - 2 * k);
@@ -321,6 +345,16 @@ export class RoamPoser {
 
     // The body: its rotation blended in from where it was; the soles below the hips.
     pose.rot.copy(this.from).slerp(this.rot, e);
+    // No crossing: each foot (and hand) as drawn stays on its own side of the body's midline,
+    // the body as it's turned this frame (mid-blend too).
+    const leftNow = _c.set(1, 0, 0).applyQuaternion(pose.rot);
+    for (let i = 0; i < 2; i++) {
+      const s = i === 0 ? 1 : -1;
+      for (const t of [pose.hand[i], pose.foot[i]]) {
+        const side = (t.x - hips.x) * leftNow.x + (t.y - hips.y) * leftNow.y + (t.z - hips.z) * leftNow.z;
+        if (side * s < MIDLINE) t.addScaledVector(leftNow, s * MIDLINE - side);
+      }
+    }
     pose.root.copy(hips).sub(_a.set(0, hipH, 0).applyQuaternion(pose.rot));
     pose.hips.set(0, 0, 0);
     pose.hipsRot.set(0, 0, 0);
@@ -336,7 +370,7 @@ export class RoamPoser {
       // Elbows out and down; knees forward (into the wall when on one) and a little out.
       pose.elbow[i].set(s * 0.7, -0.6, climbing ? 0.2 : -0.6).applyQuaternion(pose.rot);
       pose.knee[i].set(s * 0.2, move === "vault" ? 0.3 : 0, 1).applyQuaternion(pose.rot);
-      pose.handAim[i] = null;
+      pose.handAim[i] = move === "zip" && i === 1 && r.path ? this.aimDir.copy(this.dir) : null;
       pose.handRot[i].set(0, 0, 0);
       pose.footRot[i].copy(pose.rot);
       pose.grip[i] = grip;
