@@ -1,18 +1,18 @@
 {
-  "ruleset": "roam-1",
-  "logRuleset": 251662596,
+  "ruleset": "roam-2",
+  "logRuleset": 251662852,
   "patrolRuleset": 4,
   "outing": {
     "ok": true,
-    "hash": "d062175a",
+    "hash": "e539196b",
     "checkpoints": [
-      "2869403b",
-      "932028f4",
-      "56874a90",
-      "6353c0a2"
+      "d0cc8a6b",
+      "0be40d89",
+      "dd1b2b85",
+      "017bce6d"
     ],
-    "ticks": 1693,
-    "bytes": 648,
+    "ticks": 2034,
+    "bytes": 806,
     "stage": [
       0,
       9,

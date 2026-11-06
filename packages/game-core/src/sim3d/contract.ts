@@ -6,7 +6,8 @@
  * ruleset c001-1, patrol nights untouched) the frame's `chapter`, the Right-Clicker and a
  * villain's `aim`; v1.6 (Case File 002, ruleset c002-1) `chapter.vote`, the "lineup" phase and
  * Case File 002's clues (docs/chapters/case-002.md); v1.7 (free roam, ruleset tag roam-1, patrol
- * nights untouched) the frame's `roam`; v1.8 (Case File 003, ruleset c003-1) the frame's `fee`
+ * nights untouched) the frame's `roam`, with roam-2's `roam.cars`, `roam.knock` and the move
+ * "knocked" (additive); v1.8 (Case File 003, ruleset c003-1) the frame's `fee`
  * (docs/chapters/case-003.md).
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
@@ -371,7 +372,16 @@ export interface VoteFrame {
  * a wall, hanging from a ledge, pulling up over it, vaulting, running along a facade, rolling
  * out of a hard landing, zipping on the web, swinging, or in the river.
  */
-export type RoamMoveName = "ground" | "air" | "climb" | "hang" | "mantle" | "vault" | "wallrun" | "roll" | "zip" | "swing" | "splash";
+export type RoamMoveName = "ground" | "air" | "climb" | "hang" | "mantle" | "vault" | "wallrun" | "roll" | "zip" | "swing" | "splash" | "knocked";
+
+/** A car in free roam's street traffic (roam-2): its centre at street (or deck) level, heading (radians, 0 = +z), speed, and a paint (0–7). */
+export interface RoamCarFrame {
+  id: number;
+  pos: Vec3;
+  yaw: number;
+  speed: number;
+  kind: number;
+}
 
 /**
  * Free roam's frame (filled by sim3d/roam/render.ts; never read back by the sim or hashed).
@@ -406,6 +416,16 @@ export interface RoamFrame {
   tags: { pos: Vec3; normal: Vec3; shot: boolean }[];
   /** Per task (rules/city.ts TASK_IDS order): its stage (9 finished) and items found. */
   tasks: { id: string; stage: number; got: number }[];
+  /**
+   * roam-2: the street traffic, every car in the city in a fixed order (ids are indices), as the
+   * sim has them: what's drawn is what hits him. Absent on an older frame.
+   */
+  cars?: RoamCarFrame[];
+  /**
+   * roam-2: knocked down by a car (move "knocked"): flung through the air, down on the ground,
+   * or getting up; seconds into that phase; the way the car pushed him (unit xz).
+   */
+  knock?: { phase: "flung" | "down" | "up"; t: number; dir: Vec3 } | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

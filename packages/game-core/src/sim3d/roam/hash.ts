@@ -5,6 +5,7 @@
  */
 import { Fnv, hashState } from "../../hash";
 import type { SimState } from "../types";
+import { hashTraffic } from "./traffic";
 import { ROAM_MOVES } from "./types";
 
 export function roamHashState(s: SimState): string {
@@ -36,5 +37,7 @@ export function roamHashState(s: SimState): string {
     f.num(r.chat.line);
     f.num(r.chat.ticks);
   }
+  // roam-2: the traffic (every car's place round its loop, speed and hold) and the knock.
+  hashTraffic(r.traffic, (v) => f.num(v));
   return f.hex();
 }

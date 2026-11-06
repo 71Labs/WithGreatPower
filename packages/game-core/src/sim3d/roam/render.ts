@@ -1,12 +1,13 @@
 /**
  * Free roam's part of the render frame (RenderFrame3D.roam, v1.6), filled in place after the
  * night's own fillRenderFrame: the body's move, the zip reticle, the bot, the people, what's
- * found, and the hero's `action` read off the move for the animator. Presentation only:
- * nothing here is read back by the sim or hashed.
+ * found, the cars and a knock (roam-2), and the hero's `action` read off the move for the
+ * animator. Presentation only: nothing here is read back by the sim or hashed.
  */
 import { HERO_RADIUS } from "../constants";
 import type { HeroAction, RenderFrame3D, RoamFrame, Vec3 } from "../contract";
-import { len2 } from "../dmath";
+import { datan2, len2 } from "../dmath";
+import { knockPhase } from "./knock";
 import type { SimState } from "../types";
 import { roamHeading } from "../parkour/move";
 import { actTarget } from "./tasks";
@@ -43,6 +44,8 @@ export function roamAction(s: SimState): HeroAction {
       return "climb";
     case "zip":
       return "dash";
+    case "knocked":
+      return s.roam!.traffic.knock.down < 0 ? "air" : "idle";
     default:
       return "air";
   }
@@ -55,7 +58,7 @@ interface Track {
 const tracks = new WeakMap<SimState, Track>();
 
 function emptyRoam(): RoamFrame {
-  return { move: "ground", moveT: 0, sprint: false, wall: null, path: null, zip: null, bot: null, folks: [], chat: null, act: null, pages: [], views: [], pixels: [], tags: [], tasks: [] };
+  return { move: "ground", moveT: 0, sprint: false, wall: null, path: null, zip: null, bot: null, folks: [], chat: null, act: null, pages: [], views: [], pixels: [], tags: [], tasks: [], cars: [], knock: null };
 }
 
 /** Write the outing into `out.roam` (and the hero's action off the move). A night's state leaves it null. */
@@ -82,7 +85,7 @@ export function fillRoamFrame(s: SimState, out: RenderFrame3D): RenderFrame3D {
   }
   out.hero.action = action;
   out.hero.actionTicks = s.tick - t.start;
-  out.hero.grounded = b.move === "ground" || b.move === "roll";
+  out.hero.grounded = b.move === "ground" || b.move === "roll" || (b.move === "knocked" && r.traffic.knock.down >= 0);
   // A zip's web, stuck where it pulls him: the roof's edge he lands over, or the perch's top.
   if (b.move === "zip") {
     const a = out.hero.anchor ?? (out.hero.anchor = v3());
@@ -189,5 +192,26 @@ export function fillRoamFrame(s: SimState, out: RenderFrame3D): RenderFrame3D {
     slot.got = bits(p.items[i]);
   }
   f.tasks.length = TASK_IDS.length;
+
+  // roam-2: the cars as the sim has them, and a knock's phase.
+  const cars = f.cars ?? (f.cars = []);
+  const tr = r.traffic;
+  for (let i = 0; i < tr.cars.length; i++) {
+    const c = tr.cars[i];
+    const slot = cars[i] ?? (cars[i] = { id: i, pos: v3(), yaw: 0, speed: 0, kind: 0 });
+    slot.id = i;
+    set(slot.pos, c.x, tr.loops[c.loop].y, c.z);
+    slot.yaw = datan2(c.hx, c.hz);
+    slot.speed = c.v;
+    slot.kind = c.kind;
+  }
+  cars.length = tr.cars.length;
+  const kp = knockPhase(s);
+  if (kp) {
+    const k = f.knock ?? (f.knock = { phase: "flung", t: 0, dir: v3() });
+    k.phase = kp.phase;
+    k.t = kp.t;
+    set(k.dir, tr.knock.dx, 0, tr.knock.dz);
+  } else f.knock = null;
   return out;
 }

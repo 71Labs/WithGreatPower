@@ -21,8 +21,20 @@ export interface RoamPlay {
 
 export const at = (x: number, y: number, z: number, fx = 1, fz = 0, base: Partial<RoamStart> = {}): RoamStart => ({ ...freshStart(), ...base, at: { x, y, z, fx, fz } });
 
-export function playRoam(start: RoamStart, goals: RoamBotGoal[], maxTicks = 60 * 60): RoamPlay {
+/**
+ * Empty the streets of a run (a test of a move that isn't about traffic): every car parked far
+ * out of the city, out of its grid's way, and none stepped. The state stays a valid outing's.
+ */
+export function quiet(run: RoamRun): RoamRun {
+  const t = run.sim.roam!.traffic;
+  for (const c of t.cars) run.sim.grid.moveSolid(c.box, -1e6, -1e6, -1e6, -1e6 + 1, -1e6 + 1, -1e6 + 1);
+  t.cars.length = 0;
+  return run;
+}
+
+export function playRoam(start: RoamStart, goals: RoamBotGoal[], maxTicks = 60 * 60, opts: { traffic?: boolean } = {}): RoamPlay {
   const run = startRoamRun(start);
+  if (opts.traffic === false) quiet(run);
   const mem = newRoamBot(goals);
   const events: RoamPlay["events"] = [];
   const moves: RoamMove[] = [run.sim.roam!.body.move];
