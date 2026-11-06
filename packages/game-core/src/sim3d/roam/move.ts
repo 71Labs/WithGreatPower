@@ -1264,6 +1264,10 @@ function startSplash(s: SimState) {
   s.roam!.events.push({ type: "roam-splash", x: h.x, y: 0, z: h.z });
   b.ax = h.x;
   b.az = h.z;
+  // The way he was going: he swims on out the far side if that's where he was headed.
+  const hs = len2(h.vx, h.vz);
+  b.ex = hs > 1 ? h.vx / hs : h.fx;
+  b.ez = hs > 1 ? h.vz / hs : h.fz;
   h.vx = 0;
   h.vy = 0;
   h.vz = 0;
@@ -1278,15 +1282,20 @@ function stepSplash(s: SimState): void {
   h.vy = 0;
   h.vz = 0;
   if (b.moveT < SPLASH_SECONDS) return;
-  // Out on the nearest bank.
+  // Out on the nearest bank the way he was going (across the river), else the nearest.
   let best = -1;
   let bd = Infinity;
   const banks = s.roam!.world.banks;
-  for (let i = 0; i < banks.length; i++) {
-    const d = len2(banks[i].x0 - b.ax, banks[i].z0 - b.az);
-    if (d < bd) {
-      bd = d;
-      best = i;
+  for (let pass = 0; pass < 2 && best < 0; pass++) {
+    for (let i = 0; i < banks.length; i++) {
+      const dx = banks[i].x0 - b.ax;
+      const dz = banks[i].z0 - b.az;
+      if (pass === 0 && dx * b.ex + dz * b.ez <= 0) continue;
+      const d = len2(dx, dz);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
     }
   }
   const spot = best >= 0 ? { x: banks[best].x0, z: banks[best].z0 } : { x: s.roam!.world.spawn.x, z: s.roam!.world.spawn.z };
