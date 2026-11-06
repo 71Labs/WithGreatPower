@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest";
 import { startRoamRun, stepRoamRun } from "../src/roam-run";
 import { CLIMB_DOWN, CLIMB_UP, JOG_SPEED, RUN_SPEED, SHOT_JUMP, SPRINT_SPEED, WALK_SPEED } from "../src/sim3d/roam/constants";
 import { clearAt, roamCity, roamGrid, roamWorld } from "../src/sim3d/roam/world";
-import { at, chain, playRoam } from "./roam-helpers";
+import { newRoamBot, roamBotFrame } from "../src/sim3d/roam/bot";
+import { at, chain, playRoam, quiet } from "./roam-helpers";
 
 const city = roamCity();
 const grid = roamGrid(city);
@@ -151,16 +152,28 @@ describe("free roam on walls", () => {
 
   it("from a hang, the stick back steps down onto the wall and climbs down it (roam-2)", () => {
     // A roof edge over an open street: over it to hang, then the stick out from the wall.
-    const e = openEdge(280);
+    const { e, t } = openEdge(280);
     const nx = e.axis === 1 ? e.n : 0;
     const nz = e.axis === 0 ? e.n : 0;
-    const t = (e.lo + e.hi) / 2;
     const ex = e.axis === 0 ? t : e.c;
     const ez = e.axis === 0 ? e.c : t;
     const out = { x: ex + nx * 3000, z: ez + nz * 3000 };
-    const p = playRoam(at(ex - nx * 30, e.y, ez - nz * 30, nx, nz), [{ kind: "press", shot: "drop", ...out }, { kind: "wait", ticks: 30 }, { kind: "hold", ...out, ticks: 60 * 6 }]);
-    expect(chain(p)).toMatch(/^ground>hang>climb>ground/);
-    expect(p.run.sim.hero.y - 26).toBeLessThan(1);
+    // Played by hand (not playRoam) to read his height the moment the climb down puts him on
+    // the street: held on, the stick walks him on across the street to the next wall.
+    const run = quiet(startRoamRun(at(ex - nx * 30, e.y, ez - nz * 30, nx, nz)));
+    const mem = newRoamBot([{ kind: "press", shot: "drop", ...out }, { kind: "wait", ticks: 30 }, { kind: "hold", ...out, ticks: 60 * 6 }]);
+    const moves = [run.sim.roam!.body.move];
+    let landed = Infinity;
+    while (mem.i < mem.goals.length && run.sim.tick < 60 * 60) {
+      stepRoamRun(run, roamBotFrame(run.sim, mem));
+      const m = run.sim.roam!.body.move;
+      if (m !== moves[moves.length - 1]) {
+        if (m === "ground" && moves[moves.length - 1] === "climb" && landed === Infinity) landed = run.sim.hero.y;
+        moves.push(m);
+      }
+    }
+    expect(moves.join(">")).toMatch(/^ground>hang>climb>ground/);
+    expect(landed - 26).toBeLessThan(1);
   });
 
   it("lets go of a hang on the drop button, falls, and lands", () => {

@@ -217,8 +217,18 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
         next(m);
         return IDLE;
       }
+      // Hanging under a lip it can't pull up over (something stands on the roof at the edge) with
+      // the way on over that roof: shimmy along the wall a while, then try the pull-up again, as a
+      // player would, rather than letting go and climbing straight back up.
+      const b = s.roam.body;
+      const over = (tx - h.x) * -b.wnx + (tz - h.z) * -b.wnz > 0;
+      if (move === "hang" && over && b.moveT > 0.8) {
+        const shimmy = Math.floor((b.moveT - 0.8) / 1.2) % 2 === 0;
+        if (shimmy) return { ...toward(s, h.x - b.wnz * 400, h.z + b.wnx * 400, 2), web: false, shot: 0 };
+        return { ...toward(s, h.x - b.wnx * 400, h.z - b.wnz * 400, 2), web: false, shot: 0 };
+      }
       // On a wall or a ledge with somewhere lower to be: let go.
-      if ((move === "hang" || move === "climb") && feet > want + 60 && s.roam.body.moveT > 0.6) return { ...IDLE, shot: SHOT_DROP };
+      if ((move === "hang" || move === "climb") && !(move === "hang" && over) && feet > want + 60 && b.moveT > 0.6) return { ...IDLE, shot: SHOT_DROP };
       // Stuck against something: hop it.
       const moved = len2(h.x - m.lastX, h.z - m.lastZ);
       m.lastX = h.x;
