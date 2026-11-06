@@ -8,6 +8,7 @@ import type { ClueId } from "../rules/chapters";
 import type { ChapterId, PowerId, Stop, TrialCourseId, VillainId } from "../rules/types";
 import type { CityIndex } from "./city";
 import type { City, InputFrame, Vec3, ZoneKind } from "./contract";
+import type { RoamState } from "./roam/types";
 
 /* ------------------------------------------------------------------ the hero */
 
@@ -545,4 +546,6 @@ export interface SimState {
   chapter: ChapterState | null;
   /** A time trial's state, or null (patrol and chapter nights). Optional so older hand-built states still type-check. */
   trial?: TrialState | null;
+  /** Free roam's state (sim3d/roam), set only on a roam outing; absent on every night and chapter. */
+  roam?: RoamState | null;
 }

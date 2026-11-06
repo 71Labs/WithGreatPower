@@ -46,6 +46,7 @@ import { worldPos } from "../rig";
 import { Mocap } from "./mocap";
 import { applyPose, newPose, newSolved, type Pose, type Solved } from "./pose";
 import { Ragdoll } from "./ragdoll";
+import { keepFeetApart, RoamPoser } from "./roam-pose";
 import type { AnimContext } from "./types";
 
 type Base = "ground" | "swing" | "air" | "climb" | "dash" | "slam" | "ko";
@@ -271,6 +272,8 @@ export class HeroAnimator {
     // planted foot behind for the leg to stretch back to.
     const jump = P.distanceTo(this.lastPos);
     if (!this.started || jump > 260 || jump > TELEPORT + Math.hypot(h.vel.x, h.vel.y, h.vel.z) * Math.max(dt, 1 / 60) * 2) this.reset(f, ctx);
+    // Free roam's climbs, hangs, mantles, vaults, wall runs and rolls have their own poser.
+    if (this.roamPose(f, dt, ctx)) return;
     this.time += dt;
     if (!this.live && ((h.actionTicks ?? 0) > 0 || (h.action !== undefined && h.action !== "idle"))) this.live = true;
     this.act = this.live ? h.action : undefined;
@@ -456,6 +459,54 @@ export class HeroAnimator {
   private lastAction: HeroAction = "idle";
   /** How long a swing's touch on a roof has lasted (SKIM). */
   private skim = 0;
+
+  /** Free roam (scene/characters/anim/roam-pose.ts): the poser, and whether it drew last frame. */
+  private roamPoser: RoamPoser | null = null;
+  private inRoam = false;
+
+  /**
+   * A free-roam move this animator has no pose for (a wall climb, a hang, a mantle, a vault, a
+   * wall run, a roll): the roam poser draws it. Returns true when it did. Leaving one, the
+   * body carries on from the pose it was in: its turn and lean, and its feet where they stand.
+   */
+  private roamPose(f: RenderFrame3D, dt: number, ctx: AnimContext): boolean {
+    if (RoamPoser.wants(f)) {
+      this.roamPoser ??= new RoamPoser(this.rig);
+      const yaw = this.roamPoser.update(f, dt, ctx, this.pose, this.pose);
+      applyPose(this.rig, this.group, this.pose, this.solved);
+      this.grip.copy(this.rig.grip).applyMatrix4(this.rig.arms[1].end.matrixWorld);
+      this.inRoam = true;
+      this.base = "climb";
+      this.action = "climb";
+      this.holdYaw = yaw;
+      this.lastPos.copy(this.P);
+      this.lastVy = f.hero.vel.y;
+      this.wasGrounded = false;
+      this.wasBase = "air";
+      this.H.copy(this.pose.root).add(_a.set(0, this.rig.hipHeight, 0).applyQuaternion(this.pose.rot));
+      this.collectTargets();
+      return true;
+    }
+    if (this.inRoam) {
+      this.inRoam = false;
+      this.roamPoser?.release();
+      // Carry on from the roam pose: its rotation, its yaw, and the limbs where they are.
+      this.orient.snap(this.pose.rot);
+      // The limb springs ride the body's turn from here, not from the pose before the roam move
+      // (turned by that stale rotation, freshly placed feet would swing across each other).
+      this.limbQ.copy(this.pose.rot);
+      this.flipT = -1;
+      this.turn.snap(this.holdYaw);
+      const H = this.P;
+      for (let i = 0; i < 2; i++) {
+        this.hands[i].snap(this.pose.hand[i].x - H.x, this.pose.hand[i].y - H.y, this.pose.hand[i].z - H.z);
+        this.feet[i].snap(this.pose.foot[i].x - H.x, this.pose.foot[i].y - H.y, this.pose.foot[i].z - H.z);
+        this.plants[i].plantAt(this.pose.foot[i]);
+      }
+      this.mocap?.stand.airborne();
+    }
+    return false;
+  }
 
   private hurt(): void {
     this.hurtT = 0.35;
@@ -920,6 +971,8 @@ export class HeroAnimator {
         f.y = Math.max(f.y, ctx.ground(f.x, f.z, H.y) + spec.ankle);
       }
     }
+    // Free roam: the feet never cross, whatever the turn (a zip handing back, a hard air turn).
+    if (f.roam) keepFeetApart(pose, H, Q);
     // Climbing: left hand and both feet planted on the wall, alternating.
     if (base === "climb") {
       const wallX = h.pos.x - this.wallN.x * (this.wallD - 3);

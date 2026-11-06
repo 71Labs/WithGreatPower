@@ -773,9 +773,10 @@ export interface Box {
   x1: number;
   y1: number;
   z1: number;
-  /** The building it belongs to, or −1 for the bridge. */
+  /** The building it belongs to, or −1 for the bridge (−2 for a free-roam prop). */
   building: number;
-  kind: "main" | "top" | "deck" | "leg";
+  /** "prop": a free-roam solid (sim3d/roam/world.ts); patrol cities never have one. */
+  kind: "main" | "top" | "deck" | "leg" | "prop";
 }
 
 /**
@@ -922,6 +923,15 @@ export class CityIndex {
     const id = this.edges.length - 1;
     if (e.axis === 0) this.insert(this.edgeCells, id, e.lo, e.c, e.hi, e.c);
     else this.insert(this.edgeCells, id, e.c, e.lo, e.c, e.hi);
+  }
+
+  /**
+   * Free roam only (sim3d/roam/world.ts): a solid that isn't a building, such as a rooftop AC
+   * unit, an antenna's pole or a water tank, to stand on, vault and climb. It has no facades
+   * (webs don't stick to it) and patrol cities never add one.
+   */
+  addSolid(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) {
+    this.addBox({ x0, y0, z0, x1, y1, z1, building: -2, kind: "prop" });
   }
 
   addAnchor(a: PropAnchor) {

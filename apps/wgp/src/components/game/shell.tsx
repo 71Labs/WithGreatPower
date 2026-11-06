@@ -9,7 +9,7 @@ import { playMusic, setSoundEnabled, soundEnabled, subscribeSound } from "@/audi
 import { SoundSliders } from "@/components/game/sound-sliders";
 import { AccountCenter, AccountChip } from "@/components/account/account-center";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { ArrowUpRight, City, FolderSearch, HelpCircle, Medal, Newspaper, Settings, Shirt, Store, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
+import { ArrowUpRight, City, Compass, FolderSearch, HelpCircle, Medal, Newspaper, Settings, Shirt, Store, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
 import type { CastId } from "@wgp/game-core/cast";
 import { XP_TO_NEXT } from "@wgp/game-core/data";
 import { useAccount, useGame } from "@/game/store";
@@ -23,6 +23,7 @@ import { GameSheet, HeroTile } from "./ui";
 
 export const GAME_NAV = [
   { href: "/play", label: "Tonight", icon: City },
+  { href: "/play/city", label: "City", icon: Compass },
   { href: "/play/hero", label: "Hero", icon: Zap },
   { href: "/play/suits", label: "Suits", icon: Shirt },
   { href: "/play/market", label: "Market", icon: Store },
@@ -399,9 +400,9 @@ function Dock({ pathname, save }: { pathname: string | null; save: Save | null }
       aria-label="Game"
       className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-2 sm:px-6"
     >
-      {/* Eight tabs: on a 360px phone the labels go a hair smaller and tighter so each fits its column. */}
+      {/* Nine tabs: on a 360px phone the labels go a hair smaller and tighter so each fits its column. */}
       <ul
-        className={`pointer-events-auto grid w-full max-w-[720px] grid-cols-8 gap-0.5 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 min-[400px]:gap-1 min-[400px]:px-2 sm:max-w-[900px] ${ON_PAPER}`}
+        className={`pointer-events-auto grid w-full max-w-[720px] grid-cols-9 gap-0.5 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 min-[400px]:gap-1 min-[400px]:px-2 sm:max-w-[900px] ${ON_PAPER}`}
       >
         {GAME_NAV.map((item) => {
           const active = isActive(pathname, item.href);
@@ -451,7 +452,7 @@ function Dock({ pathname, save }: { pathname: string | null; save: Save | null }
  * the Rug plays its jingle over it.
  */
 export function routeMusic(pathname: string): MusicId | null {
-  if (pathname.startsWith("/play/patrol")) return null;
+  if (pathname.startsWith("/play/patrol") || pathname.startsWith("/play/city")) return null;
   // A race (the Daily, a trial, a duel) is a night: it runs its own score.
   if (/^\/play\/compete\/(daily|trial|duel)/.test(pathname)) return null;
   if (pathname.startsWith("/play/market")) return "market";
@@ -479,7 +480,8 @@ function useRouteMusic(pathname: string | null) {
 export function GameShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { save } = useGame();
-  const game = !!pathname?.startsWith("/play/patrol");
+  // The 3D games take the whole screen: a night, and free roam's city.
+  const game = !!pathname?.startsWith("/play/patrol") || !!pathname?.startsWith("/play/city");
   const onboarding = !!pathname?.startsWith("/play/bitten");
   /** A case's intro comic: the whole screen, with its own way back. */
   const comic = pathname === CASE_PATHS.intro;
