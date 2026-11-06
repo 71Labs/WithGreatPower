@@ -41,7 +41,7 @@ function Moves({ touch }: { touch: boolean }) {
         <h3 className="text-[15px] font-bold">Getting around</h3>
         <ul className="flex list-disc flex-col gap-1.5 pl-5 text-pretty">
           <li>The street is safe: walk it, run it, fall into it. Nothing here hurts you, and a hard landing rolls.</li>
-          <li>Run into a wall with the stick toward it to climb. At the top you pull yourself over; let go of the stick to hang.</li>
+          <li>Run into a wall with the stick toward it to climb, and pull the stick back to climb down. At the top you pull yourself over; let go of the stick to hang.</li>
           <li>Low things (AC units, ledges) are vaulted at a run. Sprint along a wall and jump to run along it.</li>
           <li>Running off a roof leaps the gap. Fall past a ledge with the stick toward it to catch it.</li>
           <li>The web only swings while you hold it. The zip pulls you to the point the reticle marks.</li>

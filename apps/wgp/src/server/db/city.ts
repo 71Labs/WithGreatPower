@@ -59,7 +59,7 @@ export async function fileOuting(db: Db, input: { playerId: string; outingId: st
   // Replay outside the lock (a long outing takes a moment), then check nothing moved under it.
   const { save: before } = await ensureSave(db, playerId);
   if (!before.hero) throw conflict("no_hero", "Create a hero first");
-  if (roamLogStale(log)) throw conflict("stale_rules", "The city’s rules were updated since this outing began. Reload to start a fresh outing: everything filed so far is kept.");
+  if (roamLogStale(log)) throw conflict("stale_rules", "The city’s rules were updated since this outing began. Reload to start a fresh outing; everything you’ve filed is kept.");
   const base = baseFor(cityRecord(before), outingId, input.base);
   if (!base) throw conflict("stale_city", "The city moved on since this outing began (another tab?). Start again from where it stands.");
   const result = replayRoam({ start: roamStartFrom(base), log });

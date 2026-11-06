@@ -106,7 +106,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         if (g.xp > 0) toast({ tone: "xp", title: `+${g.xp} XP`, body: res.verified ? "Filed with the server." : "Saved in this browser. Sign in to keep it everywhere." });
         setFiling(res.verified ? "Filed with the server: what you found is kept." : "Saved in this browser.");
       } else if (res.kind === "failed") setFiling(`${res.message} It’ll try again.`);
-      else if (res.kind === "stale" && res.rules) setFiling("The city’s rules were updated. Reload to start a fresh outing: everything filed so far is kept.");
+      else if (res.kind === "stale" && res.rules) setFiling("The city’s rules were updated. Reload to start a fresh outing; everything you’ve filed is kept.");
       else if (res.kind === "stale") setFiling("This city moved on in another tab. Reload to pick up from there.");
       return res;
     },
