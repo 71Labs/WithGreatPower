@@ -201,6 +201,20 @@ describe("free roam on a keyboard's eight directions", () => {
     const q = playRoam(at(3810, 0, 600, 0, 1), [{ kind: "press", shot: "jump", x: 3810, z: 6000 }, { kind: "hold", x: 3810, z: 6000, ticks: 70, sprint: true }]);
     expect(q.moves).not.toContain("swing");
   });
+
+  it("ends a swing the tick the web is let go, however short the press (no tap that swings on by itself)", () => {
+    for (const ticks of [3, 8, 40]) {
+      const p = playRoam(at(3810, 0, 600, 0, 1), [{ kind: "web", x: 3810, z: 6000, ticks }, { kind: "wait", ticks: 60 }]);
+      const after = p.run.sim.tick;
+      expect(p.run.sim.hero.rope, `held ${ticks}`).toBeNull();
+      // The last thwip and every swing tick come while the web was held.
+      const swingTicks = p.events.filter(({ e }) => e.type === "roam-move" && e.move === "swing").map(({ tick }) => tick);
+      const leaves = p.events.filter(({ e }) => e.type === "roam-move" && e.from === "swing").map(({ tick }) => tick);
+      for (const t of swingTicks) expect(t).toBeLessThanOrEqual(ticks);
+      for (const t of leaves) expect(t).toBeLessThanOrEqual(ticks + 1);
+      void after;
+    }
+  });
 });
 
 describe("free roam in the river", () => {

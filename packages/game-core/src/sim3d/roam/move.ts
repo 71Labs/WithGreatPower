@@ -1,7 +1,8 @@
 /**
  * Free roam's body: walking, running and sprinting on any surface (the street included: the
  * ground is never lava), jumps, vaults, wall climbs, wall runs, ledge grabs and mantles, drops,
- * rolls on hard landings, the web-zip and, only while the web button says so, the swing.
+ * rolls on hard landings, the web-zip and, only while the web button is held, the swing (let go
+ * and it ends; held, it keeps looking for an anchor and chains swings at the top of each arc).
  *
  * One state per tick (RoamBody.move), each its own step below. Moves that must look exact (a
  * vault, a mantle, a zip, climbing out of the river) are scripted paths checked clear before
@@ -89,7 +90,7 @@ import {
   ZIP_SPEED,
 } from "./constants";
 import { collideSphere, groundBelow, overRiver, supported, type SphereHit } from "../city";
-import { FIZZLE_COOLDOWN, GOOD_BOOST, GOOD_MIN_SPEED, GOOD_MIN_VY, HERO_RADIUS, HERO_TURN, MAX_SPEED, OVERSPEED_DECEL, PERFECT_BOOST, PERFECT_TAN_HI, REWEB_VY, ROPE_MIN, ANCHOR_RANGE_FAR, SUBSTEP_LEN, WEB_BUFFER, WEB_TAP } from "../constants";
+import { FIZZLE_COOLDOWN, GOOD_BOOST, GOOD_MIN_SPEED, GOOD_MIN_VY, HERO_RADIUS, HERO_TURN, MAX_SPEED, OVERSPEED_DECEL, PERFECT_BOOST, PERFECT_TAN_HI, REWEB_VY, ROPE_MIN, ANCHOR_RANGE_FAR, SUBSTEP_LEN, WEB_BUFFER } from "../constants";
 import type { InputFrame } from "../contract";
 import { clamp, datan2, dcos, DIR64, dsin, len2, len3, MAG_SCALE } from "../dmath";
 import { flightStep, inReleaseWindow, launchFromGround, pickAnchor, wrapRope, type FlightInput } from "../swing";
@@ -216,7 +217,7 @@ export function stepMove(s: SimState, input: InputFrame, press: Presses, dt: num
   // Only while the web is held (or a press is buffered a moment): it keeps looking for something
   // to stick to, and after a swing ran out with it still held, the next waits for the top of the arc.
   if (!input.web) h.rewebWait = false;
-  const want = (input.web || h.webBuf > 0) && !(h.rewebWait && b.move === "air" && h.vy > REWEB_VY);
+  const want = input.web && !(h.rewebWait && b.move === "air" && h.vy > REWEB_VY);
   if (free && want && tryWeb(s, st, webPressed)) {
     // Swinging from this tick on.
   } else if (free && press.zip && b.zipCd <= 0 && startZip(s, st)) {
@@ -669,7 +670,8 @@ function tryWeb(s: SimState, st: Stick, pressed: boolean): boolean {
   setMove(s, "swing");
   h.rope = { x: a.x, y: a.y, z: a.z, len: clamp(d, ROPE_MIN, ANCHOR_RANGE_FAR) };
   h.ropeT = 0;
-  h.latched = !s.input.web;
+  // Free roam swings only while the web is held: no tap that carries a swing on by itself.
+  h.latched = false;
   h.webBuf = 0;
   h.rewebWait = false;
   const lat = -(a.x - h.x) * head.z + (a.z - h.z) * head.x;
@@ -726,15 +728,11 @@ function stepSwing(s: SimState, st: Stick, input: InputFrame, dt: number): void 
   const b = s.roam!.body;
   const head = heading(h, st);
   if (h.rope) {
-    const pressed = input.web && !b.webHeld;
-    if (pressed && h.latched) h.latched = false;
-    else if (!input.web && !h.latched) {
-      if (h.ropeT < WEB_TAP) h.latched = true;
-      else {
-        letGoWeb(s, true);
-        setMove(s, "air");
-        return stepAir(s, st, { jump: false, zip: false, act: false, drop: false }, dt);
-      }
+    // Let go of the web, and the swing ends there: a graded release (a boost in the window).
+    if (!input.web) {
+      letGoWeb(s, true);
+      setMove(s, "air");
+      return stepAir(s, st, { jump: false, zip: false, act: false, drop: false }, dt);
     }
     if (h.rope && swingDone(s, head.x, head.z)) {
       // The swing ran its course: the web lets go; still held, the next one shoots at the top of the arc.
