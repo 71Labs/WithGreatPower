@@ -9,7 +9,7 @@
  * big for one tick (a teleport beside an errand ally, a resume) snaps instead of sliding.
  * Allocates only when a list grows.
  */
-import type { RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
+import type { RenderFrame3D, Vec3, VoteFrame } from "@wgp/game-core/sim3d/contract";
 
 /** More than this in one tick is a teleport, not motion (top speed is ~28 units a tick). */
 export const SNAP_DISTANCE = 200;
@@ -264,4 +264,34 @@ function blendChapter(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: 
     slot.alive = k.alive;
   }
   oc.copies.length = cc.copies.length;
+  if (cc.vote) oc.vote = blendVote(prev.chapter?.vote ?? null, cc.vote, t, oc.vote ?? null);
+  else delete oc.vote;
+}
+
+/** v1.6: Case file 002's vote. The voters (by id) and the ballot slide with their bodies; the rest is the latest tick's. */
+function blendVote(prev: VoteFrame | null, curr: VoteFrame, t: number, into: VoteFrame | null): VoteFrame {
+  const out: VoteFrame = into ?? { ...curr, real: { ...curr.real }, known: { ...curr.known }, voters: [], booths: [], fork: null, recount: null, box: v3(), ballot: null };
+  out.stage = curr.stage;
+  Object.assign(out.real, curr.real);
+  Object.assign(out.known, curr.known);
+  for (let i = 0; i < curr.voters.length; i++) {
+    const k = curr.voters[i];
+    const p = prev?.voters[i];
+    const slot = (out.voters[i] ??= { ...k, pos: v3() });
+    Object.assign(slot, { id: k.id, alive: k.alive, runner: k.runner, shadow: k.shadow, blink: k.blink, left: k.left });
+    lerpInto(slot.pos, p && p.id === k.id ? p.pos : undefined, k.pos, t);
+  }
+  out.voters.length = curr.voters.length;
+  for (let i = 0; i < curr.booths.length; i++) copyInto((out.booths[i] ??= v3()), curr.booths[i]);
+  out.booths.length = curr.booths.length;
+  out.wrong = curr.wrong;
+  out.fork = curr.fork ? Object.assign(out.fork ?? { ...curr.fork }, curr.fork) : null;
+  out.recount = curr.recount ? Object.assign(out.recount ?? { left: 0 }, curr.recount) : null;
+  copyInto(out.box, curr.box);
+  if (curr.ballot) {
+    const b = (out.ballot ??= { state: curr.ballot.state, pos: v3() });
+    lerpInto(b.pos, prev?.ballot && prev.ballot.state === curr.ballot.state ? prev.ballot.pos : undefined, curr.ballot.pos, t);
+    b.state = curr.ballot.state;
+  } else out.ballot = null;
+  return out;
 }

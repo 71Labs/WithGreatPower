@@ -1,7 +1,7 @@
 "use client";
 
 import type { CaseFiling } from "@/components/cases/case-closed";
-import { FeeCaseClosed } from "@/components/cases/fee-strike/case-closed";
+import { CaseClosed } from "@/components/cases/case-closed";
 import { KitStyles } from "@/components/game/kit";
 import { useFixtureParam } from "@/lib/cases/data";
 import { FIXTURE_TICKS, FIXTURE_TX } from "@/lib/cases/fixtures";
@@ -27,7 +27,7 @@ export function Case003Lab() {
     <div data-wgp-night="" className="fixed inset-0 z-[60] overflow-hidden bg-game-night text-game-ink">
       <KitStyles />
       <CityBackdrop className="absolute inset-0" />
-      <FeeCaseClosed heroName="Night Owl" closed={view.closed ?? true} ticks={FIXTURE_TICKS} filing={view.filing} edition={0} onRetry={() => {}} record={false} />
+      <CaseClosed chapter="case-003" heroName="Night Owl" closed={view.closed ?? true} ticks={FIXTURE_TICKS} filing={view.filing} edition={0} onRetry={() => {}} record={false} />
     </div>
   );
 }

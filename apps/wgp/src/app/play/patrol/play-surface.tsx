@@ -13,14 +13,19 @@
  *
  * `?autopilot=1` hands the input to game-core's bot (and answers errands), `?debug=1`
  * shows the renderer's numbers and exposes `window.__wgpPlay` for headless checks.
+ *
+ * A race (the Daily Run, a time trial, a duel; components/compete) plugs in through `addon`:
+ * its ghosts inside the canvas, its HUD over the night, an objective in the route bar's place,
+ * its own recording slot and bot. Without one, nothing here changes.
  */
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 
 import { castById, type CastId } from "@wgp/game-core/cast";
 import { CHAPTERS, villainCard } from "@wgp/game-core/chapters";
 import { ALLY_CAST, ERRANDS, SUITS } from "@wgp/game-core/data";
-import { botFrame, newBotMemory } from "@wgp/game-core/sim3d";
+import { botFrame, newBotMemory, type BotMemory, type SimState } from "@wgp/game-core/sim3d";
+import type { InputFrame } from "@wgp/game-core/sim3d/contract";
 import type { Stop, StopResult } from "@wgp/game-core/types";
 
 import { holdAudioLoads, playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
@@ -37,6 +42,7 @@ import { EncounterBanner, ErrandSheet, PauseMenu, WonCaption } from "@/sim/ui/sh
 
 import { ChapterBeats, ChapterCallouts, ChapterStore, ChapterTips, feedChapter, ObjectiveChip, RestoreBar, RightClickerBar, useChapterLines, useChapterValue } from "./chapter-hud";
 import { chapterFixtureName, FixtureTap } from "./chapter-fixture";
+import { BallotPointer, feedVote, SybilVoteBar, useVoteLines, VoteBeats, VoteCallouts, VoteObjective, VoteStore, VoteTips } from "./vote-hud";
 import { CoolBar, FeeBeats, FeeCallouts, FeeObjective, FeeTips, FeeVillain, useFeeLines, useFeeOn } from "./fee-hud";
 import { CityMap, stopName } from "./city-map";
 import { ComboMeter } from "./combo";
@@ -63,7 +69,9 @@ html:has([data-night]), html:has([data-night]) body { overscroll-behavior: none;
 const castOf = (stop: Stop): CastId => (stop.kind === "fight" ? stop.villain : ALLY_CAST[stop.ally]);
 
 /** Where a case night's minimap button says the next mark is. */
-const CHAPTER_NEXT = { investigate: "the nearest clue", standoff: "the bridge deck", rescue: "Mary Jpeg", done: null } as const;
+const CHAPTER_NEXT = { investigate: "the nearest clue", standoff: "the bridge deck", rescue: "Mary Jpeg", done: null, lineup: "the bridge deck" } as const;
+/** Case file 002's. */
+const VOTE_NEXT = { investigate: "the nearest drop box", lineup: "the polling station", standoff: "the polling station", rescue: "Uncle Gen’s ballot", done: null } as const;
 /** Case File 003's: the next clue, the meter, Gas Goblin, the bakery, the meter again. */
 const FEE_NEXT = { investigate: "the nearest clue", meter: "the fee meter", chase: "Gas Goblin", showdown: "Aunt Mainnet’s bakery", cool: "the fee meter", done: null } as const;
 
@@ -76,6 +84,22 @@ export interface ChapterEnd {
   ticks: number | null;
 }
 
+/** What a race adds to the night (components/compete): every field optional. */
+export interface SurfaceAddon {
+  /** Inside the 3D canvas (an R3F child): the ghosts. */
+  Scene?: ComponentType<{ loop: RunLoop }>;
+  /** Over the night, under the sheets, while it plays: the race HUD. */
+  Overlay?: ComponentType<{ loop: RunLoop; tap: FrameTap; touch: boolean; still: boolean }>;
+  /** In the route bar's place (a trial has no stops). */
+  objective?: ReactNode;
+  /** The recording's slot (recorder.ts), so a race never overwrites tonight's patrol or a case. */
+  slot?: string;
+  /** The cast to build (a trial meets nobody). */
+  cast?: CastId[];
+  /** The autopilot's bot (`?autopilot=1`), in place of the patrol bot. */
+  bot?: (s: SimState, mem: BotMemory) => InputFrame;
+}
+
 export interface PlaySurfaceProps {
   session: NightSession;
   autopilot: boolean;
@@ -86,19 +110,33 @@ export interface PlaySurfaceProps {
   ended: boolean;
   /** The WebGL context didn't come back: switch to the 2D game. */
   onFallback(): void;
+  /** A race's ghosts, HUD and the rest (see SurfaceAddon). */
+  addon?: SurfaceAddon;
 }
 
-export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallback }: PlaySurfaceProps) {
+export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallback, addon }: PlaySurfaceProps) {
   const { run } = session;
   const hero = run.start.hero!;
   // The sim's stops: the patrol's, or a chapter's one stage (Case File 001 has no patrol).
   const stops = run.sim.config.stops;
   const chapter = run.chapter;
+  /** Case file 002, "The Sybil Vote": its own HUD (vote-hud.tsx). */
+  const vote = chapter === "case-002";
   const colors = SUITS[hero.suit].colors;
   const loadout = useMemo(() => hero.loadout.filter((id) => hero.powers[id]), [hero]);
   // A chapter's cast: Mary (frozen on the deck) and Gwei; the Right-Clicker comes with the bridge's zone.
+  const addonCast = addon?.cast;
   // (Case File 003's: Gas Goblin from its stop, Aunt Mainnet on her roof, Gwei.)
-  const cast = useMemo(() => (chapter && chapter !== "case-003" ? (["mary-jpeg", "gwei"] as CastId[]) : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]), [stops, chapter]);
+  const cast = useMemo(
+    () =>
+      addonCast ??
+      (chapter === "case-002"
+        ? (["uncle-gen", "gwei"] as CastId[])
+        : chapter && chapter !== "case-003"
+          ? (["mary-jpeg", "gwei"] as CastId[])
+          : [...new Set<CastId>([...stops.map(castOf), "gwei", "aunt-mainnet"])]),
+    [stops, chapter, addonCast],
+  );
   const positions = useMemo(() => stopPositions(stops.length), [stops]);
 
   const [hudStore] = useState(() => new HudStore());
@@ -113,6 +151,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [chapterStore] = useState(() => new ChapterStore());
   const chapterOn = useChapterValue(chapterStore, (c) => c !== null);
   const chapterPhase = useChapterValue(chapterStore, (c) => c?.phase ?? null);
+  const [voteStore] = useState(() => new VoteStore());
   /** Case File 003's HUD (only while the sim's snapshot carries `fee`). */
   const feeOn = useFeeOn(hudStore);
   const feePhase = useHudValue(hudStore, (h) => h?.fee?.phase ?? null);
@@ -125,6 +164,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const hudStatus = useHudValue(hudStore, (h) => h?.status ?? null);
   const hudCountdown = useHudValue(hudStore, (h) => (h?.status === "intro" ? h.countdown : null));
   const villainKind = useHudValue(hudStore, (h) => h?.villain?.kind ?? null);
+  const hudChapterPhase = useHudValue(hudStore, (h) => h?.chapter?.phase ?? null);
   const touch = useCoarsePointer();
   /** A phone, held either way: the HUD gives the minimap's spot to the villain bar in a fight. */
   const narrow = useNarrowViewport();
@@ -143,6 +183,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const [map, setMap] = useState<"play" | "pause" | null>(null);
   const [errand, setErrand] = useState<{ index: number; chosen: string | null } | null>(null);
   const [results, setResults] = useState<StopResult[]>(() => run.save.patrol?.results ?? []);
+  const addonBot = addon?.bot;
+  const addonSlot = addon?.slot;
   const [announce, setAnnounce] = useState("");
 
   // What the controls may do right now, read from their event handlers.
@@ -184,7 +226,8 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   // as long as this component; effects only attach to it, so a remount in development is safe.
   useEffect(() => {
     const mem = newBotMemory();
-    loop.setSource(autopilot ? (r) => botFrame(r.sim, mem) : () => latch.take(viewFromPose(handle.current?.pose())));
+    const bot = addonBot ?? botFrame;
+    loop.setSource(autopilot ? (r) => bot(r.sim, mem) : () => latch.take(viewFromPose(handle.current?.pose())));
     const timers: number[] = [];
     const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, ms));
 
@@ -252,7 +295,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
     const offs = [loop.bus.on(onEvent), loop.bus.on(sceneEffects(() => handle.current)), loop.bus.on(nightAudio(stops))];
     loop.start();
 
-    const recorder = new RunRecorder(run, { mode: session.mode, runId: session.runId, playerId: session.playerId });
+    const recorder = new RunRecorder(run, { mode: session.mode, runId: session.runId, playerId: session.playerId, slot: addonSlot ?? null });
     const stopRecording = recorder.start();
     const offOver = loop.bus.on((ev) => {
       // Write the finished log at once, so a reload during the submit can submit it again.
@@ -299,11 +342,13 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
       setAudioPaused(false);
       if (debug || autopilot) delete window.__wgpPlay;
     };
-  }, [loop, latch, run, session, stops, autopilot, debug, touch, say, chapterStore]);
+  }, [loop, latch, run, session, stops, autopilot, debug, touch, say, chapterStore, addonBot, addonSlot]);
 
   // A case night's HUD reads the frames the overlays see, and says what happens out loud.
   useEffect(() => feedChapter(tap, chapterStore, hudStore), [tap, chapterStore, hudStore]);
   useChapterLines(chapterStore, loop.bus, say);
+  useEffect(() => (vote ? feedVote(tap, voteStore, hudStore) : undefined), [vote, tap, voteStore, hudStore]);
+  useVoteLines(voteStore, loop.bus, say);
   useFeeLines(hudStore, loop.bus, say);
 
   const togglePause = useCallback(
@@ -525,7 +570,9 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onContextStalled={onFallback}
             paused={modal}
             tap={tap}
-          />
+          >
+            {addon?.Scene ? <addon.Scene loop={loop} /> : null}
+          </Stage>
           {/* The floating stick: its reach (the ring), where the thumb landed (the dot: inside it the stick is centred) and the knob under the thumb. */}
           <div
             ref={stickRing}
@@ -569,11 +616,15 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             onPause={() => togglePause(true)}
             combo={<ComboMeter tap={tap} store={hudStore} />}
             chapter={
-              chapterOn
-                ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> }
+              vote
+                ? { objective: <VoteObjective store={voteStore} className="w-full max-w-[520px]" />, villain: <SybilVoteBar store={voteStore} /> }
                 : feeOn
                   ? { objective: <FeeObjective hud={hudStore} className="w-full max-w-[520px]" />, villain: <FeeVillain hud={hudStore} /> }
-                  : undefined
+                  : chapterOn
+                    ? { objective: <ObjectiveChip store={chapterStore} className="w-full max-w-[520px]" />, villain: <RightClickerBar store={chapterStore} /> }
+                    : addon?.objective
+                      ? { objective: addon.objective, villain: null }
+                      : undefined
             }
             minimap={
               <Minimap
@@ -586,7 +637,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
                 onOpen={openMapFromHud}
                 still={still}
                 touch={touch}
-                nextLabel={feeOn ? FEE_NEXT[feePhase ?? "done"] : chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
+                nextLabel={vote ? VOTE_NEXT[hudChapterPhase ?? "done"] : feeOn ? FEE_NEXT[feePhase ?? "done"] : chapter ? CHAPTER_NEXT[chapterPhase ?? "done"] : nextStop ? stopName(nextStop) : null}
                 hidden={phone && villainKind !== null}
               />
             }
@@ -594,7 +645,14 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         ) : null}
         {/* A chapter's stop is the bridge, not a patrol villain: its own banner and captions belong to the chapter HUD. */}
         {!ended && !chapter && introStop?.kind === "fight" ? <EncounterBanner stop={introStop} index={hudIndex!} total={stops.length} /> : null}
-        {!ended && hudMode === "won" && villainKind && villainKind !== "right-clicker" && !feeOn ? <WonCaption villain={villainKind} /> : null}
+        {!ended && !chapter && hudMode === "won" && villainKind && villainKind !== "right-clicker" ? <WonCaption villain={villainKind} /> : null}
+        {!ended && vote ? (
+          <>
+            <BallotPointer tap={tap} />
+            <VoteBeats hud={hudStore} />
+            <VoteCallouts store={voteStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
+          </>
+        ) : null}
         {/* Case File 003's own: the cooling bar over the meter, its beats and callouts. */}
         {!ended && feeOn ? (
           <>
@@ -610,6 +668,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
             <ChapterCallouts store={chapterStore} bus={loop.bus} layout={short ? "short" : phone ? "phone" : "wide"} />
           </>
         ) : null}
+        {addon?.Overlay && !ended ? <addon.Overlay loop={loop} tap={tap} touch={touch} still={still} /> : null}
         {countdown && !ended ? (
           // Off the hero, who stands in the middle: below the feet, or above the head on a phone held sideways.
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%+128px)] flex justify-center short:top-[calc(50%-112px)]">
@@ -628,7 +687,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           onResume={() => togglePause(false)}
           onMap={() => openMap("pause")}
           settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
-          help={chapterOn ? <ChapterTips touch={touch} /> : feeOn ? <FeeTips touch={touch} /> : undefined}
+          help={vote ? <VoteTips touch={touch} /> : feeOn ? <FeeTips touch={touch} /> : chapterOn ? <ChapterTips touch={touch} /> : undefined}
         />
       ) : null}
       {map && !ended ? (

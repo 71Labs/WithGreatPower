@@ -74,7 +74,7 @@ A knockout in the fight or the cooling ends the night uncleared. Five losses in 
 
 - **Same style as the patrol sim:** `dmath` trig, the sim's `roll()`, + − × ÷, `Math.sqrt` and `Math.floor`. The determinism scan covers the new files.
 - **The hash:** `FeeState` is hashed after everything else, and only when `state.fee` is set (`hash.ts hashFee`): every patrol golden and case 001's are byte-identical.
-- **One shared-code guard:** `combat.ts villainTargets` returns no targets for a beaten villain (hits 0). On every other night hits only reach 0 as the fight is won (mode `won`), where no caller asks; the goldens and bot nights confirm nothing changed.
+- **One shared-code guard:** `combat.ts villainTargets` returns no targets for a beaten Gas Goblin (hits 0). On every other night his hits only reach 0 as the fight is won (mode `won`), where no caller asks; the goldens and bot nights confirm nothing changed.
 - **Runs:** `startChapterRun(save, seed, "case-003")`; `runLog` writes `0x0C003104`; `replayRun(input, { chapter: "case-003" })`. A patrol log, a case-001 log and a case-003 log each replay only as themselves (`ruleset 201339140 is not 4`, `… is not chapter case-001's 201330948`, `ruleset 201330948 is not chapter case-003's 201339140`).
 - **Results:** `score` 0. `chapterCleared`: the phase `done`, the meter cooled, the night over on it, health left. `chapterStats` adds `losses`, `checkpoint` and `chaseSeconds`; `restore` is the cooling ticks. Checkpoint hashes: each clue, the grab, the bakery, the win and the cooled meter (7 on a clean night).
 
@@ -119,8 +119,8 @@ Also: `villain-attack` ("Fee bomb" in the chase, "Fee spike" while cooling), `bl
 - **Starting:** `/play/patrol?case=003` goes the same three ways as case 001 (signed in: `beginRanked({ chapter: "case-003" })`; guest: `beginLocalChapter`; unranked).
 - **HUD snapshot:** `HudSnapshot.fee` (`src/sim/loop.ts FeeHud`, filled by `game3d/session/hud.ts feeHud`): `{ id, phase, cluesFound, clues, found[], chase: { gap, escape, warn, checkpoint, checkpoints, losses, maxLosses, holding } | null, heat, beside, cooled, spike }`. The patrol `villain` is set for Gas Goblin through the showdown only.
 - **In the night (`app/play/patrol/fee-hud.tsx`):** the objective chip in the route bar's place ("Chase Gas Goblin" through the chase: his face, "On his tail / Keep up / Falling behind / He's getting away!", the hazard-striped escape meter, checkpoints and losses), the patrol villain bar in the fight, callouts (clue notes, the meter's Downloads note, "After him!", "Lost him!", "Checkpoint", "Bakery!", the loaf, the "Fee spike!" and "He's getting away!" warnings), the cooling bar over the meter, the encounter card and endings, How to play, and a screen-reader line for every phase and event (`lib/cases/fee-view.ts`). The waypoint and minimap point at the clue, the meter, him, the bakery (`game3d/nav/fee-pins.ts`).
-- **The ending:** `FeeCaseClosed` (`components/cases/fee-strike/case-closed.tsx`, the same props as case 001's `CaseClosed`): "Case closed." with the Rug's FEES FALL. LOAF RISES., the time, the badge's state, Share on X. Not closed: "The case is still open."
-- **The case files:** case 003's folder on `/play/cases`, its intro comic at `/play/cases/003`, the Rug's lead after a clear.
+- **The ending:** the generic `CaseClosed` (`components/cases/case-closed.tsx`, `chapter="case-003"`) with case 003's front page (FEES FALL. LOAF RISES. and the thread to 004), the time, the badge's state, Share on X. Not closed: "The case is still open."
+- **The case files:** case 003 is an entry in the generic registry (`lib/cases/registry.ts` `CASE_ENTRIES`, `CASE_ORDER`), so its folder, the Tonight tile and the dock come from the shared data layer (one `/api/cases` fetch); its intro is the generic `CaseIntro` with its own four panels (`/play/cases/003`), and `CaseRugLead` leads with it after a clear.
 
 ## Server
 

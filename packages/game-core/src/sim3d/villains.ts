@@ -76,6 +76,8 @@ import { docVulnerable, hitVillain, hurtHero, mercy, moveDamage, villainHits, vi
 import type { Zone } from "./contract";
 import { clamp, datan2, dcos, dsin, len2, len3, PI } from "./dmath";
 import { spawnRightClicker, stepRightClicker, stepRightClickerWebbed } from "./right-clicker";
+import { stepSybilVote, stepSybilVoteWebbed } from "./sybil-vote";
+import { spawnVoteSybil } from "./vote";
 import { roll } from "./rng";
 import type { Hazard, SimState, Villain } from "./types";
 
@@ -94,8 +96,8 @@ const DOC_HOVER = 280;
 const SYBIL_HOVER = 120;
 
 export function spawnVillain(s: SimState, zone: Zone): Villain {
-  // Case File 001: the Right-Clicker on the bridge.
-  if (s.chapter) return spawnRightClicker(s, zone);
+  // Case File 001: the Right-Clicker on the bridge. Case File 002: the Sybil's voters at the polling station.
+  if (s.chapter) return s.chapter.vote ? spawnVoteSybil(s, zone) : spawnRightClicker(s, zone);
   const stop = s.config.stops[zone.index] as Extract<Stop, { kind: "fight" }>;
   const hits = villainHits(stop.level, stop.boss);
   const rate = 1 + 0.08 * (stop.level - 1) + (stop.boss ? 0.15 : 0);
@@ -1127,6 +1129,10 @@ function stepWebbed(s: SimState, v: Villain, dt: number, zone: Zone) {
     stepRightClickerWebbed(v, dt, zone);
     return;
   }
+  if (s.chapter?.vote) {
+    stepSybilVoteWebbed(v, dt, zone);
+    return;
+  }
   // Flyers sink to hang this far over the floor (v3: 260 over the street).
   const hang = floorOf(zone) + 70;
   if (v.kind === "sandwich-man") {
@@ -1207,7 +1213,9 @@ export function stepVillain(s: SimState, dt: number) {
       stepDoc(s, v, vdt, zone);
       break;
     case "sybil":
-      stepSybil(s, v, vdt, zone);
+      // Case File 002's Sybil walks the polling station's roof (sybil-vote.ts).
+      if (s.chapter?.vote) stepSybilVote(s, v, vdt, zone);
+      else stepSybil(s, v, vdt, zone);
       break;
     case "right-clicker":
       stepRightClicker(s, v, vdt, zone);

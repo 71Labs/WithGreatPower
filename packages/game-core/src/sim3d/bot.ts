@@ -8,6 +8,7 @@
  * pickup when one is close and on the way, else at the next stop.
  */
 import { abilityBlocked, gweiBlocked } from "./abilities";
+import { newVoteBotMemory, voteFightFrame, type VoteBotMemory } from "./bot-vote";
 import { besideCaptive, COPY_RADIUS, RESTORE_REACH } from "./chapter";
 import { docVulnerable, isVulnerable, mercy, nearestTarget, takesHit } from "./combat";
 import { coolFrame, feeGoalDist, feeGoalKey } from "./fee-bot";
@@ -48,6 +49,8 @@ export interface BotMemory {
   dodgeT: number;
   dodgeDir: number;
   circle: number;
+  /** Case File 002's polling station (bot-vote.ts). */
+  vote: VoteBotMemory;
 }
 
 export const newBotMemory = (): BotMemory => ({
@@ -68,6 +71,7 @@ export const newBotMemory = (): BotMemory => ({
   dodgeT: 0,
   dodgeDir: 0,
   circle: 1,
+  vote: newVoteBotMemory(),
 });
 
 /** tan 22° and tan 56°: the bot aims inside the perfect window (15–65°), with a margin, early (where the swing carries furthest). */
@@ -263,6 +267,8 @@ function rescueFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"]): Inp
 function fightFrame(s: SimState, mem: BotMemory, shot: InputFrame["shot"], dt: number): InputFrame {
   const h = s.hero;
   const v = s.villain!;
+  // Case File 002: the lineup, the fork votes and the runner (bot-vote.ts).
+  if (s.chapter?.vote) return voteFightFrame(s, mem.vote, shot);
   if (s.chapter && s.chapter.phase === "rescue" && s.mode === "fight") return rescueFrame(s, mem, shot);
   // Case File 003: cooling the meter, Gas Goblin webbed.
   if (s.fee && s.fee.phase === "cool" && s.mode === "fight") return coolFrame(s, shot);

@@ -200,7 +200,13 @@ export interface Stats {
  * A story chapter ("case file"), played as its own night (rules/chapters.ts, sim3d/chapter.ts).
  * Case File 003, "Fee Strike", is its own sim branch (sim3d/fee-strike*.ts).
  */
-export type ChapterId = "case-001" | "case-003";
+export type ChapterId = "case-001" | "case-002" | "case-003";
+
+/**
+ * A time trial's course (rules/compete.ts, sim3d/trial.ts): a short hand-laid line of gates
+ * through a fixed city, raced against the clock under its own ruleset ("trial-1").
+ */
+export type TrialCourseId = "rooftop-sprint" | "bridge-run" | "canyon-swing" | "tower-climb" | "gauntlet";
 
 /** A case file in the save: whether it's closed, when, and the fastest clear. */
 export interface CaseRecord {

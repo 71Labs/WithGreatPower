@@ -10,46 +10,16 @@
  * 4. The case file, stamped 003: the suspect, a tip about the meter, and the job.
  * (docs/story/bible.md, "003 Fee Strike".)
  *
- * Wide screens lay the page out as a strip (two by two on a tablet), empty frames waiting
- * for their panel; a phone shows one panel at a time. A tap on the comic, Turn the page, →,
- * Space or Enter turns to the next panel, ← goes back, and Skip (or Esc) shows them all.
- * Panels pop in, unless reduced motion is asked for. Guests can start too, and are told
- * where their clear is kept.
+ * The comic's frames, keys and start block are the generic CaseIntro's (case-intro.tsx).
  */
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-
-import { StickerButton, StickerFrame, StickerLink } from "@/components/game/kit";
+import { StickerFrame } from "@/components/game/kit";
 import { AVATARS } from "@/components/cast";
-import { ArrowLeft, ArrowRight, KeyRound, LogIn } from "@/components/icons";
-import { useAccount, useGame } from "@/game/store";
+import { KeyRound } from "@/components/icons";
 import { CASE_003, CASE_003_PATHS, GAS_GOBLIN } from "@/lib/cases/content-003";
-import { markCaseSeen, markCaseStarted } from "@/lib/cases/local";
 
+import { Caption, CaseIntro, Panel, type IntroStory } from "../case-intro";
 import { CaseStamp, RugFront } from "../shared";
 import { ColdWindowPhoto, DarkSignQueueArt, FeeMeterArt } from "./art";
-
-const PANELS = ["The Daily Rug’s front page", "Outside Aunt Mainnet’s", "J. Jonah Bearson", "Case file 003"] as const;
-const LAST = PANELS.length - 1;
-
-/** A comic caption box: gold, ink-ruled, in caps. */
-function Caption({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <p
-      className={`w-fit max-w-full rounded-[6px] border-2 border-game-ink bg-game-gold px-2.5 py-1 text-[11px] font-bold uppercase leading-[15px] tracking-[0.06em] text-game-ink shadow-[var(--game-shadow-sm)] ${className}`}
-    >
-      {children}
-    </p>
-  );
-}
-
-/** One panel's frame: an ink-ruled box with its own ground. */
-function Panel({ n, ground, children, className = "" }: { n: number; ground: string; children: ReactNode; className?: string }) {
-  return (
-    <figure aria-label={`Panel ${n + 1} of ${PANELS.length}: ${PANELS[n]}`} className={`wgp-pop relative flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border-[3px] border-game-ink shadow-[var(--game-shadow)] ${ground} ${className}`}>
-      {children}
-    </figure>
-  );
-}
 
 function FrontPagePanel() {
   return (
@@ -175,163 +145,20 @@ function CaseFilePanel() {
   );
 }
 
-const CONTENT = [FrontPagePanel, QueuePanel, BearsonPanel, CaseFilePanel];
+const STORY: IntroStory = {
+  id: CASE_003.id,
+  number: CASE_003.number,
+  title: CASE_003.title,
+  panels: [
+    { label: "The Daily Rug’s front page", Content: FrontPagePanel },
+    { label: "Outside Aunt Mainnet’s", Content: QueuePanel },
+    { label: "J. Jonah Bearson", Content: BearsonPanel },
+    { label: "Case file 003", Content: CaseFilePanel },
+  ],
+  paths: CASE_003_PATHS,
+};
 
-/** An empty frame waiting for its panel (wide screens only). */
-function EmptyFrame() {
-  return <div aria-hidden className="h-full min-h-[200px] rounded-[16px] border-[3px] border-dashed border-game-paper/30" />;
-}
-
-function StartBlock({ startRef }: { startRef: RefObject<HTMLAnchorElement | null> }) {
-  const account = useAccount();
-  const { save } = useGame();
-  const guest = account.status === "guest";
-  const noHero = !!save && !save.hero;
-  return (
-    <div className="wgp-rise flex w-full max-w-[460px] flex-col items-center gap-2.5 text-center">
-      {noHero ? (
-        <StickerLink ref={startRef} href="/play/bitten" variant="hero" size="xl" className="w-full">
-          Get bitten to start the case
-          <ArrowRight aria-hidden className="size-6" strokeWidth={2.25} />
-        </StickerLink>
-      ) : (
-        <StickerLink ref={startRef} href={CASE_003_PATHS.play} onClick={() => markCaseStarted(CASE_003.id)} variant="hero" size="xl" className="w-full">
-          Start the case
-          <ArrowRight aria-hidden className="size-6" strokeWidth={2.25} />
-        </StickerLink>
-      )}
-      {noHero ? (
-        <p className="text-[13px] leading-5 text-game-paper/85 text-pretty">Every case needs someone to swing it. Get bitten first; the case file waits on Tonight.</p>
-      ) : guest ? (
-        <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-[13px] leading-5 text-game-paper/85 text-pretty">
-          <span>Playing as a guest: your clear stays in this browser unless you sign in.</span>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("wgp:sign-in"))}
-            className="inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-semibold text-game-paper underline decoration-game-paper/50 underline-offset-4 pointer-fine:hover:decoration-game-paper"
-          >
-            <LogIn aria-hidden className="size-4" strokeWidth={2.25} />
-            Sign in
-          </button>
-        </p>
-      ) : (
-        <p className="text-[13px] leading-5 text-game-paper/85 text-pretty">Played off the boards. Your first clear files the “{CASE_003.badge}” badge with your hero.</p>
-      )}
-      <p className="max-w-[44ch] text-[12px] leading-[18px] text-game-paper/75 text-pretty">{CASE_003.chaseRule}</p>
-    </div>
-  );
-}
-
+/** Case file 003's intro: the generic comic (components/cases/case-intro.tsx) with its own four panels. */
 export function FeeStrikeIntro() {
-  const [step, setStep] = useState(0);
-  const [announce, setAnnounce] = useState("");
-  const start = useRef<HTMLAnchorElement>(null);
-  const done = step >= LAST;
-
-  const go = (to: number) => {
-    const n = Math.max(0, Math.min(LAST, to));
-    setStep(n);
-    setAnnounce(`Panel ${n + 1} of ${PANELS.length}: ${PANELS[n]}.`);
-  };
-  const skip = () => {
-    setStep(LAST);
-    setAnnounce("All four panels. Start the case when you’re ready.");
-    requestAnimationFrame(() => start.current?.focus({ preventScroll: true }));
-  };
-
-  // Keys turn the page: → Space Enter forward, ← back, Esc skips. Not while a control has
-  // Space or Enter (it presses itself), and never with a modifier held.
-  const keys = useRef({ go, skip, step });
-  useEffect(() => {
-    keys.current = { go, skip, step };
-  });
-  useEffect(() => markCaseSeen(CASE_003.id), []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-      const onControl = e.target instanceof HTMLElement && !!e.target.closest("a, button, input, textarea, select, [role=dialog]");
-      const k = keys.current;
-      if (e.key === "ArrowRight" || (!onControl && (e.key === " " || e.key === "Enter"))) {
-        if (k.step >= LAST) return;
-        e.preventDefault();
-        k.go(k.step + 1);
-      } else if (e.key === "ArrowLeft") {
-        if (k.step <= 0) return;
-        e.preventDefault();
-        k.go(k.step - 1);
-      } else if (e.key === "Escape" && !document.querySelector("dialog[open]")) {
-        if (k.step >= LAST) return;
-        e.preventDefault();
-        k.skip();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[1320px] flex-col gap-4 px-4 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))] sm:px-6 lg:gap-6 lg:px-8">
-      <header className="flex items-center justify-between gap-2">
-        <StickerLink href={CASE_003_PATHS.list} size="sm">
-          <ArrowLeft aria-hidden className="size-4" strokeWidth={2.25} />
-          Case files
-        </StickerLink>
-        <p className="num inline-flex h-8 items-center rounded-full border-2 border-game-ink bg-game-paper px-3 text-[13px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)]">
-          <span className="max-[359px]:hidden">Panel&nbsp;</span>
-          {step + 1}/{PANELS.length}
-        </p>
-        <StickerButton size="sm" onClick={skip} aria-keyshortcuts="Escape" className={done ? "invisible" : ""}>
-          Skip intro
-        </StickerButton>
-      </header>
-
-      <h1 className="sr-only">
-        Case file {CASE_003.number}: {CASE_003.title}
-      </h1>
-
-      {/* The comic. A tap anywhere on it turns the page. */}
-      <ol
-        aria-label="The story so far"
-        onClick={(e) => {
-          if (done || (e.target instanceof HTMLElement && e.target.closest("a, button"))) return;
-          go(step + 1);
-        }}
-        className={`grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5 ${done ? "" : "cursor-pointer"}`}
-      >
-        {CONTENT.map((Content, i) => (
-          <li key={i} className={`min-h-0 ${i === step ? "" : "max-md:hidden"}`}>
-            {i <= step ? <Content /> : <EmptyFrame />}
-          </li>
-        ))}
-      </ol>
-
-      <footer className="flex flex-col items-center gap-2">
-        {done ? (
-          <StartBlock startRef={start} />
-        ) : (
-          <div className="flex w-full max-w-[460px] items-center gap-2.5">
-            {step > 0 ? (
-              <StickerButton size="lg" onClick={() => go(step - 1)} aria-label="Go back a panel" aria-keyshortcuts="ArrowLeft" className="shrink-0 md:hidden">
-                <ArrowLeft aria-hidden className="size-5" strokeWidth={2.25} />
-              </StickerButton>
-            ) : null}
-            <StickerButton size="lg" onClick={() => go(step + 1)} aria-keyshortcuts="ArrowRight" className="flex-1">
-              Turn the page
-              <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
-            </StickerButton>
-          </div>
-        )}
-        {done ? null : (
-          <p aria-hidden className="text-[12px] font-medium leading-4 text-game-paper/75">
-            <span className="pointer-coarse:hidden">Click the comic or press → to turn the page</span>
-            <span className="pointer-fine:hidden">Tap the comic to turn the page</span>
-          </p>
-        )}
-      </footer>
-
-      <p role="status" aria-live="polite" className="sr-only">
-        {announce}
-      </p>
-    </div>
-  );
+  return <CaseIntro story={STORY} />;
 }

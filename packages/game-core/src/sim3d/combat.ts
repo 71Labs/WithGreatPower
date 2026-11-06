@@ -8,6 +8,7 @@ import { VILLAINS, damageScale } from "../rules/data";
 import type { VillainId } from "../rules/types";
 
 import { COPY_RADIUS, popCopies, popCopy } from "./chapter";
+import { endRecount, markReal, popVoteCopies, realBody, RECOUNT_AT, startRecount, takeBallot, voteDamage, VOTE_GUARD, wrongVoter } from "./vote";
 import { HURT_AIR_VY, HURT_INVULN, HURT_SHOVE, HURT_STAGGER, KO_SECONDS, MERCY_DAMAGE, MERCY_GUARD, VILLAIN_HIT_INVULN, WON_SECONDS } from "./constants";
 import { len2, len3 } from "./dmath";
 import type { HitSource, SimState, SimVillainId, Villain } from "./types";
@@ -51,6 +52,9 @@ const VILLAIN_GUARD: Partial<Record<SimVillainId, number>> = {
  */
 export function inOpening(v: Villain): boolean {
   if (v.kind === "right-clicker") return v.phase === "recover" || v.phase === "stagger";
+  // Case File 002's Sybil, recovering from a fake vote or staggered by a failed quorum (the
+  // patrol's Sybil never takes these phases, so his fights read exactly as before).
+  if (v.kind === "sybil") return v.phase === "recover" || v.phase === "stagger";
   return (v.kind === "gas-goblin" || v.kind === "sandwich-man") && v.phase === "recover";
 }
 
@@ -100,14 +104,16 @@ export function villainTargets(v: Villain): Target[] {
     });
     return out;
   }
-  // Beaten, nobody's a target: Case File 003's Gas Goblin stays webbed through the cooling (mode
-  // "fight"). On every other night hits only reach 0 as the fight is won (mode "won"), so
-  // nothing there changes.
-  if (v.hits <= 0) return [];
+  // Beaten, Gas Goblin is no target: Case File 003 keeps him webbed through the cooling (mode
+  // "fight"). On every other night his hits only reach 0 as the fight is won (mode "won"), so
+  // nothing there changes. (Case File 002's beaten Sybil is handled below: his runner stays one.)
+  if (v.kind === "gas-goblin" && v.hits <= 0) return [];
   if (v.kind === "sybil") {
     const out: Target[] = [];
     v.bodies.forEach((b, i) => {
-      if (b.alive) out.push({ x: b.x, y: b.y, z: b.z, r: v.radius, body: i });
+      // Beaten, he's no target (Case File 002's rescue: only the runner is; a patrol fight is
+      // over by then).
+      if (b.alive && !(b.real && v.hits <= 0)) out.push({ x: b.x, y: b.y, z: b.z, r: v.radius, body: i });
     });
     return out;
   }
@@ -189,6 +195,8 @@ export function hurtHero(s: SimState, damage: number, source: string, fromX: num
 export function hitVillain(s: SimState, body: number, n: number, by: HitSource): boolean {
   const v = s.villain;
   if (!v || s.mode !== "fight" || n <= 0) return false;
+  // Case File 002: the lineup, the fight's copies, the recount and the runner have their own rules.
+  if (v.kind === "sybil" && s.chapter?.vote) return hitSybilVote(s, v, body, n, by);
   if (v.kind === "right-clicker") {
     // A paper copy takes the blow and pops (it doesn't land on him); beaten, he takes no more.
     const copy = body >= 0 ? v.bodies[body] : undefined;
@@ -244,6 +252,76 @@ export function hitVillain(s: SimState, body: number, n: number, by: HitSource):
   return true;
 }
 
+/**
+ * Case File 002's hits (sim3d/vote.ts):
+ * - the lineup: only a blow marks; on the real Sybil it unmasks him (the standoff), on a copy
+ *   it pops it, with a paper cut back;
+ * - the fight: a copy pops on any hit and never passes it on; he takes direct hits through
+ *   his guard only in an opening; at RECOUNT_AT hits left he hides (the recount);
+ * - the recount: a hit on him lands whatever his guard and ends it; a copy pops, a paper cut;
+ * - the rescue: a hit on the runner takes Uncle Gen's ballot back.
+ */
+function hitSybilVote(s: SimState, v: Villain, body: number, n: number, by: HitSource): boolean {
+  const c = s.chapter!;
+  const vt = c.vote!;
+  const b = body >= 0 ? v.bodies[body] : realBody(v);
+  if (!b || !b.alive) return false;
+  if (c.phase === "lineup") {
+    if (by !== "strike") return false;
+    if (b.real) {
+      markReal(s, v);
+      return true;
+    }
+    wrongVoter(s, b);
+    hurtHero(s, voteDamage(v, "Paper cut"), "a paper cut", b.x, b.y, b.z);
+    return false;
+  }
+  if (c.phase === "rescue") {
+    if (!b.real && b.slot === vt.runner && vt.ballot === 0) takeBallot(s, b);
+    return false;
+  }
+  if (c.phase !== "standoff" || v.hits <= 0) return false;
+  if (vt.stage === "recount") {
+    if (!b.real) {
+      wrongVoter(s, b);
+      hurtHero(s, voteDamage(v, "Paper cut"), "a paper cut", b.x, b.y, b.z);
+      return false;
+    }
+    v.hits = Math.max(0, v.hits - 1);
+    v.invuln = VOTE_GUARD;
+    v.fleeT = 1.8;
+    s.events.push({ type: "villain-hit", x: b.x, y: b.y, z: b.z, hits: v.hits, hitsMax: v.hitsMax, by, double: false, copy: false });
+    endRecount(s, v);
+    if (v.hits <= 0) winFight(s);
+    return true;
+  }
+  if (!b.real) {
+    popCopy(s, b);
+    return false;
+  }
+  const direct = by === "slam" || by === "dash" || by === "sling" || by === "strike";
+  if (direct && v.invuln > 0 && !inOpening(v)) {
+    s.events.push({ type: "clang", x: b.x, y: b.y, z: b.z, reason: "guard" });
+    return false;
+  }
+  let count = n;
+  const h = s.hero;
+  const double = h.finalityT > 0;
+  if (double) {
+    count *= 2;
+    h.finalityT = 0;
+  }
+  v.hits = Math.max(0, v.hits - count);
+  v.invuln = VOTE_GUARD;
+  v.fleeT = 1.8;
+  // A blow in an opening leaves at most a moment of it (about one more blow).
+  if (inOpening(v)) v.phaseT = Math.min(v.phaseT, 0.3);
+  s.events.push({ type: "villain-hit", x: b.x, y: b.y, z: b.z, hits: v.hits, hitsMax: v.hitsMax, by, double, copy: false });
+  if (v.hits <= 0) winFight(s);
+  else if (vt.stage === "polls" && v.hits <= RECOUNT_AT) startRecount(s, v);
+  return true;
+}
+
 /** An area hit: every body inside the radius takes `n` hits, and is stunned. */
 export function blast(s: SimState, x: number, y: number, z: number, r: number, n: number, stun: number, kind: "web" | "slam"): number {
   s.events.push({ type: "blast", x, y, z, r, kind });
@@ -273,6 +351,11 @@ export function winFight(s: SimState) {
   s.hazards.length = 0;
   s.shots.length = 0;
   s.events.push({ type: "fight-won", index: s.index, villain: v.kind, hp: s.hp, fluid: s.fluid, uses: report(s), gweiUsed: s.gweiUsed });
+  // Case File 002: his copies pop, the fork vote is off.
+  if (v.kind === "sybil" && s.chapter?.vote) {
+    popVoteCopies(s, v);
+    s.chapter.vote.forkT = 0;
+  }
   // Case File 001: his copies go with him, and the lasso lets go.
   if (v.kind === "right-clicker") {
     popCopies(s, v);

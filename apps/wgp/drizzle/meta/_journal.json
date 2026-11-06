@@ -50,6 +50,13 @@
       "when": 1793781213220,
       "tag": "0006_social",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793896020476,
+      "tag": "0007_compete",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,8 @@
  * every consumer in the same PR. v1.3 (ruleset 3) added the pickups, the combo, the route and
  * the hero's `controlled`; v1.4 (ruleset 4) a fight zone's `stage`; v1.5 (Case File 001, chapter
  * ruleset c001-1, patrol nights untouched) the frame's `chapter`, the Right-Clicker and a
- * villain's `aim`.
+ * villain's `aim`; v1.6 (Case File 002, ruleset c002-1) `chapter.vote`, the "lineup" phase and
+ * Case File 002's clues (docs/chapters/case-002.md).
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
@@ -260,11 +261,16 @@ export interface RenderFrame3D {
    * - copies: the paper cutouts; `yaw` turns the cutout's front (+z) to face (sin yaw, 0, cos yaw).
    */
   chapter?: {
-    id: "case-001";
-    phase: "investigate" | "standoff" | "rescue" | "done";
-    clues: { id: "tabs" | "cursor" | "pixels"; pos: Vec3; found: boolean }[];
+    id: "case-001" | "case-002";
+    /** v1.6: Case File 002 adds "lineup" (find the real Sybil among the voters) after the clues. */
+    phase: "investigate" | "standoff" | "rescue" | "done" | "lineup";
+    clues: { id: "tabs" | "cursor" | "pixels" | "footage" | "gif" | "signature"; pos: Vec3; found: boolean }[];
+    /** Case File 002: Uncle Gen, waiting by the ballot box (`freed` once his vote is counted; `restore` 0, then 1). */
     captive: { pos: Vec3; restore: number; freed: boolean } | null;
+    /** Case File 001's paper copies (empty on Case File 002, whose copies are the Sybil's bodies in `villains`). */
     copies: { id: number; pos: Vec3; yaw: number; alive: boolean }[];
+    /** Case File 002 (v1.6), else absent. */
+    vote?: VoteFrame | null;
   } | null;
   /**
    * Case File 003, "Fee Strike" (case ruleset c003-1), else null or absent. v1.6, additive.
@@ -294,6 +300,64 @@ export interface RenderFrame3D {
     chase: { next: number; checkpoint: number; escape: number; gap: number; losses: number; maxLosses: number } | null;
     bakery: Vec3;
   } | null;
+  /**
+   * A time trial (ruleset "trial-1"), else null or absent. v1.6, additive. The gates are the
+   * frame's `pickups` (rings, in course order; `taken` once passed) and its `route` the gates
+   * still ahead.
+   * - next: the gate to pass next (0-based), `gates` once through the finish.
+   * - ticks: the clock (sim ticks, 60 a second); it stops at the finish (`endTick`).
+   * - splits: the tick each gate was passed at.
+   */
+  trial?: {
+    course: "rooftop-sprint" | "bridge-run" | "canyon-swing" | "tower-climb" | "gauntlet";
+    next: number;
+    gates: number;
+    ticks: number;
+    splits: number[];
+    finished: boolean;
+    over: boolean;
+  } | null;
+}
+
+/** A Case File 002 look: whether a voter casts a shadow, blinks, and holds his ballot in his left hand. */
+export interface VoteLook {
+  shadow: boolean;
+  blink: boolean;
+  left: boolean;
+}
+
+/**
+ * Case File 002's frame (render contract v1.6; docs/chapters/case-002.md). Nothing here is
+ * read back by the sim or hashed.
+ */
+export interface VoteFrame {
+  /** The fight's stage: the polls, the recount (he hides in a ring again), the runoff. */
+  stage: "polls" | "recount" | "runoff";
+  /** The real Sybil's look tonight, and which of its tells the found clues have revealed. */
+  real: VoteLook;
+  known: VoteLook;
+  /**
+   * Every Sybil body by its slot (`villains` carries the same bodies, alive ones only): the
+   * eight voters (0–7), then the fight's copies and the runner. `pos` is the body's centre,
+   * VOTER_LIFT (52) over the floor; popped ones stay (alive: false) so the scene can pop them.
+   */
+  voters: (VoteLook & { id: number; pos: Vec3; alive: boolean; runner: boolean })[];
+  /** The polling station's eight booths, floor level, in slot order of the lineup. */
+  booths: Vec3[];
+  /** Copies marked by mistake in the lineup. */
+  wrong: number;
+  /**
+   * The fork vote under way, else null: the split runs along z at x = `at` (axis "x") or along
+   * x at z = `at` (axis "z"); `orphan` (±1) is the side orphaned if it passes; seconds `left`
+   * of `total`; `votes` of the copies that called it still stand, `need` to pass.
+   */
+  fork: { axis: "x" | "z"; at: number; orphan: number; left: number; total: number; need: number; votes: number } | null;
+  /** The recount: seconds left before he steps out, else null. */
+  recount: { left: number } | null;
+  /** The ballot box beside Uncle Gen (floor level). */
+  box: Vec3;
+  /** Uncle Gen's ballot from the rescue on: held by the runner, carried by the hero, or counted (in the box). */
+  ballot: { state: "runner" | "carried" | "counted"; pos: Vec3 } | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

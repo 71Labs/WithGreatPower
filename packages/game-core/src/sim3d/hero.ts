@@ -79,6 +79,7 @@ import {
 } from "./constants";
 import { nextClue } from "./chapter";
 import { feeTarget } from "./fee-strike";
+import { nextGate } from "./trial";
 import { collideSphere, groundBelow, overRiver, supported, type AnchorPick, type SphereHit } from "./city";
 import { nearestTarget } from "./combat";
 import type { InputFrame, Vec3, Zone } from "./contract";
@@ -148,11 +149,12 @@ export function arenaZone(s: SimState): Zone | null {
 
 /**
  * Where the route goes next: the arena's centre, or the ally. Case File 001, investigating:
- * the nearest clue not yet found (the bridge only after all three).
+ * the nearest clue not yet found (the bridge only after all three). A time trial: the next gate.
  */
 export function stopTarget(s: SimState): Vec3 | null {
   const clue = s.chapter ? nextClue(s) : null;
   if (clue) return clue;
+  if (s.trial) return nextGate(s);
   // Case File 003: a clue, the fee meter, then Gas Goblin through the chase.
   const fee = s.fee ? feeTarget(s) : null;
   if (fee) return fee;

@@ -74,11 +74,11 @@ export const CASE_001 = {
   },
 } as const;
 
-/** The two cases still in Bearson’s drafts. */
-export const LOCKED_CASES = [
-  { number: "002", line: "Bearson is still writing." },
-  { number: "003", line: "Bearson is still writing." },
-] as const;
+/** The cases still in Bearson’s drafts. */
+export const LOCKED_CASES: readonly { number: string; line: string }[] = [
+  { number: "004", line: "Bearson is still writing." },
+  { number: "005", line: "Bearson is still writing." },
+];
 
 /** The X post a player sends about their clear: their words, from their own account. */
 export function caseShareText(link = `${SITE_URL}${CASE_PATHS.intro}`): string {

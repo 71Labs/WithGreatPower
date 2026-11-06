@@ -29,11 +29,12 @@ export const GAME_NAV = [
   { href: "/play/album", label: "Album", icon: Medal },
   { href: "/play/rug", label: "Daily Rug", icon: Newspaper },
   { href: CASE_PATHS.list, label: "Cases", icon: FolderSearch },
-  { href: "/play/leaderboard", label: "Ranks", icon: Award },
+  // Compete: the Daily Run, time trials, rivals, and the way to the Season boards (it stays lit on them).
+  { href: "/play/compete", label: "Compete", icon: Award },
 ] as const;
 
 const isActive = (pathname: string | null, href: string) =>
-  !!pathname && (href === "/play" ? pathname === "/play" : pathname.startsWith(href));
+  !!pathname && (href === "/play" ? pathname === "/play" : pathname.startsWith(href) || (href === "/play/compete" && pathname.startsWith("/play/leaderboard")));
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0");
@@ -390,10 +391,11 @@ const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(ma
 function Dock({ pathname, save }: { pathname: string | null; save: Save | null }) {
   const picks = save?.hero?.pendingPicks ?? 0;
   const unread = useUnreadEdition(save);
-  const new001 = useNewCase(save);
-  // Case File 003 counts as new too, until its folder or intro is opened.
-  const new003 = useNewCase(save, "case-003");
-  const newCase = new001 || new003;
+  // Any case still unopened (its folder or intro not seen yet) makes the Cases tab new.
+  const newCase001 = useNewCase(save);
+  const newCase002 = useNewCase(save, "case-002");
+  const newCase003 = useNewCase(save, "case-003");
+  const newCase = newCase001 || newCase002 || newCase003;
   return (
     <nav
       aria-label="Game"
@@ -452,6 +454,8 @@ function Dock({ pathname, save }: { pathname: string | null; save: Save | null }
  */
 export function routeMusic(pathname: string): MusicId | null {
   if (pathname.startsWith("/play/patrol")) return null;
+  // A race (the Daily, a trial, a duel) is a night: it runs its own score.
+  if (/^\/play\/compete\/(daily|trial|duel)/.test(pathname)) return null;
   if (pathname.startsWith("/play/market")) return "market";
   return "lobby";
 }

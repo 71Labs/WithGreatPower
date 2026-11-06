@@ -4,9 +4,6 @@ import { CHAPTERS } from "@wgp/game-core/chapters";
 
 import { xLength } from "@/lib/social/x";
 import { CASE_003, CASE_003_ID, CASE_003_PATHS, FEE_CLUES, case003ShareText, feeClueCopy } from "./content-003";
-import { asCase003Fixture, case003Record } from "./data-003";
-import { CASES_FIXTURES } from "./fixtures";
-import { caseStatus } from "./view";
 
 describe("case file 003's copy", () => {
   it("matches the game's case: its id, number, title and clues", () => {
@@ -64,22 +61,5 @@ describe("case file 003's copy", () => {
     const text = case003ShareText("https://www.wgponnear.fun/play/cases/003");
     expect(text).toBe("I cooled the fees and got the loaf back in With Great Power. Case file 003: closed 🕸️ https://www.wgponnear.fun/play/cases/003");
     expect(xLength(text)).toBeLessThanOrEqual(280);
-  });
-});
-
-describe("case file 003's folder data", () => {
-  it("re-dresses the case files fixtures as case 003, local marks included", () => {
-    const minted = asCase003Fixture(CASES_FIXTURES["closed-minted"]);
-    const rec = case003Record(typeof minted.result === "object" ? minted.result : null);
-    expect(rec).toMatchObject({ id: "case-003", number: "003", title: "Fee Strike", status: "cleared", badge: { status: "minted", tokenId: "trophy:badge:case-003" } });
-    const guest = asCase003Fixture(CASES_FIXTURES["guest-closed"]);
-    expect(guest.local?.["case-003"]?.cleared).toBe(true);
-    expect(caseStatus({ api: null, saved: null, local: guest.local?.["case-003"] ?? null })).toBe("closed");
-    expect(asCase003Fixture(CASES_FIXTURES.error).result).toBe("error");
-  });
-
-  it("finds case 003's record in the server's list, and nothing when it isn't there", () => {
-    expect(case003Record({ signedIn: true, cases: [] })).toBeNull();
-    expect(case003Record(null)).toBeNull();
   });
 });

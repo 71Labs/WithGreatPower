@@ -30,6 +30,8 @@ import type { ChapterClue, ChapterState, SimState, Villain } from "./types";
 
 /** The Right-Clicker's level: mercy as on nights 3–4 (combat.ts mercy(2) = 2/3), damage at 1.08×. */
 export const CHAPTER_LEVEL = 2;
+/** Case File 002's Sybil: a level up on the Right-Clicker (mercy 1/3, damage at 1.16×). */
+export const VOTE_LEVEL = 3;
 /** Blows to beat him. */
 export const CHAPTER_HITS = 8;
 /** The chapter bridge's deck, either side of its line (a patrol's is DECK_HALF, 120). */
@@ -67,20 +69,30 @@ export function chapterLogRuleset(id: ChapterId): number {
   switch (id) {
     case "case-001":
       return 0x0c001100 + RULESET_VERSION;
+    // "C 002 1 04": Case File 002, its rules rev 1 (CASE_002_RULESET "c002-1"), ruleset 4.
+    case "case-002":
+      return 0x0c002100 + RULESET_VERSION;
     case "case-003":
       // Case File 003 ("C 003 1 04"): fee-strike.ts.
       return FEE_LOG_RULESET_BASE + RULESET_VERSION;
   }
 }
 
-/** The chapter's one stop, as the city sees it: Doc's bridge in the Bridge District (he isn't there tonight); Case File 003's is Gas Goblin's arena (fee-strike.ts). */
+/**
+ * The chapter's one stop, as the city sees it. Case File 001: Doc's bridge in the Bridge
+ * District (he isn't there tonight). Case File 002: the Sybil's rooftop arena in Validator
+ * Heights, tonight a polling station (sim3d/vote.ts). Case File 003: Gas Goblin's arena in the
+ * Mempool Market, Aunt Mainnet's bakery (fee-strike.ts).
+ */
 export function chapterStops(id: ChapterId): Stop[] {
+  if (id === "case-002") return [{ kind: "fight", villain: "sybil", district: "validator-heights", level: VOTE_LEVEL, boss: false, quest: false }];
   if (id === "case-003") return feeStops();
   return [{ kind: "fight", villain: "doc-octochain", district: "bridge-district", level: CHAPTER_LEVEL, boss: false, quest: false }];
 }
 
-/** The chapter's city from the run's seed: the bridge city with the wide deck, its zone the Right-Clicker's. */
+/** The chapter's city from the run's seed: Case File 001's bridge city with the wide deck (its zone the Right-Clicker's); Case File 002's, a patrol city with one arena. */
 export function chapterCity(id: ChapterId, seed: number): City {
+  if (id === "case-002") return generateCity(seed, chapterStops(id));
   if (id === "case-003") return feeCity(seed);
   const city = generateCity(seed, chapterStops(id), { deckHalf: CHAPTER_DECK_HALF });
   if (city.zones[0]) city.zones[0].villain = "right-clicker";
@@ -160,8 +172,10 @@ const PASSES: { near: [number, number]; far: number; spread: number; detour: num
  * The three clues, from the seed: pixels on a roof near the bridge (its trail leads there), the
  * cursor at the foot of a billboard if one fits, tabs on another roof, all spread apart and
  * within a detour of the way from the start to the bridge. Order: tabs, cursor, pixels.
+ * `ids` names them (Case File 002's: signature, footage at a billboard's foot, the GIF near
+ * the polling station).
  */
-export function placeClues(city: City, rng: Rng): ChapterClue[] {
+export function placeClues(city: City, rng: Rng, ids: readonly [ClueId, ClueId, ClueId] = ["tabs", "cursor", "pixels"]): ChapterClue[] {
   const zone = city.zones[0];
   const spots = zone ? roofSpots(city, zone) : [];
   // A seeded shuffle, so ties go a different way each night.
@@ -185,19 +199,106 @@ export function placeClues(city: City, rng: Rng): ChapterClue[] {
     const tabs = spots.find((a) => a !== cursor && fits(a, [pixels, cursor]));
     if (!tabs) continue;
     const clue = (id: ClueId, a: Spot): ChapterClue => ({ id, x: a.x, y: a.y, z: a.z, found: false });
-    return [clue("tabs", tabs), clue("cursor", cursor), clue("pixels", pixels)];
+    return [clue(ids[0], tabs), clue(ids[1], cursor), clue(ids[2], pixels)];
   }
   // A city with no roofs to spare (never seen): around the start roof.
   const y = st.y;
   return [
-    { id: "tabs", x: st.x + 160, y, z: st.z, found: false },
-    { id: "cursor", x: st.x - 120, y, z: st.z + 150, found: false },
-    { id: "pixels", x: st.x - 120, y, z: st.z - 150, found: false },
+    { id: ids[0], x: st.x + 160, y, z: st.z, found: false },
+    { id: ids[1], x: st.x - 120, y, z: st.z + 150, found: false },
+    { id: ids[2], x: st.x - 120, y, z: st.z - 150, found: false },
   ];
 }
 
-/** The chapter's opening state: the clues placed, Mary frozen at one end of the deck. */
+/* ------------------------------------------------------------------ Case File 002's setup */
+
+/** Case File 002's clues, in placeClues' order: the signature (a roof), the booth footage (a billboard's foot), the GIF (near the station). */
+export const VOTE_CLUES = ["signature", "footage", "gif"] as const;
+/** The station's booths: four along x either side of the stage's middle, this far apart and this far out in z. */
+export const BOOTH_STEP = 100;
+export const BOOTH_ROW = 80;
+/** A Sybil body's centre over the floor when he stands (his feet on the roof). */
+export const VOTER_LIFT = 52;
+/** Uncle Gen waits this far from the stage's middle (in z, on the seed's side), the ballot box BOX_BESIDE from him in x. */
+export const GEN_OUT = 215;
+export const BOX_BESIDE = 70;
+
+/** The eight voters' looks, one of each: every mix of the three tells, in booth order (a seeded shuffle). */
+function shuffledTells(rng: Rng): number[] {
+  const t = [0, 1, 2, 3, 4, 5, 6, 7];
+  for (let i = t.length - 1; i > 0; i--) {
+    const j = Math.floor(rng.next() * (i + 1));
+    const k = t[i];
+    t[i] = t[j];
+    t[j] = k;
+  }
+  return t;
+}
+
+/**
+ * Case File 002, "The Sybil Vote": the clues on three roofs, the polling station's eight
+ * booths on the arena's stage, the real Sybil's tells (one of the eight looks, from the seed),
+ * and Uncle Gen waiting by the ballot box to vote. The voters themselves stand when the hero
+ * arrives (vote.ts spawnVoteSybil).
+ */
+function setupVote(id: ChapterId, city: City, seed: number): ChapterState {
+  const rng = new Rng(mix(seed, 0xc0021));
+  const clues = placeClues(city, rng, VOTE_CLUES);
+  const zone = city.zones[0];
+  const c = zone?.center ?? city.start;
+  const y = zone?.stage?.y ?? c.y;
+  const looks = shuffledTells(rng);
+  const realBooth = Math.floor(rng.next() * looks.length);
+  const side = rng.chance(0.5) ? 1 : -1;
+  const booths: { x: number; z: number }[] = [];
+  for (const row of [-1, 1]) for (let i = 0; i < 4; i++) booths.push({ x: c.x + (i - 1.5) * BOOTH_STEP, z: c.z + row * BOOTH_ROW });
+  // Body slots: the real one is 0, the copies 1–7 in booth order after his.
+  const tells = [looks[realBooth], ...looks.filter((_, i) => i !== realBooth)];
+  const order = [booths[realBooth], ...booths.filter((_, i) => i !== realBooth)];
+  const gen = { x: c.x, z: c.z + side * GEN_OUT };
+  return {
+    id,
+    phase: "investigate",
+    clues,
+    captive: { x: gen.x, y, z: gen.z, restore: 0, freed: false },
+    savedT: 0,
+    aimX: 1,
+    aimZ: 0,
+    dragT: 0,
+    dragX: 0,
+    dragZ: 0,
+    rescueT: 0,
+    rescueCopies: 0,
+    copies: 0,
+    copyWind: [],
+    copyCd: [],
+    vote: {
+      real: tells[0],
+      tells,
+      booths: order,
+      wrong: 0,
+      stage: "polls",
+      forks: 0,
+      forkT: 0,
+      forkAxis: 0,
+      forkAt: 0,
+      forkSide: 1,
+      forkNeed: 0,
+      forkFrom: 0,
+      forkLen: 0,
+      recountT: 0,
+      ring: [],
+      ballot: -1,
+      runner: -1,
+      boxX: gen.x + BOX_BESIDE,
+      boxZ: gen.z,
+    },
+  };
+}
+
+/** The chapter's opening state: the clues placed, Mary frozen at one end of the deck (Case File 002: setupVote). */
 export function setupChapter(id: ChapterId, city: City, _grid: CityIndex, seed: number): ChapterState {
+  if (id === "case-002") return setupVote(id, city, seed);
   const rng = new Rng(mix(seed, 0xc0011));
   const clues = placeClues(city, rng);
   const zone = city.zones[0];
@@ -221,10 +322,11 @@ export function setupChapter(id: ChapterId, city: City, _grid: CityIndex, seed: 
     copies: 0,
     copyWind: [],
     copyCd: [],
+    vote: null,
   };
 }
 
-/** Clues the hero is touching are found; the last one starts the standoff. */
+/** Clues the hero is touching are found; the last one starts the standoff (Case File 002: the lineup). */
 export function findClues(s: SimState) {
   const c = s.chapter;
   if (!c || c.phase !== "investigate") return;
@@ -245,7 +347,7 @@ export function findClues(s: SimState) {
     }
     if (k.found) found += 1;
   }
-  if (found === c.clues.length) c.phase = "standoff";
+  if (found === c.clues.length) c.phase = c.vote ? "lineup" : "standoff";
 }
 
 /** The clue the route points at while investigating: the nearest one not yet found. */

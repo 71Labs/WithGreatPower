@@ -182,16 +182,10 @@ describe("Case File 001 on the server", () => {
   });
 
   it("lists every case as new for a guest", () => {
-    // Each case's own entry (more cases file in beside it: cases-003.test.ts).
-    expect(guestCases()).toContainEqual({
-      id: "case-001",
-      number: "001",
-      title: "Missing: Mary Jpeg",
-      status: "new",
-      clearedAt: null,
-      bestTicks: null,
-      badge: { status: "none", tokenId: "trophy:badge:case-001", tx: null },
-      active: null,
-    });
+    expect(guestCases()).toEqual([
+      { id: "case-001", number: "001", title: "Missing: Mary Jpeg", status: "new", clearedAt: null, bestTicks: null, badge: { status: "none", tokenId: "trophy:badge:case-001", tx: null }, active: null },
+      { id: "case-002", number: "002", title: "The Sybil Vote", status: "new", clearedAt: null, bestTicks: null, badge: { status: "none", tokenId: "trophy:badge:case-002", tx: null }, active: null },
+      { id: "case-003", number: "003", title: "Fee Strike", status: "new", clearedAt: null, bestTicks: null, badge: { status: "none", tokenId: "trophy:badge:case-003", tx: null }, active: null },
+    ]);
   });
 });

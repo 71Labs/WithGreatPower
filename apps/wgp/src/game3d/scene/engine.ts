@@ -30,6 +30,7 @@ import type { PostFrame } from "./render/post";
 import { MoonShadows, SHADOW_LAYER } from "./render/shadows";
 import { buildSky, type Sky } from "./sky";
 import { ChapterScene } from "./chapter/chapter";
+import { VoteScene } from "./chapter/vote/vote-scene";
 import type { ChapterEvent } from "./chapter/contract";
 import type { FeeEvent } from "./fee-strike/contract";
 import { FeeScene, type FeeBlast } from "./fee-strike/fee-strike";
@@ -68,6 +69,8 @@ export class SceneEngine {
   readonly sparks: Sparks;
   /** Case file 001's clues, copies, captive and SCREENSHOT (built on a chapter night's first frame). */
   readonly chapter: ChapterScene;
+  /** Case file 002's drop boxes, polling station, tells, fork vote and ballot (built on its first frame). */
+  readonly vote: VoteScene;
   /** Case file 003's clues, stalls, fee meter and bakery (built on a case-003 night's first frame). */
   readonly fee: FeeScene;
   /** Moon shadows, on tiers with a shadow map (the compositor draws their depth pass). */
@@ -118,13 +121,14 @@ export class SceneEngine {
     this.pools = new LightPools(this.city.layout.boxes, this.uniforms);
     this.sparks = new Sparks(this.uniforms);
     this.chapter = new ChapterScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
+    this.vote = new VoteScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.fee = new FeeScene(cityData, this.solids, this.uniforms, { crowd: this.crowd, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
     // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
     for (const child of this.city.root.children) {
       if ((child.name.startsWith("sector-") && !child.name.endsWith("-ink")) || child.name === "tanks") child.layers.enable(SHADOW_LAYER);
     }
-    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.fee.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
+    this.root.add(this.sky.dome, this.sky.skyline, this.city.root, this.pools.mesh, this.characters.root, this.crowd.root, this.hazards.root, this.pickups.root, this.chapter.root, this.vote.root, this.fee.root, this.sparks.mesh, this.bursts.mesh, this.speedLines.mesh);
   }
 
   /** Build the hero (in the save's suit), the night's villains and the allies. */
@@ -137,6 +141,7 @@ export class SceneEngine {
     this.characters.setTier(preset.tier);
     this.crowd.setTier(preset.tier);
     this.chapter.setTier(preset.tier);
+    this.vote.setTier(preset.tier);
     this.fee.setTier(preset.tier);
     this.sky.setStars(preset.stars);
     this.sky.skyline.visible = preset.skyline;
@@ -166,6 +171,7 @@ export class SceneEngine {
     this.characters.setReducedMotion(on);
     this.crowd.reducedMotion = on;
     this.chapter.setReducedMotion(on);
+    this.vote.setReducedMotion(on);
     this.fee.setReducedMotion(on);
     this.speedLines.enabled = this.speedLinesTier && !on;
   }
@@ -200,6 +206,7 @@ export class SceneEngine {
   /** A Case file 001 sim event (a clue found, a SCREENSHOT that hit, a copy popped…). */
   chapterEvent(ev: ChapterEvent): void {
     this.chapter.event(ev);
+    this.vote.event(ev);
   }
 
   /** A Case file 003 sim event (a clue, the grab, a checkpoint, a spike, the fees cooled…) or a blast. */
@@ -289,6 +296,7 @@ export class SceneEngine {
       this.shadows.follow(frame ? frame.hero.pos : this.cityData.start, -e[8], -e[10]);
       this.shadows.scanCast(this.characters.root);
       if (this.chapter.active) this.shadows.scanCast(this.chapter.root);
+      if (this.vote.active) this.shadows.scanCast(this.vote.root);
     }
     u.uPxScale.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, size.height);
     this.city.updateLod(camera.position.x, camera.position.z);
@@ -307,6 +315,7 @@ export class SceneEngine {
       this.hazards.update(frame, frame.mode === "fight" ? (this.cityData.zones[frame.stop]?.stage?.y ?? null) : null);
       this.pickups.update(frame, time);
       this.chapter.update(frame, camera, size, dt, time);
+      this.vote.update(frame, camera, size, dt, time);
       this.fee.update(frame, camera, dt, time);
       // The sparkle shows once the web's shot has reached the anchor; the splat as it lands.
       const stuck = this.characters.stuck;
@@ -360,6 +369,7 @@ export class SceneEngine {
     this.hazards.dispose();
     this.pickups.dispose();
     this.chapter.dispose();
+    this.vote.dispose();
     this.fee.dispose();
   }
 }

@@ -21,6 +21,7 @@ import { len2, len3 } from "./dmath";
 import { newHero, stepHero, stopTarget, travelBearing } from "./hero";
 import { collectPickups, placePickups, stepCombo } from "./pickups";
 import { mix } from "./rng";
+import { setupTrial, stepTrial, trialCity, trialGates } from "./trial";
 import type { SimConfig, SimState } from "./types";
 import { spawnVillain, stepHazards, stepVillain } from "./villains";
 
@@ -39,9 +40,10 @@ function spawnPoint(s: Pick<SimState, "city" | "grid">, index: number): { x: num
 
 export function createSim(config: SimConfig): SimState {
   // Case File 001 builds its own city (the bridge with a wider deck) and its clues and captive;
-  // Case File 003 its Market District, the clues, the meter and Gas Goblin's route.
+  // Case File 003 its Market District, the clues, the meter and Gas Goblin's route; a time
+  // trial its course's city (no zones) and gates.
   const fee = config.chapter === "case-003";
-  const city = fee ? feeCity(config.seed) : config.chapter ? chapterCity(config.chapter, config.seed) : generateCity(config.seed, config.stops);
+  const city = fee ? feeCity(config.seed) : config.chapter ? chapterCity(config.chapter, config.seed) : config.trial ? trialCity(config.trial) : generateCity(config.seed, config.stops);
   const grid = new CityIndex(city);
   const chapter = config.chapter && !fee ? setupChapter(config.chapter, city, grid, config.seed) : null;
   const sp = spawnPoint({ city, grid }, config.index);
@@ -64,7 +66,7 @@ export function createSim(config: SimConfig): SimState {
     maxCombo: config.combo,
     // A combo carried in from an earlier session gets a fresh timer.
     comboT: config.combo > 0 ? COMBO_TICKS : 0,
-    pickups: placePickups(city, grid),
+    pickups: config.trial ? trialGates(config.trial, city, grid) : placePickups(city, grid),
     bits: 0,
     rings: 0,
     pickupPoints: 0,
@@ -84,13 +86,15 @@ export function createSim(config: SimConfig): SimState {
     chapter,
     ...(fee ? { fee: setupFee(city, grid, config.seed) } : {}),
   };
+  // A time trial's state only on trial runs, so a patrol or chapter state has no trial field at all.
+  if (config.trial) s.trial = setupTrial(config.trial);
   // Face the first stop.
   const b = travelBearing(s);
   if (b) {
     s.hero.fx = b.x;
     s.hero.fz = b.z;
   }
-  if (config.index >= city.zones.length) {
+  if (config.index >= city.zones.length && !s.trial) {
     s.mode = "done";
   } else if (config.entry === "zone") {
     // Resumed mid-stop: already there, so no arrival to report.
@@ -260,7 +264,9 @@ export function stepSim(s: SimState, frame: InputFrame): boolean {
     case "travel":
       stepHero(s, input, DT);
       stepAbilities(s, DT);
-      collectPickups(s);
+      // A time trial's rings are its gates, taken in order (trial.ts).
+      if (s.trial) stepTrial(s);
+      else collectPickups(s);
       stepCombo(s);
       if (s.chapter) findClues(s);
       if (s.fee) stepFeeTravel(s);

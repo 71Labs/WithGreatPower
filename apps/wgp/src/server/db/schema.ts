@@ -6,6 +6,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   customType,
@@ -40,7 +41,11 @@ const at = (name: string) => timestamp(name, { withTimezone: true, mode: "date" 
 
 export const authKind = pgEnum("auth_kind", ["near_auth", "wallet", "dev", "privy"]);
 export const runStatus = pgEnum("run_status", ["issued", "verified", "rejected", "expired"]);
-export const boardKind = pgEnum("board_kind", ["tonight", "season", "alltime"]);
+/**
+ * "daily" and "trial" (migration 0007): the Daily Run's board (period: the UTC day) and the time
+ * trials' (period: the course id). Neither feeds Tonight, Season or All time.
+ */
+export const boardKind = pgEnum("board_kind", ["tonight", "season", "alltime", "daily", "trial"]);
 export const chainOpStatus = pgEnum("chain_op_status", ["pending", "sending", "sent", "failed", "dead"]);
 export const seasonStatus = pgEnum("season_status", ["scheduled", "live", "closed", "recorded"]);
 
@@ -184,9 +189,18 @@ export const runs = pgTable(
     rejectReason: text("reject_reason"),
     /** Slow-motion assist: verified and saved, but kept off the boards. */
     assist: boolean("assist").notNull().default(false),
+    /**
+     * Competitive runs (migration 0007): the Daily Run's UTC day ("daily"), a time trial's course
+     * id, or "duel" for a ranked night raced again ("trial"). Null for patrol nights and cases.
+     */
+    course: text("course"),
+    /** The verified run this one raced as a ghost (a duel's, or a Daily or trial raced against someone), if any. */
+    ghostRunId: uuid("ghost_run_id").references((): AnyPgColumn => runs.id, { onDelete: "set null" }),
   },
   (t) => [
     index("runs_player_status_idx").on(t.playerId, t.status),
+    // Rivals: the ghosts a player has raced, newest first.
+    index("runs_player_ghost_idx").on(t.playerId, t.ghostRunId).where(sql`ghost_run_id IS NOT NULL`),
     index("runs_status_expires_idx").on(t.status, t.expiresAt),
     // At most one run in flight per player, enforced by the database.
     uniqueIndex("runs_one_issued_per_player").on(t.playerId).where(sql`status = 'issued'`),

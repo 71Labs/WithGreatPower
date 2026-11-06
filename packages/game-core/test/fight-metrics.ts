@@ -158,8 +158,9 @@ export function playerFrame(policy: "simple" | "average" | "good", s: SimState, 
   const hd = len2(dx, dz);
   const dist = len3(dx, t.y - h.y, dz);
   // What a player sees: not guarding, or stumbling or stalled after an attack (Doc: arms in).
-  // (The Right-Clicker's openings are his reload and his stagger; a paper copy in the way is always open.)
-  const open = takesHit(v) || (v.kind === "right-clicker" && t.body >= 0);
+  // (The Right-Clicker's openings are his reload and his stagger; a paper copy in the way is always open.
+  // So is one of Case File 002's Sybil copies: any hit pops it.)
+  const open = takesHit(v) || (v.kind === "right-clicker" && t.body >= 0) || (!!s.chapter?.vote && t.body >= 0 && !v.bodies[t.body]?.real);
 
   // Dodges: a wind-up seen (after the reaction delay), sideways to the line between you.
   if (skill.dodge > 0) {
