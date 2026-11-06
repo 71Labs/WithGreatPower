@@ -1,5 +1,5 @@
 /**
- * Free roam (the City mode, `"roam"`, ruleset tag roam-1): a deterministic sim of the hero
+ * Free roam (the City mode, `"roam"`, ruleset tag roam-2): a deterministic sim of the hero
  * moving freely through one fixed city (run, sprint, jump, vault, climb, wall-run, hang, mantle,
  * roll, web-zip and, on demand, swing), its people, side tasks and collectibles. Its own files,
  * reached only through SimState.roam; patrol nights and chapters never touch it.

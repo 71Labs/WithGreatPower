@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { startRoamRun, stepRoamRun } from "../src/roam-run";
-import { JOG_SPEED, RUN_SPEED, SHOT_JUMP, SPRINT_SPEED, WALK_SPEED } from "../src/sim3d/roam/constants";
+import { CLIMB_DOWN, CLIMB_UP, JOG_SPEED, RUN_SPEED, SHOT_JUMP, SPRINT_SPEED, WALK_SPEED } from "../src/sim3d/roam/constants";
 import { clearAt, roamCity, roamGrid, roamWorld } from "../src/sim3d/roam/world";
 import { at, chain, playRoam } from "./roam-helpers";
 
@@ -103,6 +103,52 @@ describe("free roam on walls", () => {
     const p = playRoam(at(3610, 300, 3300, 1, 0), [{ kind: "press", shot: "drop", x: 3800, z: 3300 }, { kind: "wait", ticks: 30 }, { kind: "hold", x: 3500, z: 3300, ticks: 60 }]);
     expect(chain(p)).toMatch(/^ground>hang>mantle>ground/);
     expect(p.run.sim.hero.y - 26).toBeCloseTo(300, 0);
+  });
+
+  it("climbs at a climber's pace, and climbs down with the stick back instead of letting go (roam-2)", () => {
+    const tall = [...city.buildings]
+      .filter((b) => Math.abs((b.x0 + b.x1) / 2 - 3400) < 1500 && Math.abs((b.z0 + b.z1) / 2 - 3400) < 1500)
+      .sort((a, b) => Math.max(b.h, b.top?.h ?? 0) - Math.max(a.h, a.top?.h ?? 0))[0];
+    const zc = (tall.z0 + tall.z1) / 2;
+    const run = startRoamRun(at(tall.x1 + 60, 0, zc, -1, 0));
+    const into = { dir: 32, mag: 3, web: false, shot: 0 } as const;
+    const away = { dir: 0, mag: 3, web: false, shot: 0 } as const;
+    // The stick into the wall (west): the run-up carries, then the climb settles to its pace.
+    const vys: number[] = [];
+    for (let t = 0; t < 150; t++) {
+      stepRoamRun(run, into);
+      if (run.sim.roam!.body.move === "climb") vys.push(run.sim.hero.vy);
+    }
+    expect(run.sim.roam!.body.move).toBe("climb");
+    expect(Math.max(...vys)).toBeGreaterThan(CLIMB_UP + 50);
+    expect(vys[vys.length - 1]).toBeCloseTo(CLIMB_UP, 0);
+    const high = run.sim.hero.y;
+    // The stick back (east): down the wall, never off it, and onto his feet at the street.
+    const moves = new Set<string>();
+    let down = 0;
+    for (let t = 0; t < 60 * 8 && run.sim.roam!.body.move !== "ground"; t++) {
+      stepRoamRun(run, away);
+      moves.add(run.sim.roam!.body.move);
+      down = Math.min(down, run.sim.hero.vy);
+    }
+    expect([...moves]).toEqual(["climb", "ground"]);
+    expect(down).toBeCloseTo(-CLIMB_DOWN, 0);
+    expect(high - 26).toBeGreaterThan(150);
+    expect(run.sim.hero.y - 26).toBeLessThan(1);
+  });
+
+  it("from a hang, the stick back steps down onto the wall and climbs down it (roam-2)", () => {
+    // A roof edge over an open street: over it to hang, then the stick out from the wall.
+    const e = openEdge(280);
+    const nx = e.axis === 1 ? e.n : 0;
+    const nz = e.axis === 0 ? e.n : 0;
+    const t = (e.lo + e.hi) / 2;
+    const ex = e.axis === 0 ? t : e.c;
+    const ez = e.axis === 0 ? e.c : t;
+    const out = { x: ex + nx * 3000, z: ez + nz * 3000 };
+    const p = playRoam(at(ex - nx * 30, e.y, ez - nz * 30, nx, nz), [{ kind: "press", shot: "drop", ...out }, { kind: "wait", ticks: 30 }, { kind: "hold", ...out, ticks: 60 * 6 }]);
+    expect(chain(p)).toMatch(/^ground>hang>climb>ground/);
+    expect(p.run.sim.hero.y - 26).toBeLessThan(1);
   });
 
   it("lets go of a hang on the drop button, falls, and lands", () => {

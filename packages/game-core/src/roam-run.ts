@@ -17,14 +17,27 @@ import { decodeInputCodes, encodeInputCodes, frameCode, frameFromCode, InputLogE
 import type { CityOuting, CitySpot } from "./rules/city";
 import { MAX_TICKS, SIM_HZ } from "./sim3d/constants";
 import type { InputFrame } from "./sim3d/contract";
-import { ROAM_LOG_RULESET, ROAM_RULESET } from "./sim3d/roam/constants";
+import { ROAM_LOG_RULESET, ROAM_LOG_RULESETS_PAST, ROAM_RULESET } from "./sim3d/roam/constants";
 import { roamHashState } from "./sim3d/roam/hash";
 import { createRoamSim, stepRoam } from "./sim3d/roam/step";
 import { TASK_DONE, TASK_IDS, type RoamEvent, type RoamStart } from "./sim3d/roam/types";
 import type { SimEvent, SimState } from "./sim3d/types";
 import { HERO_RADIUS } from "./sim3d/constants";
 
-export { ROAM_LOG_RULESET, ROAM_RULESET };
+export { ROAM_LOG_RULESET, ROAM_LOG_RULESETS_PAST, ROAM_RULESET };
+
+/**
+ * Whether a log is an outing played under older roam rules (roam-1's log field, before the
+ * climb changed): it can't replay under these, so the server refuses it as stale (start a
+ * fresh outing) rather than as a bad log.
+ */
+export function roamLogStale(log: Uint8Array): boolean {
+  try {
+    return ROAM_LOG_RULESETS_PAST.includes(decodeInputCodes(log).ruleset);
+  } catch {
+    return false;
+  }
+}
 
 export type RoamRunEvent = SimEvent | RoamEvent;
 
@@ -96,7 +109,7 @@ export function resumeRoamRun(input: RoamReplayInput): RoamRun {
     return run;
   }
   if (decoded.ruleset !== ROAM_LOG_RULESET) {
-    run.error = `ruleset ${decoded.ruleset} is not free roam's ${ROAM_LOG_RULESET}`;
+    run.error = ROAM_LOG_RULESETS_PAST.includes(decoded.ruleset) ? `ruleset ${decoded.ruleset} is an older free roam's (stale), not ${ROAM_LOG_RULESET}` : `ruleset ${decoded.ruleset} is not free roam's ${ROAM_LOG_RULESET}`;
     return run;
   }
   if (decoded.fromTick !== 0) {

@@ -10,13 +10,16 @@
 /** The mode's id (runs, saves, the session). */
 export const ROAM_MODE = "roam";
 /** The roam rules' version. Bump it with any change to the roam sim, its city or its content positions. */
-export const ROAM_RULESET = "roam-1";
+export const ROAM_RULESET = "roam-2";
 /**
- * The ruleset field a roam log carries (hex "F 001 1 04": free roam, city 001, rules rev 1, on
+ * The ruleset field a roam log carries (hex "F 001 2 04": free roam, city 001, rules rev 2, on
  * patrol ruleset 4), so a roam log never replays as a patrol night or a chapter, and neither of
- * those as a roam outing.
+ * those as a roam outing. Rev 2 (roam-2): the climb's pace, and the stick back climbing down a
+ * wall instead of letting go.
  */
-export const ROAM_LOG_RULESET = 0x0f001104;
+export const ROAM_LOG_RULESET = 0x0f001204;
+/** Older roam rules' log fields: an outing played under them is stale, never replayed. */
+export const ROAM_LOG_RULESETS_PAST: readonly number[] = [0x0f001104];
 
 /** The one city free roam happens in: always the same, so progress has a place to live. */
 export const ROAM_CITY_SEED = 0x0c17_0002;

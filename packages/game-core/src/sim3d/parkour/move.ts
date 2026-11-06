@@ -848,14 +848,9 @@ function stepClimb(s: SimState, st: Stick, press: Presses, dt: number): void {
       parkourOf(s).events.push({ type: "roam-jump", kind: "climb", x: h.x, y: h.y, z: h.z });
     }
   }
-  b.awayT = into < -0.5 ? b.awayT + dt : 0;
-  if (b.awayT > LET_GO) {
-    if (feet(h) <= 2) {
-      setMove(s, "ground");
-      return;
-    }
-    return letGo(s, 120);
-  }
+  // The stick back from the wall climbs down it (and off it at the street); letting go is the
+  // drop button or a jump off (roam-2; roam-1 let go after LET_GO).
+  b.awayT = 0;
   const up = sprinting(b) ? CLIMB_UP_SPRINT : CLIMB_UP;
   const want = into > 0.25 ? up * Math.min(1, into * 1.3) : into < -0.25 ? -CLIMB_DOWN : 0;
   // A leap up the wall carries, then eases back to the climb.
@@ -941,8 +936,16 @@ function stepHang(s: SimState, st: Stick, press: Presses, dt: number): void {
     if (b.moveT > 0.08 && ledgeOpen(s.grid, h.x, h.z, nx, nz, b.wtop)) return startMantle(s, b.wtop);
   }
   if (into > 0.3 && b.moveT > 0.15 && ledgeOpen(s.grid, h.x, h.z, nx, nz, b.wtop)) return startMantle(s, b.wtop);
+  // The stick back: down off the ledge onto the wall below it, climbing down (roam-2; roam-1 let go).
   b.awayT = into < -0.5 ? b.awayT + dt : 0;
-  if (b.awayT > LET_GO * 1.5) return letGo(s, 80);
+  if (b.awayT > LET_GO * 1.5) {
+    if (feet(h) > 2 && columnTop(s.grid, h.x - nx * (R + 2), h.z - nz * (R + 2), h.y - 20) > h.y - 20) {
+      startClimb(s, nx, nz, 0);
+      b.grabCd = 0;
+      return;
+    }
+    return letGo(s, 80);
+  }
   // Shuffle along while the ledge goes on.
   if (side > 0.3 || side < -0.3) {
     const step = side * SHIMMY * dt;

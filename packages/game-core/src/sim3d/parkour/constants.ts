@@ -3,7 +3,7 @@
  * walls, the web and water. World units as everywhere in sim3d (the hero is about 88 tall, so a
  * metre is about 49 units), seconds and units per second.
  *
- * Free roam (the City mode, ruleset tag roam-1) is the only mode that moves with these today;
+ * Free roam (the City mode, ruleset tag roam-2) is the only mode that moves with these today;
  * patrol nights never read them. Changing one changes every mode that uses the set: bump that
  * mode's ruleset with it.
  */
@@ -65,11 +65,15 @@ export const SOFT_LAND = 0.1;
 
 /* ------------------------------------------------------------------ walls */
 
-/** Climbing: up (faster sprinting), down and sideways, reached at CLIMB_ACCEL. */
-export const CLIMB_UP = 250;
-export const CLIMB_UP_SPRINT = 360;
-export const CLIMB_DOWN = 220;
-export const CLIMB_SIDE = 150;
+/**
+ * Climbing: up (a scramble, sprinting), down and sideways, reached at CLIMB_ACCEL. A climber's
+ * pace (roam-2): about 2.5 m/s up, hand over hand, near 5 m/s scrambling; a run-up or a jump
+ * up the wall carries faster for a moment. (Roam-1 slid up at 250, 360 sprinting.)
+ */
+export const CLIMB_UP = 120;
+export const CLIMB_UP_SPRINT = 230;
+export const CLIMB_DOWN = 110;
+export const CLIMB_SIDE = 100;
 export const CLIMB_ACCEL = 1800;
 /** Running into a wall from the street, the first steps carry up it: CLIMB_RUNUP plus this share of the speed into it. */
 export const CLIMB_RUNUP = 300;
@@ -84,7 +88,10 @@ export const WALL_JUMP_OUT = 430;
 export const WALL_JUMP_VY = 600;
 /** After letting go of a wall or a ledge, nothing is grabbed for this long. */
 export const GRAB_CD = 0.35;
-/** The stick held away from the wall this long lets go. */
+/**
+ * The stick held away from a ledge this long lets go of it. On a wall the stick back climbs
+ * down instead (roam-2): letting go is the drop button, or a jump off.
+ */
 export const LET_GO = 0.14;
 /** A wall counts for climbing when its top stands at least this far above the feet (lower is a vault or a step). */
 export const CLIMB_MIN = 100;
