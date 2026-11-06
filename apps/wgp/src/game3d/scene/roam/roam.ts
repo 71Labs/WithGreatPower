@@ -446,7 +446,7 @@ export class RoamScene {
         break;
       case "roam-car-hit": {
         const hard = (ev.speed ?? 0) > 220;
-        this.host.burst(hard ? "WHAM!" : "BONK!", { x: ev.x, y: ev.y + 40, z: ev.z }, { size: hard ? 110 : 90, life: 0.8 });
+        this.host.burst(hard ? "WHAM!" : "OOF!", { x: ev.x, y: ev.y + 40, z: ev.z }, { size: hard ? 110 : 90, life: 0.8 });
         if (!this.reducedMotion) this.host.shake?.(Math.min(1, (ev.speed ?? 0) / 330));
         break;
       }
