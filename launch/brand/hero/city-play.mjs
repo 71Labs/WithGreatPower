@@ -353,40 +353,48 @@ beat("at the wall", { x: p.x, z: p.z });
 }
 await perf("climb");
 
-// 5. A wall run: down to the long west-facing wall at x 40 (z 3160–3680), a diagonal sprint at
-// it and a jump just short of it.
-p = await goTo(-110, 3050, { street: true, r: 40, low: true, timeout: 60 });
-beat("at the wall-run street", { x: p.x, z: p.z });
-{
-  const diag = { x: 40 + 2000, z: 3190 + 2000 };
-  const end = Date.now() + 3500;
+/** Hold the stick toward `to` (and `keys`) until `done(p)` or `ms` runs out; the moves seen. */
+async function until(to, keys, ms, done, strip = null, every = 1) {
+  const end = Date.now() + ms;
   const moves = new Set();
-  let jumped = false;
   let k = 0;
+  let p = await peek();
   while (Date.now() < end) {
     p = await peek();
     moves.add(p.move);
-    const keys = steerKeys(p, diag.x - p.x, diag.z - p.z);
-    keys.add("ShiftLeft");
-    if (!jumped && p.move === "ground" && p.x > 40 - 26 - 70 && p.z > 3150) {
-      keys.add("Space");
-      jumped = true;
-    }
-    await setHeld(keys);
-    if (k++ % 1 === 0) await frame("5-wallrun", p);
+    if (done(p)) break;
+    const set = steerKeys(p, to.x - p.x, to.z - p.z);
+    for (const c of keys) set.add(c);
+    await setHeld(set);
+    if (strip && k++ % every === 0) await frame(strip, p);
     await sleep(35);
   }
   await releaseAll();
-  beat("wall run", { moves: [...moves] });
+  return { p, moves: [...moves] };
 }
 
-// 6. A swing, only while F is held: down the long street at x 3810, held, then let go.
-p = await goTo(3810, 650, { street: true, r: 25, low: true, timeout: 60 });
+// 5. Off the tall roof's east edge (a long fall, a roll), then a wall run: a sprint on the
+// diagonal into the spawn building's west face (x 3130, z 3200–3640) runs along it, north.
 {
-  const north = { x: 3810, z: 7000 };
-  const before = await hold([], 700, "6-swing", 1, north);
-  const held = await hold(["KeyF"], 2800, "6-swing", 1, north);
-  const after = await hold([], 1500, "6-swing", 2, north);
+  const off = await until({ x: 3600, z: 4059 }, [], 6000, (q) => q.move === "ground" && q.y - 26 < 30, "5-drop", 2);
+  beat("off the roof", { moves: off.moves });
+  const start = await until({ x: 3000, z: 3700 }, [], 6000, (q) => Math.hypot(q.x - 3000, q.z - 3700) < 40 && q.move === "ground");
+  beat("at the wall-run street", { x: start.p.x, z: start.p.z });
+  // Up the street a moment (the camera comes round behind), then the diagonal at the wall.
+  await until({ x: 3000, z: 3560 }, [], 1500, (q) => q.z < 3600);
+  const run = await until({ x: 3600, z: 2900 }, ["ShiftLeft"], 2600, (q) => q.move === "wallrun" && q.z < 3300, "5-wallrun", 1);
+  const after = await until({ x: 3030, z: 2900 }, [], 900, () => false, "5-wallrun", 1);
+  beat("wall run", { moves: [...run.moves, ...after.moves] });
+}
+await perf("wall run");
+
+// 6. A swing, only while F is held: up the street at x 3030, held, then let go.
+p = await until({ x: 3030, z: 3300 }, [], 4000, (q) => Math.abs(q.x - 3030) < 35 && q.move === "ground");
+{
+  const north = { x: 3030, z: 0 };
+  const before = await hold([], 600, "6-swing", 1, north);
+  const held = await hold(["KeyF"], 2600, "6-swing", 1, north);
+  const after = await hold([], 1400, "6-swing", 2, north);
   p = await peek();
   beat("swing on demand", { before: before.moves, held: held.moves, after: after.moves, rope: p.rope });
 }

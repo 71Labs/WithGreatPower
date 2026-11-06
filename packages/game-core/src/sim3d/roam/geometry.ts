@@ -10,6 +10,8 @@ import { clearAt } from "./world";
 
 const R = HERO_RADIUS;
 const ids: number[] = [];
+/** Offsets along a ledge to look for room to pull up onto (units), nearest first. */
+const LATERAL = [0, 16, -16, 32, -32, 48, -48];
 
 /**
  * The top of the solid column at (x, z) around height y (a box there spanning y ± band), with
@@ -67,12 +69,16 @@ export function ledgeOpen(grid: CityIndex, x: number, z: number, nx: number, nz:
     const ok = clearAt(grid, cx, top + R + 1, cz, R - 1);
     return spot ? (ok ? { x: cx, z: cz } : null) : ok;
   }
-  for (const d of [MANTLE_IN, R + 8]) {
-    const sx = x - nx * (R + d);
-    const sz = z - nz * (R + d);
-    if (groundBelow(grid, sx, sz, top + 2) < top - 2) continue;
-    if (!clearAt(grid, sx, top + R + 1, sz, R)) continue;
-    return spot ? { x: sx, z: sz } : true;
+  // Straight over the edge, else a little along it (a prop on the roof right behind the hands
+  // shouldn't leave him hanging there): the nearest spot with room, in a fixed order.
+  for (const t of LATERAL) {
+    for (const d of [MANTLE_IN, R + 8]) {
+      const sx = x - nx * (R + d) - nz * t;
+      const sz = z - nz * (R + d) + nx * t;
+      if (groundBelow(grid, sx, sz, top + 2) < top - 2) continue;
+      if (!clearAt(grid, sx, top + R + 1, sz, R)) continue;
+      return spot ? { x: sx, z: sz } : true;
+    }
   }
   return spot ? null : false;
 }
