@@ -440,6 +440,10 @@ export class HeroAnimator {
       this.roamPoser?.release();
       // Carry on from the roam pose: its rotation, its yaw, and the limbs where they are.
       this.orient.snap(this.pose.rot);
+      // The limb springs ride the body's turn from here, not from the pose before the roam move
+      // (turned by that stale rotation, freshly placed feet would swing across each other).
+      this.limbQ.copy(this.pose.rot);
+      this.flipT = -1;
       this.turn.snap(this.holdYaw);
       const H = this.P;
       for (let i = 0; i < 2; i++) {
