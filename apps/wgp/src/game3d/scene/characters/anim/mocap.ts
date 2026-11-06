@@ -34,10 +34,14 @@ const LOCO = ["walk", "jog", "sprint"] as const;
 /** Ground speed where the blend is all sprint (the sim's top speed on a roof). */
 const SPRINT_TOP = 480;
 const DEATH_HANDOFF = 0.9;
+/** Stood still this long by the sim's own speed (s), the stride ends: a stop, not a reversal. */
+const DEAD_STOP = 0.045;
 /** Slowing down, the gait eases toward the walk over about this much ground (units). */
 const GAIT_EASE = 30;
 /** A planted ankle stays at least this far its own side of the hips' midline (units). */
 const MIDLINE_GUARD = 1.5;
+/** Where a stride ends, each foot is planted at least this far its own side of the midline. */
+const PLANT_SIDE = 3;
 const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
 const Z = new Vector3(0, 0, 1);
@@ -65,9 +69,11 @@ export interface MocapInput {
   air: boolean;
   /** A pivot under way: the stance has the legs. */
   pivot: boolean;
-  /** Horizontal speed and distance moved this frame. */
+  /** Horizontal speed (smoothed) and distance moved this frame. */
   speed: number;
   moved: number;
+  /** The sim's own ground speed this frame, unsmoothed: at a dead stop the stride ends at once. */
+  raw?: number;
 }
 
 export class Mocap {
@@ -165,10 +171,15 @@ export class Mocap {
     this.onGround = inp.ground;
     this.clipW.step(ground ? 1 : 0, dt);
     this.airW.step(inp.air ? 1 : 0, dt);
-    if (!this.moving && inp.speed > 30) {
+    // A dead stop by the sim's word (stood still a few frames: not a reversal passing through
+    // zero) ends the stride now. Waiting for the smoothed speed to fall held him frozen in the
+    // stride's flight, both feet off the roof, for a tenth of a second at every stop.
+    const raw = inp.raw ?? Infinity;
+    this.stillFor = raw < 4 ? this.stillFor + dt : 0;
+    if (!this.moving && inp.speed > 30 && this.stillFor <= 0) {
       this.moving = true;
       this.gait = inp.speed;
-    } else if (this.moving && inp.speed < 14) this.moving = false;
+    } else if (this.moving && (inp.speed < 14 || this.stillFor >= DEAD_STOP)) this.moving = false;
     // The speed the walk / jog / sprint blend is picked for. It speeds up with him, but slows
     // only as he covers ground, and holds once he's stopped: at the same phase the three
     // clips have their feet in different places, so a blend changing while the feet stand
@@ -336,6 +347,8 @@ export class Mocap {
 
   private gait = 0;
   private onGround = true;
+  /** Seconds the sim has had him standing still (DEAD_STOP). */
+  private stillFor = 0;
 
   /** Up again after a knockout. */
   recover(): void {
@@ -347,6 +360,12 @@ export class Mocap {
   plantWhereTheyAre(groundY: number, ankleH: number, yaw: number, stop = false): void {
     let up = -1;
     let high = groundY + ankleH + 3;
+    // A sprint's feet land near the midline: each is planted at least a little its own side.
+    const rig = this.rig;
+    const hipL = worldPos(rig.legs[0].upper, _h);
+    const hipR = worldPos(rig.legs[1].upper, _r);
+    const side = _s.subVectors(hipL, hipR).setY(0).normalize();
+    hipL.add(hipR).multiplyScalar(0.5);
     for (let i = 0; i < 2; i++) {
       const p = worldPos(this.rig.legs[i].end, _a);
       if (p.y > high) {
@@ -354,6 +373,9 @@ export class Mocap {
         up = i;
       }
       p.y = groundY + ankleH;
+      const s = i === 0 ? 1 : -1;
+      const over = PLANT_SIDE - s * _b.subVectors(p, hipL).setY(0).dot(side);
+      if (over > 0) p.addScaledVector(side, s * over);
       this.stand.plant(i, p, yaw + (i === 0 ? 0.12 : -0.12));
     }
     // A stop that caught a foot in the air puts it down beside the other.

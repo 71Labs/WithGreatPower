@@ -104,11 +104,12 @@ export function toonMaterial(shared: SharedUniforms, atlas: Texture | null, tank
   });
 }
 
-export function hullMaterial(shared: SharedUniforms): ShaderMaterial {
+export function hullMaterial(shared: SharedUniforms, tank = false): ShaderMaterial {
   return new ShaderMaterial({
-    name: "wgp-hull",
+    name: tank ? "wgp-hull-tank" : "wgp-hull",
     vertexShader: HULL_VERTEX,
     fragmentShader: HULL_FRAGMENT,
+    defines: tank ? { TANK: "" } : {},
     side: BackSide,
     uniforms: { ...shared },
   });

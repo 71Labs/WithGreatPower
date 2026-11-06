@@ -39,13 +39,18 @@ export function unitBox(): BufferGeometry {
 
 /** Fraction of the tank's height that is the body; the rest is the roof cone. */
 export const TANK_BODY = 0.78;
+/**
+ * The eave's height (a fraction of the tank's): a flat-roofed tank (`aRoof` 1, one an ally
+ * stands on) has its cone pressed down to here, a lid to stand on (city/shaders.ts).
+ */
+export const TANK_EAVE = TANK_BODY + 0.02;
 
 export function tankGeometry(segments = 8): BufferGeometry {
   // No bottom disc: the tank sits on its legs and is only ever seen from the side or above.
   const pts = [
     new Vector2(0.5, 0),
     new Vector2(0.5, TANK_BODY),
-    new Vector2(0.58, TANK_BODY + 0.02),
+    new Vector2(0.58, TANK_EAVE),
     new Vector2(0.0001, 1),
   ];
   const lathe = new LatheGeometry(pts, segments);

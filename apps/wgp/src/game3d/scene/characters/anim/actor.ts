@@ -215,6 +215,23 @@ export abstract class ActorAnimator {
       this.clips.step(dt);
       if (this.caughtT >= 0) this.caughtT += dt;
       this.layerClips?.(ctx, dt);
+      if (!this.dangle.active && this.state !== "webbed") this.feetOutOfRoof(ctx);
+    }
+  }
+
+  /**
+   * Whatever the clips did with the legs (a hop's tucked legs a hand's breadth over the roof, a
+   * landing laid over them), no ankle ends up under the surface below it: such a leg is bent
+   * back up onto the surface.
+   */
+  private feetOutOfRoof(ctx: AnimContext): void {
+    const rig = this.rig;
+    rig.bones[0].updateMatrixWorld(true);
+    for (let i = 0; i < 2; i++) {
+      const leg = rig.legs[i];
+      const ankle = worldPos(leg.end, _a);
+      const floor = ctx.ground(ankle.x, ankle.z, this.H.y) + rig.spec.ankle;
+      if (ankle.y < floor - 0.3) reachLimb(rig, leg, ankle.setY(floor), this.pose.knee[i]);
     }
   }
 
@@ -273,6 +290,25 @@ export abstract class ActorAnimator {
       const foot = worldQuat(leg.end, _q2).slerp(_q3.copy(this.pose.footRot[i]).multiply(rig.restWorld[rig.index.get(leg.end.name)!]), w);
       reachLimb(rig, leg, target, this.pose.knee[i], foot);
     }
+  }
+
+  /**
+   * Set the body down so its lowest sole (heel or ball of the foot, whichever a clip has lower)
+   * is at `y`: a whole-body clip (a crouch) carries its own hips, and its feet with them.
+   */
+  protected soleTo(y: number): void {
+    const rig = this.rig;
+    rig.bones[0].updateMatrixWorld(true);
+    let low = Infinity;
+    for (let i = 0; i < 2; i++) {
+      low = Math.min(low, worldPos(rig.legs[i].end, _a).y - rig.spec.ankle);
+      const ball = rig.index.get(i === 0 ? "ball_l" : "ball_r");
+      const rest = rig.joints.get(i === 0 ? "ball_l" : "ball_r");
+      if (ball !== undefined && rest) low = Math.min(low, worldPos(rig.bones[ball], _a).y - rest.y);
+    }
+    if (!Number.isFinite(low) || Math.abs(low - y) < 0.05) return;
+    this.group.position.y += y - low;
+    this.group.updateMatrixWorld(true);
   }
 
   /** Hands toward the pose's targets by `w` (per hand), after a clip moved the arms. */
@@ -383,6 +419,13 @@ export abstract class ActorAnimator {
       pose.spine.z += Math.sin(this.time * 3.1) * 0.06;
     } else {
       this.finish?.(pose, a, ctx);
+      // Never a foot through the roof: a landing's dangling feet (the springs still swinging
+      // under the hips while the planted targets fade in) stop on the surface under them.
+      for (let i = 0; i < 2; i++) {
+        const f = pose.foot[i];
+        const floor = ctx.ground(f.x, f.z, H.y) + rig.spec.ankle;
+        if (f.y < floor) f.y = floor;
+      }
     }
     this.extras?.(pose);
     this.targets[0].copy(pose.hand[0]);

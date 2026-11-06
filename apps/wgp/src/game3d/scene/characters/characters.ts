@@ -22,7 +22,7 @@ import type { City, RenderFrame3D, Vec3, Zone } from "@wgp/game-core/sim3d/contr
 
 import { NODE_COLORS, type SuitColors } from "@/components/cast";
 
-import { raycastSolids, surfaceBelow, type CitySolids } from "../camera/raycast";
+import { footingBelow, raycastSolids, surfaceBelow, type CitySolids } from "../camera/raycast";
 import type { SharedUniforms } from "../city/materials";
 import { C, FOG } from "../palette";
 import type { QualityTier } from "../quality";
@@ -46,6 +46,7 @@ import { heroAssetNow, heroScale, HERO_ANIMS, HERO_MODEL, loadHeroAsset, loadHer
 import { HeroModel } from "./hero-model";
 import { CharacterModel, CopyBatch, type BodyModel } from "./model";
 import { WebShot } from "./web-shot";
+import { wrapStrand } from "./web-wrap";
 
 /** The night's villains, and Case file 001's Right-Clicker (scene/chapter/contract.ts). */
 type VillainKey = SceneVillainId;
@@ -162,6 +163,7 @@ export class CharacterSystem {
     this.root.name = "wgp-cast";
     this.ctx = {
       ground: (x, z, y) => surfaceBelow(solids, x, z, y),
+      footing: (x, z, y, r, reach, out) => footingBelow(solids, x, z, y, r, reach, out),
       ray: (o, d, max) => raycastSolids(solids, o, d, max),
       reducedMotion: false,
       secondary: true,
@@ -646,7 +648,9 @@ export class CharacterSystem {
     }
     this.wantMiss = false;
     this.shot.update(ha.grip, frame.hero.anchor, vel, dt, this.reducedMotion);
-    this.web.setPoints(this.shot.points, this.shot.count, size.width, size.height, this.shot.widthScale);
+    // Held taut, the strand lies over the roof edge it would otherwise cut through (web-wrap.ts).
+    const n = this.shot.state === "taut" && this.shot.count === 2 ? wrapStrand(this.solids, this.shot.points, 2) : this.shot.count;
+    this.web.setPoints(this.shot.points, n, size.width, size.height, this.shot.widthScale);
 
     // Villains: the real one by id, Sybil's copies as one instanced batch.
     for (const v of this.villains.values()) v.model.visible = false;
@@ -847,7 +851,8 @@ export class CharacterSystem {
     // She swings through fast: her full body only when she passes close.
     this.lodFor(g.model, p, cam, 0.5);
     this.gweiShot.update(g.anim.grip, h.anchor, _a.set(h.vel.x, h.vel.y, h.vel.z), dt, this.reducedMotion);
-    this.gweiWeb.setPoints(this.gweiShot.points, this.gweiShot.count, size.width, size.height, this.gweiShot.widthScale);
+    const n = this.gweiShot.state === "taut" && this.gweiShot.count === 2 ? wrapStrand(this.solids, this.gweiShot.points, 2) : this.gweiShot.count;
+    this.gweiWeb.setPoints(this.gweiShot.points, n, size.width, size.height, this.gweiShot.widthScale);
   }
 
   private teardown(): void {

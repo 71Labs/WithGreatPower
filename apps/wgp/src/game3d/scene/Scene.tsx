@@ -55,6 +55,8 @@ export interface SceneHandle {
   pose(): ChasePose | null;
   /** Debug: the hero's solved ankles and his body's left axis (headless checks that the legs never cross). */
   heroLegs?(): { ankles: [Vec3, Vec3]; hips: Vec3; left: Vec3; base: string } | null;
+  /** The scene itself, for headless checks (`?debug=1`, launch/brand/hero/qa-anomalies.mjs). */
+  inspect?(): SceneEngine;
 }
 
 export interface SceneStats {
@@ -125,6 +127,7 @@ export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cas
       skip: () => engine.skip(),
       pose: () => lastPose.current,
       heroLegs: () => engine.heroLegs(),
+      inspect: () => engine,
     }),
     [engine],
   );

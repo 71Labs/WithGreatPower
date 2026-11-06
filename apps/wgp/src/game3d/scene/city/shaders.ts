@@ -27,6 +27,7 @@
  * light into the shadow side's band through Ben-Day dots, and leave lit windows lit.
  */
 import { KEY_LIGHT } from "../characters/materials";
+import { TANK_EAVE } from "./geometry";
 
 const glslVec3 = (v: { x: number; y: number; z: number }) => `vec3(${v.x.toFixed(5)}, ${v.y.toFixed(5)}, ${v.z.toFixed(5)})`;
 
@@ -196,6 +197,19 @@ void occDiscard(float occ) {
 }
 `;
 
+/**
+ * A water tower an ally stands on (`aRoof` 1) has its conical roof pressed flat at the eave:
+ * a lid at the tower's full height (city/layout.ts makes that tank taller to match).
+ */
+const TANK_ROOF = /* glsl */ `
+#ifdef TANK
+attribute float aRoof;
+vec3 tankRoof(vec3 p) {
+  return vec3(p.x, mix(p.y, min(p.y, ${TANK_EAVE.toFixed(4)}), aRoof), p.z);
+}
+#endif
+`;
+
 export const TOON_VERTEX = /* glsl */ `
 ${COMMON}
 ${OCC_VERTEX}
@@ -216,10 +230,14 @@ flat varying vec4 vInfo;
 flat varying float vBand;
 flat varying float vOcc;
 
+${TANK_ROOF}
+
 void main() {
   vec3 size = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+  vec3 pos = position;
 #ifdef TANK
-  vLocal = position * size;
+  pos = tankRoof(pos);
+  vLocal = pos * size;
 #else
   vLocal = vec3((position.x + 0.5) * size.x, position.y * size.y, (position.z + 0.5) * size.z);
 #endif
@@ -231,7 +249,7 @@ void main() {
   vInfo = aInfo;
   vBand = fogBand(aRef, uFogBands);
   vOcc = occlusion(instanceMatrix);
-  vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  vec4 world = modelMatrix * instanceMatrix * vec4(pos, 1.0);
   shadowCoord(world.xyz, vWNormal);
   vec4 view = viewMatrix * world;
   vDepth = -view.z;
@@ -729,8 +747,14 @@ uniform vec3 uFogBands;
 flat varying float vBand;
 flat varying float vOcc;
 
+${TANK_ROOF}
+
 void main() {
-  vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  vec3 pos = position;
+#ifdef TANK
+  pos = tankRoof(pos);
+#endif
+  vec4 world = modelMatrix * instanceMatrix * vec4(pos, 1.0);
   vec3 size = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
   mat3 R = mat3(instanceMatrix[0].xyz / size.x, instanceMatrix[1].xyz / size.y, instanceMatrix[2].xyz / size.z);
   vec3 dir = mat3(modelMatrix) * (R * aHullDir);

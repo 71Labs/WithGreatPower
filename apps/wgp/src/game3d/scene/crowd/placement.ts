@@ -172,8 +172,8 @@ export function routeDistance(pts: { x: number; z: number }[], x: number, z: num
   return pts.length === 1 ? Math.hypot(x - pts[0].x, z - pts[0].z) : best;
 }
 
-/** A prop's footprint as a circle (its widest side, turned any way). */
-const propRadius = (p: Prop) => Math.max(p.w, p.d) * 0.5 + CLEAR.prop;
+/** A prop's footprint as a circle (its widest side, turned any way; a water tower's tank overhangs its legs). */
+const propRadius = (p: Prop) => (p.kind === "water-tower" ? p.w * 0.58 : Math.max(p.w, p.d) * 0.5) + CLEAR.prop;
 
 /** The street lamps' poles (city/details.ts lamps them from the same stops). */
 export function lampPoles(city: City, grid: StreetGrid): { x: number; z: number }[] {
@@ -293,14 +293,19 @@ export function planCrowd(city: City, bodies: BodyInfo[], density: Density, seed
     spots.push({ kind, x, y, z, yaw, zone, group, body, look: rng.int(Math.max(1, bodies[body].looks)), idle: channelFor(idle, bodies[body], h), react: channelFor(react, bodies[body], h >>> 8), seed: h });
   };
   const roomy = (x: number, z: number) => spots.every((s) => Math.hypot(s.x - x, s.z - z) >= CLEAR.person);
+  const towers = city.props.filter((p) => p.kind === "water-tower");
   const clearOfLamps = (x: number, z: number) => lamps.every((l) => Math.hypot(l.x - x, l.z - z) >= CLEAR.lamp);
 
-  /** A spot on a roof is fine: inside the roof, off the tier, clear of its props. */
+  /**
+   * A spot on a roof is fine: inside the roof, off the tier, clear of its props and of a
+   * neighbour's tank hanging over it.
+   */
   const onRoof = (b: Building, props: Prop[], x: number, z: number) => {
     const e = CLEAR.roofEdge;
     if (!(x > b.x0 + e && x < b.x1 - e && z > b.z0 + e && z < b.z1 - e)) return false;
     if (b.top && inRect(b.top, x, z, e)) return false;
     if (props.some((p) => Math.hypot(p.at.x - x, p.at.z - z) < propRadius(p))) return false;
+    if (towers.some((p) => p.buildingId !== b.id && Math.abs(p.at.y - b.h) < 120 && Math.hypot(p.at.x - x, p.at.z - z) < propRadius(p))) return false;
     return !forbidden(city, x, z) && roomy(x, z);
   };
   const propsOf = new Map<number, Prop[]>();

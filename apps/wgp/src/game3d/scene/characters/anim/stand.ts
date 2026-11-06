@@ -186,6 +186,21 @@ export class Stand {
     this.started = true;
   }
 
+  /**
+   * Somewhere else at once (placed beside an errand ally, a resume): no step, no pivot, no
+   * carry; the next update plants both feet under him where he is.
+   */
+  reset(): void {
+    this.pv = null;
+    this.step = -1;
+    this.pending = -1;
+    this.rest = 0;
+    this.lift[0] = this.lift[1] = 0;
+    this.shift.set(0, 0, 0);
+    this.started = false;
+    this.fresh = true;
+  }
+
   /** Off the ground (a jump, a swing): no pivot, no carry; the next update starts afresh. */
   airborne(): void {
     this.cancelPivot();
