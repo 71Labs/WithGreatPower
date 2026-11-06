@@ -23,8 +23,15 @@ import { COMMON } from "./shaders";
 import { inferStreets, type Street } from "./streets";
 
 /** Car parts in car space (x across, y up, z forward): centre and size of the body and the cabin. */
-const BODY = { y: 4, h: 16, w: 30, l: 72, z: 0 };
-const CABIN = { y: 20, h: 12, w: 26, l: 38, z: -5 };
+export interface CarPart {
+  y: number;
+  h: number;
+  w: number;
+  l: number;
+  z: number;
+}
+const BODY: CarPart = { y: 4, h: 16, w: 30, l: 72, z: 0 };
+const CABIN: CarPart = { y: 20, h: 12, w: 26, l: 38, z: -5 };
 
 export const TRAFFIC = {
   /** Lane offset from the street's centre line, as a share of its width. */
@@ -118,13 +125,13 @@ export function trafficLoops(city: City): Loop[] {
 }
 
 /** Body and cabin boxes merged, bottoms dropped, with corner-sign hull directions and a part id. */
-function carGeometry(): BufferGeometry {
+export function carGeometry(body: CarPart = BODY, cabin: CarPart = CABIN): BufferGeometry {
   const pos: number[] = [];
   const nrm: number[] = [];
   const hull: number[] = [];
   const part: number[] = [];
   const index: number[] = [];
-  [BODY, CABIN].forEach((p, k) => {
+  [body, cabin].forEach((p, k) => {
     const box = new BoxGeometry(1, 1, 1);
     const P = box.getAttribute("position") as BufferAttribute;
     const N = box.getAttribute("normal") as BufferAttribute;
@@ -229,7 +236,7 @@ void main() {
 }
 `;
 
-const CAR_FRAGMENT = /* glsl */ `
+export const CAR_FRAGMENT = /* glsl */ `
 ${COMMON}
 uniform vec3 uInk;
 uniform vec3 uDark;
@@ -244,6 +251,7 @@ uniform float uCrease;
 uniform vec4 uBody;    // y, h, w, l
 uniform vec4 uCabin;   // y, h, w, l
 uniform vec2 uZ;       // body z, cabin z
+uniform float uWheel;  // wheel radius
 varying vec3 vLocal;
 flat varying vec3 vN;
 flat varying vec3 vColor;
@@ -279,9 +287,9 @@ void main() {
       if (vTaxi > 0.5 && abs(L.y - S.y * 0.55) < 2.5) col = mod(floor(L.z / 5.0), 2.0) < 0.5 ? uInk : uPaper;
       for (int i = 0; i < 2; i++) {
         vec2 c = vec2(i == 0 ? S.w * 0.2 : S.w * 0.8, 0.0);
-        float d = length(uv - c) - 8.0;
+        float d = length(uv - c) - uWheel;
         col = mix(col, uInk, fillOf(d, aa));
-        col = mix(col, uSteel, fillOf(length(uv - c) - 3.0, aa));
+        col = mix(col, uSteel, fillOf(length(uv - c) - uWheel * 0.375, aa));
       }
     } else if (vN.z > 0.5) {
       // Front: headlights.
@@ -346,7 +354,7 @@ void main() {
 }
 `;
 
-const CAR_HULL_FRAGMENT = /* glsl */ `
+export const CAR_HULL_FRAGMENT = /* glsl */ `
 ${COMMON}
 uniform vec3 uInk;
 uniform vec3 uFog;
@@ -358,6 +366,22 @@ void main() {
 `;
 
 const v3 = (c: RGB) => new Vector3(c[0], c[1], c[2]);
+
+/** The car fill's uniforms: the shared ones, the paints, and the body, cabin and wheel sizes. */
+export function carUniforms(shared: SharedUniforms, body: CarPart, cabin: CarPart, wheel: number) {
+  return {
+    ...shared,
+    uDark: { value: v3(C.windowDark) },
+    uLit: { value: v3(C.windowLit) },
+    uRed: { value: v3(C.neonRed) },
+    uPaper: { value: v3(C.paper) },
+    uSteel: { value: v3(C.steel) },
+    uBody: { value: new Float32Array([body.y, body.h, body.w, body.l]) },
+    uCabin: { value: new Float32Array([cabin.y, cabin.h, cabin.w, cabin.l]) },
+    uZ: { value: new Float32Array([body.z, cabin.z]) },
+    uWheel: { value: wheel },
+  };
+}
 
 export function buildTraffic(city: City, shared: SharedUniforms, max = 240): Traffic {
   const loops = trafficLoops(city);
@@ -403,18 +427,7 @@ export function buildTraffic(city: City, shared: SharedUniforms, max = 240): Tra
     name: "wgp-car",
     vertexShader: CAR_VERTEX,
     fragmentShader: CAR_FRAGMENT,
-    uniforms: {
-      ...shared,
-      uDeckClear: deckClear,
-      uDark: { value: v3(C.windowDark) },
-      uLit: { value: v3(C.windowLit) },
-      uRed: { value: v3(C.neonRed) },
-      uPaper: { value: v3(C.paper) },
-      uSteel: { value: v3(C.steel) },
-      uBody: { value: new Float32Array([BODY.y, BODY.h, BODY.w, BODY.l]) },
-      uCabin: { value: new Float32Array([CABIN.y, CABIN.h, CABIN.w, CABIN.l]) },
-      uZ: { value: new Float32Array([BODY.z, CABIN.z]) },
-    },
+    uniforms: { ...carUniforms(shared, BODY, CABIN, 8), uDeckClear: deckClear },
   });
   const hullMat = new ShaderMaterial({
     name: "wgp-car-ink",

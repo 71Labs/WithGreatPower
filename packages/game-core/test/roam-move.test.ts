@@ -16,20 +16,30 @@ const grid = roamGrid(city);
 const world = roamWorld();
 const spawn = world.spawn;
 
-/** A street-facing roof edge at least `minY` high with open air out over the street beyond it. */
+/**
+ * A street-facing roof edge at least `minY` high with open air out over the street beyond it, and
+ * the point along it to leap from (clear of the lamps along its sidewalk).
+ */
 function openEdge(minY: number) {
-  return grid.edges.find((e) => {
-    if (e.y0 > 0.5 || e.y < minY || e.y > minY + 120 || e.hi - e.lo < 200) return false;
+  for (const e of grid.edges) {
+    if (e.y0 > 0.5 || e.y < minY || e.y > minY + 120 || e.hi - e.lo < 200) continue;
     const nx = e.axis === 1 ? e.n : 0;
     const nz = e.axis === 0 ? e.n : 0;
-    const t = (e.lo + e.hi) / 2;
-    const x = e.axis === 0 ? t : e.c;
-    const z = e.axis === 0 ? e.c : t;
-    // The roof behind is clear for the run-up, and the street ahead open for the leap and the roll.
-    for (let d = 20; d <= 200; d += 30) if (!clearAt(grid, x - nx * d, e.y + 27, z - nz * d, 26)) return false;
-    for (let d = 30; d <= 700; d += 30) for (const y of [30, e.y * 0.5, e.y + 60]) if (!clearAt(grid, x + nx * d, y, z + nz * d, 30)) return false;
-    return !city.river || !(x + nx * 400 > city.river.x0 - 60 && x + nx * 400 < city.river.x1 + 60);
-  })!;
+    for (let t = e.lo + 60; t <= e.hi - 60; t += 30) {
+      const x = e.axis === 0 ? t : e.c;
+      const z = e.axis === 0 ? e.c : t;
+      if (city.river && x + nx * 400 > city.river.x0 - 60 && x + nx * 400 < city.river.x1 + 60) continue;
+      // Room to roll out inside the city (not stopped dead at its edge).
+      const b = city.bounds;
+      if (x + nx * 800 < b.x0 + 60 || x + nx * 800 > b.x1 - 60 || z + nz * 800 < b.z0 + 60 || z + nz * 800 > b.z1 - 60) continue;
+      // The roof behind is clear for the run-up, and the street ahead open for the leap and the roll.
+      let ok = true;
+      for (let d = 20; d <= 200 && ok; d += 30) ok = clearAt(grid, x - nx * d, e.y + 27, z - nz * d, 26);
+      for (let d = 30; d <= 700 && ok; d += 30) for (const y of [30, e.y * 0.5, e.y + 60]) if (ok) ok = clearAt(grid, x + nx * d, y, z + nz * d, 30);
+      if (ok) return { e, t };
+    }
+  }
+  throw new Error("no open edge");
 }
 
 describe("free roam on foot", () => {
@@ -37,32 +47,31 @@ describe("free roam on foot", () => {
     // A long, flat street.
     const flat = at(3810, 0, 600, 0, 1);
     const ahead = { x: 3810, z: 9000 };
-    const walk = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 40, mag: 1 }]);
-    const jog = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 40, mag: 2 }]);
-    const run = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 40, mag: 3 }]);
+    const walk = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 40, mag: 1 }], 60 * 60, QUIET);
+    const jog = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 40, mag: 2 }], 60 * 60, QUIET);
+    const run = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 40, mag: 3 }], 60 * 60, QUIET);
     expect(walk.top.ground).toBeCloseTo(WALK_SPEED, 0);
     expect(jog.top.ground).toBeCloseTo(JOG_SPEED, 0);
     expect(run.top.ground!).toBeGreaterThan(RUN_SPEED - 5);
     expect(run.top.ground!).toBeLessThanOrEqual(RUN_SPEED + 1e-6);
     // Sprinting builds past a run to the sprint's top speed.
-    const sprint = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 120, sprint: true }]);
+    const sprint = playRoam(flat, [{ kind: "hold", ...ahead, ticks: 120, sprint: true }], 60 * 60, QUIET);
     expect(sprint.top.ground!).toBeGreaterThan(SPRINT_SPEED - 5);
     expect(chain(walk)).toBe("ground");
     expect(chain(sprint)).toBe("ground");
   });
 
   it("stops at a roof's edge at a walk, and leaps off it at a run; a hard landing is a roll, and nothing hurts", () => {
-    const e = openEdge(280);
+    const { e, t } = openEdge(280);
     const nx = e.axis === 1 ? e.n : 0;
     const nz = e.axis === 0 ? e.n : 0;
-    const t = (e.lo + e.hi) / 2;
     const ex = e.axis === 0 ? t : e.c;
     const ez = e.axis === 0 ? e.c : t;
     const from = at(ex - nx * 200, e.y, ez - nz * 200, nx, nz);
     const out = { x: ex + nx * 3000, z: ez + nz * 3000 };
-    const edge = playRoam(from, [{ kind: "hold", ...out, ticks: 150, mag: 1 }]);
+    const edge = playRoam(from, [{ kind: "hold", ...out, ticks: 150, mag: 1 }], 60 * 60, QUIET);
     expect(chain(edge)).toBe("ground");
-    const leap = playRoam(from, [{ kind: "hold", ...out, ticks: 160, sprint: true }]);
+    const leap = playRoam(from, [{ kind: "hold", ...out, ticks: 160, sprint: true }], 60 * 60, QUIET);
     expect(leap.events.some(({ e: ev }) => ev.type === "roam-jump" && ev.kind === "leap")).toBe(true);
     expect(chain(leap)).toMatch(/^ground>air>roll>ground/);
     expect(leap.unhurt).toBe(true);
@@ -84,6 +93,8 @@ describe("free roam on foot", () => {
 });
 
 const IDLE = { dir: 0, mag: 0, web: false, shot: 0 } as const;
+/** A move that isn't about the traffic, tried on empty streets (traffic's own tests: roam-traffic.test.ts). */
+const QUIET = { traffic: false } as const;
 
 describe("free roam on walls", () => {
   it("climbs a building from the street with the stick into it, and mantles onto the roof", () => {
@@ -93,14 +104,15 @@ describe("free roam on walls", () => {
       .sort((a, b) => Math.max(b.h, b.top?.h ?? 0) - Math.max(a.h, a.top?.h ?? 0))[0];
     const zc = (tall.z0 + tall.z1) / 2;
     const roof = Math.max(tall.h, tall.top?.h ?? 0);
-    const p = playRoam(at(tall.x1 + 60, 0, zc, -1, 0), [{ kind: "climb", x: (tall.x0 + tall.x1) / 2, z: zc, y: roof - 2 }], 60 * 20);
+    const p = playRoam(at(tall.x1 + 60, 0, zc, -1, 0), [{ kind: "climb", x: (tall.x0 + tall.x1) / 2, z: zc, y: roof - 2 }], 60 * 20, QUIET);
     expect(p.finished).toBe(true);
     expect(chain(p)).toMatch(/^ground>climb>mantle>ground/);
     expect(p.run.sim.hero.y - 26).toBeCloseTo(roof, 0);
   });
 
   it("drops over a roof's edge to hang by the hands, and pulls back up", () => {
-    const p = playRoam(at(3610, 300, 3300, 1, 0), [{ kind: "press", shot: "drop", x: 3800, z: 3300 }, { kind: "wait", ticks: 30 }, { kind: "hold", x: 3500, z: 3300, ticks: 60 }]);
+    // (South of the bridge deck's rail, which stands just off this roof's east face.)
+    const p = playRoam(at(3610, 300, 3250, 1, 0), [{ kind: "press", shot: "drop", x: 3800, z: 3250 }, { kind: "wait", ticks: 30 }, { kind: "hold", x: 3500, z: 3250, ticks: 60 }]);
     expect(chain(p)).toMatch(/^ground>hang>mantle>ground/);
     expect(p.run.sim.hero.y - 26).toBeCloseTo(300, 0);
   });
@@ -152,7 +164,7 @@ describe("free roam on walls", () => {
   });
 
   it("lets go of a hang on the drop button, falls, and lands", () => {
-    const p = playRoam(at(3610, 300, 3300, 1, 0), [{ kind: "press", shot: "drop", x: 3800, z: 3300 }, { kind: "wait", ticks: 20 }, { kind: "press", shot: "drop" }, { kind: "wait", ticks: 90 }]);
+    const p = playRoam(at(3610, 300, 3250, 1, 0), [{ kind: "press", shot: "drop", x: 3800, z: 3250 }, { kind: "wait", ticks: 20 }, { kind: "press", shot: "drop" }, { kind: "wait", ticks: 90 }], 60 * 60, QUIET);
     expect(chain(p)).toMatch(/^ground>hang>air>(roll|ground)/);
   });
 
@@ -171,7 +183,12 @@ describe("free roam on walls", () => {
   });
 
   it("wall-runs along a facade met at speed, and wall-jumps off it", () => {
-    const e = grid.edges.find((q) => q.y0 < 1 && q.axis === 1 && q.hi - q.lo > 450 && q.y > 250 && clearAt(grid, q.c + q.n * 70, 30, q.lo + 40, 30) && clearAt(grid, q.c + q.n * 70, 30, q.lo + 300, 30))!;
+    // A long street wall with the sidewalk along it clear for the run (no lamp post in the way).
+    const clearRun = (q: (typeof grid.edges)[number]) => {
+      for (let u = q.lo + 20; u < q.lo + 420; u += 20) if (!clearAt(grid, q.c + q.n * 40, 30, u, 27) || !clearAt(grid, q.c + q.n * 70, 30, u, 30)) return false;
+      return true;
+    };
+    const e = grid.edges.find((q) => q.y0 < 1 && q.axis === 1 && q.hi - q.lo > 450 && q.y > 250 && clearRun(q))!;
     // Sprint along the wall, the stick a little into it (brushing it), then jump.
     const brush = { x: e.c - e.n * 600, z: e.lo + 4000 };
     const p = playRoam(at(e.c + e.n * 40, 0, e.lo + 30, 0, 1), [
@@ -180,7 +197,7 @@ describe("free roam on walls", () => {
       { kind: "hold", ...brush, ticks: 20, sprint: true },
       { kind: "press", shot: "jump", x: e.c + e.n * 2000, z: e.lo + 2000 },
       { kind: "wait", ticks: 80 },
-    ]);
+    ], 60 * 60, QUIET);
     expect(chain(p)).toMatch(/wallrun>air/);
     expect(p.events.some(({ e: ev }) => ev.type === "roam-jump" && ev.kind === "wall")).toBe(true);
   });
@@ -225,19 +242,24 @@ describe("free roam on the web", () => {
 
 describe("free roam on a keyboard's eight directions", () => {
   it("wall-runs off a diagonal sprint-jump at a wall (W+D), and climbs a head-on one (W)", () => {
-    const e = grid.edges.find((q) => q.y0 < 1 && q.axis === 1 && q.hi - q.lo > 450 && q.y > 250 && clearAt(grid, q.c + q.n * 70, 30, q.lo + 40, 30) && clearAt(grid, q.c + q.n * 70, 30, q.lo + 300, 30))!;
+    // A long street wall with the sidewalk along it clear for the run (no lamp post in the way).
+    const clearRun = (q: (typeof grid.edges)[number]) => {
+      for (let u = q.lo + 20; u < q.lo + 420; u += 20) if (!clearAt(grid, q.c + q.n * 40, 30, u, 27) || !clearAt(grid, q.c + q.n * 70, 30, u, 30)) return false;
+      return true;
+    };
+    const e = grid.edges.find((q) => q.y0 < 1 && q.axis === 1 && q.hi - q.lo > 450 && q.y > 250 && clearRun(q))!;
     // 45° into the wall and along it, sprinting from 150 out, a jump 70 short of it.
     const start = at(e.c + e.n * 150, 0, e.lo + 20, 0, 1);
     const diag = { x: e.c - e.n * 2000, z: e.lo + 20 + 2000 };
-    const p = playRoam(start, [{ kind: "hold", ...diag, ticks: 8, sprint: true }, { kind: "press", shot: "jump", ...diag }, { kind: "hold", ...diag, ticks: 40, sprint: true }]);
+    const p = playRoam(start, [{ kind: "hold", ...diag, ticks: 8, sprint: true }, { kind: "press", shot: "jump", ...diag }, { kind: "hold", ...diag, ticks: 40, sprint: true }], 60 * 60, QUIET);
     expect(chain(p)).toMatch(/air>wallrun/);
-    const head = playRoam(at(e.c + e.n * 150, 0, e.lo + 200, -e.n, 0), [{ kind: "hold", x: e.c - e.n * 2000, z: e.lo + 200, ticks: 60 }]);
+    const head = playRoam(at(e.c + e.n * 150, 0, e.lo + 200, -e.n, 0), [{ kind: "hold", x: e.c - e.n * 2000, z: e.lo + 200, ticks: 60 }], 60 * 60, QUIET);
     expect(chain(head)).toMatch(/^ground>climb/);
     // No jump at all: sprinting into it on the diagonal runs up onto it and along it.
-    const run = playRoam(start, [{ kind: "hold", ...diag, ticks: 50, sprint: true }]);
+    const run = playRoam(start, [{ kind: "hold", ...diag, ticks: 50, sprint: true }], 60 * 60, QUIET);
     expect(chain(run)).toMatch(/^ground>wallrun/);
     // Not sprinting, the same diagonal climbs.
-    const slow = playRoam(start, [{ kind: "hold", ...diag, ticks: 50 }]);
+    const slow = playRoam(start, [{ kind: "hold", ...diag, ticks: 50 }], 60 * 60, QUIET);
     expect(slow.moves).not.toContain("wallrun");
   });
 

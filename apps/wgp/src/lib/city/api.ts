@@ -5,7 +5,7 @@
 import type { CityBase, CityGains, CityRecord } from "@wgp/game-core/city";
 import type { Save } from "@wgp/game-core/types";
 
-export type CityResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; message?: string };
+export type CityResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; message?: string; body?: { city?: CityRecord; ruleset?: string } };
 
 export interface CityView {
   signedIn: boolean;
@@ -34,7 +34,14 @@ async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}
   }
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   if (res.ok) return { ok: true, data: body as T };
-  return { ok: false, status: res.status, error: typeof body?.error === "string" ? body.error : `http_${res.status}`, message: typeof body?.message === "string" ? body.message : undefined };
+  return {
+    ok: false,
+    status: res.status,
+    error: typeof body?.error === "string" ? body.error : `http_${res.status}`,
+    message: typeof body?.message === "string" ? body.message : undefined,
+    // An old_rules refusal carries the record to start a fresh outing from, and the server's rules.
+    body: body && typeof body === "object" ? { city: (body.city as CityRecord | undefined) ?? undefined, ruleset: typeof body.ruleset === "string" ? body.ruleset : undefined } : undefined,
+  };
 }
 
 export const getCity = () => call<CityView>("/api/city");

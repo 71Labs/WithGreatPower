@@ -20,6 +20,7 @@
  * - splash: treading water in the river, head and shoulders up, legs below.
  * - zip: pulled along the web, the web hand out ahead on the line, the other arm back, the legs
  *   trailing together, knees a little bent, then tucked as he comes in to land.
+ * - knocked (roam-2): hit by a car: flung back, down on his back, getting up (knock-pose.ts).
  *
  * The wall moves place every limb exactly (no lag, so a planted hand stays on its hold) after
  * blending in from the pose the body had; the others ease every target on a stiff spring. The
@@ -32,12 +33,13 @@ import type { RenderFrame3D, RoamMoveName } from "@wgp/game-core/sim3d/contract"
 import { Spring3 } from "../physics/spring";
 import type { Rig } from "../rig";
 import { clamp, frameQuat, lerp, Plant, smoothstep, UP } from "./common";
+import { knockPose } from "./knock-pose";
 import type { Pose } from "./pose";
 import type { AnimContext } from "./types";
 import { CLIMB, ClimbGait, Hold, LH, RH, WallFrame, wallBody, type WallBody } from "./wall-pose";
 
 /** The moves this poser draws (the rest are the hero animator's own). */
-export const ROAM_POSED: ReadonlySet<RoamMoveName> = new Set<RoamMoveName>(["climb", "hang", "mantle", "vault", "wallrun", "roll", "zip", "splash"]);
+export const ROAM_POSED: ReadonlySet<RoamMoveName> = new Set<RoamMoveName>(["climb", "hang", "mantle", "vault", "wallrun", "roll", "zip", "splash", "knocked"]);
 
 /** The sim's body radius: its centre stands this far off a wall it's on. */
 const R = 26;
@@ -336,6 +338,13 @@ export class RoamPoser {
         }
         if (path) this.aim[1] = this.aimDir.copy(dir);
         grip = 1;
+        break;
+      }
+      case "knocked": {
+        // Hit by a car (roam-2): flung, down, getting up (knock-pose.ts).
+        grip = knockPose(f, P, ctx.ground(P.x, P.z, P.y + 4), { hipH, legK: this.legK, shoulderY: this.shoulderY, reach: this.reach }, ctx.reducedMotion, H, this.rot, targets);
+        // He faces back at the car the whole time (the animator carries on from it once he's up).
+        this.dir.set(h.facing?.x ?? 0, 0, h.facing?.z ?? 1);
         break;
       }
       case "roll":

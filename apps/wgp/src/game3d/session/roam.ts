@@ -14,7 +14,7 @@
  */
 import { applyOuting, cityBase, cityRecord, roamStartFrom, type CityBase, type CityGains, type CityRecord } from "@wgp/game-core/city";
 import { toBase64 } from "@wgp/game-core/input";
-import { roamLog, roamOuting, startRoamRun, type RoamRun } from "@wgp/game-core/roam";
+import { ROAM_RULESET, roamLog, roamOuting, startRoamRun, type RoamRun } from "@wgp/game-core/roam";
 import type { Save } from "@wgp/game-core/types";
 
 import { adoptServerSave, commitLocalSave, getSave } from "@/game/store";
@@ -34,11 +34,14 @@ export interface RoamSession {
 
 export type FileResult =
   | { kind: "filed"; gains: CityGains; record: CityRecord; verified: boolean }
+  /** The server's record moved on since this outing began (another tab): start again from it. */
+  | { kind: "stale"; record: CityRecord | null }
   /**
-   * The server's record moved on since this outing began (another tab), or (`rules`) the city's
-   * rules did (a release since the page loaded): start again from the record, after a reload.
+   * The server refused this outing as one played under older roam rules (409 old_rules): nothing
+   * of it was filed, the record keeps what it had. `fresh`: the server's rules are this page's,
+   * so a fresh outing from `record` files; else the page is older than the server (reload).
    */
-  | { kind: "stale"; record: CityRecord | null; rules?: boolean }
+  | { kind: "old-rules"; record: CityRecord | null; fresh: boolean }
   | { kind: "failed"; message: string }
   /** Nothing new to send. */
   | { kind: "idle" };
@@ -74,11 +77,7 @@ export async function fileOuting(s: RoamSession, opts: { keepalive?: boolean; fo
   }
   const res = await fileOutingLog({ outingId: s.outingId, base: s.base, log: toBase64(roamLog(s.run)) }, opts.keepalive);
   if (!res.ok) {
-    if (res.status === 409 && res.error === "stale_rules") {
-      // Never filed under these rules: stop sending it (the record keeps what was filed before).
-      filed.set(s, Infinity);
-      return { kind: "stale", record: null, rules: true };
-    }
+    if (res.status === 409 && res.error === "old_rules") return { kind: "old-rules", record: res.body?.city ?? null, fresh: res.body?.ruleset === ROAM_RULESET };
     if (res.status === 409) return { kind: "stale", record: null };
     return { kind: "failed", message: res.message ?? "Couldn’t file the outing with the server." };
   }

@@ -54,7 +54,12 @@ function windowGrid(style: number, faceW: number, h: number) {
   return { cw, ch, gx, gy, cols, rows };
 }
 
-export function addDetails(city: City, push: Push, streets: StreetGrid = inferStreets(city)): void {
+/**
+ * `cornicesOnly`: free roam's City (its lamps, signals and roof doors are its furniture, solid in
+ * the sim and drawn from the sim's list; the 6-unit parapets and the fire escapes, which can't be
+ * solid without changing how a ledge is grabbed, aren't drawn there).
+ */
+export function addDetails(city: City, push: Push, streets: StreetGrid = inferStreets(city), opts: { cornicesOnly?: boolean } = {}): void {
   const blocked: Rect[] = city.buildings.map((b) => ({ x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 }));
   const river = city.river;
   const deck = city.bridge?.deck ?? null;
@@ -66,8 +71,19 @@ export function addDetails(city: City, push: Push, streets: StreetGrid = inferSt
   const propsOf = new Map<number, Prop[]>();
   for (const p of city.props) if (p.buildingId !== null) propsOf.set(p.buildingId, [...(propsOf.get(p.buildingId) ?? []), p]);
   const spots = [city.start, ...city.zones.map((z) => z.center), ...city.zones.flatMap((z) => (z.allyAt ? [z.allyAt] : []))];
+  if (opts.cornicesOnly) {
+    for (const b of city.buildings) addCornice(b, push);
+    return;
+  }
   for (const b of city.buildings) addBuildingDetail(b, propsOf.get(b.id) ?? [], spots, blocked, push);
   addStreetFurniture(city, streets, keepClear, push);
+}
+
+/** A cornice just under the roof edge: a dark ledge with its own ink line. */
+function addCornice(b: Building, push: Push) {
+  const cx = (b.x0 + b.x1) / 2;
+  const cz = (b.z0 + b.z1) / 2;
+  if (b.h > 200) push({ x: cx, y: b.h - 19, z: cz, w: b.x1 - b.x0 + 10, h: 8, d: b.z1 - b.z0 + 10, color: LEDGE, kind: KIND.solid, hull: 0.7, ref: { x: cx, z: cz }, lod: DETAIL_LOD.near });
 }
 
 function addBuildingDetail(b: Building, props: Prop[], spots: { x: number; y: number; z: number }[], blocked: Rect[], push: Push) {

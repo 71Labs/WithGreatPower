@@ -11,8 +11,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { cityBase, cityRecord, emptyCity, roamStartFrom } from "@wgp/game-core/city";
 import { encodeInputCodes } from "@wgp/game-core/input";
-import { ROAM_LOG_RULESETS_PAST, ROAM_RULESET, roamLog, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
-import { newRoamBot, PAGE_XP, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
+import { roamLog, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
+import { newRoamBot, PAGE_XP, ROAM_OLD_LOG_RULESETS, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
 
 import { HttpError } from "@/server/http";
 
@@ -24,6 +24,7 @@ import { freshDb, givePlayerHero, makePlayer } from "./test-helpers";
 const T0 = new Date("2026-11-07T20:00:00Z");
 const ID_A = "6f1d6a1e-6a7b-4c39-9a3b-1f9e1a2b3c4d";
 const ID_B = "0b9c3c1a-2d4e-4f50-8a61-7b8c9d0e1f2a";
+const ID_C = "5a7e2c0d-91b3-4f6a-b8d2-3c4e5f6a7b8c";
 
 /** Play an outing in "the browser" from a record, the bot doing `goals`; the log and how far it got. */
 function play(base = cityBase(emptyCity()), goals: RoamBotGoal[], maxTicks = 60 * 120) {
@@ -60,7 +61,7 @@ describe("free roam on the server", () => {
     // First part of the outing: off the roof, to Dev, the chase and back.
     const first = play(cityBase(emptyCity()), chase);
     const a = await fileOuting(db, { playerId, outingId: ID_A, base: cityBase(emptyCity()), log: first.log, now: T0 });
-    expect(a.ruleset).toBe(ROAM_RULESET);
+    expect(a.ruleset).toBe("roam-2");
     expect(a.gains.tasks).toEqual(["pickpocket"]);
     expect(a.gains.xp).toBe(TASK_XP);
     expect(a.city.tasks.pickpocket).toBe(TASK_DONE);
@@ -112,21 +113,27 @@ describe("free roam on the server", () => {
     expect(bad.status).toBe(422);
   });
 
-  it("refuses an outing played under older roam rules as stale, and keeps the record as it stands", async () => {
-    const before = (await ensureSave(db, playerId)).save;
-    const rec = cityRecord(before);
-    // A tab open across a release: its outing's log carries roam-1's field.
-    const now = play(cityBase(rec), [{ kind: "wait", ticks: 30 }]);
-    const old = encodeInputCodes(now.run.codes, [], 0, ROAM_LOG_RULESETS_PAST[0]);
-    const e = await rejection(fileOuting(db, { playerId, outingId: ID_A, base: cityBase(rec), log: old, now: T0 }));
-    expect(e.status).toBe(409);
-    expect(e.code).toBe("stale_rules");
+  it("refuses an outing played under older roam rules (roam-1) as stale, keeping the record, and hands back the record to start fresh from", async () => {
+    const before = cityRecord((await ensureSave(db, playerId)).save);
+    const xp = (await ensureSave(db, playerId)).save.hero!.xp;
+    // The same frames a roam-1 tab would send, under roam-1's log field.
+    const played = play(cityBase(before), [{ kind: "wait", ticks: 20 }]);
+    const old = encodeInputCodes(played.run.codes, [], 0, ROAM_OLD_LOG_RULESETS[0]);
+    for (const id of [ID_B, ID_C]) {
+      const e = await rejection(fileOuting(db, { playerId, outingId: id, base: cityBase(before), log: old, now: T0 }));
+      expect(e.status).toBe(409);
+      expect(e.code).toBe("old_rules");
+      expect(e.details?.ruleset).toBe("roam-2");
+      expect(e.details?.city).toEqual(before);
+    }
+    // Nothing moved: the record and the XP are as they were.
     const after = (await ensureSave(db, playerId)).save;
-    expect(after.city).toEqual(before.city);
-    expect(after.hero!.xp).toBe(before.hero!.xp);
-    // A fresh outing from the record files as ever.
-    const fresh = await fileOuting(db, { playerId, outingId: "3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a9f", base: cityBase(rec), log: now.log, now: T0 });
-    expect(fresh.gains.xp).toBe(0);
+    expect(cityRecord(after)).toEqual(before);
+    expect(after.hero!.xp).toBe(xp);
+    // A fresh outing from that record files.
+    const fresh = play(cityBase(before), [{ kind: "wait", ticks: 20 }]);
+    const ok = await fileOuting(db, { playerId, outingId: ID_C, base: cityBase(before), log: fresh.log, now: T0 });
+    expect(ok.ruleset).toBe("roam-2");
   });
 
   it("counts filings against a daily budget", () => {

@@ -11,8 +11,11 @@
  * - The pickpocket bot, two draw calls: a small paper-and-ink robot with a red eye, bobbing as
  *   it runs, slumped once caught.
  * - Bursts on the city's events: "GOT IT!" for a page, "SNAP!" for a photo, "SYNCED!", "GOTCHA!".
+ * - roam-2: the street traffic, two draw calls (roam/cars.ts): the sim's cars, where the sim has
+ *   them. A car that knocks the hero down: "WHAM!" over him and a short camera shake (none on
+ *   the Steady camera or with reduced motion).
  *
- * Reduced motion: no flutter, no bob, no beam shimmer. About four draw calls in all.
+ * Reduced motion: no flutter, no bob, no beam shimmer, no shake. About six draw calls in all.
  */
 import {
   BackSide,
@@ -40,9 +43,12 @@ import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
 import type { SharedUniforms } from "../city/materials";
 import type { BurstOptions } from "../effects";
 import { C, rgb } from "../palette";
+import { RoamCars } from "./cars";
 
 export interface RoamHost {
   burst(word: string, at: Vec3, opts?: BurstOptions): void;
+  /** A short camera shake (the host leaves it out on the Steady camera and with reduced motion). */
+  shake?(amount: number): void;
 }
 
 /** A roam sim event, typed loosely (the scene only reads a few fields). */
@@ -53,6 +59,8 @@ export interface RoamSceneEvent {
   z?: number;
   task?: string | null;
   state?: string;
+  /** roam-car-hit: the car's speed. */
+  speed?: number;
 }
 
 const KIND = { page: 0, pixel: 1, marker: 2, next: 3, reticle: 4, beam: 5 } as const;
@@ -320,6 +328,8 @@ export class RoamScene {
   private parts: Parts | null = null;
   private botYaw = 0;
   private lastFrame: RenderFrame3D | null = null;
+  /** roam-2: the sim's cars (built on the first frame that has them). */
+  private cars: RoamCars | null = null;
 
   constructor(
     private readonly city: City,
@@ -434,6 +444,12 @@ export class RoamScene {
       case "roam-splash":
         this.host.burst("SPLASH!", { x: ev.x, y: 40, z: ev.z }, { size: 72, life: 0.8 });
         break;
+      case "roam-car-hit": {
+        const hard = (ev.speed ?? 0) > 220;
+        this.host.burst(hard ? "WHAM!" : "OOF!", { x: ev.x, y: ev.y + 40, z: ev.z }, { size: hard ? 110 : 90, life: 0.8 });
+        if (!this.reducedMotion) this.host.shake?.(Math.min(1, (ev.speed ?? 0) / 330));
+        break;
+      }
     }
   }
 
@@ -444,6 +460,15 @@ export class RoamScene {
       return;
     }
     this.parts ??= this.build();
+    if (r.cars && r.cars.length) {
+      if (!this.cars || this.cars.max < r.cars.length) {
+        this.cars?.dispose();
+        if (this.cars) this.root.remove(this.cars.fill, this.cars.hull);
+        this.cars = new RoamCars(this.city, this.shared, r.cars.length);
+        this.root.add(this.cars.fill, this.cars.hull);
+      }
+      this.cars.update(r.cars);
+    }
     this.root.visible = true;
     this.lastFrame = frame;
     const P = this.parts;
@@ -559,6 +584,8 @@ export class RoamScene {
     (P.botFill.material as MeshBasicMaterial).dispose();
     (P.botHull.material as MeshBasicMaterial).dispose();
     this.parts = null;
+    this.cars?.dispose();
+    this.cars = null;
     void this.city;
   }
 }

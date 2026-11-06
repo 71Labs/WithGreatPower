@@ -4,15 +4,15 @@
   "patrolRuleset": 4,
   "outing": {
     "ok": true,
-    "hash": "5f9e347e",
+    "hash": "d10213d4",
     "checkpoints": [
-      "2869403b",
-      "3445f41f",
-      "17d63596",
-      "6c7ea42e"
+      "0f1bda00",
+      "dd9d51cd",
+      "f0cf39ba",
+      "00bb854e"
     ],
-    "ticks": 1773,
-    "bytes": 731,
+    "ticks": 3270,
+    "bytes": 1074,
     "stage": [
       0,
       9,

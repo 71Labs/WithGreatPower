@@ -6,7 +6,7 @@
  * nights (roam null) never reach a line of this.
  *
  * No timer and no end: an outing runs until the player leaves (or the log's MAX_TICKS), and
- * nothing hurts the hero.
+ * nothing hurts the hero (roam-2: a car knocks him down, and he gets up).
  */
 import type { CityIndex } from "../city";
 import { DT, HERO_RADIUS } from "../constants";
@@ -16,7 +16,9 @@ import { mix } from "../rng";
 import type { SimState } from "../types";
 import { ROAM_CITY_SEED, SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP, SPRINT_GRACE } from "./constants";
 import { stepMove, type Presses } from "../parkour/move";
+import { stepKnock } from "./knock";
 import { stepPeople } from "./tasks";
+import { buildTraffic, stepTraffic } from "./traffic";
 import { TASK_DONE, TASK_IDS, type RoamBody, type RoamStart, type RoamState } from "./types";
 import { clearAt, roamCity, roamGrid, roamWorld } from "./world";
 
@@ -101,6 +103,7 @@ export function createRoamSim(start: RoamStart, heroLevel = 1): SimState {
     bot: { state: stage[1] >= 2 ? 3 : 0, leg: 0, part: 0, u: 0, x: world.botPath[0]?.x ?? 0, y: world.botPath[0]?.y ?? 0, z: world.botPath[0]?.z ?? 0, vx: 0, vy: 0, vz: 0 },
     chat: null,
     events: [],
+    traffic: buildTraffic(city, grid, at),
   };
   const s: SimState = {
     config: { seed: ROAM_CITY_SEED, stops: [], index: city.zones.length, entry: "travel", hp: 100, maxHp: 100, fluid: 0, combo: 0, gweiCalls: 0, heroLevel, loadout: [] },
@@ -162,7 +165,10 @@ export function stepRoam(s: SimState, frame: InputFrame): boolean {
   const b = r.body;
   b.sprintT = input.shot === SHOT_SPRINT ? SPRINT_GRACE : Math.max(0, b.sprintT - 1);
   const press: Presses = { jump: input.shot === SHOT_JUMP, zip: input.shot === SHOT_ZIP, act: input.shot === SHOT_ACT, drop: input.shot === SHOT_DROP };
-  stepMove(s, input, press, DT);
+  // roam-2: the cars move first (and may knock him down); down, the parkour set waits.
+  stepTraffic(s);
+  if (b.move === "knocked") stepKnock(s);
+  else stepMove(s, input, press, DT);
   stepPeople(s, press, DT);
   return true;
 }

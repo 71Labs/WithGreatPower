@@ -52,12 +52,14 @@ export const newRoamBot = (goals: RoamBotGoal[]): RoamBotMemory => ({ goals, i: 
 /**
  * The golden tour (src/golden-roam.ts) and `?autopilot=1`: from the spawn roof a walk, a run
  * and a sprint off its edge, down to Dev for the pickpocket chase over the roofs and back, a
- * Daily Rug page in the street, a swing on the web (held, then let go) and a zip.
+ * Daily Rug page in the street, a swing on the web (held, then let go), a zip, and a dart
+ * back and forth across the street in the traffic.
  */
 export function roamTour(w: RoamWorld): RoamBotGoal[] {
   const s = w.spawn;
   const dev = w.folks.find((f) => f.key === "dev")!;
   const page = w.pages.find((p) => p.y === 0)!;
+  const cross = streetLine(page.x);
   return [
     { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 1 },
     { kind: "hold", x: s.x - 2000, z: s.z - 120, ticks: 30, mag: 3 },
@@ -74,6 +76,11 @@ export function roamTour(w: RoamWorld): RoamBotGoal[] {
     { kind: "wait", ticks: 90 },
     { kind: "press", shot: "zip", x: page.x, z: page.z + 3000 },
     { kind: "wait", ticks: 60 },
+    // roam-2: dart back and forth across the page's street in the traffic, so a car knocks him
+    // down (and he gets up) whatever the pace of the moves before.
+    { kind: "go", x: cross, z: page.z, r: 20, street: true },
+    ...[0, 1, 2, 3, 4, 5, 6, 7].map((k): RoamBotGoal => ({ kind: "hold", x: cross + (k % 2 ? -120 : 120), z: page.z + 2000, ticks: 60, sprint: true })),
+    { kind: "wait", ticks: 120 },
   ];
 }
 

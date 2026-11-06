@@ -5,7 +5,7 @@
  * - advance(seconds) once per animation frame steps the outing at 60 Hz (at most MAX_STEPS a
  *   frame; a slow tab slows the city rather than fast-forwarding it), one InputFrame a tick.
  * - `view` is the blend of the last two ticks, the night's fields (blend.ts) plus the outing's
- *   (RenderFrame3D.roam: the latest tick's, the bot sliding between ticks).
+ *   (RenderFrame3D.roam: the latest tick's, the bot and the cars sliding between ticks).
  * - Events go out on a synchronous bus; the HUD snapshot to its store about 10 times a second
  *   and at once on anything that changes what it says.
  * - No countdown and no end: loading → live ⇄ paused. replace() swaps in the next outing.
@@ -14,7 +14,7 @@ import { lineText } from "@wgp/game-core/city";
 import { roamActive, stepRoamRun, type RoamRun, type RoamRunEvent } from "@wgp/game-core/roam";
 import { DT, fillRenderFrame, newRenderFrame } from "@wgp/game-core/sim3d";
 import { fillRoamFrame, TASK_DONE, TASK_IDS } from "@wgp/game-core/sim3d/roam";
-import type { InputFrame, RenderFrame3D, RoamFrame, RoamMoveName } from "@wgp/game-core/sim3d/contract";
+import type { InputFrame, RenderFrame3D, RoamCarFrame, RoamFrame, RoamMoveName } from "@wgp/game-core/sim3d/contract";
 
 import { EventBus } from "@/sim/loop";
 import type { SceneCue } from "@/game3d/scene/camera/director";
@@ -125,9 +125,35 @@ function blendRoam(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: Ren
   }
   const o = out.roam && out.roam !== c && out.roam !== prev.roam ? out.roam : (out.roam = { ...c });
   Object.assign(o, c);
+  const k = Math.max(0, Math.min(1, t));
+  // roam-2: the cars slide between ticks too (the hero does), so nothing stutters past him.
+  const pc = prev.roam?.cars;
+  const cc = c.cars;
+  if (cc && pc && pc.length === cc.length) {
+    let list = viewCars.get(o);
+    if (!list || list.length !== cc.length) {
+      list = cc.map((q) => ({ id: q.id, pos: { x: 0, y: 0, z: 0 }, yaw: 0, speed: 0, kind: q.kind }));
+      viewCars.set(o, list);
+    }
+    for (let i = 0; i < cc.length; i++) {
+      const a = pc[i];
+      const b = cc[i];
+      const v = list[i];
+      v.id = b.id;
+      v.kind = b.kind;
+      v.speed = b.speed;
+      v.pos.x = a.pos.x + (b.pos.x - a.pos.x) * k;
+      v.pos.y = a.pos.y + (b.pos.y - a.pos.y) * k;
+      v.pos.z = a.pos.z + (b.pos.z - a.pos.z) * k;
+      let dy = b.yaw - a.yaw;
+      if (dy > Math.PI) dy -= Math.PI * 2;
+      else if (dy < -Math.PI) dy += Math.PI * 2;
+      v.yaw = a.yaw + dy * k;
+    }
+    o.cars = list;
+  }
   const pb = prev.roam?.bot;
   if (!c.bot || !pb) return;
-  const k = Math.max(0, Math.min(1, t));
   const bot = (viewBots.get(o) ?? viewBots.set(o, { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, state: "running" }).get(o))!;
   bot.pos.x = pb.pos.x + (c.bot.pos.x - pb.pos.x) * k;
   bot.pos.y = pb.pos.y + (c.bot.pos.y - pb.pos.y) * k;
@@ -137,6 +163,7 @@ function blendRoam(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: Ren
   o.bot = bot;
 }
 const viewBots = new WeakMap<RoamFrame, NonNullable<RoamFrame["bot"]>>();
+const viewCars = new WeakMap<RoamFrame, RoamCarFrame[]>();
 
 export class RoamLoop {
   readonly hud = new RoamHudStore();
