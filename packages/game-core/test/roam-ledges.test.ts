@@ -14,7 +14,7 @@ import { dirIndex } from "../src/sim3d/dmath";
 import { clearAt } from "../src/sim3d/roam/world";
 import { at } from "./roam-helpers";
 
-const stick = (dx: number, dz: number, shot = 0): InputFrame => ({ dir: dirIndex(dx, dz), mag: 3, web: false, shot });
+const stick = (dx: number, dz: number): InputFrame => ({ dir: dirIndex(dx, dz), mag: 3, web: false, shot: 0 });
 
 function play(run: RoamRun, frame: (t: number) => InputFrame, ticks: number, each: (run: RoamRun) => void) {
   for (let t = 0; t < ticks; t++) {
