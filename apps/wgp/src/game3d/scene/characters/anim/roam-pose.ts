@@ -376,7 +376,10 @@ export class RoamPoser {
       pose.grip[i] = grip;
     }
     this.lastY = P.y;
-    return Math.atan2(fwd.x, fwd.z);
+    // The way the body faces, for the animator to carry on from: the wall on a wall, else the
+    // way he's going (a wall run's, a zip's, a vault's, a roll's direction).
+    const look = move === "climb" || move === "hang" || move === "mantle" ? fwd : this.dir;
+    return Math.abs(look.x) + Math.abs(look.z) > 1e-6 ? Math.atan2(look.x, look.z) : Math.atan2(fwd.x, fwd.z);
   }
 
   /** On entering a move: where the hands will hold (the ledge, the obstacle). */
