@@ -284,21 +284,23 @@
         if (b.ratio > 0.997 && g[i].sole - floor > 3 && g[1 - i].sole - floor > 3) flag("hero-leg-locked", g[i].sole - floor, { key, leg: i, ...extra });
       }
     }
-    // Pops: a foot or knee jumping against the hips between frames, per 60 Hz frame.
+    // Pops: a foot or knee snapping against the hips, a kink in its motion that no stride makes
+    // (the second difference of its place, per 60 Hz frame²: a sprint's swing is under 1).
     const prev = prevLegs.get(key);
     const hips = V((g[0].hip.x + g[1].hip.x) / 2, (g[0].hip.y + g[1].hip.y) / 2, (g[0].hip.z + g[1].hip.z) / 2);
     const rel = g.map((x) => ({ a: sub(x.ankle, hips), k: sub(x.knee, hips) }));
-    if (prev && dt > 0) {
-      const k = 1 / 60 / Math.min(Math.max(dt, 1 / 240), 0.1);
+    if (prev && prev.before && dt > 0) {
+      const k = (1 / 60 / Math.min(Math.max(dt, 1 / 240), 0.1)) ** 2;
+      const kink = (p, q, r) => Math.hypot(p.x - 2 * q.x + r.x, p.y - 2 * q.y + r.y, p.z - 2 * q.z + r.z) * k;
       for (let i = 0; i < 2; i++) {
-        const ja = dist(rel[i].a, prev[i].a) * k;
-        const jk = dist(rel[i].k, prev[i].k) * k;
-        sample(`${who}-foot-jump`, ja);
-        if (ja > 12) flag(`${who}-foot-pop`, ja, { key, leg: i, ...extra });
-        if (who === "hero" && jk > 10) flag("hero-knee-pop", jk, { key, leg: i, ...extra });
+        const ja = kink(rel[i].a, prev.rel[i].a, prev.before[i].a);
+        const jk = kink(rel[i].k, prev.rel[i].k, prev.before[i].k);
+        sample(`${who}-foot-kink`, ja);
+        if (ja > 6) flag(`${who}-foot-pop`, ja, { key, leg: i, ...extra });
+        if (who === "hero" && jk > 6) flag("hero-knee-pop", jk, { key, leg: i, ...extra });
       }
     }
-    prevLegs.set(key, rel);
+    prevLegs.set(key, { rel, before: prev ? prev.rel : null });
     return g;
   };
 
@@ -465,7 +467,9 @@
       if (key !== lastAnchorKey) {
         lastAnchorKey = key;
         let d = anchorSeen.get(key);
-        const onVillain = (f.villains || []).some((v) => dist(v.pos, anchor) < 90);
+        // A web on a body (a villain, a Right-Clicker's paper copy) is on what it hit.
+        const copies = (f.chapter && f.chapter.copies) || [];
+        const onVillain = (f.villains || []).some((v) => dist(v.pos, anchor) < 90) || copies.some((c) => dist(c.pos, anchor) < 90);
         if (d === undefined && !onVillain) {
           d = nearestDrawn(anchor);
           anchorSeen.set(key, d);

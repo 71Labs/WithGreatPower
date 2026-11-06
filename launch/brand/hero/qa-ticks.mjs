@@ -63,6 +63,12 @@ const WATCH = `(() => {
       q.rec = { tick: f.tick, alpha: +f.alpha.toFixed(2), mode: f.mode, pos: r(f.hero.pos), vel: r(f.hero.vel), anchor: r(f.hero.anchor), grounded: f.hero.grounded, action: f.hero.action, actionTicks: f.hero.actionTicks,
         base: ha && ha.base, impactT: ha && +(ha.impactT || 0).toFixed(2), flipT: ha && +(ha.flipT).toFixed(2), turn: ha && +ha.turn.value.toFixed(2), orient: e ? [e.x, e.y, e.z, e.w].map((x) => +x.toFixed(2)) : null,
         clipW: ha && ha.mocap ? +ha.mocap.clipW.value.toFixed(2) : null, moveW: ha && ha.mocap ? +ha.mocap.moveW.value.toFixed(2) : null, groundW: ha ? +ha.groundW.value.toFixed(2) : null };
+      const mc = ha && ha.mocap;
+      if (mc) {
+        const rig = eng.characters.hero.model.rig;
+        const wy = (b) => Math.round(b.matrixWorld.elements[13] * 10) / 10;
+        Object.assign(q.rec, { moving: mc.moving, legsMove: +mc.legsMove.toFixed(2), gait: Math.round(mc.gait), pivot: mc.stand.pivoting, stepping: mc.stand.stepping, shot: mc.shot ? mc.shot.name + "@" + mc.shot.t.toFixed(2) : null, ankles: rig.legs.map((l) => wy(l.end)), targets: ha.pose.foot.map((t) => Math.round(t.y * 10) / 10), groupY: Math.round(eng.characters.hero.model.group.position.y * 10) / 10 });
+      }
       q.held = true;
     }
     return last;

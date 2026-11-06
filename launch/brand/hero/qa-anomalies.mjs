@@ -4,7 +4,7 @@
  *
  *   node launch/brand/hero/qa-anomalies.mjs --base http://127.0.0.1:3910 --label before
  *        [--out launch/brand/hero/game-shots/qa-sweep] [--levels 1,4,9] [--seeds "1:0,1;4:0,5;9:0,2"]
- *        [--tiers high,low] [--case 2] [--parallel 3] [--only patrol|case]
+ *        [--tiers high,low] [--case 2] [--parallel 3] [--only patrol|case] [--probe qa-probe.js]
  *
  * Nights: patrol nights at villain levels 1, 4 and 9 (save nights 1, 7 and 17, the hero at the
  * matching level), each on `--seeds` heroes (the seed is the night and the hero's name; the
@@ -42,7 +42,8 @@ const cases = Number(opt("case", "2"));
 const parallel = Number(opt("parallel", "3"));
 const only = opt("only", "");
 const maxMinutes = Number(opt("minutes", "4"));
-const PROBE = readFileSync(join(here, "qa-probe.js"), "utf8");
+/** The probe (`--probe` another copy: run an older checkout with today's measurements). */
+const PROBE = readFileSync(opt("probe", join(here, "qa-probe.js")), "utf8");
 const HERO = JSON.parse(readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8"));
 const NAMES = ["Peter Parquet", "Miles Mempool", "Gwen Gasless", "Ben Blockly", "May Merkle", "Otto Oracle"];
 
