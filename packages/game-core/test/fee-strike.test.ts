@@ -1,7 +1,7 @@
 /**
  * Case File 003, "Fee Strike": the city, the clues and Gas Goblin's route; the chase's rules
  * (catch-up, the escape meter, checkpoints, losses, fee bombs); the bakery fight and the cooled
- * meter; determinism and verification; the render contract (v1.6); patrol nights and Case File
+ * meter; determinism and verification; the render contract (v1.8); patrol nights and Case File
  * 001 untouched; and the balance gates on fee-metrics.ts (FEE_REPORT=1 prints them all).
  */
 import { beforeAll, describe, expect, it } from "vitest";
@@ -458,7 +458,7 @@ describe("Case File 003: determinism and verification", () => {
   });
 });
 
-describe("Case File 003: the render frame (v1.6)", () => {
+describe("Case File 003: the render frame (v1.8)", () => {
   it("carries the clues, the meter (carried through the chase), the route and the chase's numbers, and his state words", () => {
     const run = feeRun();
     const frame: RenderFrame3D = newRenderFrame();
