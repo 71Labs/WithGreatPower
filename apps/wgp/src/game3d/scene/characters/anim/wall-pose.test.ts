@@ -133,6 +133,17 @@ describe("the climb's holds", () => {
     for (let i = 1; i < sf.length; i++) for (let k = 0; k < 4; k++) if (sf[i].planted[k] && sf[i - 1].planted[k]) expect(sf[i].pos[k].distanceTo(sf[i - 1].pos[k])).toBe(0);
   });
 
+  it("keeps every limb finite through a frame with no time in it (a paused render)", () => {
+    const { w, base, g } = setup();
+    drive(g, w, base, [{ vu: 0, vv: 120, secs: 0.5 }]);
+    g.step(w, base, 0, 0, 0);
+    base.y += 2;
+    g.step(w, base, 0, 2, 0);
+    drive(g, w, base, [{ vu: 0, vv: 120, secs: 0.5 }]);
+    for (const h of g.holds) expect(Number.isFinite(h.pos.x + h.pos.y + h.pos.z)).toBe(true);
+    expect(Number.isFinite(g.dir.u + g.dir.v + g.speed)).toBe(true);
+  });
+
   it("re-plants a hold the body has left behind (a leap up the wall, a corner)", () => {
     const { w, base, g } = setup();
     drive(g, w, base, [{ vu: 0, vv: 120, secs: 1 }]);

@@ -152,6 +152,45 @@ describe("the hero on a wall", () => {
     for (const x of rest) expect(x.planted).toEqual([true, true, true, true]);
   });
 
+  it("stays finite through every roam move and any frame time (none, tiny, long), in and out of each", () => {
+    const rig: Rig = rigFromAsset(asset, HEIGHT);
+    const group = new Group();
+    group.add(rig.bones[0]);
+    const anim = new HeroAnimator(rig, group, ctx);
+    anim.setClips(clips, heroScale(asset, HEIGHT));
+    const moves: RoamMoveName[] = ["ground", "climb", "hang", "mantle", "ground", "vault", "air", "wallrun", "roll", "zip", "splash", "climb", "ground"];
+    const dts = [0, 1 / 240, DT, 1 / 30, 0.1, 0];
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const f = script([{ move: "climb", vy: 0, secs: DT }]).next().value as RenderFrame3D;
+    const pos = f.hero.pos;
+    let bad = 0;
+    for (let round = 0; round < 3; round++) {
+      for (const move of moves) {
+        f.roam = { ...f.roam!, move, moveT: 0, wall: move === "climb" || move === "hang" || move === "mantle" || move === "wallrun" ? { nx: 1, nz: 0, top: TOP } : null, path: move === "mantle" || move === "vault" || move === "zip" ? { from: v(pos.x, pos.y, pos.z), to: v(pos.x - 60, pos.y + 40, pos.z), u: 0 } : null };
+        f.hero.action = move === "ground" ? "run" : move === "air" ? "air" : "climb";
+        f.hero.grounded = move === "ground";
+        for (let k = 0; k < 40; k++) {
+          const dt = dts[Math.floor(rnd() * dts.length)];
+          const vy = (rnd() - 0.4) * 500;
+          f.hero.vel = v((rnd() - 0.5) * 400, vy, (rnd() - 0.5) * 400);
+          pos.y = Math.max(30, pos.y + vy * dt);
+          pos.z += f.hero.vel.z * dt;
+          if (f.roam!.path) f.roam!.path.u = Math.min(1, f.roam!.path.u + dt * 2.5);
+          f.roam!.moveT += dt;
+          f.tick++;
+          anim.update(f, dt, ctx);
+          group.updateMatrixWorld(true);
+          for (const b of rig.bones) {
+            const e = b.matrixWorld.elements;
+            if (!Number.isFinite(e[12] + e[13] + e[14])) bad++;
+          }
+        }
+      }
+    }
+    expect(bad).toBe(0);
+  });
+
   it("hangs from the ledge by both hands, on its lip, arms long, legs under him", () => {
     const s = play(
       script([

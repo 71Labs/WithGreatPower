@@ -247,6 +247,8 @@ export class ClimbGait {
    * travel along the wall this frame (u toward his left, v up), in world units; `dt` seconds.
    */
   step(w: WallFrame, base: Vector3, du: number, dv: number, dt: number): void {
+    // A frame with no time in it (a paused or demand-driven render) still places the limbs.
+    if (!(dt > 1e-4)) dt = 1e-4;
     const ds = Math.hypot(du, dv);
     const k = 1 - Math.exp(-dt / 0.12);
     this.speed += (ds / Math.max(dt, 1e-4) - this.speed) * k;
