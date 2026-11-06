@@ -14,9 +14,11 @@
  * - the recount ("RECOUNT!"), the marks ("GOTCHA!", "COPY!", card confetti), and Uncle Gen's
  *   gold ballot, with the runner, in the hero's hand, then in the box ("COUNTED!").
  *
- * Nothing is built until a Case file 002 frame arrives. About ten draws: one for every inked
- * box (booths, boxes, cards), the beams, the shadows, the eyes, the split's two planes, the
- * confetti, and Uncle Gen. Reduced motion (and the Steady camera): no pulsing or bobbing; the
+ * Nothing is built until a Case file 002 frame arrives. At most eight draws, each batch culled
+ * off screen and skipped when empty: one for every inked box (the station, the boxes, the
+ * cards), the beams (investigating), the shadows and eyes (picking him out), the split (a fork
+ * vote: one plane, its line and hatching in one shader), the confetti, and Uncle Gen (fill
+ * and ink, from GEN_SHOWN in). Reduced motion (and the Steady camera): no pulsing or bobbing; the
  * eyes still blink, since a blink is a tell (a state change, not motion).
  */
 import {
@@ -56,6 +58,8 @@ import { GenFigure, type GenState } from "./gen";
 const LIFT = 52;
 const MAX_BOXES = 220;
 const MAX_VOTERS = 16;
+/** Uncle Gen is drawn within this of the camera (from across the city he'd be a few pixels). */
+const GEN_SHOWN = 2400;
 
 const COL = {
   post: rgb("#2E3350"),
@@ -107,7 +111,6 @@ class InkBoxes {
     this.mesh = new InstancedMesh(this.geo, this.mat, MAX_BOXES);
     this.mesh.name = "vote-boxes";
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.mesh.frustumCulled = false;
     this.mesh.count = 0;
   }
 
@@ -127,8 +130,10 @@ class InkBoxes {
 
   end() {
     this.mesh.count = this.n;
+    this.mesh.visible = this.n > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.colour.needsUpdate = true;
+    if (this.n > 0) this.mesh.computeBoundingSphere();
   }
 
   dispose() {
@@ -193,11 +198,21 @@ void main() {
 `;
 const SPLIT_FRAGMENT = /* glsl */ `
 uniform vec3 uColor;
+uniform vec3 uLine;
 uniform float uTime;
 uniform float uProg;
 uniform float uStill;
+// The split: along x (0) or z (1), where, and which side is orphaned (±1).
+uniform vec3 uSplit;
 varying vec3 vWorld;
 void main() {
+  float d = (uSplit.x < 0.5 ? vWorld.x : vWorld.z) - uSplit.y;
+  float s = d * uSplit.z;
+  // The gold line on the split itself, opaque; the orphaned half hatched past it.
+  if (s < 4.0) {
+    gl_FragColor = vec4(uLine, 1.0);
+    return;
+  }
   // Diagonal hatching in world space, thickening as the count runs out (a pattern, not only a colour).
   float t = (vWorld.x + vWorld.z) / 34.0 + uTime * 0.6 * (1.0 - uStill);
   float band = fract(t);
@@ -276,8 +291,6 @@ interface Parts {
   eyeTex: CanvasTexture;
   half: Mesh;
   halfMat: ShaderMaterial;
-  line: Mesh;
-  lineMat: ShaderMaterial;
   splitGeo: PlaneGeometry;
   pops: Pops;
   gen: GenFigure;
@@ -346,7 +359,6 @@ export class VoteScene {
       side: DoubleSide,
     });
     const beams = new InstancedMesh(beamGeo, beamMat, 6);
-    beams.frustumCulled = false;
     beams.instanceMatrix.setUsage(DynamicDrawUsage);
     const shadowGeo = new CircleGeometry(0.5, 20);
     shadowGeo.rotateX(-Math.PI / 2);
@@ -361,7 +373,6 @@ export class VoteScene {
       uniforms: { uInk: { value: ink } },
     });
     const shadows = new InstancedMesh(shadowGeo, shadowMat, MAX_VOTERS);
-    shadows.frustumCulled = false;
     shadows.instanceMatrix.setUsage(DynamicDrawUsage);
     shadows.renderOrder = 2;
     const eyeTex = eyeAtlas();
@@ -370,7 +381,6 @@ export class VoteScene {
     eyeGeo.setAttribute("aCell", eyeCell);
     const eyeMat = new ShaderMaterial({ name: "wgp-vote-eyes", vertexShader: EYE_VERTEX, fragmentShader: EYE_FRAGMENT, uniforms: { uMap: { value: eyeTex } } });
     const eyes = new InstancedMesh(eyeGeo, eyeMat, MAX_VOTERS);
-    eyes.frustumCulled = false;
     eyes.instanceMatrix.setUsage(DynamicDrawUsage);
     const splitGeo = new PlaneGeometry(1, 1);
     splitGeo.rotateX(-Math.PI / 2);
@@ -378,31 +388,23 @@ export class VoteScene {
       name: "wgp-vote-orphan",
       vertexShader: SPLIT_VERTEX,
       fragmentShader: SPLIT_FRAGMENT,
-      uniforms: { uColor: { value: new Vector3(...rgb("#E5392C")) }, uTime: { value: 0 }, uProg: { value: 0 }, uStill: { value: 0 } },
+      uniforms: {
+        uColor: { value: new Vector3(...rgb("#E5392C")) },
+        uLine: { value: new Vector3(...COL.gold) },
+        uTime: { value: 0 },
+        uProg: { value: 0 },
+        uStill: { value: 0 },
+        uSplit: { value: new Vector3(0, 0, 1) },
+      },
       transparent: true,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -3,
       polygonOffsetUnits: -3,
     });
-    const lineMat = new ShaderMaterial({
-      name: "wgp-vote-split",
-      vertexShader: SPLIT_VERTEX,
-      fragmentShader: /* glsl */ `
-uniform vec3 uColor;
-void main() { gl_FragColor = vec4(uColor, 1.0); }
-`,
-      uniforms: { uColor: { value: new Vector3(...COL.gold) } },
-      polygonOffset: true,
-      polygonOffsetFactor: -4,
-      polygonOffsetUnits: -4,
-    });
     const half = new Mesh(splitGeo, halfMat);
     half.renderOrder = 3;
-    const line = new Mesh(splitGeo, lineMat);
-    line.renderOrder = 4;
     half.visible = false;
-    line.visible = false;
     const p: Parts = {
       boxes: new InkBoxes(this.shared),
       beams,
@@ -418,13 +420,11 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
       eyeTex,
       half,
       halfMat,
-      line,
-      lineMat,
       splitGeo,
       pops: new Pops(this.shared),
       gen: new GenFigure(this.shared, this.solids),
     };
-    this.root.add(p.boxes.mesh, p.beams, p.shadows, p.eyes, p.half, p.line, p.pops.mesh, p.gen.root);
+    this.root.add(p.boxes.mesh, p.beams, p.shadows, p.eyes, p.half, p.pops.mesh, p.gen.root);
     this.parts = p;
     this.setTier(this.tier);
     this.setReducedMotion(this.reduced);
@@ -477,6 +477,7 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
     p.beams.count = beams;
     p.beams.visible = beams > 0;
     p.beams.instanceMatrix.needsUpdate = true;
+    if (beams > 0) p.beams.computeBoundingSphere();
     p.beamMat.uniforms.uPulse.value = still ? 0.5 : 0.5 + 0.5 * Math.sin(time * 3);
 
     // The station while the line stands: a taped square on the roof under each booth and a
@@ -535,7 +536,7 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
         b.add(hx, v.pos.y + 16 + bob, hz, 20, 26, 2, yaw, COL.ballot);
         b.add(hx, v.pos.y + 7 + bob, hz, 20.4, 5, 2.4, yaw, COL.bar);
       }
-      if (v.shadow && shadows < MAX_VOTERS) {
+      if (picking && v.shadow && shadows < MAX_VOTERS) {
         const g = v.pos.y - LIFT;
         this.tmp.position.set(v.pos.x, g + 1.5, v.pos.z);
         this.tmp.rotation.set(0, 0, 0);
@@ -558,8 +559,10 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
     p.shadows.count = shadows;
     p.shadows.visible = shadows > 0;
     p.shadows.instanceMatrix.needsUpdate = true;
+    if (shadows > 0) p.shadows.computeBoundingSphere();
     p.eyes.count = eyes;
     p.eyes.visible = eyes > 0;
+    if (eyes > 0) p.eyes.computeBoundingSphere();
     p.eyes.instanceMatrix.needsUpdate = true;
     p.eyeCell.needsUpdate = true;
 
@@ -577,7 +580,7 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
     const gen = ch.captive?.pos ?? null;
     const near = gen ? Math.hypot(hero.x - gen.x, hero.z - gen.z) < 260 : false;
     const state: GenState = ch.captive?.freed ? "wave" : vote.ballot?.state === "carried" && near ? "talk" : "idle";
-    p.gen.update(gen, state, hero, camera, dt);
+    p.gen.update(gen && camera.position.distanceTo(_p.set(gen.x, gen.y, gen.z)) < GEN_SHOWN ? gen : null, state, hero, camera, dt);
 
     p.pops.update(dt);
 
@@ -588,28 +591,24 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
     const f = vote.fork;
     if (!f || !stage) {
       p.half.visible = false;
-      p.line.visible = false;
       return;
     }
     const y = floor + 1.2;
+    // The orphaned half and a 4-unit strip past the split (the line, drawn by the same shader).
     if (f.axis === "x") {
-      const x0 = f.orphan > 0 ? f.at : stage.x0;
-      const x1 = f.orphan > 0 ? stage.x1 : f.at;
+      const x0 = f.orphan > 0 ? f.at - 4 : stage.x0;
+      const x1 = f.orphan > 0 ? stage.x1 : f.at + 4;
       p.half.position.set((x0 + x1) / 2, y, (stage.z0 + stage.z1) / 2);
       p.half.scale.set(Math.max(1, x1 - x0), 1, stage.z1 - stage.z0);
-      p.line.position.set(f.at, y + 0.4, (stage.z0 + stage.z1) / 2);
-      p.line.scale.set(8, 1, stage.z1 - stage.z0);
     } else {
-      const z0 = f.orphan > 0 ? f.at : stage.z0;
-      const z1 = f.orphan > 0 ? stage.z1 : f.at;
+      const z0 = f.orphan > 0 ? f.at - 4 : stage.z0;
+      const z1 = f.orphan > 0 ? stage.z1 : f.at + 4;
       p.half.position.set((stage.x0 + stage.x1) / 2, y, (z0 + z1) / 2);
       p.half.scale.set(stage.x1 - stage.x0, 1, Math.max(1, z1 - z0));
-      p.line.position.set((stage.x0 + stage.x1) / 2, y + 0.4, f.at);
-      p.line.scale.set(stage.x1 - stage.x0, 1, 8);
     }
     p.half.visible = true;
-    p.line.visible = true;
     const u = p.halfMat.uniforms;
+    (u.uSplit.value as Vector3).set(f.axis === "x" ? 0 : 1, f.at, f.orphan);
     u.uTime.value = time;
     u.uProg.value = f.total > 0 ? 1 - f.left / f.total : 0;
     u.uStill.value = this.reduced ? 1 : 0;
@@ -658,7 +657,6 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
     p.pops.clear();
     p.gen.hide();
     p.half.visible = false;
-    p.line.visible = false;
   }
 
   dispose(): void {
@@ -674,7 +672,6 @@ void main() { gl_FragColor = vec4(uColor, 1.0); }
     p.eyeTex.dispose();
     p.splitGeo.dispose();
     p.halfMat.dispose();
-    p.lineMat.dispose();
     p.pops.dispose();
     p.gen.dispose();
     this.parts = null;
