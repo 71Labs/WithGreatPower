@@ -5,7 +5,7 @@
  */
 import type { CastId } from "../rules/cast";
 import type { ClueId } from "../rules/chapters";
-import type { ChapterId, PowerId, Stop, VillainId } from "../rules/types";
+import type { ChapterId, PowerId, Stop, TrialCourseId, VillainId } from "../rules/types";
 import type { CityIndex } from "./city";
 import type { City, InputFrame, Vec3, ZoneKind } from "./contract";
 
@@ -326,7 +326,12 @@ export type SimEvent =
   | { type: "captive-restore"; p: number }
   | { type: "captive-freed"; x: number; y: number; z: number }
   /** The chapter is cleared after `ticks`: the night ends with it (night-over, "route"). */
-  | { type: "case-closed"; id: ChapterId; ticks: number };
+  | { type: "case-closed"; id: ChapterId; ticks: number }
+  /* Time trials (sim3d/trial.ts, ruleset "trial-1"): trial runs only. */
+  /** Gate `index` (0-based) of `of` passed at `ticks`, in order; the last one is the finish. */
+  | { type: "trial-gate"; index: number; of: number; ticks: number; x: number; y: number; z: number }
+  /** The trial is over: through the finish gate at `ticks` (`finished`), or out of time. The night ends with it (night-over, "route"). */
+  | { type: "trial-finish"; course: TrialCourseId; finished: boolean; ticks: number };
 
 export interface SimConfig {
   seed: number;
@@ -347,6 +352,30 @@ export interface SimConfig {
    * (chapterStops). Absent on patrol nights, whose state never carries chapter fields.
    */
   chapter?: ChapterId;
+  /**
+   * A time trial instead of a patrol (sim3d/trial.ts): the course's own city and gates, no
+   * stops. Absent on patrol and chapter nights, whose state never carries trial fields.
+   */
+  trial?: TrialCourseId;
+}
+
+/* ------------------------------------------------------------------ time trials */
+
+/**
+ * A time trial's own state (sim3d/trial.ts). Its gates are the night's boost rings
+ * (`SimState.pickups`, in course order), taken one at a time in order. Hashed after
+ * everything else, and only on trial runs.
+ */
+export interface TrialState {
+  course: TrialCourseId;
+  /** The gate to pass next (an index into `pickups`); `pickups.length` once through the finish. */
+  next: number;
+  /** The tick each gate was passed at, in order (the splits). */
+  splits: number[];
+  /** Through the finish gate. */
+  finished: boolean;
+  /** The tick the trial ended (finish or time out), or −1 while it runs. */
+  endTick: number;
 }
 
 /* ------------------------------------------------------------------ chapters */
@@ -442,4 +471,6 @@ export interface SimState {
   events: SimEvent[];
   /** A story chapter's state (Case File 001), or null on a patrol night. */
   chapter: ChapterState | null;
+  /** A time trial's state, or null (patrol and chapter nights). Optional so older hand-built states still type-check. */
+  trial?: TrialState | null;
 }

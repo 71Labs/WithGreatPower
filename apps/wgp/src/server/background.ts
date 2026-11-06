@@ -16,6 +16,9 @@
  * - Social drafts (src/server/social/queue.ts): after a verified ranked run, at most once
  *   every 2 minutes; an admin opening the queue also drafts, in its own request. Drafts
  *   only: nothing is ever posted from the server.
+ * - The Daily Run's badges (src/server/db/compete.ts settleDailies): when the Compete hub or a
+ *   Daily board is read, at most once every 10 minutes; a finished day's top three are queued
+ *   their badges once (idempotent by outbox key), then sent with the mints.
  *
  * Every job is idempotent, and the windows are rows in budget_counters, so they hold
  * across serverless instances. The /api/cron/* routes stay as manual triggers, guarded by
@@ -24,6 +27,7 @@
 import { after } from "next/server";
 
 import { getDb, type Db } from "@/server/db/client";
+import { settleDailies } from "@/server/db/compete";
 import { runSeasonPass } from "@/server/db/season-close";
 import { sweep } from "@/server/db/sweep";
 import { recordSnapshots } from "@/server/market/history";
@@ -40,6 +44,7 @@ export const WINDOWS = {
   marketSnapshot: 30 * 60_000,
   seasons: 60_000,
   social: 2 * 60_000,
+  dailies: 10 * 60_000,
 } as const;
 
 export type BackgroundJob = keyof typeof WINDOWS;
@@ -116,6 +121,14 @@ export function draftSocialSoon(): void {
   whenDue("social", async (db) => {
     const report = await syncDrafts(db);
     for (const e of report.errors) console.error(`[background] social: ${e}`);
+  });
+}
+
+/** Queues the badges of any finished Daily Run's top three after this request, when due, and sends them if it can. */
+export function settleDailiesSoon(): void {
+  whenDue("dailies", async (db) => {
+    const queued = await settleDailies(db);
+    if (queued.length > 0 && canMint()) await drainRewards(db, { maxBatches: 1 });
   });
 }
 

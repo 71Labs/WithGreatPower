@@ -4,14 +4,16 @@
  * back into a live run). One record, keyed by RULESET_VERSION, so a log from another
  * ruleset is never offered; a story chapter's (Case File 001) has its own record, keyed by
  * the chapter and its CHAPTER_RULESET, so a case in progress and tonight's patrol never
- * overwrite each other. Written every few seconds and when the page hides; cleared
+ * overwrite each other. A race (the Daily Run, a time trial or a duel) records under its own
+ * `slot` ("daily:<day>", "trial:<course>", "duel:<runId>"), never tonight's or a case's.
+ * Written every few seconds and when the page hides; cleared
  * once the night is submitted or banked. Every call swallows storage errors (private
  * mode, blocked storage): the game plays on, it just can't resume after a reload.
  */
 import { CHAPTERS } from "@wgp/game-core/chapters";
 import { logRuleset, runLog, type Run } from "@wgp/game-core/replay";
 import { RULESET_VERSION } from "@wgp/game-core/sim3d/constants";
-import type { ChapterId, Save } from "@wgp/game-core/types";
+import type { ChapterId, Save, TrialCourseId } from "@wgp/game-core/types";
 
 /** Ranked (server seed), a guest's night, or a signed-in night played off the board. */
 export type RecordingMode = "ranked" | "guest" | "unranked";
@@ -22,6 +24,10 @@ export interface Recording {
   mode: RecordingMode;
   /** A story chapter's night (resume it with { chapter }), or null/absent for a patrol night. */
   chapter?: ChapterId | null;
+  /** A time trial's course (resume it with { trial }), or null/absent. */
+  trial?: TrialCourseId | null;
+  /** A race's own record ("daily:<day>", "trial:<course>", "duel:<runId>"), or null/absent. */
+  slot?: string | null;
   /** The server's run, for ranked nights. */
   runId: string | null;
   /** Who played it (signed in), so another account on this browser never resumes it. */
@@ -36,8 +42,9 @@ export interface Recording {
 
 const DB_NAME = "wgp-play";
 const STORE = "runs";
-/** The record's key: tonight's patrol, or a chapter's (by its rules version). */
-const keyFor = (chapter: ChapterId | null | undefined) => (chapter ? `case:${chapter}:${CHAPTERS[chapter].ruleset}` : `run:v${RULESET_VERSION}`);
+/** The record's key: tonight's patrol, a chapter's (by its rules version), or a race's slot. */
+const keyFor = (chapter: ChapterId | null | undefined, slot?: string | null) =>
+  slot ? `race:${slot}` : chapter ? `case:${chapter}:${CHAPTERS[chapter].ruleset}` : `run:v${RULESET_VERSION}`;
 /** How often the log is written while playing. */
 export const RECORD_EVERY_MS = 3000;
 
@@ -77,12 +84,13 @@ function request<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => ID
   );
 }
 
-const isRecording = (v: unknown, chapter: ChapterId | null): v is Recording => {
+const isRecording = (v: unknown, chapter: ChapterId | null, slot: string | null = null): v is Recording => {
   const r = v as Recording | null;
   return (
     !!r &&
     (r.chapter ?? null) === chapter &&
-    r.ruleset === logRuleset(chapter) &&
+    (r.slot ?? null) === slot &&
+    r.ruleset === logRuleset(chapter, r.trial ?? null) &&
     r.log instanceof Uint8Array &&
     typeof r.seed === "number" &&
     !!r.start &&
@@ -90,18 +98,18 @@ const isRecording = (v: unknown, chapter: ChapterId | null): v is Recording => {
   );
 };
 
-/** Tonight's patrol recording, or (with `chapter`) that chapter's. */
-export async function loadRecording(chapter: ChapterId | null = null): Promise<Recording | null> {
-  const value = await request<unknown>("readonly", (s) => s.get(keyFor(chapter)));
-  return isRecording(value, chapter) ? value : null;
+/** Tonight's patrol recording, or (with `chapter`) that chapter's, or (with `slot`) a race's. */
+export async function loadRecording(chapter: ChapterId | null = null, slot: string | null = null): Promise<Recording | null> {
+  const value = await request<unknown>("readonly", (s) => s.get(keyFor(chapter, slot)));
+  return isRecording(value, chapter, slot) ? value : null;
 }
 
 export async function saveRecording(rec: Recording): Promise<void> {
-  await request("readwrite", (s) => s.put(rec, keyFor(rec.chapter)));
+  await request("readwrite", (s) => s.put(rec, keyFor(rec.chapter, rec.slot)));
 }
 
-export async function clearRecording(chapter: ChapterId | null = null): Promise<void> {
-  await request("readwrite", (s) => s.delete(keyFor(chapter)));
+export async function clearRecording(chapter: ChapterId | null = null, slot: string | null = null): Promise<void> {
+  await request("readwrite", (s) => s.delete(keyFor(chapter, slot)));
 }
 
 /** Keeps one run's recording fresh while it plays. */
@@ -112,7 +120,7 @@ export class RunRecorder {
 
   constructor(
     private readonly run: Run,
-    private readonly meta: { mode: RecordingMode; runId: string | null; playerId: string | null },
+    private readonly meta: { mode: RecordingMode; runId: string | null; playerId: string | null; slot?: string | null },
   ) {}
 
   /** Write the log if anything was played since the last write. */
@@ -123,8 +131,9 @@ export class RunRecorder {
     this.lastTick = run.sim.tick;
     this.lastEvents = run.events.length;
     return saveRecording({
-      ruleset: logRuleset(run.chapter),
+      ruleset: logRuleset(run.chapter, run.trial ?? null),
       chapter: run.chapter,
+      ...(run.trial ? { trial: run.trial } : {}),
       ...this.meta,
       seed: run.seed,
       start: run.start,

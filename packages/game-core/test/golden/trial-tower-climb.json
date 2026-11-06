@@ -1,0 +1,27 @@
+{
+  "ruleset": "trial-1",
+  "logRuleset": 127992836,
+  "patrolRuleset": 4,
+  "course": "tower-climb",
+  "style": {
+    "run": 320,
+    "release": 650,
+    "glide": 450,
+    "climb": 460,
+    "gain": 1.6
+  },
+  "case": {
+    "ok": true,
+    "hash": "3311386c",
+    "checkpoints": [
+      "44d96e5b",
+      "bf10b054",
+      "a6ad7bf3",
+      "3311386c"
+    ],
+    "score": 0,
+    "ticks": 488,
+    "bytes": 265,
+    "finished": 1
+  }
+}

@@ -266,6 +266,23 @@ export interface RenderFrame3D {
     captive: { pos: Vec3; restore: number; freed: boolean } | null;
     copies: { id: number; pos: Vec3; yaw: number; alive: boolean }[];
   } | null;
+  /**
+   * A time trial (ruleset "trial-1"), else null or absent. v1.6, additive. The gates are the
+   * frame's `pickups` (rings, in course order; `taken` once passed) and its `route` the gates
+   * still ahead.
+   * - next: the gate to pass next (0-based), `gates` once through the finish.
+   * - ticks: the clock (sim ticks, 60 a second); it stops at the finish (`endTick`).
+   * - splits: the tick each gate was passed at.
+   */
+  trial?: {
+    course: "rooftop-sprint" | "bridge-run" | "canyon-swing" | "tower-climb" | "gauntlet";
+    next: number;
+    gates: number;
+    ticks: number;
+    splits: number[];
+    finished: boolean;
+    over: boolean;
+  } | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

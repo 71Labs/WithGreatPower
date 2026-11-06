@@ -6,6 +6,7 @@
  */
 import { POWERS } from "./rules/data";
 import type { PowerId } from "./rules/types";
+import { TRIAL_COURSE_IDS as TRIAL_COURSES } from "./sim3d/trial";
 import type { SimState } from "./sim3d/types";
 
 const f64 = new Float64Array(1);
@@ -252,6 +253,17 @@ export function hashState(s: SimState): string {
       f.num(c.copyWind[i]);
       f.num(c.copyCd[i]);
     }
+  }
+  // A time trial ("trial-1"), after everything else: patrol and chapter nights (no trial) hash
+  // exactly as before. Its gates are the pickups, already hashed above.
+  const t = s.trial;
+  if (t) {
+    f.num(TRIAL_COURSES.indexOf(t.course));
+    f.num(t.next);
+    f.num(t.splits.length);
+    for (const tick of t.splits) f.num(tick);
+    f.bool(t.finished);
+    f.num(t.endTick);
   }
   return f.hex();
 }
