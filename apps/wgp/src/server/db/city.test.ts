@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { cityBase, cityRecord, emptyCity, roamStartFrom } from "@wgp/game-core/city";
-import { roamLog, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
+import { encodeInputCodes } from "@wgp/game-core/input";
+import { ROAM_LOG_RULESETS_PAST, ROAM_RULESET, roamLog, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
 import { newRoamBot, PAGE_XP, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
 
 import { HttpError } from "@/server/http";
@@ -59,7 +60,7 @@ describe("free roam on the server", () => {
     // First part of the outing: off the roof, to Dev, the chase and back.
     const first = play(cityBase(emptyCity()), chase);
     const a = await fileOuting(db, { playerId, outingId: ID_A, base: cityBase(emptyCity()), log: first.log, now: T0 });
-    expect(a.ruleset).toBe("roam-1");
+    expect(a.ruleset).toBe(ROAM_RULESET);
     expect(a.gains.tasks).toEqual(["pickpocket"]);
     expect(a.gains.xp).toBe(TASK_XP);
     expect(a.city.tasks.pickpocket).toBe(TASK_DONE);
@@ -109,6 +110,23 @@ describe("free roam on the server", () => {
     }
     const bad = await rejection(fileOuting(db, { playerId, outingId: ID_B, base: cityBase(rec), log: new Uint8Array([1, 2, 3]), now: T0 }));
     expect(bad.status).toBe(422);
+  });
+
+  it("refuses an outing played under older roam rules as stale, and keeps the record as it stands", async () => {
+    const before = (await ensureSave(db, playerId)).save;
+    const rec = cityRecord(before);
+    // A tab open across a release: its outing's log carries roam-1's field.
+    const now = play(cityBase(rec), [{ kind: "wait", ticks: 30 }]);
+    const old = encodeInputCodes(now.run.codes, [], 0, ROAM_LOG_RULESETS_PAST[0]);
+    const e = await rejection(fileOuting(db, { playerId, outingId: ID_A, base: cityBase(rec), log: old, now: T0 }));
+    expect(e.status).toBe(409);
+    expect(e.code).toBe("stale_rules");
+    const after = (await ensureSave(db, playerId)).save;
+    expect(after.city).toEqual(before.city);
+    expect(after.hero!.xp).toBe(before.hero!.xp);
+    // A fresh outing from the record files as ever.
+    const fresh = await fileOuting(db, { playerId, outingId: "3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a9f", base: cityBase(rec), log: now.log, now: T0 });
+    expect(fresh.gains.xp).toBe(0);
   });
 
   it("counts filings against a daily budget", () => {

@@ -34,8 +34,11 @@ export interface RoamSession {
 
 export type FileResult =
   | { kind: "filed"; gains: CityGains; record: CityRecord; verified: boolean }
-  /** The server's record moved on since this outing began (another tab): start again from it. */
-  | { kind: "stale"; record: CityRecord | null }
+  /**
+   * The server's record moved on since this outing began (another tab), or (`rules`) the city's
+   * rules did (a release since the page loaded): start again from the record, after a reload.
+   */
+  | { kind: "stale"; record: CityRecord | null; rules?: boolean }
   | { kind: "failed"; message: string }
   /** Nothing new to send. */
   | { kind: "idle" };
@@ -71,6 +74,11 @@ export async function fileOuting(s: RoamSession, opts: { keepalive?: boolean; fo
   }
   const res = await fileOutingLog({ outingId: s.outingId, base: s.base, log: toBase64(roamLog(s.run)) }, opts.keepalive);
   if (!res.ok) {
+    if (res.status === 409 && res.error === "stale_rules") {
+      // Never filed under these rules: stop sending it (the record keeps what was filed before).
+      filed.set(s, Infinity);
+      return { kind: "stale", record: null, rules: true };
+    }
     if (res.status === 409) return { kind: "stale", record: null };
     return { kind: "failed", message: res.message ?? "Couldn’t file the outing with the server." };
   }

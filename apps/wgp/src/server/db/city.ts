@@ -8,7 +8,9 @@
  * record (`save.city.outing`): the first filing of an outing must start from the record as
  * it stands (the base the browser sent must be the record's own), later filings of the same
  * outing replay from that same base. Anything else is refused as stale (409), so a log can
- * never claim progress it didn't play from.
+ * never claim progress it didn't play from. So is an outing played under older roam rules (a
+ * tab open across a release: its log's ruleset is a past one): 409 stale_rules, nothing filed,
+ * the record as it stands (the browser reloads and starts a fresh outing from it).
  *
  * The replay is game-core's (roam-run.ts replayRoam), with the roam ruleset's log field; what
  * it found is merged into the save (rules/city.ts applyOuting): stages only move on, finds are
@@ -18,7 +20,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { applyOuting, cityBase, cityRecord, roamStartFrom, sameBase, type CityBase, type CityGains, type CityRecord } from "@wgp/game-core/city";
-import { replayRoam, ROAM_RULESET } from "@wgp/game-core/roam";
+import { replayRoam, roamLogStale, ROAM_RULESET } from "@wgp/game-core/roam";
 import type { Save } from "@wgp/game-core/types";
 
 import { HttpError, conflict } from "@/server/http";
@@ -57,6 +59,7 @@ export async function fileOuting(db: Db, input: { playerId: string; outingId: st
   // Replay outside the lock (a long outing takes a moment), then check nothing moved under it.
   const { save: before } = await ensureSave(db, playerId);
   if (!before.hero) throw conflict("no_hero", "Create a hero first");
+  if (roamLogStale(log)) throw conflict("stale_rules", "The city’s rules were updated since this outing began. Reload to start a fresh outing: everything filed so far is kept.");
   const base = baseFor(cityRecord(before), outingId, input.base);
   if (!base) throw conflict("stale_city", "The city moved on since this outing began (another tab?). Start again from where it stands.");
   const result = replayRoam({ start: roamStartFrom(base), log });

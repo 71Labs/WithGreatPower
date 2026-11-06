@@ -1,7 +1,8 @@
 /**
  * POST /api/city/outing { outingId: uuid, base: CityBase, log: base64 } (log ≤ 64 KB)
- *   200 { outingId, gains: { tasks, pages, views, xp }, city, save, rev, ticks, ruleset: "roam-1" }
+ *   200 { outingId, gains: { tasks, pages, views, xp }, city, save, rev, ticks, ruleset: "roam-2" }
  *   409 stale_city: the record moved on since the outing began (start again from it)
+ *   409 stale_rules: the outing was played under older roam rules (reload; nothing filed)
  *   422 outing_rejected: the replay refused the log (a night's or a chapter's, or malformed)
  *   429 daily_cap
  *
