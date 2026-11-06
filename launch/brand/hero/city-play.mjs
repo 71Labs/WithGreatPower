@@ -5,10 +5,11 @@
  *
  *   node launch/brand/hero/city-play.mjs --out <dir> [--base http://127.0.0.1:3920] [--who guest|dev] [--tier high]
  *
- * The run: walk (C held), run, sprint off the spawn roof (a leap and a roll), down to Dev in the
- * street, talk to him (the pickpocket task), chase the bot over the roofs (zips and climbs),
- * hand his wallet back (the task done), a Daily Rug page, a building climbed and mantled (both
- * tiers), a swing with F held then let go, a zip, a chat with a civilian. Strips of frames at
+ * The run, in order: a walk (C held) and a run across the spawn roof, a sprint off its edge (a
+ * leap and a roll), a building climbed from the street and mantled (both tiers), a wall run (a
+ * diagonal sprint-jump at a long wall), a swing with F held then let go, a chat with a civilian,
+ * Dev's side task (talk, chase the pickpocket bot over the roofs, hand the wallet back) and a
+ * Daily Rug page; the map and the pause sheet. Strips of frames at
  * each beat, the scene's draw calls and frame rate, and two monitors on every poll:
  *
  * - legs: the hero's solved ankles in his body's frame; a frame where the left ankle is right of
@@ -35,7 +36,20 @@ const tier = opt("tier", "high");
 const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
 mkdirSync(out, { recursive: true });
 
-const { send, evaluate, logs, close } = await launch({ port: 9751 + (who === "dev" ? 1 : 0), profile: `/private/tmp/claude-501/wgp-city-play-${who}` });
+const cdp = await launch({ port: 9751 + (who === "dev" ? 1 : 0), profile: `/private/tmp/claude-501/wgp-city-play-${who}` });
+const { logs, close } = cdp;
+/** Every CDP call gives up after 8 s (a stalled page never hangs the run). */
+const within = (promise, what) => Promise.race([promise, new Promise((_, j) => setTimeout(() => j(new Error(`timed out: ${what}`)), 8000))]);
+const send = (method, params) => within(cdp.send(method, params), method);
+const evaluate = (expr) => within(cdp.evaluate(expr), "evaluate");
+/** The whole run gives up after 9 minutes, writing what it has. */
+const watchdog = setTimeout(async () => {
+  console.log("watchdog: the run took too long");
+  try {
+    writeFileSync(join(out, "play.json"), JSON.stringify({ ...report, watchdog: true, errors: logs.filter((l) => /error|exception/i.test(l)) }, null, 1));
+  } catch {}
+  process.exit(2);
+}, 9 * 60_000);
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
@@ -174,6 +188,7 @@ async function frame(stripName, p) {
 function sheet(stripName) {
   const list = strips[stripName] ?? [];
   if (!list.length) return;
+  if (list.length === 1) return;
   try {
     execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-pattern_type", "glob", "-i", join(out, `${stripName}-??.jpg`), "-vf", `scale=320:-1,tile=6x${Math.ceil(list.length / 6)}`, "-frames:v", "1", join(out, `${stripName}-sheet.jpg`)]);
   } catch (e) {
@@ -243,7 +258,8 @@ async function goTo(x, z, { street = false, r = 40, sprint = true, timeout = 60,
   return peek();
 }
 
-async function hold(keys, ms, strip = null, every = 2) {
+/** Hold `keys` for `ms`; given `toward`, the steering keys are re-picked toward it every poll. */
+async function hold(keys, ms, strip = null, every = 2, toward = null) {
   const end = Date.now() + ms;
   let n = 0;
   const stats = { top: 0, moves: new Set() };
@@ -251,7 +267,9 @@ async function hold(keys, ms, strip = null, every = 2) {
     const p = await peek();
     stats.top = Math.max(stats.top, Math.hypot(p.vx, p.vz));
     stats.moves.add(p.move);
-    await setHeld(new Set(keys));
+    const set = new Set(keys);
+    if (toward) for (const k of steerKeys(p, toward.x - p.x, toward.z - p.z)) set.add(k);
+    await setHeld(set);
     if (strip && n++ % every === 0) await frame(strip, p);
     await sleep(40);
   }
@@ -266,151 +284,157 @@ const dev = world.folks.find((f) => f.key === "dev");
 const page = world.pages.find((p) => p.y === 0);
 await shot("00-start");
 await perf("start");
-beat("start", await peek());
+beat("start", { x: (await peek()).x });
 
-// Face west on the spawn roof (the camera follows), then walk, run and sprint off its edge.
-const s = world.spawn;
-const west = { x: s.x - 3000, z: s.z - 120 };
-const p0 = await peek();
-const walk = await hold([...steerKeys(p0, west.x - p0.x, west.z - p0.z), "KeyC"], 1300, "walk", 3);
-beat("walk", walk);
-const p1 = await peek();
-const run = await hold([...steerKeys(p1, west.x - p1.x, west.z - p1.z)], 900, "run", 3);
-beat("run", run);
-const sprint = await hold([...steerKeys(await peek(), west.x - p1.x, west.z - p1.z), "ShiftLeft"], 2600, "sprint-leap-roll", 1);
-beat("sprint, leap, roll", sprint);
-await perf("after the leap");
-
-// Down to Dev in the street, and talk to him.
-let p = await goTo(dev.x + 50, dev.z, { street: true, r: 60, low: true, timeout: 70, strip: "to-dev", every: 6 });
-beat("at Dev", { x: p.x, z: p.z, act: p.actKind });
-for (let i = 0; i < 20 && p.actKind !== "talk"; i++) {
-  await setHeld(steerKeys(p, dev.x - p.x, dev.z - p.z));
-  await sleep(60);
-  await releaseAll();
-  p = await peek();
-}
-await tap("KeyE");
-await sleep(400);
-p = await peek();
-await shot("10-talk-dev");
-beat("talked to Dev", { stage: p.stage, chat: p.chat });
-
-// The chase: after the bot, zipping at it when it's up and away, until it's caught.
-const chaseEnd = Date.now() + 120_000;
-let lastZip = 0;
-let n = 0;
-while (Date.now() < chaseEnd) {
-  p = await peek();
-  if (p.bot.state === 3 || p.stage[1] >= 2) break;
-  const keys = steerKeys(p, p.bot.x - p.x, p.bot.z - p.z);
-  keys.add("ShiftLeft");
-  const d = Math.hypot(p.bot.x - p.x, p.bot.z - p.z);
-  const up = p.bot.y - (p.y - 26);
-  if ((up > 80 || d > 380) && d < 760 && p.zip && Date.now() - lastZip > 900 && p.move !== "climb" && p.move !== "hang") {
-    keys.add("KeyQ");
-    lastZip = Date.now();
+/** Talk to someone: up to them, nudge until the prompt says so, E. */
+async function talkTo(f, label) {
+  let p = await goTo(f.x + 50, f.z, { street: f.y === 0, r: 70, low: f.y === 0, timeout: 60 });
+  for (let i = 0; i < 25 && p.actKind !== "talk"; i++) {
+    await setHeld(steerKeys(p, f.x - p.x, f.z - p.z));
+    await sleep(70);
+    await releaseAll();
+    p = await peek();
   }
-  if (p.move === "ground" && Math.hypot(p.vx, p.vz) < 20) keys.add("Space");
-  await setHeld(keys);
-  if (n++ % 4 === 0) await frame("chase", p);
-  await sleep(40);
-}
-await releaseAll();
-p = await peek();
-await shot("20-bot-caught");
-beat("bot caught", { stage: p.stage, bot: p.bot });
-await perf("chase");
-
-// The wallet back to Dev: the task done.
-p = await goTo(dev.x + 50, dev.z, { street: true, r: 70, low: true, timeout: 70 });
-for (let i = 0; i < 20 && p.actKind !== "talk"; i++) {
-  await setHeld(steerKeys(p, dev.x - p.x, dev.z - p.z));
-  await sleep(60);
-  await releaseAll();
+  await shot(`${label}-prompt`);
+  await tap("KeyE");
+  await sleep(450);
   p = await peek();
+  await shot(label);
+  return p;
 }
-await tap("KeyE");
-await sleep(500);
-p = await peek();
-await shot("30-task-done");
-beat("wallet back: task done", { stage: p.stage });
 
-// A Daily Rug page in the street.
-p = await goTo(page.x, page.z, { street: true, r: 12, low: true, timeout: 70 });
-await sleep(300);
+// 1. Walk (C held) across the spawn roof, then a run.
+const s = world.spawn;
+let p = await peek();
+const across = { x: s.x, z: s.z + 3000 };
+const walk = await hold(["KeyC"], 1400, "1-walk", 2, across);
+beat("walk", walk);
 p = await peek();
-await shot("40-page");
-beat("page", { pages: p.pages });
+const run = await hold([], 700, "1-walk", 2, across);
+beat("run", run);
 
-// A swing, only while F is held: down the street, then let go.
+// 2. Sprint: off the roof's edge in a leap, a roll on the street, on down it.
 p = await peek();
-const ahead = { x: p.x, z: p.z + 3000 };
-const swingKeys = [...steerKeys(p, ahead.x - p.x, ahead.z - p.z)];
-const swing = await hold([...swingKeys, "KeyF"], 2600, "swing", 1);
-const afterSwing = await hold(swingKeys, 1200, "swing", 2);
-p = await peek();
-beat("swing", { held: swing, released: afterSwing, rope: p.rope });
+const sprint = await hold(["ShiftLeft"], 2600, "2-sprint", 1, across);
+beat("sprint", sprint);
+await perf("sprint");
 
-// A zip to the roof edge ahead (from wherever he landed).
-await sleep(600);
-p = await peek();
-const zipFrom = { x: p.x, y: p.y, z: p.z };
-await tap("KeyQ");
-const zip = await hold([], 1400, "zip", 1);
-p = await peek();
-beat("zip", { from: zipFrom, to: { x: p.x, y: p.y, z: p.z }, moves: zip.moves });
-
-// A building climbed from the street: up its face, over its ledge, up its tier, over that.
-// (The tallest near the middle: x 2594–2928, its tier to 556; its east face from the street.)
+// 3–4. Climb a building from the street and mantle onto it (the tallest near the middle:
+// its east face, two tiers, 556 up).
 const face = { x: 2988, z: 4059 };
-const roofTop = 556;
-p = await goTo(face.x, face.z, { street: true, r: 30, low: true, timeout: 70 });
-beat("at the wall", { x: p.x, y: p.y, z: p.z });
+p = await goTo(face.x, face.z, { street: true, r: 30, low: true, timeout: 60 });
+beat("at the wall", { x: p.x, z: p.z });
 {
   const end = Date.now() + 14_000;
-  let k = 0;
   const moves = new Set();
+  let k = 0;
   while (Date.now() < end) {
     p = await peek();
     moves.add(p.move);
-    if (p.move === "ground" && p.y - 26 >= roofTop - 3) break;
-    // Into the wall (west), whichever way the camera looks.
+    if (p.move === "ground" && p.y - 26 >= 553) break;
     await setHeld(steerKeys(p, -1, 0));
-    if (k++ % 2 === 0) await frame("climb-mantle", p);
+    if (k++ % 2 === 0) await frame("3-climb-mantle", p);
     await sleep(40);
   }
   await releaseAll();
   p = await peek();
-  beat("climbed", { moves: [...moves], feet: Math.round(p.y - 26), move: p.move });
+  beat("climbed and mantled", { moves: [...moves], feet: Math.round(p.y - 26) });
+  await shot("3-on-the-roof");
 }
-await shot("50-on-the-roof");
+await perf("climb");
 
-// A word with a civilian: whoever's nearest.
-const civ = world.folks.filter((f) => !["aunt", "uncle", "mary", "bearson", "dev"].includes(f.key)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
-p = await goTo(civ.x + 60, civ.z, { street: civ.y === 0, r: 70, low: civ.y === 0, timeout: 70 });
-for (let i = 0; i < 20 && p.actKind !== "talk"; i++) {
-  await setHeld(steerKeys(p, civ.x - p.x, civ.z - p.z));
-  await sleep(60);
+// 5. A wall run: down to the long west-facing wall at x 40 (z 3160–3680), a diagonal sprint at
+// it and a jump just short of it.
+p = await goTo(-110, 3050, { street: true, r: 40, low: true, timeout: 60 });
+beat("at the wall-run street", { x: p.x, z: p.z });
+{
+  const diag = { x: 40 + 2000, z: 3190 + 2000 };
+  const end = Date.now() + 3500;
+  const moves = new Set();
+  let jumped = false;
+  let k = 0;
+  while (Date.now() < end) {
+    p = await peek();
+    moves.add(p.move);
+    const keys = steerKeys(p, diag.x - p.x, diag.z - p.z);
+    keys.add("ShiftLeft");
+    if (!jumped && p.move === "ground" && p.x > 40 - 26 - 70 && p.z > 3150) {
+      keys.add("Space");
+      jumped = true;
+    }
+    await setHeld(keys);
+    if (k++ % 1 === 0) await frame("5-wallrun", p);
+    await sleep(35);
+  }
   await releaseAll();
-  p = await peek();
+  beat("wall run", { moves: [...moves] });
 }
-await tap("KeyE");
-await sleep(400);
+
+// 6. A swing, only while F is held: down the long street at x 3810, held, then let go.
+p = await goTo(3810, 650, { street: true, r: 25, low: true, timeout: 60 });
+{
+  const north = { x: 3810, z: 7000 };
+  const before = await hold([], 700, "6-swing", 1, north);
+  const held = await hold(["KeyF"], 2800, "6-swing", 1, north);
+  const after = await hold([], 1500, "6-swing", 2, north);
+  p = await peek();
+  beat("swing on demand", { before: before.moves, held: held.moves, after: after.moves, rope: p.rope });
+}
+await perf("swing");
+
+// 7. A word with a civilian: whoever's nearest in the street.
 p = await peek();
-await shot("60-civilian");
+const civ = world.folks.filter((f) => f.y === 0 && !["dev"].includes(f.key) && !f.key.match(/^(aunt|uncle|mary|bearson)$/)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+p = await talkTo(civ, "7-civilian");
 beat("talked to a civilian", { key: civ.key, chat: p.chat });
 
-// Pause: the filing, and the map.
+// 8. A side task: Dev's wallet. Talk, chase the bot over the roofs (zips, climbs), bring it back.
+p = await talkTo(dev, "8-dev");
+beat("talked to Dev", { stage: p.stage });
+{
+  const end = Date.now() + 100_000;
+  let lastZip = 0;
+  let k = 0;
+  while (Date.now() < end) {
+    p = await peek();
+    if (p.bot.state === 3 || p.stage[1] >= 2) break;
+    const keys = steerKeys(p, p.bot.x - p.x, p.bot.z - p.z);
+    keys.add("ShiftLeft");
+    const d = Math.hypot(p.bot.x - p.x, p.bot.z - p.z);
+    const up = p.bot.y - (p.y - 26);
+    if ((up > 80 || d > 380) && d < 760 && p.zip && Date.now() - lastZip > 900 && p.move !== "climb" && p.move !== "hang") {
+      keys.add("KeyQ");
+      lastZip = Date.now();
+    }
+    if (p.move === "ground" && Math.hypot(p.vx, p.vz) < 20) keys.add("Space");
+    await setHeld(keys);
+    if (k++ % 3 === 0) await frame("8-chase", p);
+    await sleep(40);
+  }
+  await releaseAll();
+  p = await peek();
+  await shot("8-bot-caught");
+  beat("bot caught", { stage: p.stage });
+}
+p = await talkTo(dev, "8-task-done");
+beat("task done", { stage: p.stage });
+
+// 9. A Daily Rug page in the street.
+p = await goTo(page.x, page.z, { street: true, r: 12, low: true, timeout: 60, strip: "9-page", every: 8 });
+await sleep(400);
+p = await peek();
+await shot("9-page");
+beat("page", { pages: p.pages });
+
+// The map, and the pause sheet (the outing files as it opens).
 await tap("KeyM");
-await sleep(800);
-await shot("70-map");
+await sleep(900);
+await shot("10-map");
 await tap("KeyM");
 await sleep(300);
-await send("Input.dispatchKeyEvent", { type: "keyDown", code: "Escape", key: "Escape", windowsVirtualKeyCode: 27 });
-await send("Input.dispatchKeyEvent", { type: "keyUp", code: "Escape", key: "Escape", windowsVirtualKeyCode: 27 });
-await sleep(1500);
-await shot("80-pause");
+await tap("Escape");
+await sleep(1800);
+await shot("11-pause");
 await perf("end");
 if (who === "dev") report.server = await evaluate(`fetch("/api/city").then((r) => r.json())`);
 else report.local = await evaluate(`(() => { const s = JSON.parse(localStorage.getItem("wgp:save:v1")); return { city: s.city, hero: { level: s.hero.level, xp: s.hero.xp } }; })()`);
@@ -423,4 +447,5 @@ console.log("legs", JSON.stringify(report.legs), "web", JSON.stringify(report.we
 console.log("perf", JSON.stringify(report.perf));
 console.log("server/local", JSON.stringify(report.server ?? report.local));
 console.log(report.errors.join("\n") || "no console errors");
+clearTimeout(watchdog);
 await close();
