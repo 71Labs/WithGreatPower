@@ -5,7 +5,7 @@
  * React here; Scene.tsx creates one per city and calls `update` from `useFrame`, so per-frame
  * data never goes through React state. Scene.tsx's post pass reads `shadows` and `postFrame()`.
  */
-import { Group, PerspectiveCamera, Vector2, type ShaderMaterial } from "three";
+import { Group, PerspectiveCamera, Vector2, Vector3, type ShaderMaterial } from "three";
 
 import type { CastId } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
@@ -75,6 +75,8 @@ export class SceneEngine {
   readonly far: number;
   reducedMotion = false;
   private readonly post: PostFrame = { speed: 0, focus: new Vector2() };
+  /** The chase camera's heading while the hero's on a wall (free roam). */
+  private readonly wallVel = { x: 0, y: 0, z: 0 };
   private wasStuck = false;
   private readonly input = createChaseInput();
   private readonly beat: DirectorInput = { cue: null, mode: "travel", hero: { x: 0, y: 0, z: 0 }, goal: null, ally: null, aspect: 1, reducedMotion: false, input: false };
@@ -205,6 +207,16 @@ export class SceneEngine {
     this.roam.event(ev);
   }
 
+  /** Debug: the hero's solved ankles, hips and the body's left axis (the headless leg checks). */
+  heroLegs(): { ankles: [Vec3, Vec3]; hips: Vec3; left: Vec3; base: string } | null {
+    const a = this.characters.heroAnimator;
+    if (!a) return null;
+    const s = a.solved;
+    const left = new Vector3(1, 0, 0).applyQuaternion(a.pose.rot);
+    const v = (p: { x: number; y: number; z: number }) => ({ x: p.x, y: p.y, z: p.z });
+    return { ankles: [v(s.ankle[0]), v(s.ankle[1])], hips: v(a.centre), left: v(left), base: a.base };
+  }
+
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
   cut(): void {
     this.chase.reset();
@@ -231,7 +243,15 @@ export class SceneEngine {
     if (frame) {
       const i = this.input;
       i.hero = frame.hero.pos;
-      i.vel = frame.hero.vel;
+      // Free roam on a wall: his speed there is mostly up, so the camera takes his way into the
+      // wall as his heading and comes round behind him, outside it.
+      const wall = frame.roam?.wall;
+      if (wall && frame.roam!.move !== "wallrun") {
+        this.wallVel.x = -wall.nx * 260;
+        this.wallVel.y = frame.hero.vel.y;
+        this.wallVel.z = -wall.nz * 260;
+        i.vel = this.wallVel;
+      } else i.vel = frame.hero.vel;
       i.anchor = frame.hero.anchor;
       i.facing = frame.hero.facing ?? null;
       i.steer = heldStick;

@@ -53,6 +53,8 @@ export interface SceneHandle {
   skip?(): void;
   /** The last chase pose, for HUD projection. */
   pose(): ChasePose | null;
+  /** Debug: the hero's solved ankles and his body's left axis (headless checks that the legs never cross). */
+  heroLegs?(): { ankles: [Vec3, Vec3]; hips: Vec3; left: Vec3; base: string } | null;
 }
 
 export interface SceneStats {
@@ -122,6 +124,7 @@ export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cas
       cut: () => engine.cut(),
       skip: () => engine.skip(),
       pose: () => lastPose.current,
+      heroLegs: () => engine.heroLegs(),
     }),
     [engine],
   );
