@@ -213,10 +213,11 @@ export function stepMove(s: SimState, input: InputFrame, press: Presses, dt: num
 
   // The web, wherever the body can let go to take it: a swing (or a fizzle).
   const free = b.move !== "mantle" && b.move !== "vault" && b.move !== "zip" && b.move !== "splash" && b.move !== "swing";
-  // A press (buffered a moment), or the web still held after a swing ran out, at the top of the arc.
+  // Only while the web is held (or a press is buffered a moment): it keeps looking for something
+  // to stick to, and after a swing ran out with it still held, the next waits for the top of the arc.
   if (!input.web) h.rewebWait = false;
-  const chain = input.web && h.rewebWait && b.move === "air" && h.vy <= REWEB_VY;
-  if (free && (webPressed || (input.web && h.webBuf > 0) || chain) && tryWeb(s, st, webPressed)) {
+  const want = (input.web || h.webBuf > 0) && !(h.rewebWait && b.move === "air" && h.vy > REWEB_VY);
+  if (free && want && tryWeb(s, st, webPressed)) {
     // Swinging from this tick on.
   } else if (free && press.zip && b.zipCd <= 0 && startZip(s, st)) {
     // Zipping.

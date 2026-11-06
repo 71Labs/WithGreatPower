@@ -177,6 +177,26 @@ describe("free roam on the web", () => {
   });
 });
 
+describe("free roam on a keyboard's eight directions", () => {
+  it("wall-runs off a diagonal sprint-jump at a wall (W+D), and climbs a head-on one (W)", () => {
+    const e = grid.edges.find((q) => q.y0 < 1 && q.axis === 1 && q.hi - q.lo > 450 && q.y > 250 && clearAt(grid, q.c + q.n * 70, 30, q.lo + 40, 30) && clearAt(grid, q.c + q.n * 70, 30, q.lo + 300, 30))!;
+    // 45° into the wall and along it, sprinting from 150 out, a jump 70 short of it.
+    const start = at(e.c + e.n * 150, 0, e.lo + 20, 0, 1);
+    const diag = { x: e.c - e.n * 2000, z: e.lo + 20 + 2000 };
+    const p = playRoam(start, [{ kind: "hold", ...diag, ticks: 8, sprint: true }, { kind: "press", shot: "jump", ...diag }, { kind: "hold", ...diag, ticks: 40, sprint: true }]);
+    expect(chain(p)).toMatch(/air>wallrun/);
+    const head = playRoam(at(e.c + e.n * 150, 0, e.lo + 200, -e.n, 0), [{ kind: "hold", x: e.c - e.n * 2000, z: e.lo + 200, ticks: 60 }]);
+    expect(chain(head)).toMatch(/^ground>climb/);
+  });
+
+  it("swings mid-air when the web is held after a jump (it keeps looking while held), never without it", () => {
+    const p = playRoam(at(3810, 0, 600, 0, 1), [{ kind: "press", shot: "jump", x: 3810, z: 6000 }, { kind: "hold", x: 3810, z: 6000, ticks: 10 }, { kind: "web", x: 3810, z: 6000, ticks: 60 }]);
+    expect(chain(p)).toMatch(/air>swing/);
+    const q = playRoam(at(3810, 0, 600, 0, 1), [{ kind: "press", shot: "jump", x: 3810, z: 6000 }, { kind: "hold", x: 3810, z: 6000, ticks: 70, sprint: true }]);
+    expect(q.moves).not.toContain("swing");
+  });
+});
+
 describe("free roam in the river", () => {
   it("splashes in, climbs out on a bank, unhurt", () => {
     const rv = city.river!;

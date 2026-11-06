@@ -141,9 +141,13 @@ export const VAULT_CLEAR = 14;
 export const VAULT_MIN_T = 0.28;
 export const VAULT_MAX_T = 0.55;
 
-/** Wall-running: at this speed or more, meeting a tall wall within WALLRUN_ANGLE of parallel (as |cos| to its normal). */
+/**
+ * Wall-running: at this speed or more, meeting a tall wall at a glancing angle: the motion within
+ * about 49° of the wall's plane (|cos| to its normal under WALLRUN_ANGLE), so a sprint-jump at a
+ * wall on a diagonal runs along it and a head-on one climbs it.
+ */
 export const WALLRUN_SPEED = 430;
-export const WALLRUN_ANGLE = 0.62;
+export const WALLRUN_ANGLE = 0.75;
 /** Along the wall at least this fast, lifted to WALLRUN_VY, under lighter gravity, for at most WALLRUN_SECONDS. */
 export const WALLRUN_MIN = 520;
 export const WALLRUN_VY = 260;
