@@ -207,14 +207,20 @@ export class SceneEngine {
     this.roam.event(ev);
   }
 
-  /** Debug: the hero's solved ankles, hips and the body's left axis (the headless leg checks). */
+  /**
+   * Debug: the hero's ankles as drawn (the bones after the clips and every IK pass), his hips
+   * and his body's left axis, and the animator's base state (the headless leg-crossing check).
+   */
   heroLegs(): { ankles: [Vec3, Vec3]; hips: Vec3; left: Vec3; base: string } | null {
     const a = this.characters.heroAnimator;
     if (!a) return null;
-    const s = a.solved;
+    const l = this.characters.jointOf("hero", "footL", new Vector3());
+    const r = this.characters.jointOf("hero", "footR", new Vector3());
+    const hips = this.characters.jointOf("hero", "hips", new Vector3());
+    if (!l || !r || !hips) return null;
     const left = new Vector3(1, 0, 0).applyQuaternion(a.pose.rot);
     const v = (p: { x: number; y: number; z: number }) => ({ x: p.x, y: p.y, z: p.z });
-    return { ankles: [v(s.ankle[0]), v(s.ankle[1])], hips: v(a.centre), left: v(left), base: a.base };
+    return { ankles: [v(l), v(r)], hips: v(hips), left: v(left), base: a.base };
   }
 
   /** Cut the camera to its wanted pose on the next frame (and drop the last shot's speed lines). */
