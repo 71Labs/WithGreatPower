@@ -627,8 +627,7 @@ function airWall(s: SimState, st: Stick, c: Contact) {
   const ledge = top - h.y;
   // Hands on a ledge: falling (or barely rising) with its top within reach.
   if (ledge >= GRAB_LOW && ledge <= GRAB_HIGH && h.vy < GRAB_VY && (into > 0.1 || c.into > 40) && ledgeOpen(s.grid, h.x, h.z, c.nx, c.nz, top)) {
-    startHang(s, c.nx, c.nz, top);
-    return;
+    if (grabLedge(s, c.nx, c.nz, top)) return;
   }
   const hs = len2(h.vx, h.vz);
   const along = hs > 1 ? Math.abs(h.vx * c.nx + h.vz * c.nz) / hs : 1;
@@ -899,12 +898,39 @@ function stepClimb(s: SimState, st: Stick, press: Presses, dt: number): void {
   b.wtop = top;
   if (top > 0 && h.y >= top - HANG_DOWN) {
     if (ledgeOpen(s.grid, h.x, h.z, b.wnx, b.wnz, top)) {
-      if (into > 0.25) startMantle(s, top);
-      else startHang(s, b.wnx, b.wnz, top);
-      return;
+      // Over it with the stick into the wall, else hanging under its lip (else over it after all).
+      if ((into > 0.25 && startMantle(s, top)) || grabLedge(s, b.wnx, b.wnz, top)) return;
     }
-    if (h.y >= top + R && !wallSeek(s.grid, h, b.wnx, b.wnz, 90)) startHang(s, b.wnx, b.wnz, top);
+    if (h.y >= top + R && !wallSeek(s.grid, h, b.wnx, b.wnz, 90) && hangRoom(s, top)) startHang(s, b.wnx, b.wnz, top);
   }
+}
+
+/**
+ * Room to hang under a ledge at `top` where he is: the body HANG_DOWN under it clear of
+ * everything (roam-2; a low unit on a roof would have put him into the roof).
+ */
+function hangRoom(s: SimState, top: number): boolean {
+  return clearAt(s.grid, s.hero.x, top - HANG_DOWN, s.hero.z, R - 2);
+}
+
+/**
+ * Hands on a ledge at `top` (the wall's normal n): hanging under it if there's room, else up
+ * over it (a low unit on a roof: onto it), else not at all. True when he caught it.
+ */
+function grabLedge(s: SimState, nx: number, nz: number, top: number): boolean {
+  if (hangRoom(s, top)) {
+    startHang(s, nx, nz, top);
+    return true;
+  }
+  const b = parkourOf(s).body;
+  const wnx = b.wnx;
+  const wnz = b.wnz;
+  b.wnx = nx;
+  b.wnz = nz;
+  if (startMantle(s, top)) return true;
+  b.wnx = wnx;
+  b.wnz = wnz;
+  return false;
 }
 
 function startHang(s: SimState, nx: number, nz: number, top: number) {
@@ -933,9 +959,9 @@ function stepHang(s: SimState, st: Stick, press: Presses, dt: number): void {
   if (press.drop) return letGo(s, 60);
   if (b.jumpBuf > 0) {
     if (into < -0.3) return wallJump(s, st);
-    if (b.moveT > 0.08 && ledgeOpen(s.grid, h.x, h.z, nx, nz, b.wtop)) return startMantle(s, b.wtop);
+    if (b.moveT > 0.08 && ledgeOpen(s.grid, h.x, h.z, nx, nz, b.wtop) && startMantle(s, b.wtop)) return;
   }
-  if (into > 0.3 && b.moveT > 0.15 && ledgeOpen(s.grid, h.x, h.z, nx, nz, b.wtop)) return startMantle(s, b.wtop);
+  if (into > 0.3 && b.moveT > 0.15 && ledgeOpen(s.grid, h.x, h.z, nx, nz, b.wtop) && startMantle(s, b.wtop)) return;
   // The stick back: down off the ledge onto the wall below it, climbing down (roam-2; roam-1 let go).
   b.awayT = into < -0.5 ? b.awayT + dt : 0;
   if (b.awayT > LET_GO * 1.5) {
@@ -981,12 +1007,16 @@ function dropToHang(s: SimState, st: Stick): boolean {
   return true;
 }
 
-/** Up over a ledge whose top is at `top`: a scripted pull-up to MANTLE_IN in from the edge (the middle of a perch). */
-function startMantle(s: SimState, top: number) {
+/**
+ * Up over a ledge whose top is at `top`: a scripted pull-up to MANTLE_IN in from the edge (onto
+ * a narrow top where he grabbed it). The whole path is swept first (roam-2): nothing in the way
+ * of the body going up and over, or no mantle (false).
+ */
+function startMantle(s: SimState, top: number): boolean {
   const h = s.hero;
   const b = parkourOf(s).body;
   const to = ledgeOpen(s.grid, h.x, h.z, b.wnx, b.wnz, top, true);
-  if (!to) return;
+  if (!to || !mantleClear(s, h.x, h.y, h.z, to.x, top + R, to.z)) return false;
   b.ax = h.x;
   b.ay = h.y;
   b.az = h.z;
@@ -999,6 +1029,34 @@ function startMantle(s: SimState, top: number) {
   h.vy = 0;
   h.vz = 0;
   setMove(s, "mantle");
+  return true;
+}
+
+const mp = { x: 0, y: 0, z: 0 };
+
+/** The mantle's path at u (0–1), as stepScripted moves him: up first, then over and in. */
+function mantlePoint(ax: number, ay: number, az: number, bx: number, by: number, bz: number, u: number, out: { x: number; y: number; z: number }) {
+  const up = Math.min(1, u / 0.6);
+  const over = u <= 0.55 ? 0 : (u - 0.55) / 0.45;
+  const eu = 1 - (1 - up) * (1 - up);
+  const eo = over * over * (3 - 2 * over);
+  out.x = ax + (bx - ax) * eo;
+  out.z = az + (bz - az) * eo;
+  out.y = ay + (by - ay) * eu;
+  return out;
+}
+
+/**
+ * Whether the mantle's path is clear: the body (a little slimmer, as it leaves the face it
+ * touches) at points no further apart than a quarter of its radius.
+ */
+function mantleClear(s: SimState, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+  const n = clamp(Math.ceil((len2(bx - ax, bz - az) + Math.abs(by - ay)) / 6), 8, 48);
+  for (let k = 1; k <= n; k++) {
+    mantlePoint(ax, ay, az, bx, by, bz, k / n, mp);
+    if (!clearAt(s.grid, mp.x, mp.y, mp.z, R - 4)) return false;
+  }
+  return true;
 }
 
 function startWallrun(s: SimState, c: Contact) {
@@ -1074,7 +1132,7 @@ function stepWallrun(s: SimState, st: Stick, press: Presses, dt: number): void {
   }
   // A ledge comes into reach on the way: grab it.
   const top = columnTop(s.grid, h.x - b.wnx * (R + 2), h.z - b.wnz * (R + 2), h.y);
-  if (top - h.y >= GRAB_LOW && top - h.y <= GRAB_HIGH * 0.6 && h.vy < GRAB_VY && ledgeOpen(s.grid, h.x, h.z, b.wnx, b.wnz, top)) startHang(s, b.wnx, b.wnz, top);
+  if (top - h.y >= GRAB_LOW && top - h.y <= GRAB_HIGH * 0.6 && h.vy < GRAB_VY && ledgeOpen(s.grid, h.x, h.z, b.wnx, b.wnz, top)) grabLedge(s, b.wnx, b.wnz, top);
 }
 
 /* ------------------------------------------------------------------ vaults */
@@ -1098,8 +1156,11 @@ function vaultArc(s: SimState, tx: number, ty: number, tz: number, top: number):
   const h = s.hero;
   const mid = (h.y + ty) / 2;
   const arc = Math.max(8, top + R + VAULT_CLEAR - mid);
-  for (let k = 1; k < 8; k++) {
-    vaultPoint(h.x, h.y, h.z, tx, ty, tz, arc, k / 8, vp);
+  // Swept (roam-2): samples no further apart than a quarter of the checked radius, so a thin
+  // post between two of them can't slip through.
+  const n = clamp(Math.ceil((len2(tx - h.x, tz - h.z) + arc * 2) / 4), 8, 96);
+  for (let k = 1; k < n; k++) {
+    vaultPoint(h.x, h.y, h.z, tx, ty, tz, arc, k / n, vp);
     if (!clearAt(s.grid, vp.x, vp.y, vp.z, R - 10)) return -1;
   }
   return arc;
@@ -1177,13 +1238,7 @@ function stepScripted(s: SimState, dt: number): void {
   const pz = h.z;
   if (b.move === "mantle") {
     // Up first, then over and in.
-    const up = Math.min(1, u / 0.6);
-    const over = u <= 0.55 ? 0 : (u - 0.55) / 0.45;
-    const eu = 1 - (1 - up) * (1 - up);
-    const eo = over * over * (3 - 2 * over);
-    h.x = b.ax + (b.bx - b.ax) * eo;
-    h.z = b.az + (b.bz - b.az) * eo;
-    h.y = b.ay + (b.by - b.ay) * eu;
+    mantlePoint(b.ax, b.ay, b.az, b.bx, b.by, b.bz, u, h);
   } else if (b.move === "vault") {
     vaultPoint(b.ax, b.ay, b.az, b.bx, b.by, b.bz, b.arc, u, h);
   } else {
