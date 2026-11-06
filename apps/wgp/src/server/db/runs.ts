@@ -12,6 +12,9 @@
  * `runs.mode` = the chapter id and `runs.ruleset` = its CHAPTER_RULESET. They are replayed as
  * the chapter (verify.ts verifyChapterRun), can be played on any night, have their own daily
  * budget, and are unranked: no board, no Bits. A clear closes the case in the save.
+ *
+ * Competitive runs (the Daily Run, time trials and duels; compete.ts) are issued by
+ * startCompeteRun and submitted here, handed straight to submitCompeteRun by their mode.
  */
 import { createHash, createHmac, randomUUID } from "node:crypto";
 
@@ -29,6 +32,7 @@ import { getChapterVerifier, getVerifier, verifyChapterRun, verifyRun, type Veri
 
 import { badgeKey, badgeView, CASE_BUDGET_SCOPE, CASE_RUNS_PER_DAY, type CaseOutcome } from "./cases";
 import type { Db } from "./client";
+import { isCompeteMode, submitCompete, type CompeteOutcome } from "./compete";
 import { recordScore } from "./leaderboard";
 import { BITS_TOKEN_ID, enqueueRewardMint, lootDiff, withBits, type MintItem } from "./outbox";
 import { ensureSave, getPlayer, writeSave } from "./players";
@@ -167,6 +171,8 @@ export type SubmitResult =
       idempotent: boolean;
       /** A chapter run (never ranked, no Bits): what it did to the case. */
       chapter?: CaseOutcome;
+      /** A competitive run (the Daily, a trial or a duel; never ranked, no Bits): its board and its ghost. */
+      compete?: CompeteOutcome;
     }
   | { status: "rejected"; runId: string; reason: string; idempotent: boolean };
 
@@ -310,6 +316,8 @@ export async function submitRun(
 
   const run = await loadRun(db, input.runId);
   if (!run || run.playerId !== playerId) throw notFound("No such run");
+  // The Daily, a trial or a duel: its own replay, board and outcome (compete.ts).
+  if (isCompeteMode(run.mode)) return submitCompete(db, run, { log, clientHash, now, verifier: input.verifier });
   if (run.status === "verified" || run.status === "rejected") return storedOutcome(db, run, log, clientHash);
   if (run.status === "expired") throw new HttpError(410, "run_expired", "This run expired; start a new one");
   if (now.getTime() > run.expiresAt.getTime() + SUBMIT_GRACE_MS) {
@@ -434,14 +442,19 @@ export async function submitRun(
 /* ------------------------------------------------------------------ reads */
 
 /** The player's run in flight, if any. `chapter`: a story chapter's run (it blocks a ranked night too, one run at a time). */
-export async function activeRun(db: Db, playerId: string, now = new Date()): Promise<{ runId: string; expiresAt: string; night: number; chapter: ChapterId | null } | null> {
+export async function activeRun(
+  db: Db,
+  playerId: string,
+  now = new Date(),
+): Promise<{ runId: string; expiresAt: string; night: number; chapter: ChapterId | null; mode: string; course: string | null } | null> {
   const [row] = await db
-    .select({ id: runs.id, expiresAt: runs.expiresAt, night: runs.night, mode: runs.mode })
+    .select({ id: runs.id, expiresAt: runs.expiresAt, night: runs.night, mode: runs.mode, course: runs.course })
     .from(runs)
     .where(and(eq(runs.playerId, playerId), eq(runs.status, "issued")))
     .limit(1);
   if (!row || row.expiresAt.getTime() <= now.getTime()) return null;
-  return { runId: row.id, expiresAt: row.expiresAt.toISOString(), night: row.night, chapter: isChapterId(row.mode) ? row.mode : null };
+  // `mode` and `course`: what the run in flight is (a patrol night, a case, the Daily, a trial or a duel).
+  return { runId: row.id, expiresAt: row.expiresAt.toISOString(), night: row.night, chapter: isChapterId(row.mode) ? row.mode : null, mode: row.mode, course: row.course };
 }
 
 export interface PublicReplay {
@@ -453,6 +466,13 @@ export interface PublicReplay {
   ruleset: string;
   /** A story chapter's run: replay it with replayRun(…, { chapter }) from startSave itself (no patrol). */
   chapter: ChapterId | null;
+  /**
+   * The run's mode ("patrol", a chapter id, "daily" or "trial") and course (the Daily's day, a
+   * trial's course, or "duel"). A trial course's run replays with replayRun(…, { trial: course })
+   * from startSave itself; the Daily and a duel replay like a patrol night.
+   */
+  mode: string;
+  course: string | null;
   /** The save at run start; replay with startPatrol(startSave, seed) and the log. */
   startSave: Save;
   /** The input log, base64. */
@@ -486,6 +506,8 @@ export async function getReplay(db: Db, runId: string): Promise<PublicReplay | n
     seed: r.seed,
     ruleset: r.ruleset,
     chapter: isChapterId(r.mode) ? r.mode : null,
+    mode: r.mode,
+    course: r.course,
     startSave: r.startSave as Save,
     log: Buffer.from(r.inputLog!).toString("base64"),
     score: r.verifiedScore ?? 0,

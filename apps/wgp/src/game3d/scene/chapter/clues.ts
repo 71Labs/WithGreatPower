@@ -669,7 +669,7 @@ function propClearance(city: City, x: number, z: number, floor: number): number 
 }
 
 /** Room each prop needs round its foot (units): the billboard is wide, the pole thin. */
-const CLEARANCE: Record<ClueId, number> = { cursor: 95, tabs: 48, pixels: 30 };
+const CLEARANCE: Record<ClueId, number> = { cursor: 95, tabs: 48, pixels: 30, footage: 95, gif: 40, signature: 48 };
 /** How far a prop may stand from its clue's point (the sim finds it within ~140). */
 const MAX_SHIFT = 110;
 

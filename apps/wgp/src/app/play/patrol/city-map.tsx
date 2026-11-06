@@ -106,7 +106,7 @@ export function CityMap({ city, stops, results, frame, hero, northUp, onNorthUp,
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1.5">
             <StickerEyebrow>
-              <span className="num">{chapter ? "Case file 001" : current < stops.length ? `Stop ${current + 1} of ${stops.length}` : "Route done"}</span>
+              <span className="num">{chapter ? `Case file ${chapter.id === "case-002" ? "002" : "001"}` : current < stops.length ? `Stop ${current + 1} of ${stops.length}` : "Route done"}</span>
             </StickerEyebrow>
             <h2 id={`${id}-title`} className="text-[24px] font-bold leading-7 tracking-[-0.02em] text-game-ink">
               City map

@@ -23,7 +23,10 @@
     "./score": "./src/score.ts",
     "./hash": "./src/hash.ts",
     "./bridge3d": "./src/bridge3d.ts",
-    "./golden": "./src/golden.ts"
+    "./golden": "./src/golden.ts",
+    "./golden-trial": "./src/golden-trial.ts",
+    "./compete": "./src/rules/compete.ts",
+    "./ghost": "./src/ghost.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

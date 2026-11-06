@@ -19,18 +19,23 @@
  * logs carry chapterLogRuleset(chapter) in the ruleset field, so a chapter log never replays
  * as a patrol night and a patrol log never as a chapter: pass `{ chapter }` to resumeRun and
  * replayRun for a chapter run.
+ *
+ * Time trials (ruleset "trial-1") are runs the same way: startTrialRun(save, course) races the
+ * course on the save's hero (no patrol, no engine actions, the save untouched), and its log
+ * carries trialLogRuleset(course): pass `{ trial }` to resumeRun and replayRun.
  */
-import { actionFor3d, chapterConfig, currentErrand, errandActions, sessionStart3d } from "./bridge3d";
+import { actionFor3d, chapterConfig, currentErrand, errandActions, sessionStart3d, trialConfig } from "./bridge3d";
 import { hashState } from "./hash";
 import { decodeInputCodes, encodeInputCodes, frameCode, frameFromCode, InputLogError } from "./input/log";
 import { isChapterId } from "./rules/chapters";
 import { reduce } from "./rules/engine";
-import type { ChapterId, Save, Stop } from "./rules/types";
+import type { ChapterId, Save, Stop, TrialCourseId } from "./rules/types";
 import { RULESET_VERSION, scoreRun, type ScoreBreakdown } from "./score";
 import { chapterLogRuleset } from "./sim3d/chapter";
 import { SIM_HZ } from "./sim3d/constants";
 import type { InputEvent, InputFrame, ReplayInput, ReplayResult } from "./sim3d/contract";
 import { createSim, resolveErrand, simRunning, stepSim } from "./sim3d/sim";
+import { COURSE_GEOMETRY, isTrialCourse, trialLogRuleset } from "./sim3d/trial";
 import type { SimEvent, SimState } from "./sim3d/types";
 
 export interface Run {
@@ -55,6 +60,8 @@ export interface Run {
   gwei: number;
   /** The story chapter this run plays (startChapterRun), or null for a patrol night. */
   readonly chapter: ChapterId | null;
+  /** The time trial's course this run races (startTrialRun), or null/absent otherwise. */
+  readonly trial?: TrialCourseId | null;
 }
 
 /** Whether two stop lists are the same (field by field). */
@@ -70,8 +77,8 @@ function sameStops(a: Stop[], b: Stop[]): boolean {
 }
 
 /** A run that failed before it began. */
-function deadRun(save: Save, seed: number, error: string, chapter: ChapterId | null = null): Run {
-  return { save, start: save, seed, sim: null as unknown as SimState, codes: [], events: [], checkpoints: [], over: true, error, abilities: 0, gwei: 0, chapter };
+function deadRun(save: Save, seed: number, error: string, chapter: ChapterId | null = null, trial: TrialCourseId | null = null): Run {
+  return { save, start: save, seed, sim: null as unknown as SimState, codes: [], events: [], checkpoints: [], over: true, error, abilities: 0, gwei: 0, chapter, ...(trial ? { trial } : {}) };
 }
 
 export interface RunOptions {
@@ -82,6 +89,21 @@ export interface RunOptions {
   trustPatrol?: boolean;
   /** resumeRun / replayRun: the log is this story chapter's (startChapterRun), not a patrol night's. */
   chapter?: ChapterId;
+  /** resumeRun / replayRun: the log is this time trial's (startTrialRun). */
+  trial?: TrialCourseId;
+}
+
+/**
+ * Start a time trial on the save's hero (rules/compete.ts trialSave): the course's own city
+ * and seed, full health and fluid, no powers. The save isn't touched and needs no patrol.
+ */
+export function startTrialRun(save: Save, course: TrialCourseId): Run {
+  if (!isTrialCourse(course)) return deadRun(save, 0, `no course ${String(course)}`);
+  const seed = COURSE_GEOMETRY[course].seed;
+  if (!save?.hero) return deadRun(save, seed, "no hero", null, course);
+  const config = trialConfig(save, course);
+  if (!config) return deadRun(save, seed, "no hero", null, course);
+  return { save, start: save, seed, sim: createSim(config), codes: [], events: [], checkpoints: [], over: false, error: null, abilities: 0, gwei: 0, chapter: null, trial: course };
 }
 
 /**
@@ -142,9 +164,16 @@ function dispatch(run: Run, events: SimEvent[]) {
   for (const ev of events) {
     if (ev.type === "ability") run.abilities += 1;
     if (ev.type === "gwei") run.gwei += 1;
+    if (run.trial) {
+      // A trial's checkpoints: each gate.
+      if (ev.type === "trial-gate") run.checkpoints.push(hashState(run.sim));
+      if (ev.type === "night-over") run.over = true;
+      continue;
+    }
     if (run.chapter) {
-      // A chapter's checkpoints: each clue, the win, and Mary's release.
-      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed") run.checkpoints.push(hashState(run.sim));
+      // A chapter's checkpoints: each clue, the win, and Mary's release (Case File 002: the
+      // real Sybil marked too, and Uncle Gen's vote counted).
+      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed" || (ev.type === "voter-mark" && ev.real)) run.checkpoints.push(hashState(run.sim));
       if (ev.type === "night-over") run.over = true;
       continue;
     }
@@ -208,12 +237,13 @@ export function chooseErrand(run: Run, value: number): SimEvent[] | null {
   return events;
 }
 
-/** The ruleset field a run's log carries: RULESET_VERSION, or the chapter's (chapterLogRuleset). */
-export const logRuleset = (chapter: ChapterId | null | undefined) => (chapter ? chapterLogRuleset(chapter) : RULESET_VERSION);
+/** The ruleset field a run's log carries: RULESET_VERSION, the chapter's (chapterLogRuleset), or the trial course's (trialLogRuleset). */
+export const logRuleset = (chapter: ChapterId | null | undefined, trial?: TrialCourseId | null) =>
+  trial ? trialLogRuleset(trial) : chapter ? chapterLogRuleset(chapter) : RULESET_VERSION;
 
 /** The canonical input log of everything recorded so far. */
 export function runLog(run: Run): Uint8Array {
-  return encodeInputCodes(run.codes, run.events, 0, logRuleset(run.chapter));
+  return encodeInputCodes(run.codes, run.events, 0, logRuleset(run.chapter, run.trial));
 }
 
 /** The state hash right now. */
@@ -231,14 +261,17 @@ export function resumeRun(input: ReplayInput, opts: RunOptions = {}): Run {
     return deadRun(input.save as Save, input.seed, e instanceof InputLogError ? `bad log: ${e.message}` : "bad log", opts.chapter ?? null);
   }
   const chapter = opts.chapter ?? null;
+  const trial = opts.trial ?? null;
   if (chapter !== null && !isChapterId(chapter)) return deadRun(input.save as Save, input.seed, `no chapter ${String(chapter)}`);
-  const want = logRuleset(chapter);
+  if (trial !== null && !isTrialCourse(trial)) return deadRun(input.save as Save, input.seed, `no course ${String(trial)}`);
+  if (chapter !== null && trial !== null) return deadRun(input.save as Save, input.seed, "a run is a chapter or a trial, not both", chapter, trial);
+  const want = logRuleset(chapter, trial);
   if (decoded.ruleset !== want) {
-    const what = chapter ? `chapter ${chapter}'s ${want}` : String(RULESET_VERSION);
-    return deadRun(input.save as Save, input.seed, `ruleset ${decoded.ruleset} is not ${what}`, chapter);
+    const what = trial ? `trial ${trial}'s ${want}` : chapter ? `chapter ${chapter}'s ${want}` : String(RULESET_VERSION);
+    return deadRun(input.save as Save, input.seed, `ruleset ${decoded.ruleset} is not ${what}`, chapter, trial);
   }
-  if (decoded.fromTick !== 0) return deadRun(input.save as Save, input.seed, "a run's log starts at tick 0", chapter);
-  const run = chapter ? startChapterRun(input.save as Save, input.seed, chapter) : startRun(input.save as Save, input.seed, opts);
+  if (decoded.fromTick !== 0) return deadRun(input.save as Save, input.seed, "a run's log starts at tick 0", chapter, trial);
+  const run = trial ? startTrialRun(input.save as Save, trial) : chapter ? startChapterRun(input.save as Save, input.seed, chapter) : startRun(input.save as Save, input.seed, opts);
   if (run.error) return run;
   const { codes, events } = decoded;
   let e = 0;
@@ -335,6 +368,38 @@ export function chapterStats(run: Run): Record<string, number> {
     knockedOut: s && s.hp <= 0 ? 1 : 0,
     abilities: run.abilities,
     gweiUsed: run.gwei,
+    // Case File 002: copies marked by mistake in the lineup, and fork votes called.
+    ...(c?.vote ? { wrongMarks: c.vote.wrong, forks: c.vote.forks } : {}),
+  };
+}
+
+/** Whether a trial run finished its course: through the finish gate, and the night ended on it. */
+export function trialFinished(run: Run): boolean {
+  const t = run.sim?.trial;
+  return !!run.trial && !!t && t.finished && run.over && !run.error;
+}
+
+/**
+ * A trial run's stats, as the server stores them: `finished` (0 or 1), `ticks` (the clock at
+ * the finish), each gate's split as `split1`…, and the swing stats.
+ */
+export function trialStats(run: Run): Record<string, number> {
+  const s = run.sim;
+  const t = s?.trial;
+  const splits: Record<string, number> = {};
+  (t?.splits ?? []).forEach((tick, i) => (splits[`split${i + 1}`] = tick));
+  return {
+    trial: 1,
+    finished: trialFinished(run) ? 1 : 0,
+    ticks: s?.tick ?? 0,
+    seconds: Math.floor((s?.tick ?? 0) / SIM_HZ),
+    gates: t ? t.next : 0,
+    of: s?.pickups.length ?? 0,
+    perfect: s?.total.perfect ?? 0,
+    good: s?.total.good ?? 0,
+    miss: s?.total.miss ?? 0,
+    maxCombo: s?.maxCombo ?? 0,
+    ...splits,
   };
 }
 
@@ -370,6 +435,10 @@ export function finishRun(run: Run): ReplayResult {
   });
   if (run.error) return fail(run.error);
   if (!run.over) return fail("the night didn't finish");
+  if (run.trial) {
+    // A trial is never scored or banked here: the server ranks a finished one by its time.
+    return { ok: true, save: run.save, score: 0, ticks: run.sim.tick, stats: trialStats(run), checkpoints: run.checkpoints, hash: hashState(run.sim) };
+  }
   if (run.chapter) {
     // A chapter is never scored or banked here: the server closes the case (applyCaseClear) on a clear.
     return { ok: true, save: run.save, score: 0, ticks: run.sim.tick, stats: chapterStats(run), checkpoints: run.checkpoints, hash: hashState(run.sim) };

@@ -5,11 +5,12 @@
  * so tests can use a fake and the server can swap rulesets in one place.
  */
 import { CHAPTERS } from "@wgp/game-core/chapters";
+import { TRIAL_RULESET } from "@wgp/game-core/compete";
 import { reduce } from "@wgp/game-core/engine";
 import { replayRun } from "@wgp/game-core/replay";
 import { RULESET_VERSION, SIM_HZ } from "@wgp/game-core/sim3d/constants";
 import type { ReplayInput, ReplayResult } from "@wgp/game-core/sim3d/contract";
-import type { ChapterId, Save } from "@wgp/game-core/types";
+import type { ChapterId, Save, TrialCourseId } from "@wgp/game-core/types";
 
 export interface Verifier {
   /** Pinned in every run at issue; a submit against another ruleset is rejected. */
@@ -60,6 +61,40 @@ export function setChapterVerifier(verifier: Verifier | undefined): void {
   chapterOverride = verifier;
 }
 
+/**
+ * A time trial's verifier: game-core's replay as that course, pinned to TRIAL_RULESET
+ * ("trial-1"). A trial log never replays as a patrol night, a case or another course.
+ */
+const trialVerifier = (course: TrialCourseId): Verifier => ({ ruleset: TRIAL_RULESET, tickHz: SIM_HZ, replay: (input) => replayRun(input, { trial: course }) });
+
+let trialOverride: Verifier | undefined;
+
+export function getTrialVerifier(course: TrialCourseId): Verifier {
+  return trialOverride ?? trialVerifier(course);
+}
+
+/** Swaps every course's verifier (tests), or restores the defaults with undefined. */
+export function setTrialVerifier(verifier: Verifier | undefined): void {
+  trialOverride = verifier;
+}
+
+/** A trial is short: a course takes seconds, so its floor is lower than a night's. */
+export const TRIAL_MIN_SECONDS = 3;
+
+/**
+ * A time trial's run: replayed as its course from the save at issue (a trial starts no patrol),
+ * under the same plausibility rules but a trial's shorter floor. `stats.finished` (0 or 1) says
+ * whether it crossed the finish. Never throws.
+ */
+export async function verifyTrialRun(
+  run: RunToVerify & { course: TrialCourseId },
+  log: Uint8Array,
+  clientHash: string,
+  opts: { now?: Date; verifier?: Verifier } = {},
+): Promise<Verdict> {
+  return verifyWith(opts.verifier ?? getTrialVerifier(run.course), run, () => run.startSave, log, clientHash, opts.now, TRIAL_MIN_SECONDS);
+}
+
 /** The save the replay starts from: the server's copy at run start with tonight's patrol started from the server-issued seed. */
 export function startPatrol(save: Save, seed: number): Save {
   return reduce(save, { type: "start-patrol", seed });
@@ -103,7 +138,7 @@ export async function verifyChapterRun(
   return verifyWith(opts.verifier ?? getChapterVerifier(run.chapter), run, () => run.startSave, log, clientHash, opts.now);
 }
 
-async function verifyWith(verifier: Verifier, run: RunToVerify, startSave: () => Save, log: Uint8Array, clientHash: string, at?: Date): Promise<Verdict> {
+async function verifyWith(verifier: Verifier, run: RunToVerify, startSave: () => Save, log: Uint8Array, clientHash: string, at?: Date, minSeconds: number = VERIFY_RULES.minGameSeconds): Promise<Verdict> {
   const now = at ?? new Date();
 
   if (run.ruleset !== verifier.ruleset) return { ok: false, reason: "ruleset_mismatch" };
@@ -124,7 +159,7 @@ async function verifyWith(verifier: Verifier, run: RunToVerify, startSave: () =>
 
   const gameSeconds = result.ticks / verifier.tickHz;
   const wallSeconds = (now.getTime() - run.issuedAt.getTime()) / 1000;
-  if (gameSeconds < VERIFY_RULES.minGameSeconds) return { ok: false, reason: "too_short", result };
+  if (gameSeconds < minSeconds) return { ok: false, reason: "too_short", result };
   if (gameSeconds > wallSeconds + VERIFY_RULES.wallSlackSeconds) return { ok: false, reason: "faster_than_wall_clock", result };
   if (result.hash !== clientHash) return { ok: false, reason: "hash_mismatch", result };
 

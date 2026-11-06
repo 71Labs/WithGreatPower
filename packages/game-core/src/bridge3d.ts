@@ -4,10 +4,11 @@
  * driver, the server verifier and the browser all go through here, so they play the exact
  * same flow.
  */
-import { ERRANDS, MAX_FLUID, powerScale } from "./rules/data";
+import { ERRANDS, HERO_BASE_HP, MAX_FLUID, powerScale } from "./rules/data";
 import type { Action } from "./rules/engine";
-import type { ChapterId, Save, Stop } from "./rules/types";
+import type { ChapterId, Save, Stop, TrialCourseId } from "./rules/types";
 import { chapterStops } from "./sim3d/chapter";
+import { COURSE_GEOMETRY } from "./sim3d/trial";
 import type { SimConfig, SimEvent } from "./sim3d/types";
 
 /**
@@ -31,6 +32,29 @@ export function chapterConfig(save: Save, seed: number, chapter: ChapterId): Sim
     heroLevel: hero.level,
     loadout,
     chapter,
+  };
+}
+
+/**
+ * A time trial's sim config from a save (rules/compete.ts trialSave): the hero at full health
+ * and fluid on the course's own city, with no powers and no Gwei (a race is movement alone).
+ * The course fixes the seed, so every run of a course is the same race. Null without a hero.
+ */
+export function trialConfig(save: Save, course: TrialCourseId): SimConfig | null {
+  if (!save.hero) return null;
+  return {
+    seed: COURSE_GEOMETRY[course].seed >>> 0,
+    stops: [],
+    index: 0,
+    entry: "travel",
+    hp: HERO_BASE_HP,
+    maxHp: HERO_BASE_HP,
+    fluid: MAX_FLUID,
+    combo: 0,
+    gweiCalls: 0,
+    heroLevel: 1,
+    loadout: [],
+    trial: course,
   };
 }
 

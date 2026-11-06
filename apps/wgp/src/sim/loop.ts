@@ -77,7 +77,8 @@ export interface HudSnapshot {
 /** What the chapter HUD shows (docs/chapters/case-001.md). */
 export interface ChapterHud {
   id: ChapterId;
-  phase: "investigate" | "standoff" | "rescue" | "done";
+  /** Case File 002 adds "lineup" (marking the real Sybil among the voters). */
+  phase: "investigate" | "standoff" | "rescue" | "done" | "lineup";
   cluesFound: number;
   clues: number;
   /** The Right-Clicker from the standoff's fight on: hits left, his state word (render contract), open (a blow lands now) and guarding. */
