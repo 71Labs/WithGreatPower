@@ -183,6 +183,8 @@ export class ClimbGait {
   readonly dir = { u: 0, v: 1 };
   speed = 0;
   private readonly travel = { u: 0, v: 0 };
+  /** The ground at the wall's foot (no hold goes under it). */
+  private floor = -Infinity;
   private started = false;
 
   constructor(private readonly body: WallBody) {}
@@ -225,7 +227,10 @@ export class ClimbGait {
     const ahead = g.stance[k] * g.L * 0.5;
     const ju = jitter(k, n, 1) * (k <= RH ? 2.5 : 2);
     const jv = jitter(k, n, 2) * (k <= RH ? 3 : 2.5);
-    return w.point(base, h.u + this.dir.u * ahead + ju, h.y + this.dir.v * ahead + jv, this.gap(k), out);
+    w.point(base, h.u + this.dir.u * ahead + ju, h.y + this.dir.v * ahead + jv, this.gap(k), out);
+    // Never under the ground at the wall's foot (a climb from the street starts with his feet on it).
+    out.y = Math.max(out.y, this.floor + (k <= RH ? this.body.hand : this.body.ankle));
+    return out;
   }
 
   /** How far a planted limb may sit from its home before it must move (a corner, a leap, a stall). */
@@ -244,9 +249,11 @@ export class ClimbGait {
 
   /**
    * One frame. `base`: the hips on the wall (without the drawn surge); `du`, `dv`: the body's
-   * travel along the wall this frame (u toward his left, v up), in world units; `dt` seconds.
+   * travel along the wall this frame (u toward his left, v up), in world units; `dt` seconds;
+   * `floor`: the ground at the wall's foot.
    */
-  step(w: WallFrame, base: Vector3, du: number, dv: number, dt: number): void {
+  step(w: WallFrame, base: Vector3, du: number, dv: number, dt: number, floor = -Infinity): void {
+    this.floor = floor;
     // A frame with no time in it (a paused or demand-driven render) still places the limbs.
     if (!(dt > 1e-4)) dt = 1e-4;
     const ds = Math.hypot(du, dv);
@@ -339,7 +346,7 @@ export class ClimbGait {
       const back = moving ? g.stance[i] * g.L : (p - window) * g.L;
       this.landing(i, w, base, h.moves, _p);
       h.at.copy(_p).addScaledVector(w.left, -this.dir.u * back);
-      h.at.y -= this.dir.v * back;
+      h.at.y = Math.max(h.at.y - this.dir.v * back, this.floor + (i <= RH ? this.body.hand : this.body.ankle));
       w.onto(h.at, this.gap(i));
       h.cycle = Math.floor(this.phase - g.offset[i]);
       h.lift = 0;

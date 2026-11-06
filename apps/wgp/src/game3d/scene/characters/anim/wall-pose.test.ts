@@ -133,6 +133,19 @@ describe("the climb's holds", () => {
     for (let i = 1; i < sf.length; i++) for (let k = 0; k < 4; k++) if (sf[i].planted[k] && sf[i - 1].planted[k]) expect(sf[i].pos[k].distanceTo(sf[i - 1].pos[k])).toBe(0);
   });
 
+  it("never puts a hold under the ground at the wall's foot (a climb from the street)", () => {
+    const { w, g } = setup();
+    // His feet on the street (the sim's body centre 26 up), climbing away from it.
+    const base = new Vector3(BODY.forearm * CLIMB.hipOff, 26, 0);
+    let low = Infinity;
+    for (let i = 0; i < 90; i++) {
+      base.y += 2;
+      g.step(w, base, 0, i ? 2 : 0, DT, 0);
+      for (let k = LF; k <= RF; k++) low = Math.min(low, g.holds[k].pos.y);
+    }
+    expect(low).toBeGreaterThanOrEqual(BODY.ankle - 1e-9);
+  });
+
   it("keeps every limb finite through a frame with no time in it (a paused render)", () => {
     const { w, base, g } = setup();
     drive(g, w, base, [{ vu: 0, vv: 120, secs: 0.5 }]);

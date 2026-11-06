@@ -493,7 +493,7 @@ export class RoamPoser {
     const du = fresh ? 0 : (P.x - this.last.x) * w.left.x + (P.z - this.last.z) * w.left.z;
     const dv = fresh ? 0 : P.y - this.last.y;
     if (fresh) this.gait.reset();
-    this.gait.step(w, base, du, dv, dt);
+    this.gait.step(w, base, du, dv, dt, ctx.ground(P.x, P.z, P.y));
     const holds = this.gait.holds;
     const g = this.gait;
     // A leap up the wall: a dyno (both hands reaching up, the legs trailing) until he slows.
@@ -780,7 +780,7 @@ export class RoamPoser {
     const left = this.left.set(1, 0, 0).applyQuaternion(this.rot);
     const a = P.x * along.x + P.z * along.z;
     if (this.since <= 1e-6) this.lastAlong = a;
-    this.phase += Math.min(0.3, Math.abs(a - this.lastAlong) / 96);
+    this.phase += Math.min(0.3, Math.abs(a - this.lastAlong) / 80);
     this.lastAlong = a;
     // Feet flat on the face: the sole on it, the ankle its height off it.
     const gap = this.body.ankle + 0.6;
@@ -789,7 +789,7 @@ export class RoamPoser {
     for (let i = 0; i < 2; i++) {
       const s = i === 0 ? 1 : -1;
       const off = this.off.copy(left).multiplyScalar(s * 6).addScaledVector(UP, -26 * this.legK);
-      this.plants[2 + i].update(this.phase + i * 0.5, 0.46, H, along, 96, off, 10, n, plane);
+      this.plants[2 + i].update(this.phase + i * 0.5, 0.46, H, along, 80, off, 10, n, plane);
       this.targets[2 + i].copy(this.plants[2 + i].target);
       const sw = Math.sin((this.phase + i * 0.5) * TAU);
       this.targets[i].copy(H).addScaledVector(left, s * 13).addScaledVector(UP, this.shoulderY - 14 + 10 * Math.max(sw, 0)).addScaledVector(along, 14 * sw);
