@@ -18,8 +18,8 @@
  *   counterweight, cab, apex, hook and its cable).
  * - Street furniture: lamp posts, traffic signals (taller than a patrol night's, their heads
  *   hung clear of the hero and the cars), roof doors (stair bulkheads), and on Doc's bridge
- *   the rails along both edges (its lamps stand in them), the towers' beams and caps, the
- *   cables' hangers and the deck's truss.
+ *   the rails along both edges (where a patrol night's deck lamps stand), the towers' beams
+ *   and caps, the cables' hangers and the deck's truss.
  *
  * Not here (decoration under 6 units that a body passes no differently from paint): the
  * cornice trim. The City doesn't draw a patrol night's 6-unit parapets or fire escapes,
@@ -547,7 +547,7 @@ export function roamFurniture(city: City, keep: KeepClear[] = []): RoamFurniture
       const capV = (vb - va + half * 2 + 16) / 2;
       add(uv(u - half - 5, u + half + 5, top, top + 24, mid - capV, mid + capV), "bridge", false);
     }
-    // (Its lamps stand in the rails, 4 in from each edge: the rails are their solid.)
+    // (The City draws no deck lamps: the rails stand where they stood.)
     // The hangers from the main cables down to the deck's level (thin, but solid like a lamp post).
     for (const c of city.cables ?? []) {
       if (c.kind !== "bridge") continue;

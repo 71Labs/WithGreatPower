@@ -155,7 +155,7 @@ export function buildCityLayout(city: City, opts: { details?: boolean; roam?: Ro
     addProp(p, ref, push, tanks, texts, roam ? p.kind === "water-tower" : carries(p), d.bare, !!roam);
   }
 
-  if (city.bridge) addBridge(city, push);
+  if (city.bridge) addBridge(city, push, !roam);
   for (const c of city.cables ?? []) addCable(c, city, push);
   if (opts.details !== false) addDetails(city, push, undefined, { cornicesOnly: !!roam });
   if (roam) for (const part of roam.parts) if (part.draw) addPart(part, city, push);
@@ -317,7 +317,7 @@ function addPart(part: FurniturePart, city: City, push: Push) {
 }
 
 /** The red bridge: the deck with its truss, the tower legs (square columns from the street) with beams and caps, lamps. */
-function addBridge(city: City, push: Push) {
+function addBridge(city: City, push: Push, lamps = true) {
   const br = city.bridge!;
   const { deck } = br;
   const alongX = br.axis ? br.axis === "x" : deck.x1 - deck.x0 >= deck.z1 - deck.z0;
@@ -365,7 +365,8 @@ function addBridge(city: City, push: Push) {
     box(u, top, mid, half * 2 + 10, 24, vb - va + half * 2 + 16, cap, KIND.solid, 1);
   }
 
-  // Lamps along both edges.
+  // Lamps along both edges (the City's bridge has its rails there instead: furniture.ts).
+  if (!lamps) return;
   for (let u = u0 + 60; u < u1 - 30; u += 160) {
     for (const v of [v0 + 4, v1 - 4]) {
       box(u, deck.y, v, 3, 42, 3, C.ink, KIND.solid, 0, 1);
