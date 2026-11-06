@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * /play/cases/001: the case's intro comic, four panels, then "Start the case".
+ * /play/cases/001: the case's intro comic, four panels, then "Start the case". Another case
+ * passes its own `story` (its panels, number and paths: case-002/intro.tsx).
  *
  * 1. The Daily Rug's front page: "JPEG GONE".
  * 2. The MISSING poster, taped to a wall in the Bridge District.
@@ -14,7 +15,7 @@
  * pop in, unless reduced motion is asked for. Guests can start too, and are told where
  * their clear is kept.
  */
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type JSX, type ReactNode, type RefObject } from "react";
 
 import { StickerButton, StickerFrame, StickerLink } from "@/components/game/kit";
 import { AVATARS } from "@/components/cast";
@@ -27,10 +28,21 @@ import { MaryPhoto, MissingPoster, RightClickerArt } from "./art";
 import { CaseStamp, RugFront } from "./shared";
 
 const PANELS = ["The Daily Rug’s front page", "The MISSING poster", "J. Jonah Bearson", "Case file 001"] as const;
-const LAST = PANELS.length - 1;
+
+/** A case's intro comic: its panels (a label each, for the frame's name) and where "Start the case" goes. */
+export interface IntroStory {
+  id: string;
+  number: string;
+  title: string;
+  panels: readonly { label: string; Content: () => JSX.Element }[];
+  paths: { list: string; play: string };
+}
+
+/** The panels' labels, for each frame's accessible name. */
+const PanelLabels = createContext<readonly string[]>(PANELS);
 
 /** A comic caption box: gold, ink-ruled, in caps. */
-function Caption({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Caption({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <p
       className={`w-fit max-w-full rounded-[6px] border-2 border-game-ink bg-game-gold px-2.5 py-1 text-[11px] font-bold uppercase leading-[15px] tracking-[0.06em] text-game-ink shadow-[var(--game-shadow-sm)] ${className}`}
@@ -41,9 +53,10 @@ function Caption({ children, className = "" }: { children: ReactNode; className?
 }
 
 /** One panel's frame: an ink-ruled box with its own ground. */
-function Panel({ n, ground, children, className = "" }: { n: number; ground: string; children: ReactNode; className?: string }) {
+export function Panel({ n, ground, children, className = "" }: { n: number; ground: string; children: ReactNode; className?: string }) {
+  const labels = useContext(PanelLabels);
   return (
-    <figure aria-label={`Panel ${n + 1} of ${PANELS.length}: ${PANELS[n]}`} className={`wgp-pop relative flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border-[3px] border-game-ink shadow-[var(--game-shadow)] ${ground} ${className}`}>
+    <figure aria-label={`Panel ${n + 1} of ${labels.length}: ${labels[n]}`} className={`wgp-pop relative flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border-[3px] border-game-ink shadow-[var(--game-shadow)] ${ground} ${className}`}>
       {children}
     </figure>
   );
@@ -175,12 +188,21 @@ function CaseFilePanel() {
 
 const CONTENT = [FrontPagePanel, PosterPanel, BearsonPanel, CaseFilePanel];
 
+/** Case file 001's intro. */
+const STORY_001: IntroStory = {
+  id: CASE_001.id,
+  number: CASE_001.number,
+  title: CASE_001.title,
+  panels: PANELS.map((label, i) => ({ label, Content: CONTENT[i] })),
+  paths: CASE_PATHS,
+};
+
 /** An empty frame waiting for its panel (wide screens only). */
 function EmptyFrame() {
   return <div aria-hidden className="h-full min-h-[200px] rounded-[16px] border-[3px] border-dashed border-game-paper/30" />;
 }
 
-function StartBlock({ startRef }: { startRef: RefObject<HTMLAnchorElement | null> }) {
+function StartBlock({ startRef, story }: { startRef: RefObject<HTMLAnchorElement | null>; story: IntroStory }) {
   const account = useAccount();
   const { save } = useGame();
   const guest = account.status === "guest";
@@ -193,7 +215,7 @@ function StartBlock({ startRef }: { startRef: RefObject<HTMLAnchorElement | null
           <ArrowRight aria-hidden className="size-6" strokeWidth={2.25} />
         </StickerLink>
       ) : (
-        <StickerLink ref={startRef} href={CASE_PATHS.play} onClick={() => markCaseStarted(CASE_001.id)} variant="hero" size="xl" className="w-full">
+        <StickerLink ref={startRef} href={story.paths.play} onClick={() => markCaseStarted(story.id)} variant="hero" size="xl" className="w-full">
           Start the case
           <ArrowRight aria-hidden className="size-6" strokeWidth={2.25} />
         </StickerLink>
@@ -219,7 +241,9 @@ function StartBlock({ startRef }: { startRef: RefObject<HTMLAnchorElement | null
   );
 }
 
-export function CaseIntro() {
+export function CaseIntro({ story = STORY_001 }: { story?: IntroStory }) {
+  const labels = story.panels.map((p) => p.label);
+  const LAST = labels.length - 1;
   const [step, setStep] = useState(0);
   const [announce, setAnnounce] = useState("");
   const start = useRef<HTMLAnchorElement>(null);
@@ -228,28 +252,28 @@ export function CaseIntro() {
   const go = (to: number) => {
     const n = Math.max(0, Math.min(LAST, to));
     setStep(n);
-    setAnnounce(`Panel ${n + 1} of ${PANELS.length}: ${PANELS[n]}.`);
+    setAnnounce(`Panel ${n + 1} of ${labels.length}: ${labels[n]}.`);
   };
   const skip = () => {
     setStep(LAST);
-    setAnnounce("All four panels. Start the case when you’re ready.");
+    setAnnounce(`All ${labels.length} panels. Start the case when you’re ready.`);
     requestAnimationFrame(() => start.current?.focus({ preventScroll: true }));
   };
 
   // Keys turn the page: → Space Enter forward, ← back, Esc skips. Not while a control has
   // Space or Enter (it presses itself), and never with a modifier held.
-  const keys = useRef({ go, skip, step });
+  const keys = useRef({ go, skip, step, last: LAST });
   useEffect(() => {
-    keys.current = { go, skip, step };
+    keys.current = { go, skip, step, last: LAST };
   });
-  useEffect(() => markCaseSeen(CASE_001.id), []);
+  useEffect(() => markCaseSeen(story.id), [story.id]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const onControl = e.target instanceof HTMLElement && !!e.target.closest("a, button, input, textarea, select, [role=dialog]");
       const k = keys.current;
       if (e.key === "ArrowRight" || (!onControl && (e.key === " " || e.key === "Enter"))) {
-        if (k.step >= LAST) return;
+        if (k.step >= k.last) return;
         e.preventDefault();
         k.go(k.step + 1);
       } else if (e.key === "ArrowLeft") {
@@ -257,7 +281,7 @@ export function CaseIntro() {
         e.preventDefault();
         k.go(k.step - 1);
       } else if (e.key === "Escape" && !document.querySelector("dialog[open]")) {
-        if (k.step >= LAST) return;
+        if (k.step >= k.last) return;
         e.preventDefault();
         k.skip();
       }
@@ -269,20 +293,22 @@ export function CaseIntro() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[1320px] flex-col gap-4 px-4 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))] sm:px-6 lg:gap-6 lg:px-8">
       <header className="flex items-center justify-between gap-2">
-        <StickerLink href={CASE_PATHS.list} size="sm">
+        <StickerLink href={story.paths.list} size="sm">
           <ArrowLeft aria-hidden className="size-4" strokeWidth={2.25} />
           Case files
         </StickerLink>
         <p className="num inline-flex h-8 items-center rounded-full border-2 border-game-ink bg-game-paper px-3 text-[13px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)]">
           <span className="max-[359px]:hidden">Panel&nbsp;</span>
-          {step + 1}/{PANELS.length}
+          {step + 1}/{labels.length}
         </p>
         <StickerButton size="sm" onClick={skip} aria-keyshortcuts="Escape" className={done ? "invisible" : ""}>
           Skip intro
         </StickerButton>
       </header>
 
-      <h1 className="sr-only">Case file 001: {CASE_001.title}</h1>
+      <h1 className="sr-only">
+        Case file {story.number}: {story.title}
+      </h1>
 
       {/* The comic. A tap anywhere on it turns the page. */}
       <ol
@@ -293,16 +319,18 @@ export function CaseIntro() {
         }}
         className={`grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5 ${done ? "" : "cursor-pointer"}`}
       >
-        {CONTENT.map((Content, i) => (
-          <li key={i} className={`min-h-0 ${i === step ? "" : "max-md:hidden"}`}>
-            {i <= step ? <Content /> : <EmptyFrame />}
-          </li>
-        ))}
+        <PanelLabels.Provider value={labels}>
+          {story.panels.map(({ Content }, i) => (
+            <li key={i} className={`min-h-0 ${i === step ? "" : "max-md:hidden"}`}>
+              {i <= step ? <Content /> : <EmptyFrame />}
+            </li>
+          ))}
+        </PanelLabels.Provider>
       </ol>
 
       <footer className="flex flex-col items-center gap-2">
         {done ? (
-          <StartBlock startRef={start} />
+          <StartBlock startRef={start} story={story} />
         ) : (
           <div className="flex w-full max-w-[460px] items-center gap-2.5">
             {step > 0 ? (

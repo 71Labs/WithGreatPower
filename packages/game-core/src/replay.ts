@@ -171,8 +171,9 @@ function dispatch(run: Run, events: SimEvent[]) {
       continue;
     }
     if (run.chapter) {
-      // A chapter's checkpoints: each clue, the win, and Mary's release.
-      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed") run.checkpoints.push(hashState(run.sim));
+      // A chapter's checkpoints: each clue, the win, and Mary's release (Case File 002: the
+      // real Sybil marked too, and Uncle Gen's vote counted).
+      if (ev.type === "clue-found" || ev.type === "fight-won" || ev.type === "captive-freed" || (ev.type === "voter-mark" && ev.real)) run.checkpoints.push(hashState(run.sim));
       if (ev.type === "night-over") run.over = true;
       continue;
     }
@@ -367,6 +368,8 @@ export function chapterStats(run: Run): Record<string, number> {
     knockedOut: s && s.hp <= 0 ? 1 : 0,
     abilities: run.abilities,
     gweiUsed: run.gwei,
+    // Case File 002: copies marked by mistake in the lineup, and fork votes called.
+    ...(c?.vote ? { wrongMarks: c.vote.wrong, forks: c.vote.forks } : {}),
   };
 }
 

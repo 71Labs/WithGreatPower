@@ -170,7 +170,8 @@ export class ChapterScene {
   }
 
   update(frame: RenderFrame3D, camera: PerspectiveCamera, size: { width: number; height: number }, dt: number, time: number): void {
-    const ch = chapterOf(frame);
+    // Case file 001 only (Case file 002 draws its own: vote/vote-scene.ts).
+    const ch = chapterOf(frame)?.id === "case-001" ? chapterOf(frame) : null;
     if (!ch) {
       if (this.root.visible) this.reset();
       return;

@@ -332,7 +332,7 @@ export function Night3D() {
       <>
         <PlaySurface key={phase.session.runId ?? phase.session.run.seed} session={phase.session} autopilot={autopilot && botMayPlay(phase.session)} debug={debug} ended={!!ending} onDone={finish} onFallback={fallback} />
         {ending && phase.session.chapter ? (
-          <CaseClosed {...caseResults(phase.session, ending, chapterEnd)} onRetry={() => void finish()} />
+          <CaseClosed chapter={phase.session.chapter} {...caseResults(phase.session, ending, chapterEnd)} onRetry={() => void finish()} />
         ) : ending ? (
           <NightResults session={phase.session} ending={ending} onRetry={() => void finish()} />
         ) : null}

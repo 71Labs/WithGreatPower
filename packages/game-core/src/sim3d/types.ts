@@ -128,7 +128,24 @@ export interface SybilBody {
  * Case File 001 adds the Right-Clicker's aim, flash, copy, drag and stagger
  * (sim3d/right-clicker.ts); the patrol villains never use them.
  */
-export type VillainPhase = "enter" | "idle" | "telegraph" | "dash" | "sweep" | "slam-wind" | "slam" | "retract" | "recover" | "aim" | "flash" | "copy" | "drag" | "stagger";
+export type VillainPhase =
+  | "enter"
+  | "idle"
+  | "telegraph"
+  | "dash"
+  | "sweep"
+  | "slam-wind"
+  | "slam"
+  | "retract"
+  | "recover"
+  | "aim"
+  | "flash"
+  | "copy"
+  | "drag"
+  | "stagger"
+  /* Case File 002's Sybil (sim3d/sybil-vote.ts): calling a fork vote, and hiding in the recount's ring. */
+  | "vote"
+  | "count";
 
 /** The patrol's villains, and the chapters' (the Right-Clicker only appears in Case File 001). */
 export type SimVillainId = VillainId | "right-clicker";
@@ -327,6 +344,17 @@ export type SimEvent =
   | { type: "captive-freed"; x: number; y: number; z: number }
   /** The chapter is cleared after `ticks`: the night ends with it (night-over, "route"). */
   | { type: "case-closed"; id: ChapterId; ticks: number }
+  /* Case File 002 (sim3d/vote.ts, sybil-vote.ts): its nights only. */
+  /** A voter was hit in the lineup (or the recount's ring): the real Sybil (`real`), or a copy (it pops; `wrong` so far). */
+  | { type: "voter-mark"; id: number; real: boolean; wrong: number; x: number; y: number; z: number }
+  /** The copies call a fork vote: the rooftop splits along `axis` at `at`; the `orphan` side (+1/−1 of it) is orphaned if `need` of `voters` still stand at the close. */
+  | { type: "fork-call"; axis: "x" | "z"; at: number; orphan: number; need: number; voters: number }
+  /** The fork vote closes: `passed` (the orphaned side reorgs; `hit` when the hero stood on it) or quorum failed (the Sybil staggers, open). */
+  | { type: "fork"; passed: boolean; hit: boolean; votes: number; need: number }
+  /** At half his hits the Sybil hides in a ring of copies again (the recount); `end` when it's over (found, or he steps out). */
+  | { type: "recount"; end: boolean; x: number; y: number; z: number }
+  /** Uncle Gen's ballot: grabbed back from the runner, then counted in the ballot box. */
+  | { type: "ballot"; state: "taken" | "counted"; x: number; y: number; z: number }
   /* Time trials (sim3d/trial.ts, ruleset "trial-1"): trial runs only. */
   /** Gate `index` (0-based) of `of` passed at `ticks`, in order; the last one is the finish. */
   | { type: "trial-gate"; index: number; of: number; ticks: number; x: number; y: number; z: number }
@@ -380,7 +408,49 @@ export interface TrialState {
 
 /* ------------------------------------------------------------------ chapters */
 
-export type ChapterPhase = "investigate" | "standoff" | "rescue" | "done";
+/** Case File 002 adds "lineup" (find the real Sybil among the voters) between the clues and the fight. */
+export type ChapterPhase = "investigate" | "standoff" | "rescue" | "done" | "lineup";
+
+/** Case File 002's fight, in turn: the polls (fork votes), the recount (he hides in a ring again), the runoff. */
+export type VoteStage = "polls" | "recount" | "runoff";
+
+/**
+ * Case File 002's own state (sim3d/vote.ts): the voters' tells, the fork vote, the recount and
+ * Uncle Gen's ballot. Hashed after the chapter's fields, and only on its nights.
+ */
+export interface VoteState {
+  /** The real Sybil's tells as bits (rules/chapters.ts TELL_BIT), set by the seed. */
+  real: number;
+  /** Each body's tells by its slot (the villain's bodies' `slot`); the real one's are `real`. */
+  tells: number[];
+  /** The station's eight booths (where the lineup stands), in order. */
+  booths: { x: number; z: number }[];
+  /** Copies hit by mistake in the lineup (each forks an extra copy into the fight). */
+  wrong: number;
+  /** The fight's stage. */
+  stage: VoteStage;
+  /** Fork votes called so far (they alternate the split's axis). */
+  forks: number;
+  /** The fork vote under way: seconds left (0: none), its axis (0: the split runs along z at x = at; 1: along x at z = at), the orphaned side (±1), the votes it needs and the copies that may vote (slots below `forkFrom`). */
+  forkT: number;
+  forkAxis: number;
+  forkAt: number;
+  forkSide: number;
+  forkNeed: number;
+  forkFrom: number;
+  /** The fork vote's whole call, seconds (for the scene's countdown). */
+  forkLen: number;
+  /** The recount: seconds in, and each body's place in its ring by slot (−1: none). */
+  recountT: number;
+  ring: number[];
+  /** Uncle Gen's ballot: 0 the runner has it, 1 the hero carries it, 2 counted (−1 before the rescue). */
+  ballot: number;
+  /** The runner's slot (−1 before the rescue). */
+  runner: number;
+  /** The ballot box beside Uncle Gen. */
+  boxX: number;
+  boxZ: number;
+}
 
 export interface ChapterClue {
   id: ClueId;
@@ -414,6 +484,8 @@ export interface ChapterState {
   /** Per copy (by id): the rescue slap's wind-up seconds left (0: none), and the cooldown before the next. */
   copyWind: number[];
   copyCd: number[];
+  /** Case File 002's own state, or null (Case File 001). */
+  vote: VoteState | null;
 }
 
 export interface SimState {

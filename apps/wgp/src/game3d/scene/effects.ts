@@ -47,13 +47,20 @@ export const BURST_WORDS = {
   "CLICK!": [PAPER, INK],
   "CTRL+C!": [CITY.neonMint, INK],
   "gm": [CITY.neonMint, PAPER],
+  /** Case file 002 (scene/chapter/vote): the real one marked, a copy marked, the fork vote passing or failing, the recount, the ballot in. */
+  "GOTCHA!": [CITY.neonRed, PAPER],
+  "COPY!": [PAPER, INK],
+  "FORK!": [CITY.neonRed, PAPER],
+  "NO QUORUM!": [CITY.windowLit, INK],
+  "RECOUNT!": [PAPER, INK],
+  "COUNTED!": [CITY.neonMint, INK],
 } as const;
 
 export type BurstWord = keyof typeof BURST_WORDS;
 
 const WORDS = Object.keys(BURST_WORDS) as BurstWord[];
 const COLS = 2;
-const ROWS = 8;
+const ROWS = 11;
 const CELL_W = 512;
 const CELL_H = 256;
 

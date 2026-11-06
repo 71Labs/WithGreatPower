@@ -391,7 +391,9 @@ const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(ma
 function Dock({ pathname, save }: { pathname: string | null; save: Save | null }) {
   const picks = save?.hero?.pendingPicks ?? 0;
   const unread = useUnreadEdition(save);
-  const newCase = useNewCase(save);
+  const newCase001 = useNewCase(save);
+  const newCase002 = useNewCase(save, "case-002");
+  const newCase = newCase001 || newCase002;
   return (
     <nav
       aria-label="Game"

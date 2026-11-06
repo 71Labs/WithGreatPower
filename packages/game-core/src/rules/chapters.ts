@@ -15,9 +15,25 @@ export const CHAPTER_ID = "case-001" satisfies ChapterId;
 /** The chapter's rules version, recorded with every chapter run (`runs.ruleset`). Bump it with any change to the chapter's sim. */
 export const CHAPTER_RULESET = "c001-1";
 
-export const CHAPTER_IDS: readonly ChapterId[] = [CHAPTER_ID];
+/** Case File 002, "The Sybil Vote". */
+export const CASE_002_ID = "case-002" satisfies ChapterId;
+/** Case File 002's rules version (`runs.ruleset`). Bump it with any change to its sim (sim3d/vote.ts, sybil-vote.ts). */
+export const CASE_002_RULESET = "c002-1";
 
-export type ClueId = "tabs" | "cursor" | "pixels";
+export const CHAPTER_IDS: readonly ChapterId[] = [CHAPTER_ID, CASE_002_ID];
+
+/**
+ * A clue's id. Case File 001's: torn tabs, a cursor scorch, loose pixels. Case File 002's: the
+ * three drop boxes' finds, each revealing one of the real Sybil's tells (TELL_OF_CLUE).
+ */
+export type ClueId = "tabs" | "cursor" | "pixels" | "footage" | "gif" | "signature";
+
+/** Case File 002: the real Sybil's tells, each one bit of a voter's look (sim3d/vote.ts). */
+export type TellId = "shadow" | "blink" | "left";
+/** Which tell each of Case File 002's clues reveals. */
+export const TELL_OF_CLUE: Partial<Record<ClueId, TellId>> = { footage: "shadow", gif: "blink", signature: "left" };
+/** A voter's tells as bits: shadow 1 (casts one), blink 2 (blinks), left 4 (holds his ballot in his left hand). */
+export const TELL_BIT: Record<TellId, number> = { shadow: 1, blink: 2, left: 4 };
 
 export interface ChapterInfo {
   id: ChapterId;
@@ -31,6 +47,11 @@ export interface ChapterInfo {
   captive: { name: string; freed: string };
   /** Each clue's case note, in the order the city places them (any order to find). */
   clues: { id: ClueId; name: string; note: string }[];
+  /**
+   * Case File 002: what each clue says about the real Sybil, by the tell's value tonight (the
+   * seed sets it): `yes` when he has it (casts a shadow, blinks, holds his ballot left-handed).
+   */
+  tells?: Partial<Record<ClueId, { tell: TellId; yes: string; no: string }>>;
 }
 
 export const CHAPTERS: Record<ChapterId, ChapterInfo> = {
@@ -53,7 +74,48 @@ export const CHAPTERS: Record<ChapterId, ChapterInfo> = {
       { id: "pixels", name: "Loose pixels", note: "Pixels. Big ones. Someone's been compressing." },
     ],
   },
+  "case-002": {
+    id: "case-002",
+    number: "002",
+    title: "The Sybil Vote",
+    ruleset: CASE_002_RULESET,
+    badge: "case-002",
+    villain: {
+      name: "The Sybil",
+      tagline: "One man. Ten thousand votes.",
+      taunt: "All in favour? All of me.",
+      defeat: "The Sybil is webbed to the ballot box. Every copy of him votes to go home.",
+    },
+    captive: { name: "Uncle Gen", freed: "Counted." },
+    clues: [
+      { id: "signature", name: "Smudged signature", note: "Ten thousand ballots, one signature. Same pen, same slant." },
+      { id: "footage", name: "Booth footage", note: "A CCTV still from the booth. Somebody stuffed this box in person." },
+      { id: "gif", name: "Looping sticker", note: "An “I voted” sticker that loops. Some of his copies were saved as GIFs." },
+    ],
+    tells: {
+      signature: { tell: "left", yes: "Every signature slants left. The real one holds his ballot in his left hand.", no: "Every signature slants right. The real one holds his ballot in his right hand." },
+      footage: { tell: "shadow", yes: "In the footage he casts a shadow. Most of his copies are flat files: they don’t.", no: "In the footage he casts no shadow: he stood in the booth’s shade. Some copies have shadows baked in." },
+      gif: { tell: "blink", yes: "The GIF copies blink on a loop, and so does he: the real one blinks.", no: "The real one hasn’t blinked since the polls opened. Only the GIF copies blink." },
+    },
+  },
 };
+
+/** Case File 002's Sybil: his moves and their damage at level 1 (scaled by damageScale like every villain's). */
+export const SYBIL_VOTE_MOVES: readonly { label: string; value: number }[] = [
+  { label: "Fake vote", value: 15 },
+  { label: "Swarm", value: 7 },
+  { label: "Fork vote", value: 24 },
+  { label: "Duplicate", value: 0 },
+  { label: "Paper cut", value: 5 },
+];
+
+/** A clue's note for tonight: Case File 002's say what they reveal about the real Sybil (`tells`, his bits). */
+export function clueNote(id: ChapterId, clue: ClueId, tells = 0): string {
+  const info = CHAPTERS[id];
+  const t = info.tells?.[clue];
+  if (t) return (tells & TELL_BIT[t.tell]) !== 0 ? t.yes : t.no;
+  return info.clues.find((c) => c.id === clue)?.note ?? "";
+}
 
 /** The Right-Clicker's moves and their damage at level 1 (scaled by damageScale like every villain's). */
 export const RIGHT_CLICKER_MOVES: readonly { label: string; value: number }[] = [

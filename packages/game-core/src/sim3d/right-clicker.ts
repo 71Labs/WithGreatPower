@@ -142,14 +142,14 @@ export function spawnRightClicker(s: SimState, zone: Zone): Villain {
 
 /* ------------------------------------------------------------------ on foot */
 
-interface Box {
+export interface Box {
   x0: number;
   z0: number;
   x1: number;
   z1: number;
 }
 
-function stageBox(zone: Zone, inset: number): Box {
+export function stageBox(zone: Zone, inset: number): Box {
   const r = zone.stage ?? zone.bounds;
   return { x0: r.x0 + inset, z0: r.z0 + inset, x1: r.x1 - inset, z1: r.z1 - inset };
 }
@@ -172,7 +172,7 @@ function keepIn(m: { x: number; z: number; vx: number; vz: number }, b: Box) {
 }
 
 /** Walk toward a wanted ground velocity (accelerating at `accel`, braking at `brake`), on the deck. */
-function walk(m: { x: number; y: number; z: number; vx: number; vy: number; vz: number }, wx: number, wz: number, accel: number, brake: number, dt: number, box: Box, y: number) {
+export function walk(m: { x: number; y: number; z: number; vx: number; vy: number; vz: number }, wx: number, wz: number, accel: number, brake: number, dt: number, box: Box, y: number) {
   const faster = len2(wx, wz) > len2(m.vx, m.vz);
   let ax = wx - m.vx;
   let az = wz - m.vz;
@@ -192,7 +192,7 @@ function walk(m: { x: number; y: number; z: number; vx: number; vy: number; vz: 
 }
 
 /** Toward (tx, tz), arriving: as fast as `speed`, slow enough to stop there. */
-function walkTo(m: SybilBody | Villain, tx: number, tz: number, speed: number, accel: number, dt: number, box: Box, y: number) {
+export function walkTo(m: SybilBody | Villain, tx: number, tz: number, speed: number, accel: number, dt: number, box: Box, y: number) {
   const dx = tx - m.x;
   const dz = tz - m.z;
   const d = len2(dx, dz);

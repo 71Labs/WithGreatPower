@@ -10,12 +10,15 @@
  * two frame objects in turn and a counter kept on the frame would only see every other tick.
  */
 import { DT } from "./constants";
-import type { HeroAction, RenderFrame3D, Vec3 } from "./contract";
+import type { HeroAction, RenderFrame3D, Vec3, VoteFrame, VoteLook } from "./contract";
 import { datan2, dcos, dsin, len2 } from "./dmath";
 import { RESTORE_TICKS } from "./chapter";
 import { inOpening } from "./combat";
 import { comboMultiplier } from "./pickups";
 import { rightClickerAim, rightClickerState } from "./right-clicker";
+import { forkVotes, sybilVoteState } from "./sybil-vote";
+import { knownTells, RECOUNT_SECONDS, voteHidden } from "./vote";
+import { TELL_BIT } from "../rules/chapters";
 import { armShoulder, armTip } from "./villains";
 import type { SimState, Villain } from "./types";
 
@@ -164,6 +167,7 @@ function zipTarget(s: SimState): Vec3 | null {
 function villainState(s: SimState): string {
   const v = s.villain!;
   if (v.kind === "right-clicker") return rightClickerState(s, v);
+  if (s.chapter?.vote) return sybilVoteState(s, v);
   if (s.mode === "won") return "webbed";
   if (v.stun > 0) return "stunned";
   // v4: Gas Goblin's stall and Sandwich Man's stumble are openings: they read as dazed.
@@ -354,7 +358,9 @@ export function fillRenderFrame(s: SimState, out: RenderFrame3D, alpha = 1, time
       } else delete slot.aim;
       vs[n++] = slot;
     };
-    if (v.kind === "sybil") v.bodies.forEach((b, i) => b.alive && push(b, !b.real, i));
+    // Case File 002: in the lineup and the recount he reads as one of the copies (v1.6).
+    const hidden = voteHidden(s);
+    if (v.kind === "sybil") v.bodies.forEach((b, i) => b.alive && push(b, !b.real || hidden, i));
     else push(v, false, -1);
   }
   vs.length = n;
@@ -446,4 +452,87 @@ function fillChapter(s: SimState, out: RenderFrame3D) {
     }
   }
   ch.copies.length = n;
+  if (c.vote) fillVote(s, ch);
+  else delete ch.vote;
+}
+
+const look = (t: number, out: VoteLook) => {
+  out.shadow = (t & TELL_BIT.shadow) !== 0;
+  out.blink = (t & TELL_BIT.blink) !== 0;
+  out.left = (t & TELL_BIT.left) !== 0;
+  return out;
+};
+
+/** v1.6: Case File 002's voters, fork vote, recount and Uncle Gen's ballot. */
+function fillVote(s: SimState, ch: NonNullable<RenderFrame3D["chapter"]>) {
+  const c = s.chapter!;
+  const vt = c.vote!;
+  const out: VoteFrame =
+    ch.vote ??
+    (ch.vote = {
+      stage: vt.stage,
+      real: { shadow: false, blink: false, left: false },
+      known: { shadow: false, blink: false, left: false },
+      voters: [],
+      booths: [],
+      wrong: 0,
+      fork: null,
+      recount: null,
+      box: v3(),
+      ballot: null,
+    });
+  out.stage = vt.stage;
+  look(vt.real, out.real);
+  look(knownTells(s), out.known);
+  const floor = c.captive.y;
+  for (let i = 0; i < vt.booths.length; i++) {
+    const at = out.booths[i] ?? (out.booths[i] = v3());
+    set(at, vt.booths[i].x, floor, vt.booths[i].z);
+  }
+  out.booths.length = vt.booths.length;
+  const v = s.villain;
+  let n = 0;
+  if (v && v.kind === "sybil") {
+    for (const b of v.bodies) {
+      const slot = out.voters[n] ?? (out.voters[n] = { id: b.slot, pos: v3(), alive: true, runner: false, shadow: false, blink: false, left: false });
+      slot.id = b.slot;
+      set(slot.pos, b.x, b.y, b.z);
+      slot.alive = b.alive;
+      slot.runner = b.slot === vt.runner;
+      look(vt.tells[b.slot] ?? 0, slot);
+      n += 1;
+    }
+  }
+  out.voters.length = n;
+  out.wrong = vt.wrong;
+  if (vt.forkT > 0 && v) {
+    const f = out.fork ?? (out.fork = { axis: "x", at: 0, orphan: 1, left: 0, total: 0, need: 0, votes: 0 });
+    f.axis = vt.forkAxis === 0 ? "x" : "z";
+    f.at = vt.forkAt;
+    f.orphan = vt.forkSide;
+    f.left = vt.forkT;
+    f.total = vt.forkLen;
+    f.need = vt.forkNeed;
+    f.votes = forkVotes(v, vt);
+  } else out.fork = null;
+  if (c.phase === "standoff" && vt.stage === "recount") {
+    const r = out.recount ?? (out.recount = { left: 0 });
+    r.left = Math.max(0, RECOUNT_SECONDS - vt.recountT);
+  } else out.recount = null;
+  set(out.box, vt.boxX, floor, vt.boxZ);
+  if (vt.ballot >= 0) {
+    const bl = out.ballot ?? (out.ballot = { state: "runner", pos: v3() });
+    const runner = v?.bodies.find((b) => b.slot === vt.runner);
+    const h = s.hero;
+    if (vt.ballot === 0 && runner) {
+      bl.state = "runner";
+      set(bl.pos, runner.x, runner.y + 20, runner.z);
+    } else if (vt.ballot === 1) {
+      bl.state = "carried";
+      set(bl.pos, h.x, h.y + 24, h.z);
+    } else {
+      bl.state = "counted";
+      set(bl.pos, vt.boxX, floor + 40, vt.boxZ);
+    }
+  } else out.ballot = null;
 }

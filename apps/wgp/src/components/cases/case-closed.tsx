@@ -2,8 +2,9 @@
 
 /**
  * The end of a case night: "Case closed." over the city, with The Daily Rug's front page
- * ("JPEG found. Slightly more compressed.", by J. Jonah Bearson), the time, the "Case
- * closed" badge's state, "Share on X" and the way back to the case files. A guest's clear
+ * (001: "JPEG found. Slightly more compressed."; 002: "Toll fails by one vote"; by J. Jonah
+ * Bearson), the time, the "Case closed" badge's state, "Share on X" and the way back to the
+ * case files. A guest's clear
  * is kept in this browser with a way to sign in; a night that didn't close the case says
  * the case is still open.
  */
@@ -13,12 +14,15 @@ import { StickerButton, StickerEyebrow, StickerLink, StickerPanel, stickerButton
 import { ArrowLeft, CircleAlert, RotateCcw } from "@/components/icons";
 import { ShareOnX } from "@/components/social/share-on-x";
 import { getCases } from "@/lib/api/client";
-import { CASE_001, CASE_PATHS, caseShareText } from "@/lib/cases/content";
+import { CASE_001 } from "@/lib/cases/content";
+import { CASE_002 } from "@/lib/cases/content-002";
 import { markCaseCleared } from "@/lib/cases/local";
-import { CHAPTER_ID } from "@/lib/cases/types";
+import { caseEntry } from "@/lib/cases/registry";
+import type { ChapterId } from "@/lib/cases/types";
 import { badgeView, formatTicks, spokenTicks, type BadgeView } from "@/lib/cases/view";
 
 import { MaryPhoto } from "./art";
+import { GenPhoto } from "./case-002/art";
 import { BadgeBlock, CaseStamp, RugFront } from "./shared";
 
 /** Where the clear stands with the server. */
@@ -35,6 +39,8 @@ export type CaseFiling =
   | { kind: "failed"; message: string };
 
 export interface CaseClosedProps {
+  /** Which case (Case file 001 when absent). */
+  chapter?: ChapterId | null;
   heroName: string;
   closed: boolean;
   ticks: number | null;
@@ -51,7 +57,7 @@ export interface CaseClosedProps {
 }
 
 /** The badge after a verified clear: asked of the server once (the mint is usually still queued). */
-function useFiledBadge(filing: CaseFiling): BadgeView | null {
+function useFiledBadge(filing: CaseFiling, chapter: ChapterId): BadgeView | null {
   const given = filing.kind === "filed" ? (filing.badge ?? null) : null;
   const ask = filing.kind === "filed" && !filing.badge;
   const [asked, setAsked] = useState<BadgeView | null>(null);
@@ -60,13 +66,13 @@ function useFiledBadge(filing: CaseFiling): BadgeView | null {
     const ctrl = new AbortController();
     getCases(ctrl.signal).then(
       (res) => {
-        const rec = res.ok ? res.data.cases?.find((c) => c.id === CHAPTER_ID) : null;
+        const rec = res.ok ? res.data.cases?.find((c) => c.id === chapter) : null;
         setAsked(badgeView({ signedIn: true, status: "closed", badge: rec?.badge ?? null, failed: !res.ok }));
       },
       () => {},
     );
     return () => ctrl.abort();
-  }, [ask]);
+  }, [ask, chapter]);
   return given ?? asked;
 }
 
@@ -125,8 +131,41 @@ function bestLine(ticks: number, best: number | null | undefined, first: boolean
   return "Off the boards: kept in the case file.";
 }
 
-export function CaseClosed({ heroName, closed, ticks, best, firstClear, filing, edition, onRetry, record = true }: CaseClosedProps) {
-  const badge = useFiledBadge(filing);
+/** The case's front page once it's closed. */
+function FrontPage({ chapter, heroName }: { chapter: ChapterId; heroName: string }) {
+  if (chapter === "case-002")
+    return (
+      <RugFront
+        headingLevel="h2"
+        headingId="case-front-headline"
+        headline={CASE_002.found.headline}
+        dateline={["Extra edition", CASE_002.district]}
+        photo={<GenPhoto alt="Uncle Gen beside the ballot box, holding up his ballot." />}
+        caption={CASE_002.found.caption}
+        dek={CASE_002.found.dek}
+        story={CASE_002.found.story(heroName)}
+        byline={CASE_002.found.byline}
+      />
+    );
+  return (
+    <RugFront
+      headingLevel="h2"
+      headingId="case-front-headline"
+      headline={CASE_001.found.headline}
+      dateline={["Extra edition", "Bridge District"]}
+      photo={<MaryPhoto restored alt="Mary Jpeg on a rooftop, waving, in full quality." />}
+      caption={CASE_001.found.caption}
+      dek={CASE_001.found.dek}
+      story={CASE_001.found.story(heroName)}
+      byline="By J. Jonah Bearson, who had it first"
+    />
+  );
+}
+
+export function CaseClosed({ chapter: id, heroName, closed, ticks, best, firstClear, filing, edition, onRetry, record = true }: CaseClosedProps) {
+  const entry = caseEntry(id);
+  const chapter = entry.id;
+  const badge = useFiledBadge(filing, chapter);
   const kept = record && closed && (filing.kind === "filed" || filing.kind === "guest");
 
   // The results take over from the game: start keyboard and screen-reader users at the title.
@@ -136,8 +175,8 @@ export function CaseClosed({ heroName, closed, ticks, best, firstClear, filing, 
 
   // A kept clear: its time here, and the Rug's next front page.
   useEffect(() => {
-    if (kept) markCaseCleared(CHAPTER_ID, { ticks, edition, hero: heroName, keep: true });
-  }, [kept, ticks, edition, heroName]);
+    if (kept) markCaseCleared(chapter, { ticks, edition, hero: heroName, keep: true });
+  }, [kept, ticks, edition, heroName, chapter]);
 
   return (
     <div className="absolute inset-0 overflow-y-auto overscroll-contain">
@@ -148,36 +187,26 @@ export function CaseClosed({ heroName, closed, ticks, best, firstClear, filing, 
             <div className="flex min-w-0 flex-col gap-1.5">
               <StickerEyebrow>
                 <span>
-                  Case file <span className="num">{CASE_001.number}</span> · {CASE_001.title}
+                  Case file <span className="num">{entry.number}</span> · {entry.title}
                 </span>
               </StickerEyebrow>
               <h1 id="results-title" tabIndex={-1} className="text-[30px] font-bold leading-8 tracking-[-0.025em] text-game-ink outline-none sm:text-[38px] sm:leading-[42px]">
                 {closed ? "Case closed." : "The case is still open."}
               </h1>
               <p className="text-[14px] leading-5 text-game-muted text-pretty">
-                {closed ? "Mary’s back, and Bearson already has the front page." : "Mary’s still in the Downloads folder. Bearson is holding the front page."}
+                {closed ? entry.closedLine : entry.openLine}
               </p>
             </div>
             {closed ? (
               <span className="mr-1 mt-2 hidden shrink-0 sm:block">
-                <CaseStamp number={CASE_001.number} />
+                <CaseStamp number={entry.number} />
               </span>
             ) : null}
           </header>
 
           {closed ? (
             <article aria-labelledby="case-front-headline" className="rounded-[16px] border-[2.5px] border-game-ink bg-game-paper p-3.5 shadow-[var(--game-shadow-sm)] sm:p-5">
-              <RugFront
-                headingLevel="h2"
-                headingId="case-front-headline"
-                headline={CASE_001.found.headline}
-                dateline={["Extra edition", "Bridge District"]}
-                photo={<MaryPhoto restored alt="Mary Jpeg on a rooftop, waving, in full quality." />}
-                caption={CASE_001.found.caption}
-                dek={CASE_001.found.dek}
-                story={CASE_001.found.story(heroName)}
-                byline="By J. Jonah Bearson, who had it first"
-              />
+              <FrontPage chapter={chapter} heroName={heroName} />
             </article>
           ) : null}
 
@@ -198,20 +227,20 @@ export function CaseClosed({ heroName, closed, ticks, best, firstClear, filing, 
           <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
             {closed ? (
               <>
-                <StickerLink href={CASE_PATHS.list} variant={filing.kind === "failed" ? "paper" : "hero"} size="lg" className="w-full sm:w-auto">
+                <StickerLink href={entry.paths.list} variant={filing.kind === "failed" ? "paper" : "hero"} size="lg" className="w-full sm:w-auto">
                   <ArrowLeft aria-hidden className="size-5" strokeWidth={2.25} />
                   Back to case files
                 </StickerLink>
-                <ShareOnX text={caseShareText()} size="lg" className="w-full sm:w-auto" />
+                <ShareOnX text={entry.share()} size="lg" className="w-full sm:w-auto" />
               </>
             ) : (
               <>
                 {/* A full load: the patrol page starts the case again from the top. */}
-                <a href={CASE_PATHS.play} className={stickerButtonClass("hero", "lg", "w-full sm:w-auto")}>
+                <a href={entry.paths.play} className={stickerButtonClass("hero", "lg", "w-full sm:w-auto")}>
                   <RotateCcw aria-hidden className="size-5" strokeWidth={2.25} />
                   Try the case again
                 </a>
-                <StickerLink href={CASE_PATHS.list} size="lg" className="w-full sm:w-auto">
+                <StickerLink href={entry.paths.list} size="lg" className="w-full sm:w-auto">
                   Back to case files
                 </StickerLink>
               </>
