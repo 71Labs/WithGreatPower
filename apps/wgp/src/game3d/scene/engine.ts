@@ -269,17 +269,28 @@ export class SceneEngine {
       const i = this.input;
       i.hero = frame.hero.pos;
       // Free roam on a wall: his speed there is mostly up, so the camera takes his way into the
-      // wall as his heading and comes round behind him, outside it.
+      // wall as his heading and comes round behind him, outside it, close (chase.ts wallDist);
+      // the stick there climbs, so it never holds the camera off coming round.
       const wall = frame.roam?.wall;
-      if (wall && frame.roam!.move !== "wallrun") {
+      const onWall = !!wall && frame.roam!.move !== "wallrun";
+      i.wall = onWall;
+      if (wall && onWall) {
         this.wallVel.x = -wall.nx * 260;
         this.wallVel.y = frame.hero.vel.y;
         this.wallVel.z = -wall.nz * 260;
         i.vel = this.wallVel;
+      } else if (wall) {
+        // A wall run: his heading turned a little into the wall, so the camera follows from
+        // behind and out from it rather than along (or inside) its face.
+        const hs = Math.hypot(frame.hero.vel.x, frame.hero.vel.z);
+        this.wallVel.x = frame.hero.vel.x - wall.nx * hs * 0.45;
+        this.wallVel.y = frame.hero.vel.y;
+        this.wallVel.z = frame.hero.vel.z - wall.nz * hs * 0.45;
+        i.vel = this.wallVel;
       } else i.vel = frame.hero.vel;
       i.anchor = frame.hero.anchor;
       i.facing = frame.hero.facing ?? null;
-      i.steer = heldStick;
+      i.steer = onWall ? null : heldStick;
       const zone = this.cityData.zones[frame.stop];
       const rival = frame.mode === "fight" ? (frame.villains.find((v) => !v.copy) ?? frame.villains[0]) : undefined;
       i.rival = rival && zone ? rival.pos : null;

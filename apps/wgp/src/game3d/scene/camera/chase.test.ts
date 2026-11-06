@@ -47,6 +47,27 @@ describe("chase camera", () => {
     expect(pose.target.x).toBeGreaterThan(input.hero.x);
   });
 
+  it("frames a climber close behind, nearly level, out from the face (free roam on a wall)", () => {
+    // A climber on the slab's east face (x = -200): the engine hands the chase his way into the
+    // wall as his heading (−x), and `wall`.
+    const city = wallCity();
+    const cam = new ChaseCamera(createCityRaycast(city));
+    const input = createChaseInput();
+    input.hero = { x: -200 + 26, y: 400, z: 0 };
+    input.vel = { x: -260, y: 120, z: 0 };
+    input.wall = true;
+    const pose = run(cam, input, 3);
+    // Out from the face, behind him, inside the wall arm, and not looking down on him from above.
+    expect(pose.position.x).toBeGreaterThan(input.hero.x + 150);
+    expect(pose.want).toBeLessThanOrEqual(CHASE_TUNING.wallDist + 1e-6);
+    expect(horiz(pose.position, input.hero)).toBeLessThan(CHASE_TUNING.wallDist + 1);
+    expect(pose.position.y - input.hero.y).toBeLessThan(80);
+    // The same climb without the flag: the travel shot's own (wider) arm.
+    const plain = new ChaseCamera(createCityRaycast(city));
+    const p2 = run(plain, { ...input, wall: false }, 3);
+    expect(p2.want).toBeGreaterThan(CHASE_TUNING.wallDist + 50);
+  });
+
   it("turns with the heading but holds it when the hero stops", () => {
     const cam = new ChaseCamera();
     const input = createChaseInput();
