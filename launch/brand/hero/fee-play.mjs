@@ -222,6 +222,9 @@ async function playOnce(who, dev, opts = {}) {
   }
   console.log(JSON.stringify({ name, bootMs: run.bootMs, totalMs: run.totalMs, beats: run.beats.length, shots: run.shots.length, errors: run.errors.length, chase: run.chase, failure: run.failure }));
   report.runs.push(run);
+  // Each run on its own as it lands, so a stopped batch keeps what it played.
+  mkdirSync(out, { recursive: true });
+  writeFileSync(join(out, `${name}.json`), JSON.stringify(run, null, 2));
 }
 
 for (const who of opt("who", "guest,dev").split(",")) {
