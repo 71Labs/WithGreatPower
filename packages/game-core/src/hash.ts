@@ -7,7 +7,7 @@
 import { POWERS } from "./rules/data";
 import type { PowerId } from "./rules/types";
 import { TRIAL_COURSE_IDS as TRIAL_COURSES } from "./sim3d/trial";
-import type { SimState } from "./sim3d/types";
+import type { FeeState, SimState } from "./sim3d/types";
 
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
@@ -298,5 +298,47 @@ export function hashState(s: SimState): string {
     f.bool(t.finished);
     f.num(t.endTick);
   }
+  // Case File 003, after everything else and only on its nights: every other night hashes as before.
+  if (s.fee) hashFee(f, s.fee);
   return f.hex();
+}
+
+const FEE_PHASES = ["investigate", "meter", "chase", "showdown", "cool", "done"] as const;
+
+/** Case File 003's state (sim3d/types.ts FeeState), field by field. */
+function hashFee(f: Fnv, c: FeeState) {
+  f.num(FEE_PHASES.indexOf(c.phase));
+  f.num(c.clues.length);
+  for (const k of c.clues) {
+    f.num(k.x);
+    f.num(k.y);
+    f.num(k.z);
+    f.bool(k.found);
+  }
+  const m = c.meter;
+  f.num(m.x);
+  f.num(m.y);
+  f.num(m.z);
+  f.bool(m.carried);
+  f.num(m.cool);
+  f.bool(m.cooled);
+  f.num(c.route.length);
+  for (const p of c.route) {
+    f.num(p.x);
+    f.num(p.y);
+    f.num(p.z);
+    f.bool(p.roof);
+    f.num(p.at);
+  }
+  f.num(c.next);
+  f.num(c.checkpoint);
+  f.num(c.progress);
+  f.num(c.escape);
+  f.num(c.losses);
+  f.num(c.holdT);
+  f.num(c.bombT);
+  f.num(c.chaseT);
+  f.num(c.coolT);
+  f.num(c.spikeT);
+  f.num(c.spikeWind);
 }

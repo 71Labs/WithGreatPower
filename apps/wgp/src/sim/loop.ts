@@ -72,6 +72,29 @@ export interface HudSnapshot {
    * VILLAINS); this adds his state word, SAVED, the clues and Mary's restore.
    */
   chapter?: ChapterHud | null;
+  /** 3D, Case File 003's night ("Fee Strike"; game3d/session/hud.ts feeHud), else absent or null. */
+  fee?: FeeHud | null;
+}
+
+/** What Case File 003's HUD shows (docs/chapters/case-003.md). */
+export interface FeeHud {
+  id: "case-003";
+  phase: "investigate" | "meter" | "chase" | "showdown" | "cool" | "done";
+  cluesFound: number;
+  clues: number;
+  /** Each clue found or not, in the case's order (burn, pretzel, florist). */
+  found: boolean[];
+  /**
+   * The chase, null outside it: the gap to Gas Goblin (units, to the nearest 10), the escape
+   * meter 0–1 (two decimals) and whether he's pulling away (`warn`), the last checkpoint passed
+   * of how many, losses so far of how many end the case, and whether he's waiting after a loss.
+   */
+  chase: { gap: number; escape: number; warn: boolean; checkpoint: number; checkpoints: number; losses: number; maxLosses: number; holding: boolean } | null;
+  /** The meter: heat 1 (MAX) → 0 (cooled), two decimals; the hero beside it (holding web cools it); a fee spike's wind-up 0–1 (0: none). */
+  heat: number;
+  beside: boolean;
+  cooled: boolean;
+  spike: number;
 }
 
 /** What the chapter HUD shows (docs/chapters/case-001.md). */
@@ -128,6 +151,7 @@ function sameHud(a: HudSnapshot, b: HudSnapshot): boolean {
     return false;
   if (JSON.stringify(a.buffs) !== JSON.stringify(b.buffs) || JSON.stringify(a.villain) !== JSON.stringify(b.villain)) return false;
   if (JSON.stringify(a.chapter ?? null) !== JSON.stringify(b.chapter ?? null)) return false;
+  if (JSON.stringify(a.fee ?? null) !== JSON.stringify(b.fee ?? null)) return false;
   if (a.abilities.length !== b.abilities.length) return false;
   return a.abilities.every((x, i) => {
     const y = b.abilities[i];

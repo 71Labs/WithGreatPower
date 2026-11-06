@@ -20,8 +20,9 @@
 import { useEffect, useRef } from "react";
 
 import { AVATARS } from "@/components/cast";
-import { Cursor, Search } from "@/components/icons";
+import { Cursor, Gauge, Search } from "@/components/icons";
 import { chapterOf, chapterWaypoint } from "@/game3d/nav/chapter-pins";
+import { feeOf, feeWaypoint } from "@/game3d/nav/fee-pins";
 import { metres, stopPoint } from "@/game3d/nav/map";
 import type { FrameTap } from "@/game3d/nav/tap";
 import { edgePoint, inBox, project, waypointLayout, waypointLayoutFromHud, type HudZones, type Rect } from "@/game3d/nav/waypoint";
@@ -84,7 +85,7 @@ function TargetFace({ cast, size }: { cast: CastId | null; size: "lg" | "sm" }) 
   return (
     <>
       {cast ? (
-        <span className="block group-data-[target=bridge]:hidden group-data-[target=clue]:hidden group-data-[target=gen]:hidden group-data-[target=mary]:hidden">
+        <span className="block group-data-[target=bridge]:hidden group-data-[target=clue]:hidden group-data-[target=gen]:hidden group-data-[target=mary]:hidden group-data-[target=meter]:hidden">
           <Face id={cast} className={size === "lg" ? box : `${box} rounded-full`} />
         </span>
       ) : null}
@@ -104,6 +105,12 @@ function TargetFace({ cast, size }: { cast: CastId | null; size: "lg" | "sm" }) 
       {/* Case file 002: Uncle Gen's ballot box. */}
       <span className="hidden group-data-[target=gen]:block">
         <Face id="uncle-gen" className={size === "lg" ? box : `${box} rounded-full`} />
+      </span>
+      {/* Case File 003: the fee meter. */}
+      <span className="hidden group-data-[target=meter]:block">
+        <span className={`${mark} bg-game-hero text-game-on-hero`}>
+          <Gauge className={icon} strokeWidth={2.5} />
+        </span>
       </span>
     </>
   );
@@ -148,8 +155,10 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
       const f = t.frame;
       // A case night points at the case's next mark (a clue, the bridge, Mary), not a stop.
       const chapter = chapterOf(f);
-      const mark = chapter ? chapterWaypoint(chapter, city, f.hero.pos) : null;
-      const zone = chapter ? null : city.zones[f.stop];
+      // Case File 003 points at its own marks too: a clue, the meter, Gas Goblin, the bakery.
+      const fee = chapter ? null : feeOf(f);
+      const mark = chapter ? chapterWaypoint(chapter, city, f.hero.pos) : fee ? feeWaypoint(fee, f) : null;
+      const zone = chapter || fee ? null : city.zones[f.stop];
       const target = mark ? mark.point : zone && f.mode === "travel" ? stopPoint(zone) : null;
       const show = !!target && !!t.pose;
       if (show !== shown) {
@@ -224,7 +233,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
   const cast = stop && Object.hasOwn(AVATARS, stopCast(stop)) ? stopCast(stop) : null;
   const fight = stop?.kind === "fight";
   // A case night's marks (data-target, set from the frame): the ring and the wedge take their colour.
-  const ring = `${fight ? "border-game-hero" : "border-game-gold"} group-data-[target=bridge]:border-game-hero group-data-[target=clue]:border-game-gold group-data-[target=mary]:border-game-gold group-data-[target=gen]:border-game-gold`;
+  const ring = `${fight ? "border-game-hero" : "border-game-gold"} group-data-[target=bridge]:border-game-hero group-data-[target=clue]:border-game-gold group-data-[target=mary]:border-game-gold group-data-[target=gen]:border-game-gold group-data-[target=meter]:border-game-hero`;
   return (
     <div ref={root} aria-hidden data-mode="pin" data-target="stop" className="group pointer-events-none invisible absolute left-0 top-0 z-0 will-change-transform">
       <NavStyles />
@@ -249,7 +258,7 @@ export function Waypoint({ tap, city, stops, index, still, touch }: WaypointProp
           <svg width="22" height="26" viewBox="0 0 22 26" className="absolute left-[22px] top-[-13px] block">
             <path
               d="M2 2 L20 13 L2 24 Z"
-              className={`${fight ? "fill-game-hero" : "fill-game-gold"} group-data-[target=bridge]:fill-game-hero group-data-[target=clue]:fill-game-gold group-data-[target=mary]:fill-game-gold group-data-[target=gen]:fill-game-gold`}
+              className={`${fight ? "fill-game-hero" : "fill-game-gold"} group-data-[target=bridge]:fill-game-hero group-data-[target=clue]:fill-game-gold group-data-[target=mary]:fill-game-gold group-data-[target=gen]:fill-game-gold group-data-[target=meter]:fill-game-hero`}
               stroke="var(--game-ink)"
               strokeWidth="2.5"
               strokeLinejoin="round"

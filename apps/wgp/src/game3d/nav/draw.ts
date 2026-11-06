@@ -12,6 +12,7 @@ import type { Building, City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/c
 import { BLOCK, GRID, PITCH } from "@wgp/game-core/sim3d/constants";
 
 import { chapterOf, drawChapterPins } from "./chapter-pins";
+import { drawFeePins, feeEarly } from "./fee-pins";
 import { NAV_COLORS as K } from "./colors";
 import { clampToDisc, mapAngle, remainingRoute, stopPoint, toMap, type MapView } from "./map";
 
@@ -319,9 +320,9 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
   }
 
   // The route: the leg you're on in ink, the legs after it fainter (a patrol's; a case's marks lead instead).
-  const travelling = (frame.mode === "travel" || frame.mode === "intro") && !chapterOf(frame);
+  const travelling = (frame.mode === "travel" || frame.mode === "intro") && !chapterOf(frame) && !feeEarly(frame);
   const route = remainingRoute(city, frame);
-  const pts = chapterOf(frame) ? [] : [toMap(view, hero.x, hero.z), ...route.map((p) => toMap(view, p.x, p.z))];
+  const pts = chapterOf(frame) || feeEarly(frame) ? [] : [toMap(view, hero.x, hero.z), ...route.map((p) => toMap(view, p.x, p.z))];
   if (pts.length > 2) dottedPath(ctx, pts.slice(1), K.routeLater, 2.5, 6);
   if (pts.length > 1 && travelling) dottedPath(ctx, pts.slice(0, 2), K.route, 3, 6);
 
@@ -329,7 +330,7 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
   pickupDots(ctx, frame, view, 3, (x, y) => Math.hypot(x - R, y - R) < rim - 3);
 
   // A case night has its own marks (drawChapterPins below), not the patrol's stops.
-  const patrol = !chapterOf(frame);
+  const patrol = !chapterOf(frame) && !feeEarly(frame);
 
   // Later stops, faint and small, when they're on the map.
   for (let i = city.zones.length - 1; patrol && i > frame.stop; i--) {
@@ -384,6 +385,8 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, s: MinimapScene): voi
 
   // A case night's clues and the bridge (nothing on a normal night).
   drawChapterPins(ctx, frame, city, view, R, rim);
+  // Case File 003's clues, meter and Gas Goblin.
+  drawFeePins(ctx, frame, view, R, rim);
 
   const h = heading(frame);
   heroArrow(ctx, R, R, mapAngle(view, h.x, h.z), 9, s.heroColor);
@@ -446,7 +449,7 @@ export function drawFullMap(ctx: CanvasRenderingContext2D, s: FullMapScene): voi
   drawCity(ctx, city, view, null, 1.25);
 
   // A case night's marks are pinned by the page; its one patrol stop has no route to draw.
-  const patrol = !chapterOf(frame);
+  const patrol = !chapterOf(frame) && !feeEarly(frame);
   const all: Vec3[] = patrol ? [city.start, ...city.zones.map(stopPoint)] : [];
   const done = all.slice(0, Math.min(all.length, frame.stop + 1)).map((p) => toMap(view, p.x, p.z));
   if (done.length > 1) {

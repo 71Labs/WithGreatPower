@@ -139,7 +139,8 @@ function RouteBar({ hud, stops, results, positions, hero, className = "" }: { hu
   );
 }
 
-function VillainBar({ hud }: { hud: HudSnapshot }) {
+/** The villain bar (exported for a case whose villain has a face here: Case File 003, patrol/fee-hud.tsx). */
+export function VillainBar({ hud }: { hud: HudSnapshot }) {
   const v = hud.villain;
   // A villain without a face here (a case's own) has its own bar (patrol/chapter-hud.tsx).
   if (!v || hud.mode === "intro" || !Object.hasOwn(VILLAINS, v.kind)) return null;

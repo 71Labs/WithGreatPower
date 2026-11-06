@@ -9,9 +9,12 @@ import { CASE_002 } from "@/lib/cases/content-002";
 
 import { MaryPhoto } from "./art";
 import { GenPhoto } from "./case-002/art";
+import { CaseRugLead003 } from "./fee-strike/rug-lead";
 import { RugFront } from "./shared";
 
 export function CaseRugLead({ hero, id = "case-001" }: { hero: string; id?: string }) {
+  // Case File 003's own lead (fee-strike/rug-lead.tsx): "Fees fall. Loaf rises."
+  if (id === "case-003") return <CaseRugLead003 hero={hero} />;
   if (id === "case-002")
     return (
       <section aria-labelledby="case-lead-headline" className="flex min-w-0 flex-col gap-3">

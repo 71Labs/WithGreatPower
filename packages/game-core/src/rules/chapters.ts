@@ -7,8 +7,11 @@
  *
  * Pure: the clock comes in as an argument.
  */
+import { FEE_STRIKE_ID, FEE_STRIKE_INFO, type FeeClueId } from "./case-003";
 import { HP_PER_LEVEL, POWERS, VILLAINS, XP_TO_NEXT } from "./data";
 import type { CaseRecord, ChapterId, Hero, Save, VillainId } from "./types";
+
+export { FEE_STRIKE_ID, FEE_STRIKE_INFO, FEE_STRIKE_LINES, FEE_STRIKE_RULESET, type FeeClueId } from "./case-003";
 
 /** Case File 001, "Missing: Mary Jpeg". */
 export const CHAPTER_ID = "case-001" satisfies ChapterId;
@@ -20,7 +23,7 @@ export const CASE_002_ID = "case-002" satisfies ChapterId;
 /** Case File 002's rules version (`runs.ruleset`). Bump it with any change to its sim (sim3d/vote.ts, sybil-vote.ts). */
 export const CASE_002_RULESET = "c002-1";
 
-export const CHAPTER_IDS: readonly ChapterId[] = [CHAPTER_ID, CASE_002_ID];
+export const CHAPTER_IDS: readonly ChapterId[] = [CHAPTER_ID, CASE_002_ID, FEE_STRIKE_ID];
 
 /**
  * A clue's id. Case File 001's: torn tabs, a cursor scorch, loose pixels. Case File 002's: the
@@ -46,7 +49,7 @@ export interface ChapterInfo {
   villain: { name: string; tagline: string; taunt: string; defeat: string };
   captive: { name: string; freed: string };
   /** Each clue's case note, in the order the city places them (any order to find). */
-  clues: { id: ClueId; name: string; note: string }[];
+  clues: { id: ClueId | FeeClueId; name: string; note: string }[];
   /**
    * Case File 002: what each clue says about the real Sybil, by the tell's value tonight (the
    * seed sets it): `yes` when he has it (casts a shadow, blinks, holds his ballot left-handed).
@@ -98,6 +101,7 @@ export const CHAPTERS: Record<ChapterId, ChapterInfo> = {
       gif: { tell: "blink", yes: "The GIF copies blink on a loop, and so does he: the real one blinks.", no: "The real one hasn’t blinked since the polls opened. Only the GIF copies blink." },
     },
   },
+  "case-003": FEE_STRIKE_INFO,
 };
 
 /** Case File 002's Sybil: his moves and their damage at level 1 (scaled by damageScale like every villain's). */

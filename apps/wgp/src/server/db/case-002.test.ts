@@ -92,6 +92,7 @@ describe("Case File 002 on the server", () => {
     expect(listed.map((c) => [c.id, c.status])).toEqual([
       ["case-001", "new"],
       ["case-002", "cleared"],
+      ["case-003", "new"],
     ]);
     expect(listed[1]).toMatchObject({ number: "002", title: "The Sybil Vote", bestTicks: played.ticks, badge: { status: "queued" } });
 

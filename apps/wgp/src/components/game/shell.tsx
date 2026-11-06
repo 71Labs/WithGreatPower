@@ -392,9 +392,11 @@ const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(ma
 function Dock({ pathname, save }: { pathname: string | null; save: Save | null }) {
   const picks = save?.hero?.pendingPicks ?? 0;
   const unread = useUnreadEdition(save);
+  // Any case still unopened (its folder or intro not seen yet) makes the Cases tab new.
   const newCase001 = useNewCase(save);
   const newCase002 = useNewCase(save, "case-002");
-  const newCase = newCase001 || newCase002;
+  const newCase003 = useNewCase(save, "case-003");
+  const newCase = newCase001 || newCase002 || newCase003;
   return (
     <nav
       aria-label="Game"

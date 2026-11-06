@@ -6,10 +6,10 @@
  */
 import { villainCard } from "@wgp/game-core/chapters";
 import { MAX_FLUID, POWERS, VILLAINS } from "@wgp/game-core/data";
-import { abilityBlocked, besideCaptive, gweiBlocked, inOpening, len2, RESTORE_TICKS, rightClickerState, stopTarget, takesHit } from "@wgp/game-core/sim3d";
+import { abilityBlocked, besideCaptive, besideMeter, chaseGap, ESCAPE_GAP, gweiBlocked, inOpening, len2, MAX_LOSSES, meterHeat, RESTORE_TICKS, rightClickerState, spikeWindSeconds, stopTarget, takesHit } from "@wgp/game-core/sim3d";
 import type { SimState } from "@wgp/game-core/sim3d";
 
-import type { ChapterHud, HudSnapshot, LoopStatus } from "@/sim/loop";
+import type { ChapterHud, FeeHud, HudSnapshot, LoopStatus } from "@/sim/loop";
 
 /** Case File 001's HUD fields, or null on a patrol night. */
 export function chapterHud(s: SimState): ChapterHud | null {
@@ -37,6 +37,38 @@ export function chapterHud(s: SimState): ChapterHud | null {
     restore: Math.round((c.captive.restore / RESTORE_TICKS) * 100) / 100,
     beside: besideCaptive(s),
     freed: c.captive.freed,
+  };
+}
+
+/** Case File 003's HUD fields ("Fee Strike"), or null on any other night. */
+export function feeHud(s: SimState): FeeHud | null {
+  const f = s.fee;
+  if (!f) return null;
+  const r = f.route;
+  return {
+    id: f.id,
+    phase: f.phase,
+    cluesFound: f.clues.filter((k) => k.found).length,
+    clues: f.clues.length,
+    found: f.clues.map((k) => k.found),
+    chase:
+      f.phase === "chase"
+        ? {
+            gap: Math.round(chaseGap(s) / 10) * 10,
+            escape: Math.round(f.escape * 100) / 100,
+            warn: chaseGap(s) > ESCAPE_GAP && f.holdT <= 0,
+            // Checkpoints are the route's roofs short of the bakery; the count so far, of them all.
+            checkpoint: r.slice(1, f.checkpoint + 1).filter((p) => p.roof).length,
+            checkpoints: r.slice(1, r.length - 1).filter((p) => p.roof).length,
+            losses: f.losses,
+            maxLosses: MAX_LOSSES,
+            holding: f.holdT > 0,
+          }
+        : null,
+    heat: Math.round(meterHeat(f) * 100) / 100,
+    beside: besideMeter(s),
+    cooled: f.meter.cooled,
+    spike: f.phase === "cool" && f.spikeWind > 0 ? Math.round((1 - f.spikeWind / spikeWindSeconds(s)) * 10) / 10 : 0,
   };
 }
 
@@ -104,7 +136,7 @@ export function hudSnapshot(s: SimState, opts: { status: LoopStatus; countdown: 
     // Set for the Right-Clicker too, through the standoff (the phone HUD gives the minimap's spot
     // to the villain bar), but not in the rescue, when he's beaten and his copies come at you.
     villain:
-      v && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko") && !(s.chapter && s.chapter.phase !== "standoff")
+      v && (s.mode === "intro" || s.mode === "fight" || s.mode === "won" || s.mode === "ko") && !(s.chapter && s.chapter.phase !== "standoff") && !(s.fee && s.fee.phase !== "showdown")
         ? {
             kind: v.kind,
             name: v.kind === "right-clicker" ? villainCard(v.kind).name : VILLAINS[v.kind].name,
@@ -120,5 +152,6 @@ export function hudSnapshot(s: SimState, opts: { status: LoopStatus; countdown: 
     buffs: { shield: h.shieldT > 0, cloak: h.cloakT > 0, finality: h.finalityT > 0, fork: h.forked, slowmo: s.slowmo > 0 },
     hint: !opts.hinted && s.index === 0 && s.mode === "travel",
     ...(s.chapter ? { chapter: chapterHud(s) } : {}),
+    ...(s.fee ? { fee: feeHud(s) } : {}),
   };
 }

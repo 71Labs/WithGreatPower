@@ -25,6 +25,8 @@ import { NODE_COLORS, type SuitColors } from "@/components/cast";
 import type { ChasePose, Raycast } from "./camera/chase";
 import type { SceneCue } from "./camera/director";
 import type { ChapterEvent } from "./chapter/contract";
+import type { FeeEvent } from "./fee-strike/contract";
+import type { FeeBlast } from "./fee-strike/fee-strike";
 import type { RoamSceneEvent } from "./roam/roam";
 import { watchContextRecovery } from "./context-recovery";
 import type { BurstOptions } from "./effects";
@@ -43,6 +45,8 @@ export interface SceneHandle {
   punch?(): void;
   /** A Case file 001 sim event: the chapter's clues, SCREENSHOT, copies and captive (scene/chapter). */
   chapter?(ev: ChapterEvent): void;
+  /** A Case file 003 sim event, or a blast to scorch the roof with (scene/fee-strike). */
+  fee?(ev: FeeEvent | FeeBlast): void;
   /** A free-roam sim event (scene/roam): a page found, a photo, a sync, the bot caught. */
   roam?(ev: RoamSceneEvent): void;
   /** Manual camera orbit: radians to add this frame, and whether a pointer holds the camera. */
@@ -121,6 +125,7 @@ export function Scene({ city, frame, cue, quality, heroColors = NODE_COLORS, cas
       fizzle: () => engine.fizzle(),
       punch: () => engine.punch(),
       chapter: (ev) => engine.chapterEvent(ev),
+      fee: (ev) => engine.feeEvent(ev),
       roam: (ev) => engine.roamEvent(ev),
       orbit: (dy, dp, holding) => engine.orbit(dy, dp, holding),
       cut: () => engine.cut(),

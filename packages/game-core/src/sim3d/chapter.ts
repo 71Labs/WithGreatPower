@@ -24,6 +24,7 @@ import { generateCity, type CityIndex } from "./city";
 import { HERO_RADIUS, RULESET_VERSION } from "./constants";
 import type { City, Zone } from "./contract";
 import { len2 } from "./dmath";
+import { FEE_LOG_RULESET_BASE, feeCity, feeStops } from "./fee-strike";
 import { mix, Rng } from "./rng";
 import type { ChapterClue, ChapterState, SimState, Villain } from "./types";
 
@@ -71,22 +72,28 @@ export function chapterLogRuleset(id: ChapterId): number {
     // "C 002 1 04": Case File 002, its rules rev 1 (CASE_002_RULESET "c002-1"), ruleset 4.
     case "case-002":
       return 0x0c002100 + RULESET_VERSION;
+    case "case-003":
+      // Case File 003 ("C 003 1 04"): fee-strike.ts.
+      return FEE_LOG_RULESET_BASE + RULESET_VERSION;
   }
 }
 
 /**
  * The chapter's one stop, as the city sees it. Case File 001: Doc's bridge in the Bridge
  * District (he isn't there tonight). Case File 002: the Sybil's rooftop arena in Validator
- * Heights, tonight a polling station (sim3d/vote.ts).
+ * Heights, tonight a polling station (sim3d/vote.ts). Case File 003: Gas Goblin's arena in the
+ * Mempool Market, Aunt Mainnet's bakery (fee-strike.ts).
  */
 export function chapterStops(id: ChapterId): Stop[] {
   if (id === "case-002") return [{ kind: "fight", villain: "sybil", district: "validator-heights", level: VOTE_LEVEL, boss: false, quest: false }];
+  if (id === "case-003") return feeStops();
   return [{ kind: "fight", villain: "doc-octochain", district: "bridge-district", level: CHAPTER_LEVEL, boss: false, quest: false }];
 }
 
 /** The chapter's city from the run's seed: Case File 001's bridge city with the wide deck (its zone the Right-Clicker's); Case File 002's, a patrol city with one arena. */
 export function chapterCity(id: ChapterId, seed: number): City {
   if (id === "case-002") return generateCity(seed, chapterStops(id));
+  if (id === "case-003") return feeCity(seed);
   const city = generateCity(seed, chapterStops(id), { deckHalf: CHAPTER_DECK_HALF });
   if (city.zones[0]) city.zones[0].villain = "right-clicker";
   return city;

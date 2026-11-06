@@ -78,6 +78,7 @@ import {
   ZIP_RANGE,
 } from "./constants";
 import { nextClue } from "./chapter";
+import { feeTarget } from "./fee-strike";
 import { nextGate } from "./trial";
 import { collideSphere, groundBelow, overRiver, supported, type AnchorPick, type SphereHit } from "./city";
 import { nearestTarget } from "./combat";
@@ -154,6 +155,9 @@ export function stopTarget(s: SimState): Vec3 | null {
   const clue = s.chapter ? nextClue(s) : null;
   if (clue) return clue;
   if (s.trial) return nextGate(s);
+  // Case File 003: a clue, the fee meter, then Gas Goblin through the chase.
+  const fee = s.fee ? feeTarget(s) : null;
+  if (fee) return fee;
   const z = s.city.zones[s.index];
   if (!z) return null;
   return z.kind === "errand" ? (z.allyAt ?? z.center) : z.center;

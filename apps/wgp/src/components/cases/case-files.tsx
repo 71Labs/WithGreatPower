@@ -3,8 +3,8 @@
 /**
  * /play/cases, "Case files": Bearson's open cases as paper folders on the night city.
  * Each open case is a big folder (its poster clipped in: 001's MISSING poster, 002's ballot,
- * its status, the best time once closed and the "Case closed" badge's state); 003 is a
- * locked folder still in his drafts. Loading keeps the folder and checks the status and badge in place; an error
+ * 003's "Sorry, no bread" sign; its status, the best time once closed and the "Case closed"
+ * badge's state); any case still unwritten is a locked folder in his drafts. Loading keeps the folder and checks the status and badge in place; an error
  * says so above it and leaves what this browser knows on screen.
  */
 import { useEffect, type ReactNode } from "react";
@@ -19,6 +19,7 @@ import { formatTicks, spokenTicks } from "@/lib/cases/view";
 
 import { MissingPoster } from "./art";
 import { BallotPoster } from "./case-002/art";
+import { FeeSignPoster } from "./fee-strike/art";
 import { BadgeBlock, CaseTime, StatusPill } from "./shared";
 
 /** The folder's tab, sitting on its top edge: the case number on the folder's darker card. */
@@ -37,6 +38,7 @@ function FolderTab({ children, locked = false }: { children: ReactNode; locked?:
 /** A case's poster, clipped into its folder. */
 function CasePoster({ id, sizes }: { id: CaseFile["id"]; sizes: string }) {
   if (id === "case-002") return <BallotPoster />;
+  if (id === "case-003") return <FeeSignPoster />;
   return <MissingPoster sizes={sizes} />;
 }
 

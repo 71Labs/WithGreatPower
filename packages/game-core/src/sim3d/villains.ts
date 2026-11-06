@@ -1187,7 +1187,8 @@ export function stepVillain(s: SimState, dt: number) {
   const slow = s.slowmo > 0 ? SLOWMO_FACTOR : 1;
   const vdt = dt * slow;
   v.invuln = Math.max(0, v.invuln - dt);
-  if (s.mode === "won") {
+  // Case File 003: still webbed while the hero cools the meter (mode "fight" again).
+  if (s.mode === "won" || s.fee?.phase === "cool") {
     stepWebbed(s, v, dt, zone);
     return;
   }

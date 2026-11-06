@@ -104,6 +104,10 @@ export function villainTargets(v: Villain): Target[] {
     });
     return out;
   }
+  // Beaten, Gas Goblin is no target: Case File 003 keeps him webbed through the cooling (mode
+  // "fight"). On every other night his hits only reach 0 as the fight is won (mode "won"), so
+  // nothing there changes. (Case File 002's beaten Sybil is handled below: his runner stays one.)
+  if (v.kind === "gas-goblin" && v.hits <= 0) return [];
   if (v.kind === "sybil") {
     const out: Target[] = [];
     v.bodies.forEach((b, i) => {

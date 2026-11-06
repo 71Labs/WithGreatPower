@@ -16,6 +16,7 @@ import { ShareOnX } from "@/components/social/share-on-x";
 import { getCases } from "@/lib/api/client";
 import { CASE_001 } from "@/lib/cases/content";
 import { CASE_002 } from "@/lib/cases/content-002";
+import { CASE_003 } from "@/lib/cases/content-003";
 import { markCaseCleared } from "@/lib/cases/local";
 import { caseEntry } from "@/lib/cases/registry";
 import type { ChapterId } from "@/lib/cases/types";
@@ -23,6 +24,8 @@ import { badgeView, formatTicks, spokenTicks, type BadgeView } from "@/lib/cases
 
 import { MaryPhoto } from "./art";
 import { GenPhoto } from "./case-002/art";
+import { AlsoFound } from "./fee-strike/also-found";
+import { WarmLoafPhoto } from "./fee-strike/art";
 import { BadgeBlock, CaseStamp, RugFront } from "./shared";
 
 /** Where the clear stands with the server. */
@@ -133,6 +136,24 @@ function bestLine(ticks: number, best: number | null | undefined, first: boolean
 
 /** The case's front page once it's closed. */
 function FrontPage({ chapter, heroName }: { chapter: ChapterId; heroName: string }) {
+  if (chapter === "case-003")
+    return (
+      <>
+        <RugFront
+          headingLevel="h2"
+          headingId="case-front-headline"
+          headline={CASE_003.found.headline}
+          dateline={["Extra edition", CASE_003.district]}
+          photo={<WarmLoafPhoto alt={CASE_003.found.photo} />}
+          caption={CASE_003.found.caption}
+          dek={CASE_003.found.dek}
+          story={CASE_003.found.story(heroName)}
+          byline={CASE_003.byline}
+        />
+        {/* The thread to case 004: the receipt in his saddlebag. */}
+        <AlsoFound className="mt-4" />
+      </>
+    );
   if (chapter === "case-002")
     return (
       <RugFront
