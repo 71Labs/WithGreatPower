@@ -204,12 +204,17 @@ export function heroScale(asset: HeroAsset, height: number): number {
 }
 
 const HAND = /^(hand|thumb|index|middle|ring|pinky)_/;
+const FOOT = /^(foot|ball|toe)_/;
+/** A pale suit's boots come up to here (a share of the body's height: mid-calf). */
+export const BOOT_TOP = 0.16;
 
 /**
  * The body in game units, with what the hero's shaders read: `aWebP`/`aWebQ`/`aWebR` (the
- * web's lengths scaled too), `aAO`, and `aHull` for the ink outline: normals averaged over
- * the vertices that share a position, so the hull never cracks where the web's cells split
- * the mesh, and a thinner line on the hands and lenses so fingers stay fingers.
+ * web's lengths scaled too), `aAO`, `aHull` for the ink outline (normals averaged over the
+ * vertices that share a position, so the hull never cracks where the web's cells split the
+ * mesh, and a thinner line on the hands and lenses so fingers stay fingers), and `aTrim`: 1 on
+ * the gloves (skinned to the hand and fingers) and the boots (the feet, up to mid-calf), where
+ * a pale suit takes its trim colour.
  */
 export function heroGeometry(asset: HeroAsset, k: number): BufferGeometry {
   const src = asset.geometry;
@@ -254,9 +259,22 @@ export function heroGeometry(asset: HeroAsset, k: number): BufferGeometry {
     s.add(v.fromBufferAttribute(nrm, i));
   }
   const hand = asset.bones.map((b) => HAND.test(b.name));
+  const foot = asset.bones.map((b) => FOOT.test(b.name));
   const si = src.getAttribute("skinIndex");
   const sw = src.getAttribute("skinWeight");
   const hull = new Float32Array(n * 4);
+  const trim = new Float32Array(n);
+  const bootTop = asset.height * BOOT_TOP;
+  for (let i = 0; i < n; i++) {
+    if (wr.getZ(i) > KIND_LENS - 0.5) continue;
+    let w = 0;
+    for (let c = 0; c < 4; c++) {
+      const b = si.getComponent(i, c);
+      if (hand[b] || foot[b]) w += sw.getComponent(i, c);
+    }
+    trim[i] = w >= 0.5 || pos.getY(i) < bootTop ? 1 : 0;
+  }
+  g.setAttribute("aTrim", new BufferAttribute(trim, 1));
   for (let i = 0; i < n; i++) {
     v.copy(sum.get(key(i))!).normalize();
     let w = 1;

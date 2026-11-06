@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { MotionLayer } from "./anim/motion";
 import { applyPose, newPose, newSolved, type Pose } from "./anim/pose";
-import { assetFromScene, clipsFromGltf, heroGeometry, heroScale, HERO_ANIMS, HERO_MODEL, type HeroAsset } from "./hero-asset";
+import { assetFromScene, BOOT_TOP, clipsFromGltf, heroGeometry, heroScale, HERO_ANIMS, HERO_MODEL, type HeroAsset } from "./hero-asset";
 import { rigFromAsset } from "./hero-rig";
 import type { Rig } from "./rig";
 
@@ -121,9 +121,25 @@ describe("the hero's MPFB rig", () => {
 
   it("builds the game geometry with the shader's attributes", () => {
     const g = heroGeometry(asset, heroScale(asset, HEIGHT));
-    for (const name of ["aWebP", "aWebQ", "aWebR", "aAO", "aHull", "skinIndex", "skinWeight"]) expect(g.getAttribute(name)).toBeTruthy();
+    for (const name of ["aWebP", "aWebQ", "aWebR", "aAO", "aHull", "aTrim", "skinIndex", "skinWeight"]) expect(g.getAttribute(name)).toBeTruthy();
     g.computeBoundingBox();
     expect(g.boundingBox!.max.y).toBeCloseTo(HEIGHT, 3);
+    // A pale suit's trim: the gloves and the boots (to mid-calf), never the torso or the head.
+    const trim = g.getAttribute("aTrim");
+    const pos = g.getAttribute("position");
+    let gloves = 0;
+    let boots = 0;
+    let body = 0;
+    for (let i = 0; i < trim.count; i++) {
+      if (trim.getX(i) < 0.5) continue;
+      const y = pos.getY(i);
+      if (y < HEIGHT * BOOT_TOP + 1e-6) boots++;
+      else if (Math.abs(pos.getX(i)) > HEIGHT * 0.2) gloves++;
+      else body++;
+    }
+    expect(boots).toBeGreaterThan(trim.count * 0.03);
+    expect(gloves).toBeGreaterThan(trim.count * 0.03);
+    expect(body).toBe(0);
     expect(g.getIndex()!.count / 3).toBeLessThanOrEqual(16000);
   });
 

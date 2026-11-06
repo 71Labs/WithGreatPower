@@ -26,6 +26,22 @@ const HULL_BACK = 0.018;
 
 const v3 = (hex: string) => new Vector3(...rgb(hex));
 
+/**
+ * How much of a pale suit's cues a suit takes (hero-shaders.ts uTrim): 0 for every suit with
+ * colour in it, 1 for a near-white one (Snow), by its lightness (Rec. 709 weights on sRGB).
+ */
+export function suitTrim(suit: string): number {
+  const [r, g, b] = rgb(suit);
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const t = Math.min(1, Math.max(0, (l - 0.78) / (0.9 - 0.78)));
+  return t * t * (3 - 2 * t);
+}
+
+/** A pale suit's web lines: the web's own colour, deeper, so they hold against the white. */
+export function webLine(web: string): Vector3 {
+  return v3(web).multiplyScalar(0.58);
+}
+
 export function heroMaterial(shared: SharedUniforms, colors: Record<string, string>, k: number): ShaderMaterial {
   return new ShaderMaterial({
     name: "wgp-hero",
@@ -49,6 +65,8 @@ export function heroMaterial(shared: SharedUniforms, colors: Record<string, stri
       uAo: { value: AO_STRENGTH },
       uFlash: { value: 0 },
       uFade: { value: 0 },
+      uTrim: { value: suitTrim(colors.suit) },
+      uWebLine: { value: webLine(colors.web) },
       uFogMix: { value: 0 },
       // Unused by the hero, kept so the scene and the hull treat every body alike.
       uWebbed: { value: 0 },
@@ -105,8 +123,14 @@ export class HeroModel implements BodyModel {
   /** Recolour (a new suit): `suit`, `web` and `lens`, as CAST_DEFS.hero.colors gives them. */
   setColors(colors: Record<string, string>): void {
     const u = this.fill.uniforms;
-    if (colors.suit) u.uSuit.value = v3(colors.suit);
-    if (colors.web) u.uWeb.value = v3(colors.web);
+    if (colors.suit) {
+      u.uSuit.value = v3(colors.suit);
+      u.uTrim.value = suitTrim(colors.suit);
+    }
+    if (colors.web) {
+      u.uWeb.value = v3(colors.web);
+      u.uWebLine.value = webLine(colors.web);
+    }
     if (colors.lens) u.uLens.value = v3(colors.lens);
   }
 
