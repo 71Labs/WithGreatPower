@@ -55,7 +55,7 @@ const DYNO_FULL = 520;
 const SWAY_W = 3.3;
 const SWAY_ZETA = 0.14;
 /** Hand over hand along a ledge: travel per cycle, and each hand's share of it on the lip. */
-const SHIMMY_L = 30;
+const SHIMMY_L = 20;
 const SHIMMY_STANCE = 0.6;
 /** The wrist on a ledge: this far under its top, this far off the face. */
 const LIP_DOWN = 2.5;
@@ -149,6 +149,7 @@ export class RoamPoser {
   private readonly lip = [new Hold(), new Hold()];
   private lipPhase = 0;
   private lipLead = LH;
+  private lipMoving = false;
   private readonly sway = { x: 0, vx: 0, z: 0, vz: 0 };
   private ledgeTop = 0;
   /** The mantle: the face it went over, and where the hips and hands started. */
@@ -565,7 +566,7 @@ export class RoamPoser {
     // Shoulders a little off the face under the hands, arms long; hips under them.
     const shoulderOff = 9;
     const hipOff = 8;
-    const shoulderY = lipY - Math.sqrt(Math.max(1, (b.reach * 0.97) ** 2 - (shoulderOff - LIP_GAP) ** 2));
+    const shoulderY = lipY - Math.sqrt(Math.max(1, (b.reach * 0.9) ** 2 - (shoulderOff - LIP_GAP) ** 2));
     const hipsY = shoulderY - b.shoulderY;
 
     // Hand over hand along the lip: the lead hand first, by the distance shimmied.
@@ -581,14 +582,18 @@ export class RoamPoser {
         hd.cycle = 0;
       }
       this.lipLead = LH;
+      this.lipMoving = false;
     }
-    if (Math.abs(du) > 0.01) {
+    const shimmying = Math.abs(du) > 0.01;
+    if (shimmying) {
       const lead = du > 0 ? LH : RH;
-      if (lead !== this.lipLead) {
+      if (lead !== this.lipLead || !this.lipMoving) {
+        // Setting off (or turning back): the lead hand reaches first, the other half a cycle on.
         this.lipLead = lead;
-        for (let i = 0; i < 2; i++) this.lip[i].cycle = Math.floor(this.lipPhase - (i === lead ? 0 : 0.5));
+        for (let i = 0; i < 2; i++) this.lip[i].cycle = i === lead ? Math.floor(this.lipPhase) - 1 : Math.floor(this.lipPhase - 0.5);
       }
     }
+    this.lipMoving = shimmying;
     const dPhase = Math.abs(du) / SHIMMY_L;
     this.lipPhase += dPhase;
     const sgn = du > 0 ? 1 : du < 0 ? -1 : 0;
@@ -631,7 +636,7 @@ export class RoamPoser {
       sw.vx = ctx.reducedMotion ? 0 : 0.45;
       sw.vz = ctx.reducedMotion ? 0 : Math.sin(P.x * 0.37 + P.z * 0.11) > 0 ? 0.18 : -0.18;
     }
-    const zWant = ctx.reducedMotion ? 0 : clamp((-du / Math.max(dt, 1e-3)) * 0.0007, -0.12, 0.12);
+    const zWant = ctx.reducedMotion ? 0 : clamp((-du / Math.max(dt, 1e-3)) * 0.0005, -0.06, 0.06);
     const W2 = SWAY_W * SWAY_W;
     const D = 2 * SWAY_ZETA * SWAY_W;
     sw.vx += (-W2 * sw.x - D * sw.vx) * dt;

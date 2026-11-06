@@ -191,14 +191,29 @@ describe("the hero on a wall", () => {
     expect(bad).toBe(0);
   });
 
-  it("hangs from the ledge by both hands, on its lip, arms long, legs under him", () => {
+  it("hangs from the ledge by both hands, on its lip, arms long, legs under him, and shimmies hand over hand", () => {
     const s = play(
       script([
         { move: "climb", vy: 120, secs: 1 },
         { move: "hang", vy: 0, secs: 1.5, y: TOP - 50 },
+        { move: "hang", vy: 0, vz: 100, secs: 1 },
+        { move: "hang", vy: 0, secs: 0.5 },
       ]),
     );
-    const hang = s.filter((x) => x.move === "hang").slice(20);
+    // A hand on the lip never slides while it holds (the shimmy moves one hand at a time).
+    let slide = 0;
+    let moves = 0;
+    for (let i = 1; i < s.length; i++) {
+      for (const k of [0, 1]) {
+        if (s[i].move !== "hang") continue;
+        if (s[i].planted[k] && s[i - 1].planted[k]) slide = Math.max(slide, s[i].at[k].distanceTo(s[i - 1].at[k]));
+        if (!s[i].planted[k] && s[i - 1].planted[k]) moves++;
+      }
+    }
+    expect(slide).toBeLessThan(0.05);
+    expect(moves).toBeGreaterThan(6);
+    // Hanging still (after the catch blends in, before the shimmy).
+    const hang = s.slice(Math.round(1.35 / DT), Math.round(2.5 / DT));
     for (const x of hang) {
       expect(x.planted.slice(0, 2)).toEqual([true, true]);
       for (const k of [0, 1]) {
