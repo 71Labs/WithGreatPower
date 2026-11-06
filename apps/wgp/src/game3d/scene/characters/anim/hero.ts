@@ -43,7 +43,7 @@ import { worldPos } from "../rig";
 import { Mocap } from "./mocap";
 import { applyPose, newPose, newSolved, type Pose, type Solved } from "./pose";
 import { Ragdoll } from "./ragdoll";
-import { RoamPoser } from "./roam-pose";
+import { keepFeetApart, RoamPoser } from "./roam-pose";
 import type { AnimContext } from "./types";
 
 type Base = "ground" | "swing" | "air" | "climb" | "dash" | "slam" | "ko";
@@ -854,6 +854,8 @@ export class HeroAnimator {
         f.y = Math.max(f.y, ctx.ground(f.x, f.z, H.y) + spec.ankle);
       }
     }
+    // Free roam: the feet never cross, whatever the turn (a zip handing back, a hard air turn).
+    if (f.roam) keepFeetApart(pose, H, Q);
     // Climbing: left hand and both feet planted on the wall, alternating.
     if (base === "climb") {
       const wallX = h.pos.x - this.wallN.x * (this.wallD - 3);

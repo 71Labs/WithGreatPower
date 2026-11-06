@@ -12,6 +12,7 @@
  * - vault: the left hand planted on the obstacle's top, the legs swung through to the right.
  * - wallrun: leaning out from the wall, feet striding along it, arms pumping.
  * - roll: a tucked forward roll over the hard landing.
+ * - splash: treading water in the river, head and shoulders up, legs below.
  * - zip: pulled along the web, the web hand out ahead on the line, the other arm back, the legs
  *   trailing together, knees a little bent, then tucked as he comes in to land.
  *
@@ -30,7 +31,7 @@ import type { Pose } from "./pose";
 import type { AnimContext } from "./types";
 
 /** The moves this poser draws (the rest are the hero animator's own). */
-export const ROAM_POSED: ReadonlySet<RoamMoveName> = new Set<RoamMoveName>(["climb", "hang", "mantle", "vault", "wallrun", "roll", "zip"]);
+export const ROAM_POSED: ReadonlySet<RoamMoveName> = new Set<RoamMoveName>(["climb", "hang", "mantle", "vault", "wallrun", "roll", "zip", "splash"]);
 
 /** The sim's body radius: its centre stands this far off a wall it's on. */
 const R = 26;
@@ -48,6 +49,20 @@ const _t = new Vector3();
 const _q = new Quaternion();
 const _p = new Vector3();
 const DOWN = new Vector3(0, -1, 0);
+
+/**
+ * Free roam frames only (the hero animator's own poses, after a roam move hands back): keep each
+ * drawn foot on its own side of the body's midline, as the roam poses do.
+ */
+export function keepFeetApart(pose: Pose, hips: Vector3, rot: Quaternion): void {
+  const left = _c.set(1, 0, 0).applyQuaternion(rot);
+  for (let i = 0; i < 2; i++) {
+    const s = i === 0 ? 1 : -1;
+    const t = pose.foot[i];
+    const side = (t.x - hips.x) * left.x + (t.y - hips.y) * left.y + (t.z - hips.z) * left.z;
+    if (side * s < MIDLINE) t.addScaledVector(left, s * MIDLINE - side);
+  }
+}
 
 export class RoamPoser {
   private move: RoamMoveName | null = null;
@@ -262,6 +277,26 @@ export class RoamPoser {
           targets[i].copy(H).addScaledVector(left, s * 13).addScaledVector(UP, this.shoulderY - 14 + 10 * Math.max(sw, 0)).addScaledVector(along, 14 * sw);
         }
         grip = 0.6;
+        break;
+      }
+      case "splash": {
+        // Treading water: upright, the hips under the surface, arms sculling, legs below.
+        const fac = h.facing ?? { x: 0, y: 0, z: 1 };
+        this.dir.set(fac.x, 0, fac.z);
+        if (this.dir.lengthSq() < 1e-6) this.dir.set(0, 0, 1);
+        this.dir.normalize();
+        frameQuat(UP, this.dir, this.rot);
+        const left = this.left.set(1, 0, 0).applyQuaternion(this.rot);
+        const bob = ctx.reducedMotion ? 0 : Math.sin(r.moveT * 6) * 2;
+        H.copy(P);
+        H.y = -this.shoulderY + 6 + bob;
+        const scull = ctx.reducedMotion ? 0 : Math.sin(r.moveT * 7);
+        for (let i = 0; i < 2; i++) {
+          const s = i === 0 ? 1 : -1;
+          targets[i].copy(H).addScaledVector(left, s * (22 + 4 * scull)).addScaledVector(UP, this.shoulderY - 6).addScaledVector(this.dir, 8);
+          targets[2 + i].copy(H).addScaledVector(left, s * 7).addScaledVector(UP, -34 * this.legK).addScaledVector(this.dir, (i === 0 ? 1 : -1) * 6 * scull);
+        }
+        grip = 0.1;
         break;
       }
       case "zip": {
