@@ -12,7 +12,7 @@
  * - A pale suit (Snow: near-white with a light web) would read as a bare, pale body, so it takes
  *   a suit's cues (uTrim, from the suit's lightness): its web lines in a deeper shade of the
  *   web's own colour (uWebLine) and a touch wider, and gloves and boots (aTrim) in the web
- *   colour. Every other suit draws exactly as before (uTrim 0).
+ *   colour, a shade deeper. Every other suit draws exactly as before (uTrim 0).
  *
  * The hull is the cast's own (HULL_VERTEX), fed by the model's `aHull`.
  */
@@ -128,9 +128,9 @@ void main() {
   else if (kind > 7.5) col = uLens;
   else {
     float pxw = max(length(fwidth(vRest)) * 0.577, 1e-4);
-    // A pale suit: gloves and boots in the web's colour, the lines deeper (on the trim, inked).
+    // A pale suit: gloves and boots in its web colour, a shade deeper; the lines deeper (inked on the trim).
     float trim = uTrim * step(0.5, vTrim);
-    vec3 base = mix(uSuit, uWeb, trim);
+    vec3 base = mix(uSuit, mix(uWeb, uWebLine, 0.45), trim);
     vec3 line = mix(mix(uWeb, uWebLine, uTrim), mix(uWeb, uInk, 0.55), trim);
     // A hit (or SAVED!) blinks the suit hot, in its own colour, under white Ben-Day dots;
     // never a flat wash toward white: far off the web fades out, and a washed-out suit reads
