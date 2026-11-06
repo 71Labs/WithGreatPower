@@ -180,6 +180,9 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
       const dz = b.z - h.z;
       const d = len2(dx, dz);
       const up = b.y - (h.y - HERO_RADIUS);
+      // On a wall with it behind him: let go (the stick back only climbs down, roam-2).
+      const body = s.roam.body;
+      if ((move === "climb" || move === "hang") && body.moveT > 0.3 && -(dx * body.wnx + dz * body.wnz) < -0.3 * d) return { ...IDLE, shot: SHOT_DROP };
       // Up and away: zip at it (the zip finds the roof edge nearest the way to it).
       const zip = (up > 80 || d > 380) && d < 760 && move !== "climb" && move !== "hang" && m.t % 45 === 0;
       // Stuck: hop.
