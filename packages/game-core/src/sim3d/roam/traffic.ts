@@ -208,6 +208,15 @@ export function buildTraffic(city: City, grid: CityIndex, start: { x: number; y:
         if (!straight || !inCrossing(loop, along)) break;
         s = (s + STREET + CAR_LEN + 40) % loop.len;
       }
+      // Not on the hero where the outing starts (back down its lane a few lengths).
+      for (let tries = 0; tries < 6; tries++) {
+        placeCar(loop, s, scratch);
+        const dx = start.x - scratch.x;
+        const dz = start.z - scratch.z;
+        const clear = start.y > loop.y + CAR_TALL + R || start.y < loop.y - R || dx > scratch.ex + R + 20 || dx < -scratch.ex - R - 20 || dz > scratch.ez + R + 20 || dz < -scratch.ez - R - 20;
+        if (clear) break;
+        s = (s - 2 * CAR_LEN + loop.len) % loop.len;
+      }
       list.push({ s, cruise: CAR_CRUISE_MIN + (CAR_CRUISE_MAX - CAR_CRUISE_MIN) * (((h >>> 16) & 0xffff) / 0xffff), kind: (h >>> 8) & 7 });
     }
     list.sort((a, b) => a.s - b.s);

@@ -100,8 +100,11 @@ export const ROAM_LAMP = { post: 2, h: 66, head: 8, headH: 8, lean: 7, headAt: 6
 export const ROAM_SIGNAL = { post: 2.5, h: 140, arm: 1.5, head: 5.5, headH: 30, headUp: 100 } as const;
 /** Roof doors: the bulkhead (taller than STEP_UP: vaulted, not stepped onto) and its cap. */
 export const ROOF_DOOR = { w: 44, d: 36, h: 44, capW: 52, capD: 44, capH: 5 } as const;
-/** Doc's bridge's rails: this tall, this thick (a flush wall, its cap a band of it), along both deck edges. */
-export const BRIDGE_RAIL = { h: 54, t: 10, capH: 5 } as const;
+/**
+ * Doc's bridge's rails: this tall, this thick (a flush wall, its cap a band of it), along both deck
+ * edges. Tall enough that hanging from the top on the deck's side keeps the body clear of the deck.
+ */
+export const BRIDGE_RAIL = { h: 80, t: 10, capH: 5 } as const;
 /** The rails come in lengths about this long. */
 const RAIL_PIECE = 60;
 
@@ -512,18 +515,15 @@ export function roamFurniture(city: City, keep: KeepClear[] = []): RoamFurniture
     /** A box from u/v ranges. */
     const uv = (ua: number, ub: number, y0: number, y1: number, va: number, vb: number) => (alongX ? box(ua, y0, va, ub, y1, vb) : box(va, y0, ua, vb, y1, ub));
     const R = BRIDGE_RAIL;
-    // In lengths (a ledge pulled up onto is stood on near where it's grabbed, not at the middle of the bridge).
+    // One wall each side (no seams to wedge in), its cap in lengths (a ledge pulled up onto is
+    // stood on near where it's grabbed, not at the middle of the bridge).
     const pieces = Math.max(1, Math.round((u1 - u0) / RAIL_PIECE));
     for (const [va, vb] of [
       [v0, v0 + R.t],
       [v1 - R.t, v1],
     ]) {
-      for (let k = 0; k < pieces; k++) {
-        const ua = u0 + ((u1 - u0) * k) / pieces;
-        const ub = u0 + ((u1 - u0) * (k + 1)) / pieces;
-        add(uv(ua, ub, dk.y, dk.y + R.h - R.capH, va, vb), "rail");
-        add(uv(ua, ub, dk.y + R.h - R.capH, dk.y + R.h, va, vb), "rail-cap");
-      }
+      add(uv(u0, u1, dk.y, dk.y + R.h - R.capH, va, vb), "rail");
+      for (let k = 0; k < pieces; k++) add(uv(u0 + ((u1 - u0) * k) / pieces, u0 + ((u1 - u0) * (k + 1)) / pieces, dk.y + R.h - R.capH, dk.y + R.h, va, vb), "rail-cap");
     }
     add(uv(u0, u1, dk.y - 44, dk.y - 24, v0, v1), "bridge", false);
     const half = br.towerHalf ?? 25;

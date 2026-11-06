@@ -144,6 +144,22 @@ export function stepKnock(s: SimState): void {
       h.y += h.vy * sdt;
       h.z += h.vz * sdt;
       collideSphere(s.grid, h, R, hit);
+      // Thrown into a corner of small boxes (a rail, a post): settle it out of all of them.
+      if (hit.hit) {
+        const wall = hit.wall;
+        const nx = hit.wallNx;
+        const nz = hit.wallNz;
+        const top = hit.top;
+        const topY = hit.topY;
+        collideSphere(s.grid, h, R, hit);
+        if (!hit.hit) {
+          hit.wall = wall;
+          hit.wallNx = nx;
+          hit.wallNz = nz;
+          hit.top = top;
+          hit.topY = topY;
+        }
+      }
       if (hit.wall && !bounced) {
         bounced = true;
         h.vx = h.vx * BOUNCE_KEEP + hit.wallNx * BOUNCE;

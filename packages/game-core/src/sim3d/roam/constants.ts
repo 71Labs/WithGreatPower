@@ -82,13 +82,14 @@ export const VIEW_XP = 15;
 /**
  * A car in the City, as the sim and the scene both size it: this long, wide and tall (one box;
  * taller than STEP_UP, so it's walked into, not up onto, and lower than VAULT_MAX, so it's
- * vaulted). Lanes run this far either side of a street's centre line (the deck's a little wider).
+ * vaulted). Lanes run this far either side of a street's (or the bridge deck's) centre line,
+ * leaving room for the hero between a car and a facade or the deck's rail.
  */
 export const CAR_LEN = 96;
 export const CAR_WIDE = 39;
 export const CAR_TALL = 46;
 export const LANE = 29;
-export const DECK_LANE = 42;
+export const DECK_LANE = 30;
 /** About one car per this much lane (each way), and the cruise speeds they pick from. */
 export const CAR_SPACING = 600;
 export const CAR_CRUISE_MIN = 250;

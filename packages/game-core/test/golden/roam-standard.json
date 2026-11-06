@@ -4,12 +4,12 @@
   "patrolRuleset": 4,
   "outing": {
     "ok": true,
-    "hash": "e539196b",
+    "hash": "41f8700e",
     "checkpoints": [
-      "d0cc8a6b",
-      "0be40d89",
-      "dd1b2b85",
-      "017bce6d"
+      "b1e442ff",
+      "153c8bdd",
+      "fc6f5389",
+      "f2693824"
     ],
     "ticks": 2034,
     "bytes": 806,
