@@ -9,10 +9,10 @@ import { fileURLToPath } from "node:url";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { cityBase, cityRecord, emptyCity, roamStartFrom } from "@wgp/game-core/city";
+import { cityBase, cityRecord, emptyCity, roamStartFrom, TASK_IDS } from "@wgp/game-core/city";
 import { encodeInputCodes } from "@wgp/game-core/input";
 import { roamLog, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
-import { newRoamBot, PAGE_XP, ROAM_OLD_LOG_RULESETS, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
+import { frontrunRace, newRoamBot, PAGE_XP, ROAM_OLD_LOG_RULESETS, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
 
 import { HttpError } from "@/server/http";
 
@@ -61,7 +61,7 @@ describe("free roam on the server", () => {
     // First part of the outing: off the roof, to Dev, the chase and back.
     const first = play(cityBase(emptyCity()), chase);
     const a = await fileOuting(db, { playerId, outingId: ID_A, base: cityBase(emptyCity()), log: first.log, now: T0 });
-    expect(a.ruleset).toBe("roam-2");
+    expect(a.ruleset).toBe("roam-3");
     expect(a.gains.tasks).toEqual(["pickpocket"]);
     expect(a.gains.xp).toBe(TASK_XP);
     expect(a.city.tasks.pickpocket).toBe(TASK_DONE);
@@ -113,18 +113,21 @@ describe("free roam on the server", () => {
     expect(bad.status).toBe(422);
   });
 
-  it("refuses an outing played under older roam rules (roam-1) as stale, keeping the record, and hands back the record to start fresh from", async () => {
+  it("refuses an outing played under older roam rules (roam-1, roam-2) as stale, keeping the record, and hands back the record to start fresh from", async () => {
     const before = cityRecord((await ensureSave(db, playerId)).save);
     const xp = (await ensureSave(db, playerId)).save.hero!.xp;
-    // The same frames a roam-1 tab would send, under roam-1's log field.
+    // The same frames a roam-1 or a roam-2 tab would send, under its log field.
     const played = play(cityBase(before), [{ kind: "wait", ticks: 20 }]);
-    const old = encodeInputCodes(played.run.codes, [], 0, ROAM_OLD_LOG_RULESETS[0]);
-    for (const id of [ID_B, ID_C]) {
-      const e = await rejection(fileOuting(db, { playerId, outingId: id, base: cityBase(before), log: old, now: T0 }));
-      expect(e.status).toBe(409);
-      expect(e.code).toBe("old_rules");
-      expect(e.details?.ruleset).toBe("roam-2");
-      expect(e.details?.city).toEqual(before);
+    expect(ROAM_OLD_LOG_RULESETS).toEqual([0x0f001104, 0x0f001204]);
+    for (const ruleset of ROAM_OLD_LOG_RULESETS) {
+      const old = encodeInputCodes(played.run.codes, [], 0, ruleset);
+      for (const id of [ID_B, ID_C]) {
+        const e = await rejection(fileOuting(db, { playerId, outingId: id, base: cityBase(before), log: old, now: T0 }));
+        expect(e.status).toBe(409);
+        expect(e.code).toBe("old_rules");
+        expect(e.details?.ruleset).toBe("roam-3");
+        expect(e.details?.city).toEqual(before);
+      }
     }
     // Nothing moved: the record and the XP are as they were.
     const after = (await ensureSave(db, playerId)).save;
@@ -133,7 +136,35 @@ describe("free roam on the server", () => {
     // A fresh outing from that record files.
     const fresh = play(cityBase(before), [{ kind: "wait", ticks: 20 }]);
     const ok = await fileOuting(db, { playerId, outingId: ID_C, base: cityBase(before), log: fresh.log, now: T0 });
-    expect(ok.ruleset).toBe("roam-2");
+    expect(ok.ruleset).toBe("roam-3");
+  });
+
+  it("roam-3: files Gwei Stacy's Front-run, won through the real replay, and pays its 40 XP once", async () => {
+    const racer = (await makePlayer(db, "racer")).id;
+    await givePlayerHero(db, racer, "Racer");
+    const race = w.race;
+    // From the spawn roof down the streets to her stall, talk, and the race the way a good runner takes it.
+    const goals: RoamBotGoal[] = [{ kind: "go", x: race.spot.x, z: race.spot.z, r: 12, street: true }, ...frontrunRace(w, "good")];
+    const run = play(cityBase(emptyCity()), goals, 60 * 120);
+    expect(run.run.sim.roam!.progress.stage[TASK_IDS.indexOf("frontrun")]).toBe(TASK_DONE);
+    const a = await fileOuting(db, { playerId: racer, outingId: ID_A, base: cityBase(emptyCity()), log: run.log, now: T0 });
+    expect(a.gains.tasks).toEqual(["frontrun"]);
+    expect(a.gains.xp).toBe(TASK_XP);
+    expect(a.city.tasks.frontrun).toBe(TASK_DONE);
+    expect(a.save.hero!.xp).toBe(TASK_XP);
+    // Filed again as the outing grows: the race isn't paid twice.
+    const longer = play(cityBase(emptyCity()), [...goals, { kind: "wait", ticks: 60 }], 60 * 120);
+    const b = await fileOuting(db, { playerId: racer, outingId: ID_A, base: cityBase(emptyCity()), log: longer.log, now: T0 });
+    expect(b.gains.tasks).toEqual([]);
+    expect(b.gains.xp).toBe(0);
+    expect((await ensureSave(db, racer)).save.hero!.xp).toBe(TASK_XP);
+    // A lost race (at a jog, Sandwich Man first) files the stage and pays nothing.
+    const loser = (await makePlayer(db, "loser")).id;
+    await givePlayerHero(db, loser, "Loser");
+    const slow = play(cityBase(emptyCity()), [goals[0], ...frontrunRace(w, "jog"), { kind: "wait", ticks: 240 }], 60 * 120);
+    const l = await fileOuting(db, { playerId: loser, outingId: ID_B, base: cityBase(emptyCity()), log: slow.log, now: T0 });
+    expect(l.gains.tasks).toEqual([]);
+    expect(l.city.tasks.frontrun).toBe(1);
   });
 
   it("counts filings against a daily budget", () => {
