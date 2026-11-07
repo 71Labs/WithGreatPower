@@ -11,6 +11,7 @@
  *                route decides
  */
 import { headers } from "next/headers";
+import { connection } from "next/server";
 import { cache } from "react";
 
 import { getDb } from "@/server/db/client";
@@ -64,5 +65,8 @@ export const loadLandingInvite = cache(async (param: string, fixture?: string | 
   if (!code) return { state: "unknown", code: null };
   const canned = landingFixture(fixture ?? undefined);
   if (canned) return toLanding(code, canned);
+  // A request-time read of the database: without this, Cache Components tries to prerender the
+  // page and trips over the database client's randomness.
+  await connection();
   return toLanding(code, await lookup(code));
 });
