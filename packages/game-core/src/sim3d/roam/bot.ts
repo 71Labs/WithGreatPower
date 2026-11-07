@@ -10,18 +10,22 @@ import type { InputFrame } from "../contract";
 import { dirIndex, len2 } from "../dmath";
 import type { SimState } from "../types";
 import { SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP } from "./constants";
-import type { RoamWorld } from "./types";
+import { RELAY_HOLD } from "./task-crosschain";
+import type { RoamRelay, RoamWorld } from "./types";
 
 export type RoamBotGoal =
   /**
    * Run (sprinting if far) to a feet point, within `r` across (and, given `y`, at about that
    * height); `street` keeps to the street grid on the way and gets down off roofs to it.
    */
-  | { kind: "go"; x: number; z: number; y?: number; r?: number; sprint?: boolean; street?: boolean; walk?: boolean }
-  /** Push the stick toward (x, z) until the body is on top of something at least `y` high (a climb, a mantle). */
-  | { kind: "climb"; x: number; z: number; y: number }
-  /** Press interact once (talk, photograph, sync). */
-  | { kind: "act" }
+  | { kind: "go"; x: number; z: number; y?: number; r?: number; sprint?: boolean; street?: boolean; walk?: boolean; jog?: boolean }
+  /**
+   * Push the stick toward (x, z) until the body is on top of something at least `y` high (a climb,
+   * a mantle); `sprint` climbs at the sprint's pace, `leap` jumps up the wall whenever it can.
+   */
+  | { kind: "climb"; x: number; z: number; y: number; sprint?: boolean; leap?: boolean }
+  /** Press interact once (talk, photograph, sync), or (roam-3) hold it down `hold` ticks (a relay). */
+  | { kind: "act"; hold?: number }
   /** Turn to face (x, z) on the spot. */
   | { kind: "face"; x: number; z: number }
   /** Hold the web for `ticks`, steering toward (x, z). */
@@ -84,6 +88,108 @@ export function roamTour(w: RoamWorld): RoamBotGoal[] {
   ];
 }
 
+/**
+ * Gwei Stacy's race (roam-3, task-frontrun.ts) from beside her stall: talk to her, then the
+ * course the way a runner takes it (RaceCourse.runner). `good`: sprinting, leaping up the facade
+ * (good movement, which wins); `jog`: at a jog, never sprinting (a slow route, which loses).
+ */
+export function frontrunRace(w: RoamWorld, pace: "good" | "jog" = "good"): RoamBotGoal[] {
+  const good = pace === "good";
+  const goals: RoamBotGoal[] = [{ kind: "act" }];
+  for (const p of w.race.runner) {
+    if (p.how === "climb") goals.push({ kind: "climb", x: p.x, z: p.z, y: p.y, sprint: good, leap: good });
+    else if (p.how === "go") goals.push({ kind: "go", x: p.x, z: p.z, y: p.y, r: 40, sprint: good, jog: !good });
+    else goals.push({ kind: "face", x: p.x, z: p.z }, { kind: "press", shot: "zip", x: p.x, z: p.z }, { kind: "wait", ticks: 50 });
+  }
+  return goals;
+}
+
+/**
+ * roam-3: the climbs up to each of Doc Octochain's relays from the street, as a player would
+ * (task-crosschain.ts places them; these are the roam city's fixed roofs and streets):
+ * - crane: up the north face of the skyscraper its jib runs beside, both tiers, along the jib
+ *   to the apex.
+ * - antenna: up the tallest building's west face, both tiers, to the antenna's open side.
+ * - bridge, deck: a scramble up the outer face of a tower's leg from the street, hanging from the cap.
+ * Each ends within reach of its relay, before the hold.
+ */
+export function relayClimb(w: RoamWorld, key: RoamRelay["key"]): RoamBotGoal[] {
+  const r = w.relays.find((q) => q.key === key)!;
+  switch (key) {
+    case "crane":
+      return [
+        // The crossing east of it, then along the street (the street grid's next line west is the river).
+        { kind: "go", x: 5370, z: 690, r: 30, street: true },
+        { kind: "go", x: r.x - 90, z: 740, r: 20 },
+        { kind: "climb", x: r.x - 90, z: 1000, y: 638 },
+        { kind: "climb", x: r.x - 90, z: 1000, y: 714 },
+        { kind: "go", x: r.x - 45, z: 1020, r: 10, walk: true },
+        { kind: "go", x: r.x, z: 1020, r: 6, walk: true },
+        { kind: "go", x: r.x + r.fx * 45, z: r.z + r.fz * 45, r: 8, walk: true },
+      ];
+    case "antenna":
+      return [
+        { kind: "go", x: 6190, z: r.z, r: 30, street: true },
+        { kind: "climb", x: 6400, z: r.z, y: 720 },
+        { kind: "climb", x: 6400, z: r.z, y: 796 },
+        { kind: "go", x: r.x + r.fx * 34, z: r.z + r.fz * 34, r: 8, walk: true },
+      ];
+    default:
+      // Out in front of the leg in the street, then into it at a sprint: up it, onto the cap's lip.
+      return [
+        { kind: "go", x: r.x + r.fx * 170, z: r.z + r.fz * 170, r: 20, street: true },
+        { kind: "hold", x: r.x - r.fx * 400, z: r.z - r.fz * 400, ticks: 60 * 7, sprint: true },
+      ];
+  }
+}
+
+/**
+ * roam-3: Cross-chain start to finish in one outing, from beside Uncle Gen on his roof: his
+ * briefing, the crane, the antenna, Doc's deck tower, a zip over the river between the two low
+ * roofs that face each other across it, the bridge's west tower, back over, and up to him.
+ */
+export function crosschainTour(w: RoamWorld): RoamBotGoal[] {
+  const uncle = w.folks.find((f) => f.key === "uncle")!;
+  const unplug: RoamBotGoal[] = [{ kind: "act", hold: RELAY_HOLD + 5 }];
+  const offWall: RoamBotGoal[] = [{ kind: "press", shot: "drop" }, { kind: "wait", ticks: 90 }];
+  const crane = w.relays.find((q) => q.key === "crane")!;
+  return [
+    { kind: "act" },
+    { kind: "wait", ticks: 20 },
+    ...relayClimb(w, "crane"),
+    ...unplug,
+    // Back along the jib onto the skyscraper's tier before heading down.
+    { kind: "go", x: crane.x - 45, z: 1020, r: 10, walk: true },
+    ...relayClimb(w, "antenna"),
+    ...unplug,
+    ...relayClimb(w, "deck"),
+    ...unplug,
+    ...offWall,
+    // Over the river: up the low roof on the east bank, and a zip across to the one facing it.
+    { kind: "go", x: 5000, z: 2290, r: 20, street: true },
+    { kind: "climb", x: 5000, z: 2450, y: 233 },
+    { kind: "go", x: 4845, z: 2450, r: 8, walk: true },
+    { kind: "face", x: 4000, z: 2450 },
+    { kind: "press", shot: "zip", x: 4000, z: 2450 },
+    { kind: "wait", ticks: 60 },
+    ...relayClimb(w, "bridge"),
+    ...unplug,
+    ...offWall,
+    // Back over the same way, then up Uncle Gen's building from the street north of it.
+    { kind: "go", x: 4100, z: 2290, r: 20, street: true },
+    { kind: "climb", x: 4100, z: 2450, y: 278 },
+    { kind: "go", x: 4335, z: 2450, r: 8, walk: true },
+    { kind: "face", x: 5200, z: 2450 },
+    { kind: "press", shot: "zip", x: 5200, z: 2450 },
+    { kind: "wait", ticks: 60 },
+    { kind: "go", x: uncle.x, z: uncle.z - 360, r: 20, street: true },
+    { kind: "climb", x: uncle.x, z: uncle.z, y: uncle.y },
+    { kind: "go", x: uncle.x, z: uncle.z - 60, r: 40 },
+    { kind: "act" },
+    { kind: "wait", ticks: 10 },
+  ];
+}
+
 const IDLE: InputFrame = { dir: 0, mag: 0, web: false, shot: 0 };
 const SHOTS = { jump: SHOT_JUMP, zip: SHOT_ZIP, drop: SHOT_DROP } as const;
 
@@ -142,7 +248,8 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
       if (m.t >= g.ticks) next(m);
       return IDLE;
     case "act":
-      next(m);
+      // roam-3: held, interact goes every tick (as sprint does); a press is one tick of it.
+      if (m.t >= (g.hold ?? 1)) next(m);
       return { ...IDLE, shot: SHOT_ACT };
     case "press": {
       next(m);
@@ -174,8 +281,10 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
         next(m);
         return IDLE;
       }
-      // Hanging: up and over.
-      return { ...toward(s, g.x, g.z), web: false, shot: move === "hang" && m.t % 20 === 0 ? SHOT_JUMP : 0 };
+      // Hanging: up and over. On the wall, a leap up it every so often if asked, else the sprint held if asked.
+      if (move === "hang" && m.t % 20 === 0) return { ...toward(s, g.x, g.z), web: false, shot: SHOT_JUMP };
+      if (g.leap && move === "climb" && m.t % 28 === 0) return { ...toward(s, g.x, g.z), web: false, shot: SHOT_JUMP };
+      return { ...toward(s, g.x, g.z), web: false, shot: g.sprint ? SHOT_SPRINT : 0 };
     }
     case "chase": {
       const b = s.roam.bot;
@@ -235,8 +344,8 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
       m.lastZ = h.z;
       m.stuck = moved < 1.5 && move === "ground" ? m.stuck + 1 : 0;
       const jump = m.stuck > 20 && m.stuck % 30 === 21;
-      const sprint = g.sprint !== false && !g.walk && left > 260;
-      return { ...toward(s, tx, tz, g.walk ? 1 : left < 120 ? 2 : 3), web: false, shot: jump ? SHOT_JUMP : sprint ? SHOT_SPRINT : 0 };
+      const sprint = g.sprint !== false && !g.walk && !g.jog && left > 260;
+      return { ...toward(s, tx, tz, g.walk ? 1 : g.jog || left < 120 ? 2 : 3), web: false, shot: jump ? SHOT_JUMP : sprint ? SHOT_SPRINT : 0 };
     }
   }
 }

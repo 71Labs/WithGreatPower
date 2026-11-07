@@ -35,4 +35,12 @@ export const NAV_COLORS = {
   done: "#16A36A",
   /** A case's clue still out there: the game's reward gold (--game-gold), with a magnifier on it. */
   clue: "#FFD95A",
+  /** Free roam: a task giver's marker (the game's gold), Mary Jpeg's lost pixel, Gas Goblin's tag. */
+  giver: "#FFD95A",
+  pixel: "#4FC3F7",
+  tag: "#7CD957",
+  /** A race gate's hoop (a numbered ring), and a relay's box with its lit plug (it goes dark once unplugged). */
+  gate: "#8B5CF6",
+  relay: "#2A2A2A",
+  relayLit: "#FFD95A",
 } as const;

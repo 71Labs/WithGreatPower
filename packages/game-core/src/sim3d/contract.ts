@@ -8,10 +8,12 @@
  * Case File 002's clues (docs/chapters/case-002.md); v1.7 (free roam, ruleset tag roam-1, patrol
  * nights untouched) the frame's `roam`, with roam-2's `roam.cars`, `roam.knock` and the move
  * "knocked" (additive); v1.8 (Case File 003, ruleset c003-1) the frame's `fee`
- * (docs/chapters/case-003.md).
+ * (docs/chapters/case-003.md); v1.9 (free roam roam-3, additive) `roam.marks`, the City tasks'
+ * map marks, Front-run's `roam.race`, Cross-chain's `roam.relay` and the act kind "unplug".
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
+import type { TaskId } from "./roam/types";
 
 export interface Vec3 {
   x: number;
@@ -405,8 +407,11 @@ export interface RoamFrame {
   folks: { id: number; key: string; pos: Vec3; yaw: number; body: number; cast: string | null; talking: boolean }[];
   /** The line on screen: who said it, which (rules/city.ts FOLKS[key].lines), and what's still to find for `{left}`. */
   chat: { folk: number; line: number; left: number } | null;
-  /** What the interact button would do now: talk to folk `index`, photograph tag `index`, sync view `index`. */
-  act: { kind: "talk" | "photo" | "sync"; index: number } | null;
+  /**
+   * What the interact button would do now: talk to folk `index`, photograph tag `index`, sync view
+   * `index`; v1.9 (roam-3): "unplug", hold it to unplug relay `index` (RoamWorld.relays).
+   */
+  act: { kind: "talk" | "photo" | "sync" | "unplug"; index: number } | null;
   pages: { pos: Vec3; found: boolean }[];
   /** Viewpoints: `pos` is the perch on top of the mast; `roof` the roof it stands on. */
   views: { pos: Vec3; roof: number; synced: boolean }[];
@@ -426,6 +431,50 @@ export interface RoamFrame {
    * or getting up; seconds into that phase; the way the car pushed him (unit xz).
    */
   knock?: { phase: "flung" | "down" | "up"; t: number; dir: Vec3 } | null;
+  /**
+   * v1.9 (roam-3, additive; never read back by the sim or hashed): the map marks of the tasks
+   * under way, filled by each task from its own state and empty when none is: Front-run's rooftop
+   * gates, Cross-chain's relays. `done` once passed or unplugged, `next` on the one to head for.
+   * The HUD draws them on the city map and the minimap and points the waypoint at the tracked
+   * task's `next` mark. Absent on an older frame.
+   */
+  marks?: RoamMark[] | null;
+  /** v1.9 (roam-3): Front-run's race while it runs or has just ended, else null (sim3d/roam/task-frontrun.ts); absent on an older frame. */
+  race?: RaceFrame | null;
+  /**
+   * v1.9 (roam-3): Cross-chain's relay being held: its index (RoamWorld.relays) and how far
+   * unplugged (0–1), else null (sim3d/roam/task-crosschain.ts); absent on an older frame.
+   */
+  relay?: { index: number; progress: number } | null;
+}
+
+/** A task's mark on the map (RoamFrame.marks, v1.9): `pos` at feet level. */
+export interface RoamMark {
+  task: TaskId;
+  kind: "gate" | "relay";
+  pos: Vec3;
+  done: boolean;
+  next: boolean;
+}
+
+/**
+ * Front-run's race (RoamFrame.race, v1.9). Sandwich Man (`rival`) at feet level, his velocity,
+ * the way he faces (radians, 0 = +z) and what he's doing; the gates each has passed (of `of`);
+ * the race clock (ticks) and the seconds until he reaches the buyer (`left`); once it's over,
+ * who won and, lost, why (he got there first, or the parcel went in the river).
+ */
+export interface RaceFrame {
+  rival: Vec3;
+  rivalVel: Vec3;
+  rivalYaw: number;
+  rivalMove: "wait" | "run" | "climb" | "leap" | "won" | "beaten";
+  rivalGate: number;
+  heroGate: number;
+  of: number;
+  ticks: number;
+  left: number;
+  over: "won" | "lost" | null;
+  why: "rival" | "river" | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

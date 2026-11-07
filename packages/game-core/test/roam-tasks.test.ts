@@ -36,7 +36,7 @@ function press(start: RoamStart) {
 describe("free roam's people", () => {
   it("places everyone the content knows, the allies on their roofs and the jogger in the street", () => {
     for (const f of world.folks) expect(FOLKS[f.key], f.key).toBeDefined();
-    expect(world.folks.filter((f) => f.cast).map((f) => f.cast).sort()).toEqual(["aunt-mainnet", "bearson", "mary-jpeg", "uncle-gen"]);
+    expect(world.folks.filter((f) => f.cast).map((f) => f.cast).sort()).toEqual(["aunt-mainnet", "bearson", "gwei", "mary-jpeg", "uncle-gen"]);
     expect(folk("dev").y).toBe(0);
     expect(world.folks.length).toBeGreaterThanOrEqual(15);
   });

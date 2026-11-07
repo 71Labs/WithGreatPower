@@ -17,7 +17,9 @@ import type { SimState } from "../types";
 import { ROAM_CITY_SEED, SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP, SPRINT_GRACE } from "./constants";
 import { stepMove, type Presses } from "../parkour/move";
 import { stepKnock } from "./knock";
-import { stepPeople } from "./tasks";
+import { stepPeople, unplugTarget } from "./tasks";
+import { newRace, startFrontrun } from "./task-frontrun";
+import { stepRelays } from "./task-crosschain";
 import { buildTraffic, stepTraffic } from "./traffic";
 import { TASK_DONE, TASK_IDS, type RoamBody, type RoamStart, type RoamState } from "./types";
 import { clearAt, roamCity, roamGrid, roamWorld } from "./world";
@@ -89,12 +91,15 @@ export function createRoamSim(start: RoamStart, heroLevel = 1): SimState {
   });
   // A chase can't carry over between outings: the bot goes home, the jogger asks again.
   if (stage[1] === 1) stage[1] = 0;
+  const items = TASK_IDS.map((_, i) => (start.items[i] ?? 0) >>> 0);
+  // roam-3: nor can Gwei's race (task-frontrun.ts): she asks again, the gates cleared.
+  startFrontrun(stage, items);
   const roam: RoamState = {
     body: newBody(),
     world,
     progress: {
       stage,
-      items: TASK_IDS.map((_, i) => (start.items[i] ?? 0) >>> 0),
+      items,
       pages: start.pages >>> 0,
       views: start.views >>> 0,
       talks: world.folks.map(() => 0),
@@ -104,6 +109,8 @@ export function createRoamSim(start: RoamStart, heroLevel = 1): SimState {
     chat: null,
     events: [],
     traffic: buildTraffic(city, grid, at),
+    race: newRace(),
+    hold: { act: false, relay: -1, ticks: 0 },
   };
   const s: SimState = {
     config: { seed: ROAM_CITY_SEED, stops: [], index: city.zones.length, entry: "travel", hp: 100, maxHp: 100, fluid: 0, combo: 0, gweiCalls: 0, heroLevel, loadout: [] },
@@ -164,11 +171,16 @@ export function stepRoam(s: SimState, frame: InputFrame): boolean {
   s.input = input;
   const b = r.body;
   b.sprintT = input.shot === SHOT_SPRINT ? SPRINT_GRACE : Math.max(0, b.sprintT - 1);
-  const press: Presses = { jump: input.shot === SHOT_JUMP, zip: input.shot === SHOT_ZIP, act: input.shot === SHOT_ACT, drop: input.shot === SHOT_DROP };
+  // roam-3: interact is held over ticks (constants.ts): a talk, a photo or a sync takes a hold's
+  // first tick; a relay takes every tick of it (task-crosschain.ts).
+  const held = input.shot === SHOT_ACT;
+  const press: Presses = { jump: input.shot === SHOT_JUMP, zip: input.shot === SHOT_ZIP, act: held && !r.hold.act, drop: input.shot === SHOT_DROP };
+  r.hold.act = held;
   // roam-2: the cars move first (and may knock him down); down, the parkour set waits.
   stepTraffic(s);
   if (b.move === "knocked") stepKnock(s);
   else stepMove(s, input, press, DT);
   stepPeople(s, press, DT);
+  stepRelays(s, held, held ? unplugTarget(s) : -1);
   return true;
 }

@@ -10,23 +10,30 @@
  *   the hero stood.
  * - Sim events become scene effects (the web's, and the city's finds through the scene
  *   handle), sound, toasts and screen-reader lines.
+ * - The tracked task (picked on the map, else the first under way) leads the tracker, and the
+ *   minimap, the waypoint and the map's distance line point at its next step.
+ * - Touch: the left of the screen is the stick, a drag anywhere else looks round (with the
+ *   stick held too), a hold there swings (input/roam.ts, input/touch.ts); the look speed is a
+ *   setting in the pause sheet.
  * - `?autopilot=1` (development) hands the input to game-core's roam bot playing its tour;
  *   `?debug=1` shows the renderer's numbers. Either exposes `window.__wgpCity` for headless checks.
+ *   `?marks=race|relays` (development) lays fixture map marks over the overlays (fixture.ts).
  */
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MAX_TICKS } from "@wgp/game-core/sim3d/constants";
-import { FOLKS, TASKS, VIEW_NAMES, type TaskId } from "@wgp/game-core/city";
+import { FOLKS, RELAY_NAMES, TASKS, VIEW_NAMES, type TaskId } from "@wgp/game-core/city";
 import { newRoamBot, roamBotFrame, roamTour, roamWorld } from "@wgp/game-core/sim3d/roam";
 import type { CastId } from "@wgp/game-core/cast";
 
 import type { SuitColors } from "@/components/cast";
 import type { LoopEvent3D } from "@/game3d/session";
 
-import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
+import { playSfx, playSting, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type StickVisual } from "@/game3d/input";
 import { attachRoamControls, RoamLatch, type RoamControls } from "@/game3d/input/roam";
+import { trackedTask } from "@/game3d/nav/roam-pins";
 import { FrameTap } from "@/game3d/nav/tap";
 import { detectTier, QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
@@ -37,9 +44,12 @@ import { useCoarsePointer, useReducedMotion } from "@/sim/ui/hooks";
 
 import { initialSettings, rememberSettings, SettingsPanel, type GraphicsChoice, type PlaySettings } from "../patrol/settings";
 import { Loading } from "../patrol/status";
-import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
+import { RoamFixtureTap, roamMarksFixture } from "./fixture";
+import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, RaceChip, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
 import { RoamMap } from "./map";
+import { CityMinimap } from "./minimap";
 import { RoamPause } from "./pause";
+import { CityWaypoint } from "./waypoint";
 
 const Stage = dynamic(() => import("./stage"), { ssr: false, loading: () => <Loading label="Heading into the city…" /> });
 
@@ -54,19 +64,31 @@ html:has([data-city]), html:has([data-city]) body { overscroll-behavior: none; o
 [data-city], [data-city] * { -webkit-tap-highlight-color: transparent; }
 `;
 
-/** The allies on their roofs (their bodies come with the city's zones). */
-const CAST: CastId[] = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson"];
+/**
+ * The allies on their roofs (their bodies come with the city's zones), and roam-3's Front-run:
+ * Gwei Stacy at her stall and Sandwich Man, who races you (their files queue behind the hero's).
+ */
+const CAST: CastId[] = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei", "sandwich-man"];
 /** File a beat after a find, and at least this often while playing. */
 const FILE_AFTER_FIND_MS = 1200;
 const FILE_EVERY_MS = 120_000;
 /** Past this many ticks the outing files and the next one starts (on the next standing moment). */
 const ROLL_AT = MAX_TICKS - 60 * 45;
+/** In these moves a thumb on the open screen holds the web the moment it lands (in the air, a web can't wait to see if it's a look). */
+const WEB_AT_ONCE = new Set(["air", "swing", "zip", "wallrun"]);
+/** "the crane’s apex" → "The crane’s apex". */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function CitySurface({ session: first, colors, autopilot, debug }: { session: RoamSession; colors: SuitColors; autopilot: boolean; debug: boolean }) {
   const session = useRef(first);
   const [loop] = useState(() => new RoamLoop(first.run));
   const [latch] = useState(() => new RoamLatch());
-  const [tap] = useState(() => new FrameTap());
+  // The task the HUD follows (picked on the map; else the first under way).
+  const [picked, setPicked] = useState<TaskId | null>(null);
+  const [tap] = useState(() => {
+    const fixture = roamMarksFixture();
+    return fixture ? new RoamFixtureTap(fixture) : new FrameTap();
+  });
   const hud = useRoamHud(loop.hud);
   const handle = useRef<SceneHandle | null>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -76,12 +98,28 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
   const touch = useCoarsePointer();
   const reducedMotion = useReducedMotion();
   const [settings, setSettings] = useState<PlaySettings>(initialSettings);
+  // The look speed for the controls, read on every turn (a change applies without re-attaching them).
+  const look = useRef(settings.look);
+  useEffect(() => {
+    look.current = settings.look;
+  }, [settings.look]);
   const [paused, setPaused] = useState(false);
   const [map, setMap] = useState<"play" | "pause" | null>(null);
+  // The map's drawer (tasks, finds, the key), kept open or shut for the visit.
+  const [mapDrawer, setMapDrawer] = useState(true);
+  const tracked = trackedTask(hud?.tasks ?? [], picked);
+  useEffect(() => {
+    if (tap instanceof RoamFixtureTap) tap.track(tracked);
+  }, [tap, tracked]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [announce, setAnnounce] = useState("");
   const [filing, setFiling] = useState<string | null>(null);
   const [sprintToggle, setSprintToggle] = useState(false);
+  /** roam-3: when the last relay hold began, and when its let-go was last explained (ms). */
+  const holdFrom = useRef(0);
+  const resetToast = useRef(-Infinity);
+  /** roam-3: how far the relay being held is unplugged (0–1), read every frame by the HUD's rings. */
+  const holdProgress = useCallback(() => loop.view.roam?.relay?.progress ?? 0, [loop]);
   const gate = useRef({ paused, map });
   useEffect(() => {
     gate.current = { paused, map };
@@ -166,9 +204,34 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
           break;
         case "roam-item":
           playSfx("loot", { volume: 0.6 });
-          toast({ tone: "info", title: ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}` : `Photo ${ev.got} of ${ev.of}`, body: ev.task === "pixels" ? "Mary’s a little less lossy." : "Bearson will want that one." });
-          setAnnounce(ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}.` : `Photo ${ev.got} of ${ev.of}.`);
+          if (ev.task === "crosschain") {
+            // roam-3: a relay unplugged.
+            const where = sentence(RELAY_NAMES[w.relays[ev.item].key]);
+            toast({ tone: "info", title: `Relay ${ev.got} of ${ev.of} unplugged`, body: ev.got < ev.of ? `${where} has gone dark.` : `${where} has gone dark. Tell Uncle Gen.` });
+            setAnnounce(`Relay ${ev.got} of ${ev.of} unplugged: ${where}.`);
+          } else {
+            toast({ tone: "info", title: ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}` : `Photo ${ev.got} of ${ev.of}`, body: ev.task === "pixels" ? "Mary’s a little less lossy." : "Bearson will want that one." });
+            setAnnounce(ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}.` : `Photo ${ev.got} of ${ev.of}.`);
+          }
           fileSoon();
+          break;
+        case "roam-relay":
+          // roam-3: holding interact on one of Doc's relays.
+          if (ev.state === "hold") {
+            holdFrom.current = performance.now();
+            playSfx("chain-sweep", { volume: 0.35 });
+            setAnnounce("Unplugging. Keep holding.");
+          } else if (ev.state === "spark") playSfx("pow", { volume: 0.4, rate: 1.3 });
+          else if (ev.state === "unplugged") playSfx("villain-hit", { volume: 0.6 });
+          else if (ev.state === "reset") {
+            setAnnounce("Let go too soon. The relay’s live again.");
+            // Once it's been fought a while, say why (at most every few seconds).
+            const now = performance.now();
+            if (now - holdFrom.current > 400 && now - resetToast.current > 8000) {
+              resetToast.current = now;
+              toast({ tone: "info", title: "It’s live again", body: "Hold until the ring fills. It sparks; you don’t let go." });
+            }
+          }
           break;
         case "roam-page":
           playSfx("newspaper", { volume: 0.7 });
@@ -190,6 +253,21 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
           break;
         case "roam-splash":
           playSfx("street-thud", { volume: 0.5 });
+          break;
+        // roam-3: Front-run's race (the task's own start and finish come as roam-task).
+        case "roam-race":
+          if (ev.state === "start") {
+            playSting("sting-sandwich-man");
+            setAnnounce("The race is on. Six gates, in order, then the buyer. Sandwich Man’s running too.");
+          } else if (ev.state === "lost") {
+            playSfx("bread-clap", { volume: 0.7 });
+            toast({ tone: "info", title: ev.why === "river" ? "The parcel’s in the river" : "Sandwich Man filled it first", body: "Gwei will give you the order again. Talk to her to race." });
+            setAnnounce(ev.why === "river" ? "You dropped the parcel in the river. The race is lost." : "Sandwich Man reached the buyer first. The race is lost.");
+          } else if (ev.state === "reset") setAnnounce("Back at Gwei Stacy’s stall. Talk to her to race again.");
+          break;
+        case "roam-gate":
+          playSfx("release-perfect", { volume: 0.5, rate: 1 + ev.got * 0.04 });
+          setAnnounce(ev.got === ev.of ? `Gate ${ev.got} of ${ev.of}. Now the buyer.` : `Gate ${ev.got} of ${ev.of}.`);
           break;
         case "roam-car-hit":
           // roam-2: knocked down by a car (the scene bursts and shakes; he gets up on his own).
@@ -258,6 +336,10 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
             chat: r.chat,
             act: loop.view.roam?.act ?? null,
             bot: { state: r.bot.state, x: Math.round(r.bot.x), y: Math.round(r.bot.y), z: Math.round(r.bot.z) },
+            race: { ...r.race, frame: loop.view.roam?.race ?? null },
+            hold: { ...r.hold },
+            relay: loop.view.roam?.relay ?? null,
+            marks: loop.view.roam?.marks?.map((m) => ({ task: m.task, kind: m.kind, done: m.done, next: m.next })) ?? [],
             input: s.input,
             pose: handle.current?.pose() ?? null,
           };
@@ -340,6 +422,8 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
       onMap: toggleMap,
       enabled: () => !autopilot && !gate.current.paused && !gate.current.map && loop.status === "live",
       onStick,
+      lookSensitivity: () => look.current,
+      webAtOnce: () => WEB_AT_ONCE.has(loop.view.roam?.move ?? "ground"),
     });
     controls.current = c;
     return () => {
@@ -403,6 +487,10 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
     rememberSettings({ steady });
     setSettings((s) => ({ ...s, steady }));
   };
+  const setLook = (v: number) => {
+    rememberSettings({ look: v });
+    setSettings((s) => ({ ...s, look: v }));
+  };
 
   const modal = paused || !!map;
   const still = settings.steady || reducedMotion;
@@ -421,7 +509,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
           role="application"
           aria-label={
             touch
-              ? "The city. Drag on the left to run; hold the right side to swing; the buttons by your right thumb jump, zip, talk and sprint."
+              ? "The city. Drag on the left to run; drag anywhere else to look around, and hold there to swing; the buttons by your right thumb jump, zip, talk and sprint."
               : "The city. WASD runs, Shift sprints, Space jumps, F or the mouse swings, Q zips, E talks, Escape pauses."
           }
         >
@@ -438,6 +526,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
             paused={modal}
             tap={tap}
           />
+          {hud ? <CityWaypoint tap={tap} tracked={tracked} still={still} /> : null}
           <div ref={stickRing} aria-hidden data-active="false" className="pointer-events-none absolute left-0 top-0 opacity-0 will-change-transform data-[active=true]:opacity-100 motion-safe:transition-[opacity] motion-safe:duration-150">
             <span className="absolute block rounded-full border-[2.5px] border-dashed border-game-paper/80 bg-game-ink/25" style={{ left: -STICK_RADIUS, top: -STICK_RADIUS, width: 2 * STICK_RADIUS, height: 2 * STICK_RADIUS }} />
             <span className="absolute block rounded-full border-2 border-game-paper bg-game-ink/50" style={{ left: -STICK_DEAD_ZONE, top: -STICK_DEAD_ZONE, width: 2 * STICK_DEAD_ZONE, height: 2 * STICK_DEAD_ZONE }} />
@@ -448,16 +537,41 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         {hud ? (
           <>
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 px-3 pt-[max(12px,env(safe-area-inset-top))] sm:px-4">
-              <TaskTracker hud={hud} />
+              <TaskTracker hud={hud} tracked={tracked} />
               <div className="flex flex-col items-end gap-3">
-                <CornerButtons onMap={() => openMap("play")} onPause={() => togglePause(true)} />
-                <Toasts toasts={toasts} />
+                <CornerButtons
+                  onPause={() => togglePause(true)}
+                  minimap={
+                    <CityMinimap
+                      tap={tap}
+                      city={city}
+                      heroColor={heroSuit.suit}
+                      tracked={tracked}
+                      trackedTitle={tracked ? TASKS[tracked].title : null}
+                      northUp={settings.northUp}
+                      still={still}
+                      touch={touch}
+                      onOpen={() => openMap("play")}
+                    />
+                  }
+                />
+                {/* Short landscape phones: the corner is minimap and thumb buttons; the toast moves to the middle (below). */}
+                <div className="[@media(max-height:520px)]:hidden">
+                  <Toasts toasts={toasts} />
+                </div>
               </div>
             </div>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 pb-[max(16px,env(safe-area-inset-bottom))]">
               <FirstHint touch={touch} hud={hud} />
+              <RaceChip hud={hud} />
+              {/* Short screens: one compact toast here, and none while someone's talking (the bubble says it). */}
+              {!hud.chat ? (
+                <div className="hidden [@media(max-height:520px)]:block">
+                  <Toasts toasts={toasts} compact />
+                </div>
+              ) : null}
               <SpeechBubble hud={hud} />
-              <ActPrompt hud={hud} touch={touch} />
+              <ActPrompt hud={hud} touch={touch} progress={holdProgress} />
             </div>
             {touch ? (
               <div className="pointer-events-none absolute bottom-0 right-0 pb-[max(16px,env(safe-area-inset-bottom))] pr-[max(16px,env(safe-area-inset-right))]">
@@ -465,7 +579,8 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
                   hud={hud}
                   onJump={() => latch.push(1)}
                   onZip={() => latch.push(2)}
-                  onAct={() => latch.push(3)}
+                  onAct={(down) => latch.setAct("touch", down)}
+                  holdProgress={holdProgress}
                   onDrop={() => latch.push(5)}
                   onSprint={setSprint}
                   sprintOn={sprintToggle}
@@ -476,9 +591,22 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         ) : null}
       </div>
       {paused && !map ? (
-        <RoamPause onResume={() => togglePause(false)} onMap={() => openMap("pause")} touch={touch} filing={filing} settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />} />
+        <RoamPause onResume={() => togglePause(false)} onMap={() => openMap("pause")} touch={touch} filing={filing} settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} onLook={setLook} />} />
       ) : null}
-      {map ? <RoamMap city={city} frame={loop.view} hero={heroSuit} onClose={closeMap} still={still} touch={touch} /> : null}
+      {map ? (
+        <RoamMap
+          city={city}
+          frame={tap instanceof RoamFixtureTap ? tap.dress(loop.view) : loop.view}
+          hero={heroSuit}
+          onClose={closeMap}
+          still={still}
+          touch={touch}
+          tracked={tracked}
+          onTrack={setPicked}
+          drawer={mapDrawer}
+          onDrawer={setMapDrawer}
+        />
+      ) : null}
       <p role="status" aria-live="polite" className="sr-only">
         {announce}
       </p>

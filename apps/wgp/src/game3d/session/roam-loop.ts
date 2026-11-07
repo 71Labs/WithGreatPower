@@ -34,8 +34,8 @@ export interface RoamHud {
   status: RoamStatus;
   move: RoamMoveName;
   sprint: boolean;
-  /** What E would do: talk to someone, photograph a tag, sync a viewpoint. */
-  act: { kind: "talk" | "photo" | "sync"; index: number } | null;
+  /** What E would do: talk to someone, photograph a tag, sync a viewpoint; roam-3, hold it to unplug a relay. */
+  act: { kind: "talk" | "photo" | "sync" | "unplug"; index: number } | null;
   /** The line on screen: who said it and what. */
   chat: { folk: number; key: string; text: string } | null;
   /** Per task (TASK_IDS order): stage and items found. */
@@ -48,6 +48,11 @@ export interface RoamHud {
   zip: boolean;
   /** Ticks this outing has recorded (it files near MAX_TICKS). */
   ticks: number;
+  /**
+   * roam-3, Front-run's race while it runs or has just ended (RoamFrame.race): the gates each
+   * has passed, of how many, and how it ended. Null otherwise.
+   */
+  race: { heroGate: number; rivalGate: number; of: number; over: "won" | "lost" | null; why: "rival" | "river" | null } | null;
 }
 
 /** A tiny external store for the HUD (useSyncExternalStore). */
@@ -73,10 +78,13 @@ function sameHud(a: RoamHud, b: RoamHud): boolean {
   if ((a.act?.kind ?? null) !== (b.act?.kind ?? null) || (a.act?.index ?? -1) !== (b.act?.index ?? -1)) return false;
   if ((a.chat?.text ?? null) !== (b.chat?.text ?? null)) return false;
   if (Math.floor(a.ticks / 600) !== Math.floor(b.ticks / 600)) return false;
+  const ra = a.race;
+  const rb = b.race;
+  if (!ra !== !rb || (ra && rb && (ra.heroGate !== rb.heroGate || ra.rivalGate !== rb.rivalGate || ra.over !== rb.over || ra.why !== rb.why))) return false;
   return a.tasks.every((t, i) => t.stage === b.tasks[i]?.stage && t.got === b.tasks[i]?.got);
 }
 
-const URGENT = new Set<string>(["roam-talk", "roam-task", "roam-item", "roam-page", "roam-sync", "roam-bot", "roam-move", "status"]);
+const URGENT = new Set<string>(["roam-talk", "roam-task", "roam-item", "roam-page", "roam-sync", "roam-bot", "roam-move", "roam-gate", "roam-race", "roam-relay", "status"]);
 
 const bits = (n: number) => {
   let c = 0;
@@ -101,6 +109,7 @@ export function roamHud(run: RoamRun, status: RoamStatus, f: RoamFrame | null | 
     viewsOf: r.world.views.length,
     zip: !!f?.zip,
     ticks: run.codes.length,
+    race: f?.race ? { heroGate: f.race.heroGate, rivalGate: f.race.rivalGate, of: f.race.of, over: f.race.over, why: f.race.why } : null,
   };
 }
 
@@ -152,6 +161,17 @@ function blendRoam(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: Ren
     }
     o.cars = list;
   }
+  // roam-3: Sandwich Man runs between ticks too (Front-run's race).
+  const pr = prev.roam?.race;
+  if (c.race && pr) {
+    let race = viewRaces.get(o);
+    if (!race) viewRaces.set(o, (race = { ...c.race, rival: { x: 0, y: 0, z: 0 } }));
+    Object.assign(race, c.race, { rival: race.rival });
+    race.rival.x = pr.rival.x + (c.race.rival.x - pr.rival.x) * k;
+    race.rival.y = pr.rival.y + (c.race.rival.y - pr.rival.y) * k;
+    race.rival.z = pr.rival.z + (c.race.rival.z - pr.rival.z) * k;
+    o.race = race;
+  }
   const pb = prev.roam?.bot;
   if (!c.bot || !pb) return;
   const bot = (viewBots.get(o) ?? viewBots.set(o, { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, state: "running" }).get(o))!;
@@ -163,6 +183,7 @@ function blendRoam(prev: RenderFrame3D, curr: RenderFrame3D, t: number, out: Ren
   o.bot = bot;
 }
 const viewBots = new WeakMap<RoamFrame, NonNullable<RoamFrame["bot"]>>();
+const viewRaces = new WeakMap<RoamFrame, NonNullable<RoamFrame["race"]>>();
 const viewCars = new WeakMap<RoamFrame, RoamCarFrame[]>();
 
 export class RoamLoop {

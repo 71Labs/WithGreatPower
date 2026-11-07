@@ -66,11 +66,30 @@ export const STICK_RADIUS = 64;
 export const STICK_DEAD_ZONE = 10;
 /** The stick's length at the edge of the dead zone: game-core's smallest step (it reads under 0.15 as centred). */
 export const STICK_FLOOR = 0.15;
-/** A second finger on the same side as a held one must drag this far (CSS px) before the pair orbits the camera. */
-export const ORBIT_SLOP = 12;
-/** Drag to orbit: radians per CSS px, yaw and pitch. */
+/** A finger off the stick must drag this far (CSS px) from where it landed before its drag turns the camera. */
+export const LOOK_SLOP = 10;
+/**
+ * Free roam on something (a roof, a wall): a thumb on the web side that stays put this long
+ * (ms) holds the web; one that drags first is a look and never fires a web.
+ */
+export const WEB_HOLD_MS = 180;
+/** Touch look (one finger dragging on the open screen): radians per CSS px, yaw and pitch, at a look speed of 1. */
+export const TOUCH_LOOK_YAW_PER_PX = 0.005;
+export const TOUCH_LOOK_PITCH_PER_PX = 0.0035;
+/** Right-button drag orbit (a mouse without pointer lock): radians per CSS px, yaw and pitch. */
 export const ORBIT_YAW_PER_PX = 0.006;
 export const ORBIT_PITCH_PER_PX = 0.004;
 /** Mouse look (pointer lock): radians per px of mouse movement, yaw and pitch. */
 export const LOOK_YAW_PER_PX = 0.0024;
 export const LOOK_PITCH_PER_PX = 0.0018;
+/** The look speed setting: a multiplier on every look (touch, mouse, drag), its range and step. */
+export const LOOK_SPEED_MIN = 0.5;
+export const LOOK_SPEED_MAX = 2;
+export const LOOK_SPEED_STEP = 0.25;
+
+/** A look speed as the settings keep it: finite, inside the range, on a step (1 when unset or junk). */
+export function lookSpeed(v: unknown): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return 1;
+  const stepped = Math.round(v / LOOK_SPEED_STEP) * LOOK_SPEED_STEP;
+  return Math.min(LOOK_SPEED_MAX, Math.max(LOOK_SPEED_MIN, stepped));
+}

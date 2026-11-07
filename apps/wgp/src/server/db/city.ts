@@ -15,10 +15,10 @@
  * kept, and each first finish pays its XP once, ever. Never ranked, never a Bits mint, no
  * chain op: a level-up rides on the player's next night's mint, as every save change does.
  *
- * An outing played under older roam rules (a tab still running roam-1 after roam-2 shipped) is
- * refused as stale (409 old_rules) before any replay, with the record as it stands: the record
- * keeps everything filed so far, and the browser starts a fresh outing from it (an old page,
- * which reads any 409 as "reload to pick up from there", does just that).
+ * An outing played under older roam rules (a tab still running roam-1 or roam-2 after roam-3
+ * shipped) is refused as stale (409 old_rules) before any replay, with the record as it stands:
+ * the record keeps everything filed so far, and the browser starts a fresh outing from it (an
+ * old page, which reads any 409 as "reload to pick up from there", does just that).
  */
 import { and, eq } from "drizzle-orm";
 

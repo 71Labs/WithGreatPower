@@ -56,8 +56,13 @@ export const FOLKS: Record<string, FolkInfo> = {
       "Cold, but it’s hers. With great power comes great patience with the oven.",
       "Fully finalized. Not a crumb left.",
       "In my day we swung on dial-up. Uphill. Both ways.",
+      // roam-3: Cross-chain (his stages; the bread in hand still comes first).
+      "Doc Octochain bolted relays to the city’s highest points: the crane, his bridge towers, the tallest antenna. They’re draining your aunt’s node. Go pull the plugs.",
+      "Still {left} to go. Hold the plug till it gives. They spark; you don’t let go.",
+      "All four, dark. With great power comes great gas fees, and you just zeroed your aunt’s. I wrote a six-hour speech. Short version: proud of you.",
+      "Doc swears he kept one relay. The Right-Clicker took the rest. Saved them to his Downloads, apparently.",
     ],
-    byStage: { 0: 0, [TASK_DONE]: 3 },
+    byStage: { 0: 5, 1: 6, 2: 7, [TASK_DONE]: 8 },
     chatter: [4, 0],
   },
   mary: {
@@ -171,6 +176,36 @@ export const FOLKS: Record<string, FolkInfo> = {
     lines: ["The pigeons up here run nodes. Don’t ask how.", "Coo. That’s pigeon for gm.", "The Right-Clicker downloaded a whole flock once. They came back as GIFs."],
     chatter: [0, 1, 2],
   },
+  // roam-3: Front-run (sim3d/roam/task-frontrun.ts picks Gwei's lines by the race: GWEI_LINE).
+  gwei: {
+    name: "Gwei Stacy",
+    who: "runs the Mempool Market stall",
+    lines: [
+      "Order up! A buyer in Validator Heights wants this parcel, through six gates, in order. Sandwich Man saw it in the mempool. Beat him there and it fills at zero slippage. Go!",
+      "Same order, same buyer, same sandwich. This time, front-run the front-runner. Go!",
+      "Why are you still here? Every second costs about four billion gwei. Run!",
+      "He got there first. I’ve been sandwiched out of 21 gwei. It’s not the gwei, it’s the principle. Again?",
+      "You dropped it in the river. The fish now hold a mempool order. Dry off and go again.",
+      "Filled at zero slippage! That’s forty billion gwei of respect, easy. I’d tip you, but the Right-Clicker saved my tip jar to his Downloads.",
+      "Fresh fruit, priced in gwei. That banana’s three billion. No, I don’t take bananas.",
+      "I swung in from another chain for this stall. Rent’s 900 million gwei. A day.",
+    ],
+    byStage: { 0: 0, 1: 1, [TASK_DONE]: 5 },
+    chatter: [6, 7],
+  },
+  buyer: {
+    name: "Moby",
+    who: "a buyer, waiting on an order",
+    lines: [
+      "I’ve got a buy order sitting in the mempool. It’s been sitting there since Tuesday.",
+      "Is that my order? Don’t let the man made of bread get here first.",
+      "Order filled! Gwei says you’re worth forty billion gwei. Her words. I’d have said thirty.",
+      "I buy high, then I hold. Mostly I hold.",
+      "Whales don’t swim. We wait on roofs. It’s cheaper.",
+    ],
+    byStage: { 0: 0, 1: 1, [TASK_DONE]: 2 },
+    chatter: [3, 4],
+  },
 };
 
 /** Uncle Gen's line when the bread's handed over: warm within this many seconds of leaving the oven. */
@@ -244,6 +279,30 @@ export const TASKS: Record<TaskId, TaskInfo> = {
     steps: { 0: "Talk to Bearson", 1: "Photograph Gas Goblin’s tags ({got} of {of})", 2: "Bring the photos to Bearson", [TASK_DONE]: "On page twelve" },
     items: 4,
   },
+  frontrun: {
+    id: "frontrun",
+    title: "Front-run",
+    blurb: "Race Gwei Stacy’s order over the roofs to the buyer, through six gates, before Sandwich Man gets there.",
+    giver: "gwei",
+    steps: { 0: "Talk to Gwei Stacy at her stall", 1: "Beat Sandwich Man to the buyer (gate {got} of {of})", [TASK_DONE]: "Order filled" },
+    items: 6,
+  },
+  crosschain: {
+    id: "crosschain",
+    title: "Cross-chain",
+    blurb: "Unplug Doc Octochain’s relays from the city’s highest points, then tell Uncle Gen.",
+    giver: "uncle",
+    steps: { 0: "Talk to Uncle Gen", 1: "Unplug Doc Octochain’s relays ({got} of {of})", 2: "Tell Uncle Gen the relays are down", [TASK_DONE]: "Bridge unplugged" },
+    items: 4,
+  },
+};
+
+/** Cross-chain's relays by key (sim3d/roam/task-crosschain.ts places them), as the HUD names them. */
+export const RELAY_NAMES: Record<"crane" | "bridge" | "antenna" | "deck", string> = {
+  crane: "the crane’s apex",
+  bridge: "the bridge’s west tower",
+  antenna: "the tallest antenna",
+  deck: "Doc’s deck tower",
 };
 
 /** The tracker's line for a task at a stage. */

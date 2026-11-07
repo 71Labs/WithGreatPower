@@ -14,8 +14,15 @@
  * - roam-2: the street traffic, two draw calls (roam/cars.ts): the sim's cars, where the sim has
  *   them. A car that knocks the hero down: "WHAM!" over him and a short camera shake (none on
  *   the Steady camera or with reduced motion).
+ * - roam-3: Front-run (roam/frontrun.ts): its gates, the bread barricade and Gwei's crates, her
+ *   stall sign, the parcel on the hero's back; a red arrow over the next gate (any task's next
+ *   map mark), over the buyer once every gate's through, over Gwei between tries. "GATE!",
+ *   "FILLED!", "OOF!" when he beats you. Sandwich Man runs in the cast (characters.ts, raceRival).
+ * - roam-3: Doc Octochain's relays (roam/crosschain.ts), their sparks and the hold ring, five
+ *   draw calls; a red arrow over the nearest one still plugged in while Cross-chain is on.
  *
- * Reduced motion: no flutter, no bob, no beam shimmer, no shake. About six draw calls in all.
+ * Reduced motion: no flutter, no bob, no beam shimmer, no shake, no blinking lamps. About eleven
+ * draw calls in all, up to six more with Front-run's race on.
  */
 import {
   BackSide,
@@ -39,16 +46,23 @@ import {
 } from "three";
 
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
+import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import type { SharedUniforms } from "../city/materials";
 import type { BurstOptions } from "../effects";
 import { C, rgb } from "../palette";
 import { RoamCars } from "./cars";
+import { RoamRelays } from "./crosschain";
+import { FrontrunScene } from "./frontrun";
 
 export interface RoamHost {
   burst(word: string, at: Vec3, opts?: BurstOptions): void;
   /** A short camera shake (the host leaves it out on the Steady camera and with reduced motion). */
   shake?(amount: number): void;
+  /** roam-3: a joint of the hero's body in the world (Front-run's parcel rides on his back). */
+  heroJoint?(joint: string, out: Vector3): Vector3 | null;
+  /** roam-3: comic debris for a hit word, without the word (a relay's spark). */
+  impact?(word: string, at: Vec3): void;
 }
 
 /** A roam sim event, typed loosely (the scene only reads a few fields). */
@@ -61,6 +75,12 @@ export interface RoamSceneEvent {
   state?: string;
   /** roam-car-hit: the car's speed. */
   speed?: number;
+  /** roam-3, Front-run: roam-gate's count, roam-race's reason. */
+  got?: number;
+  of?: number;
+  why?: string | null;
+  /** roam-relay (roam-3): which relay. */
+  relay?: number;
 }
 
 const KIND = { page: 0, pixel: 1, marker: 2, next: 3, reticle: 4, beam: 5 } as const;
@@ -313,6 +333,8 @@ interface Parts {
   bot: Group;
   botFill: Mesh;
   botHull: Mesh;
+  /** roam-3: Front-run's gates, solids, sign and parcel (roam/frontrun.ts). */
+  frontrun: FrontrunScene;
 }
 
 const _m = new Matrix4();
@@ -330,6 +352,8 @@ export class RoamScene {
   private lastFrame: RenderFrame3D | null = null;
   /** roam-2: the sim's cars (built on the first frame that has them). */
   private cars: RoamCars | null = null;
+  /** roam-3: Doc Octochain's relays (crosschain.ts), built with the parts. */
+  private relays: RoamRelays | null = null;
 
   constructor(
     private readonly city: City,
@@ -416,12 +440,15 @@ export class RoamScene {
     bot.add(botHull, botFill);
     bot.visible = false;
 
-    this.root.add(tags, sprites, bot);
-    return { sprites, spriteGeo, spriteMat, center, params, color, centerAttr, paramsAttr, colorAttr, tags, tagMat, tagAttr, tagTex, bot, botFill, botHull };
+    const frontrun = new FrontrunScene(roamWorld().race, { heroJoint: (j, out) => this.host.heroJoint?.(j, out) ?? null });
+    frontrun.setReducedMotion(this.reducedMotion);
+    this.root.add(tags, sprites, bot, frontrun.root);
+    return { sprites, spriteGeo, spriteMat, center, params, color, centerAttr, paramsAttr, colorAttr, tags, tagMat, tagAttr, tagTex, bot, botFill, botHull, frontrun };
   }
 
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
+    this.parts?.frontrun.setReducedMotion(on);
   }
 
   /** The city's finds as bursts (a page, a photo, a sync, the bot caught, the river). */
@@ -433,7 +460,11 @@ export class RoamScene {
         this.host.burst("GOT IT!", at, { size: 70, life: 0.8 });
         break;
       case "roam-item":
-        this.host.burst(ev.task === "graffiti" ? "SNAP!" : "PIXEL!", at, { size: 64, life: 0.7 });
+        // roam-3: a relay's own event bursts it (below).
+        if (ev.task !== "crosschain") this.host.burst(ev.task === "graffiti" ? "SNAP!" : "PIXEL!", at, { size: 64, life: 0.7 });
+        break;
+      case "roam-relay":
+        if (ev.relay !== undefined && ev.state) this.relays?.event(ev.state, ev.relay, this.host, this.reducedMotion);
         break;
       case "roam-sync":
         this.host.burst("SYNCED!", at, { size: 84, life: 1.1 });
@@ -450,6 +481,14 @@ export class RoamScene {
         if (!this.reducedMotion) this.host.shake?.(Math.min(1, (ev.speed ?? 0) / 330));
         break;
       }
+      // roam-3, Front-run: a gate, the go, the finish (the parcel in the river says SPLASH! already).
+      case "roam-gate":
+        this.host.burst("GATE!", { x: ev.x, y: ev.y + 30, z: ev.z }, { size: ev.got === ev.of ? 84 : 66, life: 0.7 });
+        break;
+      case "roam-race":
+        if (ev.state === "won") this.host.burst("FILLED!", at, { size: 100, life: 1.2 });
+        else if (ev.state === "lost" && ev.why === "rival") this.host.burst("OOF!", at, { size: 96, life: 1.1 });
+        break;
     }
   }
 
@@ -460,6 +499,11 @@ export class RoamScene {
       return;
     }
     this.parts ??= this.build();
+    if (!this.relays) {
+      this.relays = new RoamRelays(this.shared, roamWorld().relays);
+      this.root.add(this.relays.root);
+    }
+    this.relays.update(frame, time, this.reducedMotion);
     if (r.cars && r.cars.length) {
       if (!this.cars || this.cars.max < r.cars.length) {
         this.cars?.dispose();
@@ -472,6 +516,7 @@ export class RoamScene {
     this.root.visible = true;
     this.lastFrame = frame;
     const P = this.parts;
+    P.frontrun.update(r, frame, time);
     const still = this.reducedMotion;
     let n = 0;
     const put = (x: number, y: number, z: number, w: number, h: number, kind: number, spin: number, c: readonly number[]) => {
@@ -509,11 +554,27 @@ export class RoamScene {
       const head = f.pos.y + (f.cast ? 118 : 110) + (still ? 0 : Math.sin(time * 2 + f.id) * 4);
       const gives = GIVES[f.key];
       const takes = TAKES[f.key];
-      if (gives && stage(gives) === 0) put(f.pos.x, head, f.pos.z, 30, 30, KIND.marker, 0, GOLD);
-      else if (takes && isHandIn(takes, stage(takes))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+      // A hand-in first (Uncle Gen takes the loaf before he hands out Cross-chain, as the sim does).
+      if (takes?.some((t) => isHandIn(t, stage(t)))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+      else if (gives && stage(gives) === 0) put(f.pos.x, head, f.pos.z, 30, 30, KIND.marker, 0, GOLD);
+    }
+    // roam-3: an arrow over each task's next map mark: Front-run's next gate, and the nearest relay
+    // still plugged in until the hold's ring takes its place.
+    for (const m of r.marks ?? []) {
+      if (!m.next || (m.kind === "relay" && r.relay)) continue;
+      if (m.kind === "gate") put(m.pos.x, m.pos.y + 100 + (still ? 0 : Math.sin(time * 3) * 5), m.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+      else put(m.pos.x, m.pos.y + 62 + (still ? 0 : Math.sin(time * 2.4) * 4), m.pos.z, 24, 28, KIND.next, 0, HERO_RED);
     }
     // The bot's arrow while it's loose.
     if (r.bot && r.bot.state !== "caught" && stage("pickpocket") === 1) put(r.bot.pos.x, r.bot.pos.y + 108, r.bot.pos.z, 24, 28, KIND.next, 0, HERO_RED);
+    // roam-3: Front-run's people: the buyer once every gate's through, Gwei between tries (talk to
+    // her to go again).
+    const race = r.race;
+    for (const f of r.folks) {
+      const between = f.key === "gwei" && stage("frontrun") === 1 && !race;
+      const finish = f.key === "buyer" && !!race && race.over === null && race.heroGate >= race.of;
+      if (between || finish) put(f.pos.x, f.pos.y + (f.cast ? 118 : 110) + (still ? 0 : Math.sin(time * 2 + f.id) * 4), f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+    }
     // Viewpoint beams until synced.
     for (const v of r.views) {
       if (v.synced) continue;
@@ -583,16 +644,23 @@ export class RoamScene {
     P.botFill.geometry.dispose();
     (P.botFill.material as MeshBasicMaterial).dispose();
     (P.botHull.material as MeshBasicMaterial).dispose();
+    P.frontrun.dispose();
     this.parts = null;
     this.cars?.dispose();
     this.cars = null;
+    this.relays?.dispose();
+    this.relays = null;
     void this.city;
   }
 }
 
-/** Who hands out which task, and who takes it back (rules/city.ts, by folk key). */
-const GIVES: Record<string, string> = { aunt: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti" };
-const TAKES: Record<string, string> = { uncle: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti" };
+/**
+ * Who hands out which task, and who takes which back (rules/city.ts, by folk key). roam-3: Gwei
+ * gives Front-run (her buyer's arrow is the race's, below); Uncle Gen gives Cross-chain and takes
+ * it and the bread.
+ */
+const GIVES: Record<string, string> = { aunt: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti", gwei: "frontrun", uncle: "crosschain" };
+const TAKES: Record<string, string[]> = { uncle: ["bread", "crosschain"], dev: ["pickpocket"], mary: ["pixels"], bearson: ["graffiti"] };
 
 /** Whether a task's next step is handing it in to its taker. */
 function isHandIn(task: string, stage: number): boolean {

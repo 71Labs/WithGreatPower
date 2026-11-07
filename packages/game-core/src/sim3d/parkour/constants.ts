@@ -3,7 +3,7 @@
  * walls, the web and water. World units as everywhere in sim3d (the hero is about 88 tall, so a
  * metre is about 49 units), seconds and units per second.
  *
- * Free roam (the City mode, ruleset tag roam-2) is the only mode that moves with these today;
+ * Free roam (the City mode, ruleset tag roam-3) is the only mode that moves with these today;
  * patrol nights never read them. Changing one changes every mode that uses the set: bump that
  * mode's ruleset with it.
  */

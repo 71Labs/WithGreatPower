@@ -10,9 +10,13 @@
  *   billboards, cranes, roof doors, street lamps and signals, the bridge's rails; and the
  *   street traffic's cars, which move (roam/traffic.ts).
  * - People: the four allies on their roofs, a dozen chatty civilians on the sidewalks and a few
- *   up top, and the jogger whose wallet the pickpocket bot took.
+ *   up top, and the jogger whose wallet the pickpocket bot took; roam-3: Gwei Stacy at her
+ *   Mempool Market stall and the buyer at the end of her race (task-frontrun.ts).
  * - Collectibles: twelve Daily Rug pages, five viewpoints, Mary Jpeg's eight pixels, Gas Goblin's
  *   four tags, and the bot's loop over the roofs.
+ * - roam-3: Front-run's course (task-frontrun.ts), hand-laid: its gates, Sandwich Man's route,
+ *   and its solids (the bread barricade, Gwei's crates) in roam's grid; and Doc Octochain's four
+ *   relays on the city's highest points (task-crosschain.ts), solid.
  *
  * Pure and deterministic: placement is by hashed rank (mix) and plain arithmetic.
  */
@@ -26,6 +30,8 @@ import { len2 } from "../dmath";
 import { mix } from "../rng";
 import { ROAM_CITY_SEED } from "./constants";
 import { furnitureSolids, MAST_HALF, poleHalf, roamFurniture, type KeepClear, type RoamFurniture } from "./furniture";
+import { raceCourse, raceKeepClear } from "./task-frontrun";
+import { placeRelays, relaySolids } from "./task-crosschain";
 import type { RoamFolk, RoamRoof, RoamSpot, RoamTag, RoamView, RoamWorld } from "./types";
 
 /** The stops the roam city is built on: the allies' roofs and Doc's bridge (nobody fights here). */
@@ -127,6 +133,10 @@ export function roamGrid(city: City): CityIndex {
   const g = new CityIndex(city);
   const f = cached?.city === city ? cached.furniture : roamFurniture(city);
   for (const b of furnitureSolids(f)) g.addSolid(b.x0, b.y0, b.z0, b.x1, b.y1, b.z1);
+  // roam-3: Front-run's bread barricade and Gwei's crates (task-frontrun.ts), drawn as they are.
+  for (const b of raceCourse().solids) g.addSolid(b.x0, b.y0, b.z0, b.x1, b.y1, b.z1);
+  // roam-3: Doc Octochain's relays, solid as drawn (task-crosschain.ts).
+  for (const b of relaySolids(cached?.city === city ? cached.world.relays : [])) g.addSolid(b.x0, b.y0, b.z0, b.x1, b.y1, b.z1);
   return g;
 }
 
@@ -160,6 +170,7 @@ function keepClear(world: RoamWorld): KeepClear[] {
   for (const b of world.banks) out.push({ x: b.x0, y: 0, z: b.z0, r: 40 });
   for (const r of world.botPath) out.push({ x: r.x, y: r.y, z: r.z, r: 50 });
   for (const t of world.tags) out.push({ x: t.x + t.nx * 260, y: 0, z: t.z + t.nz * 260, r: 40 });
+  out.push(...raceKeepClear(world.race));
   return out;
 }
 
@@ -265,7 +276,8 @@ function place(city: City, grid: CityIndex): RoamWorld {
   const allyKey: Record<string, string> = { "aunt-mainnet": "aunt", bearson: "bearson", "mary-jpeg": "mary", "uncle-gen": "uncle" };
   const allyTask: Record<string, { gives: RoamFolk["gives"]; takes: RoamFolk["takes"] }> = {
     "aunt-mainnet": { gives: "bread", takes: null },
-    "uncle-gen": { gives: null, takes: "bread" },
+    // roam-3: Uncle Gen hands out Cross-chain (and takes it back), and still takes the bread (tasks.ts talk).
+    "uncle-gen": { gives: "crosschain", takes: "bread" },
     "mary-jpeg": { gives: "pixels", takes: "pixels" },
     bearson: { gives: "graffiti", takes: "graffiti" },
   };
@@ -429,7 +441,17 @@ function place(city: City, grid: CityIndex): RoamWorld {
     }
   }
 
-  return { spawn, folks, pages, views, pixels, tags, botPath, banks };
+  // roam-3: Doc Octochain's relays on the city's highest points (the crane by Uncle Gen first).
+  const uncle = folks.find((f) => f.key === "uncle") ?? { x: s.x, z: s.z };
+  const relays = placeRelays(city, uncle);
+
+  // roam-3: Gwei Stacy at her Mempool Market stall and the buyer at the end of her race
+  // (task-frontrun.ts), placed after everything else so nothing a save indexes moves.
+  const race = raceCourse();
+  addFolk({ key: "gwei", body: -1, cast: "gwei", x: race.stall.x, y: race.stall.y, z: race.stall.z, yaw: race.stall.yaw, gives: "frontrun", takes: null });
+  addFolk({ key: "buyer", body: 0, cast: null, x: race.buyer.x, y: race.buyer.y, z: race.buyer.z, yaw: race.buyer.yaw, gives: null, takes: "frontrun" });
+
+  return { spawn, folks, pages, views, pixels, tags, botPath, banks, race, relays };
 }
 
 /**
