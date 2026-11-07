@@ -25,6 +25,7 @@ import type { JavascriptProvider } from "@fast-auth-near/javascript-provider";
 import { actions, base64Decode, buildDelegateAction, encodeDelegateAction, PublicKey, type DelegateAction } from "near-api-js";
 
 import { getNearAuthNonce } from "@/lib/api/client";
+import { withRef } from "@/lib/referrals/ref";
 
 import { DELEGATE_ACTION_PREFIX } from "./delegate-codec";
 import { GAME_CONTRACT_ID, NEAR_AUTH, NETWORK, RPC_URLS, nearAuthPath } from "./config";
@@ -315,7 +316,8 @@ export async function nearAuthSignIn(opts: { handle?: string } = {}): Promise<Ne
     method: "POST",
     headers: { "content-type": "application/json", "x-wgp-device": deviceId() },
     credentials: "same-origin",
-    body: JSON.stringify({ mode: "sign-in", idToken: await auth.idToken(), handle: opts.handle, sessionPublicKey: key.publicKey }),
+    // `ref`: the invite code this browser holds, in case the invite cookie was lost.
+    body: JSON.stringify(withRef({ mode: "sign-in", idToken: await auth.idToken(), handle: opts.handle, sessionPublicKey: key.publicKey })),
   });
   const body = (await res.json().catch(() => ({}))) as Partial<NearAuthSignIn> & { needsHandle?: boolean; suggestedHandle?: string; error?: string; message?: string };
   if (res.ok && body.needsHandle) return { status: "needs-handle", suggestedHandle: body.suggestedHandle };
