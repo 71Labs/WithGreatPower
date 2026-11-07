@@ -116,7 +116,7 @@ async function tap(code) {
   await key(code, false);
 }
 
-const PEEK = `(() => { const c = window.__wgpCity; const p = c.peek(); const f = c.loop.view.roam; return { ...p, actKind: f && f.act && f.act.kind, actIndex: f && f.act ? f.act.index : -1, chatLine: f && f.chat ? f.chat.line : null }; })()`;
+const PEEK = `(() => { const c = window.__wgpCity; const p = c.peek(); const f = c.loop.view.roam; const t = f.tasks.findIndex((q) => q.id === "crosschain"); return { ...p, cs: p.stage[t], ci: p.items[t], actKind: f && f.act && f.act.kind, actIndex: f && f.act ? f.act.index : -1, chatLine: f && f.chat ? f.chat.line : null }; })()`;
 const peek = () => evaluate(PEEK);
 const view = (pose) => {
   if (pose.steer) return { fx: pose.steer.fx, fz: pose.steer.fz };
@@ -190,7 +190,7 @@ async function holdE(relay, { ms = 4000, shots = {}, letGoAt = 0 } = {}) {
   const taken = new Set();
   let p = await peek();
   const bit = 1 << relay;
-  while (Date.now() < end && !(p.items[4] & bit)) {
+  while (Date.now() < end && !(p.ci & bit)) {
     for (const [ticks, name] of Object.entries(shots)) {
       if (!taken.has(name) && p.hold.ticks >= Number(ticks)) {
         taken.add(name);
@@ -225,7 +225,7 @@ await sleep(700);
 p = await peek();
 await shot("02-uncle-briefing");
 await unlook();
-report.checks.taken = p.stage[4];
+report.checks.taken = p.cs;
 beat("briefing", { stage: p.stage, chatLine: p.chatLine });
 await perf("uncle");
 await tap("KeyM");
@@ -269,8 +269,8 @@ p = await holdE(c.i, { shots: { 33: "07-crane-spark", 72: "07b-crane-ring" } });
 await sleep(250);
 await shot("08-crane-unplugged");
 await unlook();
-report.checks.crane = (p.items[4] & (1 << c.i)) !== 0;
-beat("crane: unplugged", { items: p.items[4] });
+report.checks.crane = (p.ci & (1 << c.i)) !== 0;
+beat("crane: unplugged", { items: p.ci });
 
 // 3. The bridge's west tower: up a leg to hang from the cap; a let-go halfway, then the hold.
 const b = R.bridge;
@@ -284,14 +284,14 @@ report.checks.bridgeReached = p.actKind === "unplug" && p.actIndex === b.i;
 p = await holdE(b.i, { shots: { 34: "11-bridge-half" }, letGoAt: 48 });
 await sleep(350);
 await shot("12-bridge-reset");
-report.checks.reset = { ticks: p.hold.ticks, relay: p.hold.relay, items: p.items[4] };
+report.checks.reset = { ticks: p.hold.ticks, relay: p.hold.relay, items: p.ci };
 beat("bridge: let go halfway", report.checks.reset);
 await sleep(600);
 p = await holdE(b.i);
 await sleep(250);
 await shot("13-bridge-unplugged");
-report.checks.bridge = (p.items[4] & (1 << b.i)) !== 0;
-beat("bridge: unplugged", { items: p.items[4] });
+report.checks.bridge = (p.ci & (1 << b.i)) !== 0;
+beat("bridge: unplugged", { items: p.ci });
 await perf("bridge");
 
 // 4. The tallest building's antenna.
@@ -309,8 +309,8 @@ p = await holdE(a.i, { shots: { 50: "16-antenna-hold" } });
 await sleep(250);
 await shot("17-antenna-unplugged");
 await unlook();
-report.checks.antenna = (p.items[4] & (1 << a.i)) !== 0;
-beat("antenna: unplugged", { items: p.items[4] });
+report.checks.antenna = (p.ci & (1 << a.i)) !== 0;
+beat("antenna: unplugged", { items: p.ci });
 await perf("antenna");
 
 // 5. On a phone: Doc's deck tower, hung from by a scramble up its leg, the act button held by a finger.
@@ -332,7 +332,7 @@ if (btn) {
       shotHalf = true;
       await shot("19-phone-hold-ring");
     }
-    if (p.items[4] & (1 << d.i)) break;
+    if (p.ci & (1 << d.i)) break;
     await sleep(25);
   }
   await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
@@ -340,9 +340,9 @@ if (btn) {
   p = await peek();
   await shot("20-phone-unplugged");
 }
-report.checks.deck = (p.items[4] & (1 << d.i)) !== 0;
-report.checks.stageAfterFour = p.stage[4];
-beat("deck (touch): unplugged", { items: p.items[4], stage: p.stage[4] });
+report.checks.deck = (p.ci & (1 << d.i)) !== 0;
+report.checks.stageAfterFour = p.cs;
+beat("deck (touch): unplugged", { items: p.ci, stage: p.cs });
 await perf("phone");
 
 // 6. Back to Uncle Gen: the speech, done, and its XP.
@@ -352,8 +352,8 @@ await tap("KeyE");
 await sleep(1600);
 p = await peek();
 await shot("21-uncle-speech");
-report.checks.done = p.stage[4];
-beat("speech", { stage: p.stage[4], chatLine: p.chatLine });
+report.checks.done = p.cs;
+beat("speech", { stage: p.cs, chatLine: p.chatLine });
 await sleep(1500);
 const saved = await evaluate(`(() => { const s = JSON.parse(localStorage.getItem("wgp:save:v1")); return { city: s.city, xp: s.hero && s.hero.xp }; })()`);
 report.checks.saved = { crosschain: saved.city && saved.city.tasks.crosschain, xp: saved.xp, cityXp: saved.city && saved.city.xp };
