@@ -19,6 +19,7 @@ import { CircleGeometry, DynamicDrawUsage, Group, InstancedMesh, Matrix4, Object
 
 import type { CastId } from "@wgp/game-core/cast";
 import type { City, RenderFrame3D, Vec3, Zone } from "@wgp/game-core/sim3d/contract";
+import { isRoamCity, roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import { NODE_COLORS, type SuitColors } from "@/components/cast";
 
@@ -94,8 +95,22 @@ const COPY_POSES = 3;
 type Copies = { kind: "proc"; batch: CopyBatch; anim: SybilAnimator } | { kind: "cast"; batch: CastCopies; anims: SybilAnimator[] };
 
 interface Ally extends Actor {
-  zone: Zone;
+  id: AllyKey;
+  style: AllyStyle;
+  /** Their errand's zone, or null for one standing in the street (free roam's, roamAllies). */
+  zone: Zone | null;
   at: Vec3;
+}
+
+/**
+ * Free roam's cast folks with no zone of their own, who stand in the street (roam-3: Gwei Stacy
+ * at her Mempool Market stall), hands on hips.
+ */
+function roamAllies(city: City): { id: AllyKey; at: Vec3; style: AllyStyle }[] {
+  if (!isRoamCity(city)) return [];
+  return roamWorld()
+    .folks.filter((f) => f.cast && f.cast in ALLY_STYLE && !city.zones.some((z) => z.ally === f.cast))
+    .map((f) => ({ id: f.cast as AllyKey, at: { x: f.x, y: f.y, z: f.z }, style: "hips" as const }));
 }
 
 const MAX_SHADOWS = 16;
@@ -223,19 +238,18 @@ export class CharacterSystem {
       const i = this.cast.indexOf(id as CastId);
       return i < 0 ? this.cast.length : i;
     };
-    const bodies = new Set<CastBodyId>([...villainIds, ...this.city.zones.flatMap((z) => (z.ally ? [z.ally] : []))]);
+    const street = roamAllies(this.city);
+    const bodies = new Set<CastBodyId>([...villainIds, ...this.city.zones.flatMap((z) => (z.ally ? [z.ally] : [])), ...street.map((a) => a.id)]);
     for (const id of [...bodies].sort((a, b) => met(a) - met(b))) this.askCast(id);
     for (const id of villainIds) this.villain(id);
-    for (const z of this.city.zones) {
-      if (!z.ally) continue;
-      const id = z.ally;
+    const addAlly = (id: AllyKey, zone: Zone | null, at: Vec3, style: AllyStyle) => {
       const asset = this.castNow(id);
       const model: BodyModel = asset ? this.castModel(asset, "ally") : new CharacterModel(CAST_DEFS[id], this.shared, lods.ally);
-      const at = z.allyAt ?? z.center;
-      const ally: Ally = { model, anim: this.allyAnimator(id, model), zone: z, at, flash: 0, hits: 0 };
-      this.allies.push(ally);
+      this.allies.push({ id, style, model, anim: this.allyAnimator(id, model, style), zone, at, flash: 0, hits: 0 });
       this.root.add(model.group);
-    }
+    };
+    for (const z of this.city.zones) if (z.ally) addAlly(z.ally, z, z.allyAt ?? z.center, ALLY_STYLE[z.ally]);
+    for (const a of street) addAlly(a.id, null, a.at, a.style);
   }
 
   /* ---------------------------------------------------------------- the cast's bodies */
@@ -255,8 +269,8 @@ export class CharacterSystem {
     return new CastModel(asset, this.shared, lods);
   }
 
-  private allyAnimator(id: AllyKey, model: BodyModel): AllyAnimator {
-    const anim = new AllyAnimator(model.rig, model.group, ALLY_STYLE[id]);
+  private allyAnimator(id: AllyKey, model: BodyModel, style: AllyStyle = ALLY_STYLE[id]): AllyAnimator {
+    const anim = new AllyAnimator(model.rig, model.group, style);
     if (model instanceof CastModel && this.castClips) anim.setClips(this.castClips, model.k);
     return anim;
   }
@@ -365,12 +379,12 @@ export class CharacterSystem {
       if (id === "sybil") this.swapCopies(asset);
     }
     for (const a of this.allies) {
-      if (a.zone.ally !== id || a.model instanceof CastModel) continue;
+      if (a.id !== id || a.model instanceof CastModel) continue;
       const model = this.castModel(asset, "ally");
       this.root.remove(a.model.group);
       a.model.dispose();
       a.model = model;
-      a.anim = this.allyAnimator(id as AllyKey, model);
+      a.anim = this.allyAnimator(a.id, model, a.style);
       this.root.add(model.group);
     }
     // Her body is ready before she's called, so the assist doesn't hitch building it.
@@ -534,7 +548,7 @@ export class CharacterSystem {
     let m: BodyModel | null = null;
     if (key === "hero") m = this.hero?.model ?? null;
     else if (this.villains.has(key as VillainKey)) m = this.villains.get(key as VillainKey)!.model;
-    else m = this.allies.find((a) => a.zone.ally === key)?.model ?? (key === "gwei" ? (this.gwei?.model ?? null) : null);
+    else m = this.allies.find((a) => a.id === key)?.model ?? (key === "gwei" ? (this.gwei?.model ?? null) : null);
     if (!m || !m.visible) return null;
     return out.setFromMatrixPosition(m.rig.get(joint).matrixWorld);
   }
@@ -546,7 +560,7 @@ export class CharacterSystem {
     let m: BodyModel | null = null;
     if (key === "hero") m = this.hero?.model ?? null;
     else if (this.villains.has(key as VillainKey)) m = this.villains.get(key as VillainKey)!.model;
-    else m = this.allies.find((a) => a.zone.ally === key)?.model ?? null;
+    else m = this.allies.find((a) => a.id === key)?.model ?? null;
     if (!m) return null;
     // The root bone carries the body's turn: its forward (+z in the model's frame at rest).
     const root = m.rig.bones[0];
@@ -706,7 +720,7 @@ export class CharacterSystem {
       ctx.secondary = allyCtx;
       const near = Math.hypot(this.heroPos.x - a.at.x, this.heroPos.z - a.at.z) < 520;
       // An errand open with them, or (free roam) a line they're saying to you.
-      const open = (frame.mode === "errand" && frame.stop === a.zone.index) || !!frame.roam?.folks.some((f) => f.talking && f.cast === a.zone.ally);
+      const open = (!!a.zone && frame.mode === "errand" && frame.stop === a.zone.index) || !!frame.roam?.folks.some((f) => f.talking && f.cast === a.id);
       a.anim.update({ pos: a.at, state: open ? "talk" : near ? "wave" : "idle" }, dt, ctx);
       // Allies take their full body only up close (an errand), villains from further out.
       this.lodFor(a.model, a.at, cam, 0.6);

@@ -14,8 +14,13 @@
  * - roam-2: the street traffic, two draw calls (roam/cars.ts): the sim's cars, where the sim has
  *   them. A car that knocks the hero down: "WHAM!" over him and a short camera shake (none on
  *   the Steady camera or with reduced motion).
+ * - roam-3: Front-run (roam/frontrun.ts): its gates, the bread barricade and Gwei's crates, her
+ *   stall sign, the parcel on the hero's back; a red arrow over the next gate (any task's next
+ *   map mark), over the buyer once every gate's through, over Gwei between tries. "GATE!",
+ *   "FILLED!", "OOF!" when he beats you. Sandwich Man runs in the cast (characters.ts, raceRival).
  *
- * Reduced motion: no flutter, no bob, no beam shimmer, no shake. About six draw calls in all.
+ * Reduced motion: no flutter, no bob, no beam shimmer, no shake. About six draw calls in all,
+ * up to six more with Front-run's race on.
  */
 import {
   BackSide,
@@ -39,16 +44,20 @@ import {
 } from "three";
 
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
+import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import type { SharedUniforms } from "../city/materials";
 import type { BurstOptions } from "../effects";
 import { C, rgb } from "../palette";
 import { RoamCars } from "./cars";
+import { FrontrunScene } from "./frontrun";
 
 export interface RoamHost {
   burst(word: string, at: Vec3, opts?: BurstOptions): void;
   /** A short camera shake (the host leaves it out on the Steady camera and with reduced motion). */
   shake?(amount: number): void;
+  /** roam-3: a joint of the hero's body in the world (Front-run's parcel rides on his back). */
+  heroJoint?(joint: string, out: Vector3): Vector3 | null;
 }
 
 /** A roam sim event, typed loosely (the scene only reads a few fields). */
@@ -61,6 +70,10 @@ export interface RoamSceneEvent {
   state?: string;
   /** roam-car-hit: the car's speed. */
   speed?: number;
+  /** roam-3, Front-run: roam-gate's count, roam-race's reason. */
+  got?: number;
+  of?: number;
+  why?: string | null;
 }
 
 const KIND = { page: 0, pixel: 1, marker: 2, next: 3, reticle: 4, beam: 5 } as const;
@@ -313,6 +326,8 @@ interface Parts {
   bot: Group;
   botFill: Mesh;
   botHull: Mesh;
+  /** roam-3: Front-run's gates, solids, sign and parcel (roam/frontrun.ts). */
+  frontrun: FrontrunScene;
 }
 
 const _m = new Matrix4();
@@ -416,12 +431,15 @@ export class RoamScene {
     bot.add(botHull, botFill);
     bot.visible = false;
 
-    this.root.add(tags, sprites, bot);
-    return { sprites, spriteGeo, spriteMat, center, params, color, centerAttr, paramsAttr, colorAttr, tags, tagMat, tagAttr, tagTex, bot, botFill, botHull };
+    const frontrun = new FrontrunScene(roamWorld().race, { heroJoint: (j, out) => this.host.heroJoint?.(j, out) ?? null });
+    frontrun.setReducedMotion(this.reducedMotion);
+    this.root.add(tags, sprites, bot, frontrun.root);
+    return { sprites, spriteGeo, spriteMat, center, params, color, centerAttr, paramsAttr, colorAttr, tags, tagMat, tagAttr, tagTex, bot, botFill, botHull, frontrun };
   }
 
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
+    this.parts?.frontrun.setReducedMotion(on);
   }
 
   /** The city's finds as bursts (a page, a photo, a sync, the bot caught, the river). */
@@ -450,6 +468,14 @@ export class RoamScene {
         if (!this.reducedMotion) this.host.shake?.(Math.min(1, (ev.speed ?? 0) / 330));
         break;
       }
+      // roam-3, Front-run: a gate, the go, the finish (the parcel in the river says SPLASH! already).
+      case "roam-gate":
+        this.host.burst("GATE!", { x: ev.x, y: ev.y + 30, z: ev.z }, { size: ev.got === ev.of ? 84 : 66, life: 0.7 });
+        break;
+      case "roam-race":
+        if (ev.state === "won") this.host.burst("FILLED!", at, { size: 100, life: 1.2 });
+        else if (ev.state === "lost" && ev.why === "rival") this.host.burst("OOF!", at, { size: 96, life: 1.1 });
+        break;
     }
   }
 
@@ -472,6 +498,7 @@ export class RoamScene {
     this.root.visible = true;
     this.lastFrame = frame;
     const P = this.parts;
+    P.frontrun.update(r, frame, time);
     const still = this.reducedMotion;
     let n = 0;
     const put = (x: number, y: number, z: number, w: number, h: number, kind: number, spin: number, c: readonly number[]) => {
@@ -514,6 +541,16 @@ export class RoamScene {
     }
     // The bot's arrow while it's loose.
     if (r.bot && r.bot.state !== "caught" && stage("pickpocket") === 1) put(r.bot.pos.x, r.bot.pos.y + 108, r.bot.pos.z, 24, 28, KIND.next, 0, HERO_RED);
+    // roam-3: an arrow over the next map mark (Front-run's next gate), and Front-run's people:
+    // the buyer once every gate's through, Gwei between tries (talk to her to go again).
+    const mark = r.marks?.find((m) => m.next);
+    if (mark) put(mark.pos.x, mark.pos.y + 100 + (still ? 0 : Math.sin(time * 3) * 5), mark.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+    const race = r.race;
+    for (const f of r.folks) {
+      const between = f.key === "gwei" && stage("frontrun") === 1 && !race;
+      const finish = f.key === "buyer" && !!race && race.over === null && race.heroGate >= race.of;
+      if (between || finish) put(f.pos.x, f.pos.y + (f.cast ? 118 : 110) + (still ? 0 : Math.sin(time * 2 + f.id) * 4), f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+    }
     // Viewpoint beams until synced.
     for (const v of r.views) {
       if (v.synced) continue;
@@ -583,6 +620,7 @@ export class RoamScene {
     P.botFill.geometry.dispose();
     (P.botFill.material as MeshBasicMaterial).dispose();
     (P.botHull.material as MeshBasicMaterial).dispose();
+    P.frontrun.dispose();
     this.parts = null;
     this.cars?.dispose();
     this.cars = null;
@@ -591,7 +629,7 @@ export class RoamScene {
 }
 
 /** Who hands out which task, and who takes it back (rules/city.ts, by folk key). */
-const GIVES: Record<string, string> = { aunt: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti" };
+const GIVES: Record<string, string> = { aunt: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti", gwei: "frontrun" };
 const TAKES: Record<string, string> = { uncle: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti" };
 
 /** Whether a task's next step is handing it in to its taker. */

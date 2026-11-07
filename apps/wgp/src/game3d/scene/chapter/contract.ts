@@ -8,6 +8,8 @@ import { CHAPTER_ID } from "@wgp/game-core/chapters";
 import type { SimEvent } from "@wgp/game-core/sim3d";
 import type { RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 
+import { raceRival } from "../roam/frontrun";
+
 export { CHAPTER_ID };
 export type { ClueId } from "@wgp/game-core/chapters";
 
@@ -44,9 +46,15 @@ export function chapterOf(frame: RenderFrame3D): ChapterFrame | null {
   return frame.chapter ?? null;
 }
 
-/** The frame's villains. */
+const withRival: SceneVillain[] = [];
+
+/** The frame's villains (free roam's Front-run adds Sandwich Man while its race is on: roam/frontrun.ts). */
 export function villainsOf(frame: RenderFrame3D): readonly SceneVillain[] {
-  return frame.villains;
+  const rival = raceRival(frame);
+  if (!rival) return frame.villains;
+  withRival.length = 0;
+  withRival.push(...frame.villains, rival);
+  return withRival;
 }
 
 /** The Right-Clicker in this frame, if he's there. */

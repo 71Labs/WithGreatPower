@@ -59,6 +59,9 @@ export const BURST_WORDS = {
   "SNAP!": [PAPER, INK],
   "PIXEL!": [CITY.neonMint, INK],
   "SYNCED!": [CITY.neonMint, PAPER],
+  /** Free roam's Front-run (roam-3, scene/roam): a gate passed, the order filled. */
+  "GATE!": [NAV_COLORS.ring, INK],
+  "FILLED!": [CITY.windowLit, INK],
 } as const;
 
 export type BurstWord = keyof typeof BURST_WORDS;
