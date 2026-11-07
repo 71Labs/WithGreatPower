@@ -1,5 +1,5 @@
 /**
- * Free roam's golden replay and determinism (src/golden-roam.ts, ruleset tag roam-2): test/golden/roam-standard.bin
+ * Free roam's golden replay and determinism (src/golden-roam.ts, ruleset tag roam-3): test/golden/roam-standard.bin
  * must replay, as an outing, to test/golden/roam-standard.json; the same log replays the same
  * way twice and after other runs; a roam log is refused by the night and chapter verifiers and
  * their logs by the roam verifier. The patrol and chapter goldens (golden.test.ts,

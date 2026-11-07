@@ -14,17 +14,20 @@ export const ROAM_MODE = "roam";
  * roam-2: everything the City draws in the hero's way is solid as drawn (roam/furniture.ts), and
  * the street traffic is in the sim (roam/traffic.ts): cars that stop at lights, queue, brake for
  * him standing in the road, and knock him flying when he isn't.
+ * roam-3: two more side tasks (TASK_IDS grows; old records start them at stage 0). This build's:
+ * "Front-run" (roam/task-frontrun.ts), Gwei Stacy's rooftop race against Sandwich Man, with her
+ * and the buyer in the city and a bread barricade on the race's roof.
  */
-export const ROAM_RULESET = "roam-2";
+export const ROAM_RULESET = "roam-3";
 /**
- * The ruleset field a roam log carries (hex "F 001 2 04": free roam, city 001, rules rev 2, on
+ * The ruleset field a roam log carries (hex "F 001 3 04": free roam, city 001, rules rev 3, on
  * patrol ruleset 4), so a roam log never replays as a patrol night or a chapter, and neither of
  * those as a roam outing. Rev 2 (roam-2): the climb's pace, and the stick back climbing down a
- * wall instead of letting go.
+ * wall instead of letting go. Rev 3 (roam-3): the new side tasks.
  */
-export const ROAM_LOG_RULESET = 0x0f001204;
-/** Older roam rules' log fields (roam-1's), refused as a stale outing (the server says start a fresh one). */
-export const ROAM_OLD_LOG_RULESETS: readonly number[] = [0x0f001104];
+export const ROAM_LOG_RULESET = 0x0f001304;
+/** Older roam rules' log fields (roam-1's, roam-2's), refused as a stale outing (the server says start a fresh one). */
+export const ROAM_OLD_LOG_RULESETS: readonly number[] = [0x0f001104, 0x0f001204];
 /** The same list under the climbing branch's name (roam-run.ts). */
 export const ROAM_LOG_RULESETS_PAST: readonly number[] = ROAM_OLD_LOG_RULESETS;
 

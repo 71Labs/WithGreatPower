@@ -18,6 +18,7 @@ import { ROAM_CITY_SEED, SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP, 
 import { stepMove, type Presses } from "../parkour/move";
 import { stepKnock } from "./knock";
 import { stepPeople } from "./tasks";
+import { newRace, startFrontrun } from "./task-frontrun";
 import { buildTraffic, stepTraffic } from "./traffic";
 import { TASK_DONE, TASK_IDS, type RoamBody, type RoamStart, type RoamState } from "./types";
 import { clearAt, roamCity, roamGrid, roamWorld } from "./world";
@@ -89,12 +90,15 @@ export function createRoamSim(start: RoamStart, heroLevel = 1): SimState {
   });
   // A chase can't carry over between outings: the bot goes home, the jogger asks again.
   if (stage[1] === 1) stage[1] = 0;
+  const items = TASK_IDS.map((_, i) => (start.items[i] ?? 0) >>> 0);
+  // roam-3: nor can Gwei's race (task-frontrun.ts): she asks again, the gates cleared.
+  startFrontrun(stage, items);
   const roam: RoamState = {
     body: newBody(),
     world,
     progress: {
       stage,
-      items: TASK_IDS.map((_, i) => (start.items[i] ?? 0) >>> 0),
+      items,
       pages: start.pages >>> 0,
       views: start.views >>> 0,
       talks: world.folks.map(() => 0),
@@ -104,6 +108,7 @@ export function createRoamSim(start: RoamStart, heroLevel = 1): SimState {
     chat: null,
     events: [],
     traffic: buildTraffic(city, grid, at),
+    race: newRace(),
   };
   const s: SimState = {
     config: { seed: ROAM_CITY_SEED, stops: [], index: city.zones.length, entry: "travel", hp: 100, maxHp: 100, fluid: 0, combo: 0, gweiCalls: 0, heroLevel, loadout: [] },

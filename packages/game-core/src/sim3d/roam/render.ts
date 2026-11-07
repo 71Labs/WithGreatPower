@@ -11,6 +11,7 @@ import { knockPhase } from "./knock";
 import type { SimState } from "../types";
 import { roamHeading } from "../parkour/move";
 import { actTarget } from "./tasks";
+import { fillRaceFrame, fillRaceMarks } from "./task-frontrun";
 import { TASK_IDS } from "./types";
 import { zipTarget } from "../parkour/zip";
 
@@ -58,7 +59,7 @@ interface Track {
 const tracks = new WeakMap<SimState, Track>();
 
 function emptyRoam(): RoamFrame {
-  return { move: "ground", moveT: 0, sprint: false, wall: null, path: null, zip: null, bot: null, folks: [], chat: null, act: null, pages: [], views: [], pixels: [], tags: [], tasks: [], cars: [], knock: null };
+  return { move: "ground", moveT: 0, sprint: false, wall: null, path: null, zip: null, bot: null, folks: [], chat: null, act: null, pages: [], views: [], pixels: [], tags: [], tasks: [], cars: [], knock: null, marks: [], race: null };
 }
 
 /** Write the outing into `out.roam` (and the hero's action off the move). A night's state leaves it null. */
@@ -213,5 +214,12 @@ export function fillRoamFrame(s: SimState, out: RenderFrame3D): RenderFrame3D {
     k.t = kp.t;
     set(k.dir, tr.knock.dx, 0, tr.knock.dz);
   } else f.knock = null;
+
+  // roam-3 (v1.9): each task's map marks, then Front-run's race (task-frontrun.ts).
+  const marks = f.marks ?? (f.marks = []);
+  let n = 0;
+  n = fillRaceMarks(s, marks, n);
+  marks.length = n;
+  f.race = fillRaceFrame(s, f.race ?? null);
   return out;
 }

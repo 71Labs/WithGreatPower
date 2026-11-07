@@ -8,10 +8,11 @@
  * Case File 002's clues (docs/chapters/case-002.md); v1.7 (free roam, ruleset tag roam-1, patrol
  * nights untouched) the frame's `roam`, with roam-2's `roam.cars`, `roam.knock` and the move
  * "knocked" (additive); v1.8 (Case File 003, ruleset c003-1) the frame's `fee`
- * (docs/chapters/case-003.md).
+ * (docs/chapters/case-003.md); v1.9 (free roam roam-3, additive) `roam.marks` and `roam.race`.
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
+import type { TaskId } from "./roam/types";
 
 export interface Vec3 {
   x: number;
@@ -426,6 +427,42 @@ export interface RoamFrame {
    * or getting up; seconds into that phase; the way the car pushed him (unit xz).
    */
   knock?: { phase: "flung" | "down" | "up"; t: number; dir: Vec3 } | null;
+  /**
+   * v1.9 (roam-3, additive): the tracked tasks' map marks, from each task's own state, empty when
+   * no task with marks is under way: Front-run's six gates (kind "gate") while its race runs.
+   */
+  marks: RoamMark[];
+  /** v1.9 (roam-3): Front-run's race while it runs or has just ended, else null (sim3d/roam/task-frontrun.ts). */
+  race: RaceFrame | null;
+}
+
+/** A map mark (RoamFrame.marks): which task's, what it is, where (its centre), passed, and whether it's the one to go for next. */
+export interface RoamMark {
+  task: TaskId;
+  kind: "gate" | "relay";
+  pos: Vec3;
+  done: boolean;
+  next: boolean;
+}
+
+/**
+ * Front-run's race (RoamFrame.race, v1.9). Sandwich Man (`rival`) at feet level, his velocity,
+ * the way he faces (radians, 0 = +z) and what he's doing; the gates each has passed (of `of`);
+ * the race clock (ticks) and the seconds until he reaches the buyer (`left`); once it's over,
+ * who won and, lost, why (he got there first, or the parcel went in the river).
+ */
+export interface RaceFrame {
+  rival: Vec3;
+  rivalVel: Vec3;
+  rivalYaw: number;
+  rivalMove: "wait" | "run" | "climb" | "leap" | "won" | "beaten";
+  rivalGate: number;
+  heroGate: number;
+  of: number;
+  ticks: number;
+  left: number;
+  over: "won" | "lost" | null;
+  why: "rival" | "river" | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

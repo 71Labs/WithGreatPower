@@ -19,7 +19,7 @@ describe("the city record", () => {
     const s = heroSave(STANDARD, "Roamer");
     expect(cityRecord(s)).toEqual(emptyCity());
     const start = roamStartFrom(cityRecord(s));
-    expect(start).toEqual({ stage: [0, 0, 0, 0], items: [0, 0, 0, 0], pages: 0, views: 0, talks: [], at: null });
+    expect(start).toEqual({ stage: [0, 0, 0, 0, 0], items: [0, 0, 0, 0, 0], pages: 0, views: 0, talks: [], at: null });
   });
 
   it("pays XP for each first finish, once: tasks, pages and viewpoints", () => {
@@ -58,8 +58,8 @@ describe("the city record", () => {
 
   it("rebuilds a start from a record, refusing junk", () => {
     const start = roamStartFrom({ ...emptyCity(), tasks: { bread: 99 as number, pixels: 1 }, items: { pixels: 3 }, at: { x: Number.NaN, y: 0, z: 0, fx: 1, fz: 0 } });
-    expect(start.stage).toEqual([0, 0, 1, 0]);
-    expect(start.items).toEqual([0, 0, 3, 0]);
+    expect(start.stage).toEqual([0, 0, 1, 0, 0]);
+    expect(start.items).toEqual([0, 0, 3, 0, 0]);
     expect(start.at).toBeNull();
   });
 

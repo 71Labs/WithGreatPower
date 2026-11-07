@@ -157,7 +157,7 @@ describe("free roam's traffic", () => {
       expect(p.x).toBeCloseTo(c.x, 6);
       expect(p.z).toBeCloseTo(c.z, 6);
     }
-    expect(ROAM_LOG_RULESET).toBe(0x0f001204);
+    expect(ROAM_LOG_RULESET).toBe(0x0f001304);
   });
 
   it("never puts two cars in one place: lanes, gaps and lights over three minutes", () => {

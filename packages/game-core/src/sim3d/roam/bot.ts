@@ -17,9 +17,12 @@ export type RoamBotGoal =
    * Run (sprinting if far) to a feet point, within `r` across (and, given `y`, at about that
    * height); `street` keeps to the street grid on the way and gets down off roofs to it.
    */
-  | { kind: "go"; x: number; z: number; y?: number; r?: number; sprint?: boolean; street?: boolean; walk?: boolean }
-  /** Push the stick toward (x, z) until the body is on top of something at least `y` high (a climb, a mantle). */
-  | { kind: "climb"; x: number; z: number; y: number }
+  | { kind: "go"; x: number; z: number; y?: number; r?: number; sprint?: boolean; street?: boolean; walk?: boolean; jog?: boolean }
+  /**
+   * Push the stick toward (x, z) until the body is on top of something at least `y` high (a climb,
+   * a mantle); `sprint` climbs at the sprint's pace, `leap` jumps up the wall whenever it can.
+   */
+  | { kind: "climb"; x: number; z: number; y: number; sprint?: boolean; leap?: boolean }
   /** Press interact once (talk, photograph, sync). */
   | { kind: "act" }
   /** Turn to face (x, z) on the spot. */
@@ -82,6 +85,22 @@ export function roamTour(w: RoamWorld): RoamBotGoal[] {
     ...[0, 1, 2, 3, 4, 5, 6, 7].map((k): RoamBotGoal => ({ kind: "hold", x: cross + (k % 2 ? -120 : 120), z: page.z + 2000, ticks: 60, sprint: true })),
     { kind: "wait", ticks: 120 },
   ];
+}
+
+/**
+ * Gwei Stacy's race (roam-3, task-frontrun.ts) from beside her stall: talk to her, then the
+ * course the way a runner takes it (RaceCourse.runner). `good`: sprinting, leaping up the facade
+ * (good movement, which wins); `jog`: at a jog, never sprinting (a slow route, which loses).
+ */
+export function frontrunRace(w: RoamWorld, pace: "good" | "jog" = "good"): RoamBotGoal[] {
+  const good = pace === "good";
+  const goals: RoamBotGoal[] = [{ kind: "act" }];
+  for (const p of w.race.runner) {
+    if (p.how === "climb") goals.push({ kind: "climb", x: p.x, z: p.z, y: p.y, sprint: good, leap: good });
+    else if (p.how === "go") goals.push({ kind: "go", x: p.x, z: p.z, y: p.y, r: 40, sprint: good, jog: !good });
+    else goals.push({ kind: "face", x: p.x, z: p.z }, { kind: "press", shot: "zip", x: p.x, z: p.z }, { kind: "wait", ticks: 50 });
+  }
+  return goals;
 }
 
 const IDLE: InputFrame = { dir: 0, mag: 0, web: false, shot: 0 };
@@ -174,8 +193,10 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
         next(m);
         return IDLE;
       }
-      // Hanging: up and over.
-      return { ...toward(s, g.x, g.z), web: false, shot: move === "hang" && m.t % 20 === 0 ? SHOT_JUMP : 0 };
+      // Hanging: up and over. On the wall, a leap up it every so often if asked, else the sprint held if asked.
+      if (move === "hang" && m.t % 20 === 0) return { ...toward(s, g.x, g.z), web: false, shot: SHOT_JUMP };
+      if (g.leap && move === "climb" && m.t % 28 === 0) return { ...toward(s, g.x, g.z), web: false, shot: SHOT_JUMP };
+      return { ...toward(s, g.x, g.z), web: false, shot: g.sprint ? SHOT_SPRINT : 0 };
     }
     case "chase": {
       const b = s.roam.bot;
@@ -235,8 +256,8 @@ export function roamBotFrame(s: SimState, m: RoamBotMemory): InputFrame {
       m.lastZ = h.z;
       m.stuck = moved < 1.5 && move === "ground" ? m.stuck + 1 : 0;
       const jump = m.stuck > 20 && m.stuck % 30 === 21;
-      const sprint = g.sprint !== false && !g.walk && left > 260;
-      return { ...toward(s, tx, tz, g.walk ? 1 : left < 120 ? 2 : 3), web: false, shot: jump ? SHOT_JUMP : sprint ? SHOT_SPRINT : 0 };
+      const sprint = g.sprint !== false && !g.walk && !g.jog && left > 260;
+      return { ...toward(s, tx, tz, g.walk ? 1 : g.jog || left < 120 ? 2 : 3), web: false, shot: jump ? SHOT_JUMP : sprint ? SHOT_SPRINT : 0 };
     }
   }
 }

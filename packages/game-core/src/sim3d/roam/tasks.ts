@@ -1,7 +1,8 @@
 /**
- * The city's people and things to find, in free roam: talking (the interact button), the four
- * side tasks, Daily Rug pages and viewpoints, Mary Jpeg's pixels, Bearson's photos, and the
- * pickpocket bot's run over the roofs.
+ * The city's people and things to find, in free roam: talking (the interact button), the first
+ * four side tasks, Daily Rug pages and viewpoints, Mary Jpeg's pixels, Bearson's photos, and the
+ * pickpocket bot's run over the roofs. roam-3's tasks live in their own files and hook in here
+ * (task-frontrun.ts: Gwei's talk, and the race's step after everything else).
  *
  * - Interact picks one thing in this order (actTarget, which the HUD's prompt reads too): the
  *   nearest person in reach; a Gas Goblin tag in frame while Bearson wants photos; a viewpoint's
@@ -32,6 +33,7 @@ import {
   TALK_RISE,
 } from "./constants";
 import { canTalk, type Presses } from "../parkour/move";
+import { stepRace, talkFrontrun } from "./task-frontrun";
 import { TASK_DONE, TASK_IDS, type RoamFolk, type RoamRoof, type TaskId } from "./types";
 
 const R = HERO_RADIUS;
@@ -128,6 +130,7 @@ export function stepPeople(s: SimState, press: Presses, dt: number) {
   if (press.act) act(s);
   pickUp(s);
   stepBot(s, dt);
+  stepRace(s);
 }
 
 function act(s: SimState) {
@@ -187,7 +190,7 @@ function talk(s: SimState, f: RoamFolk) {
   } else if (task === "pixels" || task === "graffiti") {
     if (stage === 0) setStage(s, task, 1);
     else if (stage === 2) setStage(s, task, TASK_DONE);
-  }
+  } else if (task === "frontrun") line = talkFrontrun(s, f, line);
   p.talks[f.id] = (p.talks[f.id] ?? 0) + 1;
   r.chat = { folk: f.id, line, ticks: CHAT_TICKS };
   r.events.push({ type: "roam-talk", folk: f.id, line, task });

@@ -8,9 +8,14 @@
 import type { CastId } from "../../rules/cast";
 import type { DistrictId, RoamMoveName, Vec3 } from "../contract";
 import type { ParkourBody, ParkourEvent } from "../parkour/types";
+import type { RaceCourse, RaceEvent, RoamRace } from "./task-frontrun";
 
-/** The tasks the city's people hand out, in their fixed order (progress arrays are indexed by it). */
-export const TASK_IDS = ["bread", "pickpocket", "pixels", "graffiti"] as const;
+/**
+ * The tasks the city's people hand out, in their fixed order (progress arrays are indexed by it;
+ * append only: a record saved before a task existed starts it at stage 0 with no items).
+ * roam-3: "frontrun", Gwei Stacy's race (roam/task-frontrun.ts).
+ */
+export const TASK_IDS = ["bread", "pickpocket", "pixels", "graffiti", "frontrun"] as const;
 export type TaskId = (typeof TASK_IDS)[number];
 
 /** A task's stage: 0 not started, 1 and up under way (each task's own steps), TASK_DONE finished. */
@@ -103,6 +108,8 @@ export interface RoamWorld {
   botPath: RoamRoof[];
   /** The river's banks: where a swimmer climbs out. */
   banks: { x0: number; z0: number; x1: number; z1: number }[];
+  /** roam-3: Gwei Stacy's race course (roam/task-frontrun.ts). */
+  race: RaceCourse;
 }
 
 /** Progress through the city: what the save's CityRecord holds, plus this outing's working state. */
@@ -215,6 +222,8 @@ export interface RoamState {
   chat: RoamChat | null;
   /** roam-2: the cars, and being knocked down by one. */
   traffic: RoamTraffic;
+  /** roam-3: Gwei Stacy's race against Sandwich Man (roam/task-frontrun.ts). */
+  race: RoamRace;
   /** Roam's own events since the driver last drained them (the hero's web events go to SimState.events as on a night). */
   events: RoamEvent[];
 }
@@ -248,4 +257,6 @@ export type RoamEvent =
   /** Nothing to do with the interact button here (a photo with nothing in frame, a talk with nobody near). */
   | { type: "roam-nothing" }
   /** roam-2: a car hit him (its speed then; where he was): he's knocked down, the car stands. */
-  | { type: "roam-car-hit"; speed: number; car: number; x: number; y: number; z: number };
+  | { type: "roam-car-hit"; speed: number; car: number; x: number; y: number; z: number }
+  /** roam-3: Gwei Stacy's race (roam/task-frontrun.ts): the start, a gate, the finish, the reset. */
+  | RaceEvent;
