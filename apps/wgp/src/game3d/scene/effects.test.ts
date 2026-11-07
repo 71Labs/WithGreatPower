@@ -29,4 +29,10 @@ describe("the comic bursts", () => {
     for (const w of ["GOT IT!", "SNAP!", "PIXEL!", "SYNCED!", "GOTCHA!"]) expect(words.has(w), w).toBe(true);
     for (const w of words) expect(w in BURST_WORDS, w).toBe(true);
   });
+
+  it("fits every word in a 4096 px tall atlas (two 256 px cells to a row: 32 words at most)", () => {
+    const n = Object.keys(BURST_WORDS).length;
+    expect(Math.ceil(n / 2) * 256).toBeLessThanOrEqual(4096);
+    for (const w of ["GATE!", "FILLED!", "ZZT!", "CLUNK!"]) expect(w in BURST_WORDS, w).toBe(true);
+  });
 });
