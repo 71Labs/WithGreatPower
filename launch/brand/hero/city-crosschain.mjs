@@ -242,10 +242,13 @@ beat("crane: main roof", { y: Math.round(feet(p)), move: p.move });
 p = await drive(c.x - 90, 1000, [], (q) => q.move === "ground" && feet(q) > 708, { timeout: 20 });
 beat("crane: tier", { y: Math.round(feet(p)), move: p.move });
 // Round the tier's cluster of antennas (east of them), then along to the jib.
-// Up here (the tier, its edge, the jib): a walk, never a hop. Round the tier's clutter (a
-// cluster of antennas and a mast in its middle, a vent by the jib) on its west and north sides.
+// Up here (the tier, its edge, the jib): never a hop. Round the tier's clutter (a cluster of
+// antennas on foot blocks and a mast in its middle, a vent by the jib) on its west and north
+// sides. First a few steps west at a jog (a walk can't step back down off a foot block the
+// pull-up may have left him on), then a walk.
+p = await drive(4890, 872, [], near(4890, 872, 14), { timeout: 10, hop: false });
+beat("crane: off the mantle", { x: Math.round(p.x), y: Math.round(feet(p)), z: Math.round(p.z) });
 for (const [x, z, r] of [
-  [4878, 880, 12],
   [4878, 1016, 12],
   [c.x - 45, 1016, 10],
 ]) {
