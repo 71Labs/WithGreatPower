@@ -2,7 +2,7 @@
  * Free roam's smoke check over CDP: open /play/city as a guest with a hero save, wait for the
  * city, take a shot, print the console's errors and the scene's numbers.
  *
- *   node launch/brand/hero/city-smoke.mjs [--base http://127.0.0.1:3920] [--out dir] [--query "autopilot=1"]
+ *   node launch/brand/hero/city-smoke.mjs [--base http://127.0.0.1:3920] [--out dir] [--query "autopilot=1"] [--cdp 9731]
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,7 +21,8 @@ const wait = Number(opt("wait", "8000"));
 const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
 mkdirSync(out, { recursive: true });
 
-const { send, evaluate, logs, close } = await launch({ port: 9731, profile: "/private/tmp/claude-501/wgp-city-smoke" });
+const cdpPort = Number(opt("cdp", "9731"));
+const { send, evaluate, logs, close } = await launch({ port: cdpPort, profile: `/private/tmp/claude-501/wgp-city-smoke-${cdpPort}` });
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });

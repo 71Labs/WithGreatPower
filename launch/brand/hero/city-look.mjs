@@ -5,7 +5,7 @@
  * 16 ms, nothing evaluated in between), the camera's yaw sampled in the page every animation
  * frame from the scene's chase pose, and the sim's input read back as it goes.
  *
- *   node launch/brand/hero/city-look.mjs [--viewport landscape|portrait] [--label after] [--base http://127.0.0.1:4030] [--look 2] [--steady 1]
+ *   node launch/brand/hero/city-look.mjs [--viewport landscape|portrait] [--label after] [--base http://127.0.0.1:4030] [--look 2] [--steady 1] [--cdp 9430]
  *
  * The run: Jump tapped on the roof (still a jump), one finger dragged 240 px left then right on
  * the open screen (a turn, no web), the stick held with a look drag at once, a finger that rests
@@ -29,8 +29,9 @@ const label = opt("label", "after");
 const out = opt("out", "launch/brand/hero/game-shots/city-map-look");
 const look = opt("look", null);
 const steady = opt("steady", null);
+const cdpPort = Number(opt("cdp", "9430"));
 const V = vp === "landscape" ? { width: 915, height: 412 } : { width: 412, height: 915 };
-const c = await launch({ port: 9430, profile: "/private/tmp/claude-501/wgp-ux-cdp-9430", flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const c = await launch({ port: cdpPort, profile: `/private/tmp/claude-501/wgp-ux-cdp-${cdpPort}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 await c.send("Page.enable");
 await c.send("Runtime.enable");
 await c.send("Emulation.setDeviceMetricsOverride", { width: V.width, height: V.height, deviceScaleFactor: 2, mobile: true, screenOrientation: V.width > V.height ? { type: "landscapePrimary", angle: 90 } : { type: "portraitPrimary", angle: 0 } });

@@ -7,7 +7,10 @@
  * task finished, two under way, some pages and masts). Reads the map's camera back from the
  * pins' places.
  *
- *   node launch/brand/hero/city-map.mjs [--viewport landscape|portrait|desktop] [--marks race] [--label after] [--base http://127.0.0.1:4030]
+ *   node launch/brand/hero/city-map.mjs [--viewport landscape|portrait|desktop] [--marks race] [--label after] [--base http://127.0.0.1:4030] [--cdp 9430] [--act 1]
+ *
+ * `--act 1` presses E once the city is up (with a `--save` whose record stands the hero beside
+ * Gwei Stacy, that starts her race, so the map shows the real gates, not a fixture's).
  *
  * Writes <out>/<label>-<viewport>[-marks]-{hud,map,zoomed,centred,key,drawer-hidden}.png and -mapplay.json.
  */
@@ -26,9 +29,11 @@ const marks = opt("marks", null);
 const label = opt("label", "after");
 const steady = opt("steady", null);
 const out = opt("out", "launch/brand/hero/game-shots/city-map-look");
+const cdpPort = Number(opt("cdp", "9430"));
+const act = opt("act", null);
 mkdirSync(out, { recursive: true });
 const V = vp === "landscape" ? { width: 915, height: 412 } : vp === "desktop" ? { width: 1440, height: 900, desktop: true } : { width: 412, height: 915 };
-const c = await launch({ port: 9430, profile: "/private/tmp/claude-501/wgp-ux-cdp-9430", flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const c = await launch({ port: cdpPort, profile: `/private/tmp/claude-501/wgp-ux-cdp-${cdpPort}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const report = { viewport: V, marks, steps: [] };
 try {
   await c.send("Page.enable");
@@ -60,6 +65,14 @@ try {
   };
   await until(`window.__wgpCity && window.__wgpCity.peek().status === "live" && window.__wgpCity.handle() && window.__wgpCity.handle().pose()`);
   await sleep(9000);
+  if (act) {
+    await c.send("Input.dispatchKeyEvent", { type: "keyDown", code: "KeyE", key: "e", windowsVirtualKeyCode: 69, nativeVirtualKeyCode: 69 });
+    await sleep(60);
+    await c.send("Input.dispatchKeyEvent", { type: "keyUp", code: "KeyE", key: "e", windowsVirtualKeyCode: 69, nativeVirtualKeyCode: 69 });
+    await sleep(1500);
+    report.afterAct = await c.evaluate(`(() => { const f = window.__wgpCity.loop.view.roam; return { marks: (f.marks ?? []).map((m) => m.task + ":" + m.kind + (m.done ? ":done" : "") + (m.next ? ":next" : "")), race: f.race ? { heroGate: f.race.heroGate, rivalGate: f.race.rivalGate, over: f.race.over } : null }; })()`);
+    console.log("  after act", JSON.stringify(report.afterAct));
+  }
   const tag = `${label}-${vp}${marks ? `-${marks}` : ""}${steady ? "-steady" : ""}`;
   const shot = async (name) => {
     const { data } = await c.send("Page.captureScreenshot", { format: "png" });
