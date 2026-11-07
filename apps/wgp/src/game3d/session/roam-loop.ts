@@ -34,8 +34,8 @@ export interface RoamHud {
   status: RoamStatus;
   move: RoamMoveName;
   sprint: boolean;
-  /** What E would do: talk to someone, photograph a tag, sync a viewpoint. */
-  act: { kind: "talk" | "photo" | "sync"; index: number } | null;
+  /** What E would do: talk to someone, photograph a tag, sync a viewpoint; roam-3, hold it to unplug a relay. */
+  act: { kind: "talk" | "photo" | "sync" | "unplug"; index: number } | null;
   /** The line on screen: who said it and what. */
   chat: { folk: number; key: string; text: string } | null;
   /** Per task (TASK_IDS order): stage and items found. */
@@ -76,7 +76,7 @@ function sameHud(a: RoamHud, b: RoamHud): boolean {
   return a.tasks.every((t, i) => t.stage === b.tasks[i]?.stage && t.got === b.tasks[i]?.got);
 }
 
-const URGENT = new Set<string>(["roam-talk", "roam-task", "roam-item", "roam-page", "roam-sync", "roam-bot", "roam-move", "status"]);
+const URGENT = new Set<string>(["roam-talk", "roam-task", "roam-item", "roam-page", "roam-sync", "roam-bot", "roam-move", "roam-relay", "status"]);
 
 const bits = (n: number) => {
   let c = 0;

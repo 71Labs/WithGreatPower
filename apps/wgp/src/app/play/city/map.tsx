@@ -28,7 +28,8 @@ const PAD = 0.035;
 function taskTarget(id: TaskId, stage: number, roam: RoamFrame): { at: Vec3; who: string } | null {
   const w = roamWorld();
   const giver = w.folks.find((f) => f.gives === id)!;
-  const taker = w.folks.find((f) => f.takes === id)!;
+  // roam-3: Uncle Gen gives Cross-chain and takes it back, but his `takes` is the bread's.
+  const taker = w.folks.find((f) => f.takes === id) ?? giver;
   if (stage === 0) return { at: giver, who: FOLKS[giver.key].name };
   if (stage === TASK_DONE) return null;
   if (id === "bread") return { at: taker, who: FOLKS[taker.key].name };

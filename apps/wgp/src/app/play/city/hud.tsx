@@ -15,11 +15,11 @@
  *
  * Only buttons take touches; every panel lets them through to the play surface.
  */
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
 
 import { StickerPanel } from "@/components/game/kit";
 import { Camera, Check, MapIcon, Newspaper, Pause, Rocket, Target, Zap } from "@/components/icons";
-import { FOLKS, PAGES, TASKS, VIEW_NAMES, TASK_DONE, taskStep, type TaskId } from "@wgp/game-core/city";
+import { FOLKS, PAGES, RELAY_NAMES, TASKS, VIEW_NAMES, TASK_DONE, taskStep, type TaskId } from "@wgp/game-core/city";
 import { roamWorld } from "@wgp/game-core/sim3d/roam";
 import type { CastId } from "@wgp/game-core/cast";
 
@@ -32,7 +32,7 @@ export function useRoamHud(store: RoamHudStore): RoamHud | null {
 
 const world = () => roamWorld();
 
-/** What E would do, in words: "Talk to Aunt Mainnet", "Take a photo", "Sync the Queens Block mast". */
+/** What E would do, in words: "Talk to Aunt Mainnet", "Take a photo", "Sync the Queens Block mast", "Hold to unplug". */
 export function actLabel(act: RoamHud["act"]): string | null {
   if (!act) return null;
   if (act.kind === "talk") {
@@ -40,7 +40,37 @@ export function actLabel(act: RoamHud["act"]): string | null {
     return `Talk to ${FOLKS[f.key]?.name ?? "them"}`;
   }
   if (act.kind === "photo") return "Take a photo of the tag";
+  if (act.kind === "unplug") return "Hold to unplug";
   return `Sync the ${VIEW_NAMES[world().views[act.index].district]}`;
+}
+
+/** roam-3: which relay the unplug prompt is on, for screen readers and the touch button's name. */
+export function relayName(act: RoamHud["act"]): string {
+  const rl = act?.kind === "unplug" ? world().relays[act.index] : undefined;
+  return rl ? RELAY_NAMES[rl.key] : "the relay";
+}
+
+/**
+ * roam-3: a ring that fills gold as a relay's hold builds. `progress` (0–1) is read every
+ * animation frame straight into a CSS variable (the HUD snapshot only updates ten times a second).
+ */
+function HoldRing({ progress, fill = "var(--game-gold)", track = "var(--game-paper-2)", className = "", children }: { progress: () => number; fill?: string; track?: string; className?: string; children: ReactNode }) {
+  const ring = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const p = Math.max(0, Math.min(1, progress()));
+      ring.current?.style.setProperty("--hold", p.toFixed(3));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [progress]);
+  return (
+    <span ref={ring} aria-hidden className={`grid place-items-center rounded-full p-[3px] ${className}`} style={{ background: `conic-gradient(${fill} calc(var(--hold, 0) * 360deg), ${track} 0)` }}>
+      {children}
+    </span>
+  );
 }
 
 /** A face for whoever's speaking: the cast member's sticker, or a paper tile with an initial. */
@@ -129,15 +159,26 @@ export function SpeechBubble({ hud }: { hud: RoamHud }) {
   );
 }
 
-/** "E  Talk to Aunt Mainnet": what the act key does here (keyboard players). */
-export function ActPrompt({ hud, touch }: { hud: RoamHud; touch: boolean }) {
+/**
+ * "E  Talk to Aunt Mainnet": what the act key does here (keyboard players). roam-3, on a relay:
+ * "E  Hold to unplug", the key in a ring that fills as the hold builds.
+ */
+export function ActPrompt({ hud, touch, progress }: { hud: RoamHud; touch: boolean; progress?: () => number }) {
   const label = actLabel(hud.act);
   if (!label || touch) return null;
+  const hold = hud.act?.kind === "unplug" && progress;
   return (
     <div className="pointer-events-none flex justify-center">
       <span className="wgp-pop inline-flex h-11 items-center gap-2 rounded-full border-[2.5px] border-game-ink bg-game-paper px-4 text-[15px] font-semibold text-game-ink shadow-[var(--game-shadow)]">
-        <Kbd className="!inline-flex">E</Kbd>
+        {hold ? (
+          <HoldRing progress={progress} className="-my-1 -ml-2 border-2 border-game-ink">
+            <Kbd className="!inline-flex">E</Kbd>
+          </HoldRing>
+        ) : (
+          <Kbd className="!inline-flex">E</Kbd>
+        )}
         {label}
+        {hold ? <span className="sr-only">: {relayName(hud.act)}</span> : null}
       </span>
     </div>
   );
@@ -211,28 +252,79 @@ function MoveButton({ label, onUse, onRelease, size = "md", tone = "paper", pres
   );
 }
 
+/**
+ * roam-3: the act button, held like E: down while a finger's on it (a talk, a photo or a sync
+ * takes the first tick; a relay the whole hold), a click a tap. Let go when it goes away too
+ * (the relay it was on came unplugged), so interact is never left held.
+ */
+function ActButton({ act, label, onAct, progress }: { act: NonNullable<RoamHud["act"]>; label: string; onAct(down: boolean): void; progress?: () => number }) {
+  const held = useRef(false);
+  const touchedAt = useRef(-Infinity);
+  const onActRef = useRef(onAct);
+  useEffect(() => {
+    onActRef.current = onAct;
+  }, [onAct]);
+  const release = useCallback(() => {
+    if (!held.current) return;
+    held.current = false;
+    onActRef.current(false);
+  }, []);
+  useEffect(() => release, [release]);
+  const hold = act.kind === "unplug";
+  const face = act.kind === "photo" ? <Camera aria-hidden strokeWidth={2.25} /> : act.kind === "sync" ? <Rocket aria-hidden strokeWidth={2.25} /> : <span className="text-[13px] font-bold">{hold ? "Hold" : "Talk"}</span>;
+  return (
+    <button
+      type="button"
+      aria-label={hold ? `${label}: ${relayName(act)}` : label}
+      onPointerDown={(e: PointerEvent<HTMLButtonElement>) => {
+        if (e.pointerType !== "touch") return;
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        touchedAt.current = e.timeStamp;
+        held.current = true;
+        onAct(true);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onClick={(e) => {
+        if (e.timeStamp - touchedAt.current < 700) return;
+        onAct(true);
+        onAct(false);
+      }}
+      className="pointer-events-auto grid size-[58px] touch-none select-none place-items-center rounded-full border-[2.5px] border-game-ink bg-game-gold text-game-ink shadow-[var(--game-shadow)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow,scale] motion-safe:duration-100 motion-safe:ease-out active:translate-y-[2px] active:scale-[0.96] active:shadow-[var(--game-shadow-sm)] [&_svg]:size-6"
+    >
+      {hold && progress ? (
+        <HoldRing progress={progress} fill="var(--game-ink)" track="transparent" className="size-[48px]">
+          <span className="grid size-full place-items-center rounded-full bg-game-gold">{face}</span>
+        </HoldRing>
+      ) : (
+        face
+      )}
+    </button>
+  );
+}
+
 export interface MoveButtonsProps {
   hud: RoamHud;
   onJump(): void;
   onZip(): void;
-  onAct(): void;
+  /** roam-3: interact held down (true) or let go (false). */
+  onAct(down: boolean): void;
   onDrop(): void;
   onSprint(on: boolean): void;
   sprintOn: boolean;
+  /** roam-3: how far a relay's hold has built (0–1), read every frame for the act button's ring. */
+  holdProgress?: () => number;
 }
 
-/** The right thumb's buttons on touch: jump, zip, act (when there's something), let go (on a wall), sprint. */
-export function MoveButtons({ hud, onJump, onZip, onAct, onDrop, onSprint, sprintOn }: MoveButtonsProps) {
+/** The right thumb's buttons on touch: jump, zip, act (when there's something; held on a relay), let go (on a wall), sprint. */
+export function MoveButtons({ hud, onJump, onZip, onAct, onDrop, onSprint, sprintOn, holdProgress }: MoveButtonsProps) {
   const act = actLabel(hud.act);
   const onWall = hud.move === "climb" || hud.move === "hang" || hud.move === "wallrun";
   return (
     <div className="pointer-events-none grid grid-cols-[auto_auto] items-end gap-3">
       <div className="flex flex-col items-end gap-3">
-        {act ? (
-          <MoveButton label={act} tone="gold" onUse={onAct}>
-            {hud.act?.kind === "photo" ? <Camera aria-hidden strokeWidth={2.25} /> : hud.act?.kind === "sync" ? <Rocket aria-hidden strokeWidth={2.25} /> : <span className="text-[13px] font-bold">Talk</span>}
-          </MoveButton>
-        ) : null}
+        {act && hud.act ? <ActButton act={hud.act} label={act} onAct={onAct} progress={holdProgress} /> : null}
         {onWall ? (
           <MoveButton label="Let go" onUse={onDrop}>
             <span className="text-[13px] font-bold">Drop</span>
