@@ -2,11 +2,13 @@
  * The city's people and things to find, in free roam: talking (the interact button), the first
  * four side tasks, Daily Rug pages and viewpoints, Mary Jpeg's pixels, Bearson's photos, and the
  * pickpocket bot's run over the roofs. roam-3's tasks live in their own files and hook in here
- * (task-frontrun.ts: Gwei's talk, and the race's step after everything else).
+ * (task-frontrun.ts: Gwei's talk, and the race's step after everything else; task-crosschain.ts:
+ * Uncle Gen's talk is the generic one, his relays are worked from step.ts).
  *
  * - Interact picks one thing in this order (actTarget, which the HUD's prompt reads too): the
- *   nearest person in reach; a Gas Goblin tag in frame while Bearson wants photos; a viewpoint's
- *   perch underfoot.
+ *   nearest person in reach; roam-3, a relay of Doc's in reach while Uncle Gen wants them
+ *   unplugged (held, task-crosschain.ts); a Gas Goblin tag in frame while Bearson wants photos;
+ *   a viewpoint's perch underfoot.
  * - Pages and pixels are picked up by touching them; the bot by catching it.
  *
  * Deterministic: plain arithmetic in a fixed order; lines are picked by rules/city.ts talkLine.
@@ -33,6 +35,7 @@ import {
   TALK_RISE,
 } from "./constants";
 import { canTalk, type Presses } from "../parkour/move";
+import { relayInReach } from "./task-crosschain";
 import { stepRace, talkFrontrun } from "./task-frontrun";
 import { TASK_DONE, TASK_IDS, type RoamFolk, type RoamRoof, type TaskId } from "./types";
 
@@ -42,8 +45,8 @@ export const CHAT_TICKS = 300;
 const CHAT_LEAVE = 260;
 const ti = (id: TaskId) => TASK_IDS.indexOf(id);
 
-/** What the interact button would do right now. */
-export type ActTarget = { kind: "talk"; folk: number } | { kind: "photo"; tag: number } | { kind: "sync"; view: number } | null;
+/** What the interact button would do right now (roam-3: "unplug", hold it on a relay, task-crosschain.ts). */
+export type ActTarget = { kind: "talk"; folk: number } | { kind: "unplug"; relay: number } | { kind: "photo"; tag: number } | { kind: "sync"; view: number } | null;
 
 /** The nearest person in reach (across and up or down), or −1. */
 function folkInReach(s: SimState): number {
@@ -102,13 +105,16 @@ function viewHere(s: SimState): number {
   return -1;
 }
 
-/** What the interact button would do now (the HUD's prompt shows it): talk, photograph or sync. */
+/** What the interact button would do now (the HUD's prompt shows it): talk, unplug a relay, photograph or sync. */
 export function actTarget(s: SimState): ActTarget {
   if (!s.roam) return null;
   if (canTalk(s)) {
     const f = folkInReach(s);
     if (f >= 0) return { kind: "talk", folk: f };
   }
+  // roam-3: a relay in reach while Uncle Gen wants them unplugged.
+  const rl = relayInReach(s);
+  if (rl >= 0) return { kind: "unplug", relay: rl };
   const t = tagInFrame(s);
   if (t >= 0) return { kind: "photo", tag: t };
   const v = viewHere(s);
@@ -133,6 +139,12 @@ export function stepPeople(s: SimState, press: Presses, dt: number) {
   stepRace(s);
 }
 
+/** roam-3: the relay a held interact works on now (actTarget's "unplug"), or −1. */
+export function unplugTarget(s: SimState): number {
+  const t = actTarget(s);
+  return t && t.kind === "unplug" ? t.relay : -1;
+}
+
 function act(s: SimState) {
   const r = s.roam!;
   const t = actTarget(s);
@@ -140,6 +152,8 @@ function act(s: SimState) {
     r.events.push({ type: "roam-nothing" });
     return;
   }
+  // roam-3: a relay takes the whole hold, not the press (task-crosschain.ts stepRelays).
+  if (t.kind === "unplug") return;
   if (t.kind === "talk") talk(s, r.world.folks[t.folk]);
   else if (t.kind === "photo") {
     const g = ti("graffiti");
@@ -171,7 +185,8 @@ const bits = (n: number) => {
 function talk(s: SimState, f: RoamFolk) {
   const r = s.roam!;
   const p = r.progress;
-  const task = f.gives ?? f.takes;
+  // roam-3: Uncle Gen hands out Cross-chain and takes the bread: the loaf in hand comes first.
+  const task = f.takes === "bread" && p.stage[ti("bread")] === 1 ? "bread" : (f.gives ?? f.takes);
   const stage = task ? p.stage[ti(task)] : 0;
   let line = talkLine(f.key, stage, p.talks[f.id] ?? 0);
   if (task === "bread") {
@@ -187,7 +202,7 @@ function talk(s: SimState, f: RoamFolk) {
       setStage(s, "pickpocket", 1);
       releaseBot(s);
     } else if (stage === 2) setStage(s, "pickpocket", TASK_DONE);
-  } else if (task === "pixels" || task === "graffiti") {
+  } else if (task === "pixels" || task === "graffiti" || task === "crosschain") {
     if (stage === 0) setStage(s, task, 1);
     else if (stage === 2) setStage(s, task, TASK_DONE);
   } else if (task === "frontrun") line = talkFrontrun(s, f, line);

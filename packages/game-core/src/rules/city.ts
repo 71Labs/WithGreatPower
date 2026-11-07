@@ -56,8 +56,13 @@ export const FOLKS: Record<string, FolkInfo> = {
       "Cold, but it’s hers. With great power comes great patience with the oven.",
       "Fully finalized. Not a crumb left.",
       "In my day we swung on dial-up. Uphill. Both ways.",
+      // roam-3: Cross-chain (his stages; the bread in hand still comes first).
+      "Doc Octochain bolted relays to the city’s highest points: the crane, his bridge towers, the tallest antenna. They’re draining your aunt’s node. Go pull the plugs.",
+      "Still {left} to go. Hold the plug till it gives. They spark; you don’t let go.",
+      "All four, dark. With great power comes great gas fees, and you just zeroed your aunt’s. I wrote a six-hour speech. Short version: proud of you.",
+      "Doc swears he kept one relay. The Right-Clicker took the rest. Saved them to his Downloads, apparently.",
     ],
-    byStage: { 0: 0, [TASK_DONE]: 3 },
+    byStage: { 0: 5, 1: 6, 2: 7, [TASK_DONE]: 8 },
     chatter: [4, 0],
   },
   mary: {
@@ -282,6 +287,22 @@ export const TASKS: Record<TaskId, TaskInfo> = {
     steps: { 0: "Talk to Gwei Stacy at her stall", 1: "Beat Sandwich Man to the buyer (gate {got} of {of})", [TASK_DONE]: "Order filled" },
     items: 6,
   },
+  crosschain: {
+    id: "crosschain",
+    title: "Cross-chain",
+    blurb: "Unplug Doc Octochain’s relays from the city’s highest points, then tell Uncle Gen.",
+    giver: "uncle",
+    steps: { 0: "Talk to Uncle Gen", 1: "Unplug Doc Octochain’s relays ({got} of {of})", 2: "Tell Uncle Gen the relays are down", [TASK_DONE]: "Bridge unplugged" },
+    items: 4,
+  },
+};
+
+/** Cross-chain's relays by key (sim3d/roam/task-crosschain.ts places them), as the HUD names them. */
+export const RELAY_NAMES: Record<"crane" | "bridge" | "antenna" | "deck", string> = {
+  crane: "the crane’s apex",
+  bridge: "the bridge’s west tower",
+  antenna: "the tallest antenna",
+  deck: "Doc’s deck tower",
 };
 
 /** The tracker's line for a task at a stage. */

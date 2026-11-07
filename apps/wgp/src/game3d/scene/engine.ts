@@ -134,7 +134,12 @@ export class SceneEngine {
     this.chapter = new ChapterScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.vote = new VoteScene(cityData, this.solids, this.uniforms, { characters: this.characters, burst: (w, at, o) => this.bursts.burst(w, at, o) });
     this.fee = new FeeScene(cityData, this.solids, this.uniforms, { crowd: this.crowd, burst: (w, at, o) => this.bursts.burst(w, at, o) });
-    this.roam = new RoamScene(cityData, this.uniforms, { burst: (w, at, o) => this.bursts.burst(w, at, o), shake: (a) => this.shake(a), heroJoint: (j, out) => this.characters.jointOf("hero", j, out) });
+    this.roam = new RoamScene(cityData, this.uniforms, {
+      burst: (w, at, o) => this.bursts.burst(w, at, o),
+      shake: (a) => this.shake(a),
+      heroJoint: (j, out) => this.characters.jointOf("hero", j, out),
+      impact: (w, at) => this.sparks.impact(w, at),
+    });
     // The city's fills and water towers cast moon shadows (their ink hulls, the cars and the
     // ground don't); the cast's bodies join as they load (MoonShadows.scanCast).
     for (const child of this.city.root.children) {

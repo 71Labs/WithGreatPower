@@ -42,5 +42,9 @@ export function roamHashState(s: SimState): string {
   hashTraffic(r.traffic, (v) => f.num(v));
   // roam-3: Front-run's race (its clock is Sandwich Man's place).
   hashRace(r.race, (v) => f.num(v));
+  // roam-3: interact held (last tick's), and the relay being held and for how long.
+  f.bool(r.hold.act);
+  f.num(r.hold.relay);
+  f.num(r.hold.ticks);
   return f.hex();
 }

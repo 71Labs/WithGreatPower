@@ -3,7 +3,8 @@
  * moving freely through one fixed city (run, sprint, jump, vault, climb, wall-run, hang, mantle,
  * roll, web-zip and, on demand, swing), its people, side tasks and collectibles, everything it
  * draws in his way solid (furniture.ts), its street traffic, which knocks him down (traffic.ts,
- * knock.ts), and roam-3's side tasks in their own files (task-frontrun.ts). Its own files,
+ * knock.ts), and roam-3's side tasks in their own files (task-frontrun.ts, Gwei Stacy's race;
+ * task-crosschain.ts, Cross-chain's relays, unplugged with a held interact). Its own files,
  * reached only through SimState.roam; patrol nights and chapters never touch it.
  */
 export * from "./constants";
@@ -21,5 +22,6 @@ export type { FurniturePart, PartLook, RoamDrawnProp, RoamFurniture, SolidBox } 
 export { greenLeft, placeCar, trafficLoops } from "./traffic";
 export { knockPhase } from "./knock";
 export { columnTop, ledgeOpen } from "../parkour/geometry";
-export { frontrunRace, roamBotFrame, newRoamBot, roamTour, streetRoute, type RoamBotGoal, type RoamBotMemory } from "./bot";
+export { crosschainTour, frontrunRace, relayClimb, roamBotFrame, newRoamBot, roamTour, streetRoute, type RoamBotGoal, type RoamBotMemory } from "./bot";
 export { FINISH_REACH, gatesPassed, GWEI_LINE, RACE_HOLD, raceCourse, RIVAL_HIP, rivalAt, type GateMove, type RaceCourse, type RaceEvent, type RaceGate, type RaceNode, type RaceSolid, type RivalPlace, type RoamRace } from "./task-frontrun";
+export { RELAY_HALF, RELAY_HALF_Y, RELAY_HOLD, RELAY_KEEP, RELAY_KNOCK, RELAY_REACH, RELAY_RISE, RELAY_SPARKS, relaySolids, type RoamMark } from "./task-crosschain";

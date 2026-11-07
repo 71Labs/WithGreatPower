@@ -172,7 +172,8 @@ describe("the free-roam golden replay", () => {
     expect(reason(bin.slice(0, bin.length - 1))).toMatch(/bad log/);
     expect(reason(encodeInputLog({ ...decoded, ruleset: RULESET_VERSION }))).toMatch(/ruleset 4 is not free roam/);
     expect(reason(encodeInputLog({ ...decoded, ruleset: chapterLogRuleset("case-001") }))).toMatch(/is not free roam/);
-    // roam-1's outings (before the City's furniture was solid and its cars hit him) aren't roam-2's.
+    // roam-1's outings (before the City's furniture was solid and its cars hit him) and roam-2's
+    // (before interact was held and the relays went up) aren't roam-3's.
     for (const old of ROAM_OLD_LOG_RULESETS) expect(reason(encodeInputLog({ ...decoded, ruleset: old }))).toMatch(/is an older free roam's \(stale\)/);
     expect(reason(encodeInputLog({ ...decoded, fromTick: 3 }))).toMatch(/tick 0/);
     expect(reason(encodeInputCodes([0, 0, 0], [{ tick: 1, kind: "errand-choice", value: 0 }], 0, ROAM_LOG_RULESET))).toMatch(/no events/);

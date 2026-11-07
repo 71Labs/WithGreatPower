@@ -12,10 +12,12 @@ import type { RaceCourse, RaceEvent, RoamRace } from "./task-frontrun";
 
 /**
  * The tasks the city's people hand out, in their fixed order (progress arrays are indexed by it;
- * append only: a record saved before a task existed starts it at stage 0 with no items).
- * roam-3: "frontrun", Gwei Stacy's race (roam/task-frontrun.ts).
+ * append only: a save's record maps by id, so a record saved before a task existed starts it at
+ * stage 0 with nothing found).
+ * roam-3 adds "frontrun", Gwei Stacy's race (roam/task-frontrun.ts), and "crosschain", Uncle Gen's:
+ * unplug Doc Octochain's relays (task-crosschain.ts).
  */
-export const TASK_IDS = ["bread", "pickpocket", "pixels", "graffiti", "frontrun"] as const;
+export const TASK_IDS = ["bread", "pickpocket", "pixels", "graffiti", "frontrun", "crosschain"] as const;
 export type TaskId = (typeof TASK_IDS)[number];
 
 /** A task's stage: 0 not started, 1 and up under way (each task's own steps), TASK_DONE finished. */
@@ -110,6 +112,41 @@ export interface RoamWorld {
   banks: { x0: number; z0: number; x1: number; z1: number }[];
   /** roam-3: Gwei Stacy's race course (roam/task-frontrun.ts). */
   race: RaceCourse;
+  /** roam-3: Doc Octochain's cross-chain relays on the city's highest points (task-crosschain.ts), solid as drawn. */
+  relays: RoamRelay[];
+}
+
+/**
+ * roam-3: one of Doc Octochain's cross-chain relays (task-crosschain.ts): a box bolted to one of
+ * the city's high points, solid as drawn, unplugged by holding interact within reach of it.
+ */
+export interface RoamRelay {
+  /** Which high point: the crane's apex, the bridge's west tower, the tallest building's antenna, Doc's deck tower. */
+  key: "crane" | "bridge" | "antenna" | "deck";
+  /** The box's centre and half sizes. */
+  x: number;
+  y: number;
+  z: number;
+  hx: number;
+  hy: number;
+  hz: number;
+  /** The way its front faces (unit xz): its light and its plug, toward where he reaches it from. */
+  fx: number;
+  fz: number;
+  /** Where its chains are bolted on: a point on the structure below and behind it (the drawing's). */
+  ax: number;
+  ay: number;
+  az: number;
+}
+
+/**
+ * roam-3: interact held over ticks. `act`: interact was down last tick (a talk, a photo or a sync
+ * takes only the first tick of a hold). `relay`: the relay being held (−1 none), for how many ticks.
+ */
+export interface RoamHold {
+  act: boolean;
+  relay: number;
+  ticks: number;
 }
 
 /** Progress through the city: what the save's CityRecord holds, plus this outing's working state. */
@@ -224,6 +261,8 @@ export interface RoamState {
   traffic: RoamTraffic;
   /** roam-3: Gwei Stacy's race against Sandwich Man (roam/task-frontrun.ts). */
   race: RoamRace;
+  /** roam-3: interact held (a relay being unplugged). */
+  hold: RoamHold;
   /** Roam's own events since the driver last drained them (the hero's web events go to SimState.events as on a night). */
   events: RoamEvent[];
 }
@@ -259,4 +298,9 @@ export type RoamEvent =
   /** roam-2: a car hit him (its speed then; where he was): he's knocked down, the car stands. */
   | { type: "roam-car-hit"; speed: number; car: number; x: number; y: number; z: number }
   /** roam-3: Gwei Stacy's race (roam/task-frontrun.ts): the start, a gate, the finish, the reset. */
-  | RaceEvent;
+  | RaceEvent
+  /**
+   * roam-3: a relay held (task-crosschain.ts): the hold began, the relay sparked and shoved him,
+   * he let go too soon (its progress gone), or it came unplugged. Where the relay is.
+   */
+  | { type: "roam-relay"; relay: number; state: "hold" | "spark" | "reset" | "unplugged"; x: number; y: number; z: number };

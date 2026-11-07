@@ -44,6 +44,32 @@ describe("free roam's latch", () => {
     expect(l.take(VIEW, 3).shot).toBe(0);
   });
 
+  it("roam-3: holds interact every tick it's down (a tap still a tick), over sprint, after queued presses", () => {
+    const l = new RoamLatch();
+    l.setKeys(0, 1, 0);
+    l.setSprint("key", true);
+    // A tap shorter than a tick: one tick of interact, then sprint again.
+    l.setAct("key", true);
+    l.setAct("key", false);
+    expect([l.take(VIEW, 1).shot, l.take(VIEW, 1).shot]).toEqual([SHOT_ACT, SHOT_SPRINT]);
+    // Held: interact every tick (the relay's hold), even with sprint held; a key repeat queues nothing more.
+    l.setAct("key", true);
+    l.setAct("key", true);
+    expect([l.take(VIEW, 2).shot, l.take(VIEW, 2).shot, l.take(VIEW, 2).shot]).toEqual([SHOT_ACT, SHOT_ACT, SHOT_ACT]);
+    // A jump in the middle takes its tick (and lets go of the hold in the sim); the touch button holds too.
+    l.push(SHOT_JUMP);
+    l.setAct("touch", true);
+    l.setAct("key", false);
+    expect([l.take(VIEW, 3).shot, l.take(VIEW, 3).shot, l.take(VIEW, 3).shot]).toEqual([SHOT_JUMP, SHOT_ACT, SHOT_ACT]);
+    l.setAct("touch", false);
+    expect(l.take(VIEW, 4).shot).toBe(SHOT_SPRINT);
+    expect(l.acting).toBe(false);
+    // Pausing or a lost focus lets go.
+    l.setAct("key", true);
+    l.clear();
+    expect(l.take(VIEW, 5).shot).toBe(0);
+  });
+
   it("holds the web while any source holds it, and lets go of everything on clear", () => {
     const l = new RoamLatch();
     l.base.setWeb("key", true);

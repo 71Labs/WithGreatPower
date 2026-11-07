@@ -23,7 +23,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MAX_TICKS } from "@wgp/game-core/sim3d/constants";
-import { FOLKS, TASKS, VIEW_NAMES, type TaskId } from "@wgp/game-core/city";
+import { FOLKS, RELAY_NAMES, TASKS, VIEW_NAMES, type TaskId } from "@wgp/game-core/city";
 import { newRoamBot, roamBotFrame, roamTour, roamWorld } from "@wgp/game-core/sim3d/roam";
 import type { CastId } from "@wgp/game-core/cast";
 
@@ -76,6 +76,8 @@ const FILE_EVERY_MS = 120_000;
 const ROLL_AT = MAX_TICKS - 60 * 45;
 /** In these moves a thumb on the open screen holds the web the moment it lands (in the air, a web can't wait to see if it's a look). */
 const WEB_AT_ONCE = new Set(["air", "swing", "zip", "wallrun"]);
+/** "the crane’s apex" → "The crane’s apex". */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function CitySurface({ session: first, colors, autopilot, debug }: { session: RoamSession; colors: SuitColors; autopilot: boolean; debug: boolean }) {
   const session = useRef(first);
@@ -113,6 +115,11 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
   const [announce, setAnnounce] = useState("");
   const [filing, setFiling] = useState<string | null>(null);
   const [sprintToggle, setSprintToggle] = useState(false);
+  /** roam-3: when the last relay hold began, and when its let-go was last explained (ms). */
+  const holdFrom = useRef(0);
+  const resetToast = useRef(-Infinity);
+  /** roam-3: how far the relay being held is unplugged (0–1), read every frame by the HUD's rings. */
+  const holdProgress = useCallback(() => loop.view.roam?.relay?.progress ?? 0, [loop]);
   const gate = useRef({ paused, map });
   useEffect(() => {
     gate.current = { paused, map };
@@ -197,9 +204,34 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
           break;
         case "roam-item":
           playSfx("loot", { volume: 0.6 });
-          toast({ tone: "info", title: ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}` : `Photo ${ev.got} of ${ev.of}`, body: ev.task === "pixels" ? "Mary’s a little less lossy." : "Bearson will want that one." });
-          setAnnounce(ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}.` : `Photo ${ev.got} of ${ev.of}.`);
+          if (ev.task === "crosschain") {
+            // roam-3: a relay unplugged.
+            const where = sentence(RELAY_NAMES[w.relays[ev.item].key]);
+            toast({ tone: "info", title: `Relay ${ev.got} of ${ev.of} unplugged`, body: ev.got < ev.of ? `${where} has gone dark.` : `${where} has gone dark. Tell Uncle Gen.` });
+            setAnnounce(`Relay ${ev.got} of ${ev.of} unplugged: ${where}.`);
+          } else {
+            toast({ tone: "info", title: ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}` : `Photo ${ev.got} of ${ev.of}`, body: ev.task === "pixels" ? "Mary’s a little less lossy." : "Bearson will want that one." });
+            setAnnounce(ev.task === "pixels" ? `Pixel ${ev.got} of ${ev.of}.` : `Photo ${ev.got} of ${ev.of}.`);
+          }
           fileSoon();
+          break;
+        case "roam-relay":
+          // roam-3: holding interact on one of Doc's relays.
+          if (ev.state === "hold") {
+            holdFrom.current = performance.now();
+            playSfx("chain-sweep", { volume: 0.35 });
+            setAnnounce("Unplugging. Keep holding.");
+          } else if (ev.state === "spark") playSfx("pow", { volume: 0.4, rate: 1.3 });
+          else if (ev.state === "unplugged") playSfx("villain-hit", { volume: 0.6 });
+          else if (ev.state === "reset") {
+            setAnnounce("Let go too soon. The relay’s live again.");
+            // Once it's been fought a while, say why (at most every few seconds).
+            const now = performance.now();
+            if (now - holdFrom.current > 400 && now - resetToast.current > 8000) {
+              resetToast.current = now;
+              toast({ tone: "info", title: "It’s live again", body: "Hold until the ring fills. It sparks; you don’t let go." });
+            }
+          }
           break;
         case "roam-page":
           playSfx("newspaper", { volume: 0.7 });
@@ -305,6 +337,9 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
             act: loop.view.roam?.act ?? null,
             bot: { state: r.bot.state, x: Math.round(r.bot.x), y: Math.round(r.bot.y), z: Math.round(r.bot.z) },
             race: { ...r.race, frame: loop.view.roam?.race ?? null },
+            hold: { ...r.hold },
+            relay: loop.view.roam?.relay ?? null,
+            marks: loop.view.roam?.marks?.map((m) => ({ task: m.task, kind: m.kind, done: m.done, next: m.next })) ?? [],
             input: s.input,
             pose: handle.current?.pose() ?? null,
           };
@@ -527,7 +562,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
               <FirstHint touch={touch} hud={hud} />
               <RaceChip hud={hud} />
               <SpeechBubble hud={hud} />
-              <ActPrompt hud={hud} touch={touch} />
+              <ActPrompt hud={hud} touch={touch} progress={holdProgress} />
             </div>
             {touch ? (
               <div className="pointer-events-none absolute bottom-0 right-0 pb-[max(16px,env(safe-area-inset-bottom))] pr-[max(16px,env(safe-area-inset-right))]">
@@ -535,7 +570,8 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
                   hud={hud}
                   onJump={() => latch.push(1)}
                   onZip={() => latch.push(2)}
-                  onAct={() => latch.push(3)}
+                  onAct={(down) => latch.setAct("touch", down)}
+                  holdProgress={holdProgress}
                   onDrop={() => latch.push(5)}
                   onSprint={setSprint}
                   sprintOn={sprintToggle}

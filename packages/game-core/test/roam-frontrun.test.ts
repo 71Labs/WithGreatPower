@@ -288,7 +288,7 @@ describe("Front-run's race", () => {
 describe("Front-run and the save", () => {
   it("can't carry a race between outings: a stage-1 record starts at 0, the gates cleared; a finished one keeps them", () => {
     const fr = (stage: number, items: number) => {
-      const s = createRoamSim({ ...freshStart(), stage: [0, 0, 0, 0, stage], items: [0, 0, 0, 0, items] });
+      const s = createRoamSim({ ...freshStart(), stage: TASK_IDS.map((_, i) => (i === FR ? stage : 0)), items: TASK_IDS.map((_, i) => (i === FR ? items : 0)) });
       return [s.roam!.progress.stage[FR], s.roam!.progress.items[FR], s.roam!.race.state];
     };
     expect(fr(1, 0b111)).toEqual([0, 0, 0]);
@@ -302,18 +302,18 @@ describe("Front-run and the save", () => {
     const rec = cityRecord(save);
     expect(rec.tasks.frontrun).toBeUndefined();
     const start = roamStartFrom(rec);
-    expect(start.stage).toEqual([TASK_DONE, TASK_DONE, 2, 1, 0]);
-    expect(start.items).toEqual([0, 0, 0b1011, 0b1, 0]);
+    expect(start.stage).toEqual([TASK_DONE, TASK_DONE, 2, 1, 0, 0]);
+    expect(start.items).toEqual([0, 0, 0b1011, 0b1, 0, 0]);
     // An outing from it plays, and files back with the old progress intact.
     const run = startRoamRun(start);
     steps(run, IDLE, 5);
     const filed = applyOuting(save, roamOuting(run));
     expect(filed.record.tasks).toEqual(old.tasks);
     expect(filed.gains.xp).toBe(0);
-    // A four-entry start (an older client's) still builds a five-task outing.
+    // A four-entry start (an older client's) still builds a six-task outing.
     const s = createRoamSim({ ...freshStart(), stage: [TASK_DONE, 0, 0, 0], items: [0, 0, 0, 0] });
-    expect(s.roam!.progress.stage).toEqual([TASK_DONE, 0, 0, 0, 0]);
-    expect(s.roam!.progress.items).toEqual([0, 0, 0, 0, 0]);
+    expect(s.roam!.progress.stage).toEqual([TASK_DONE, 0, 0, 0, 0, 0]);
+    expect(s.roam!.progress.items).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   it("pays the task's XP once on the win, and nothing for the gates on a loss", () => {

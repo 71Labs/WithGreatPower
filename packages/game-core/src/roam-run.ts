@@ -27,9 +27,9 @@ import { HERO_RADIUS } from "./sim3d/constants";
 export { ROAM_LOG_RULESET, ROAM_LOG_RULESETS_PAST, ROAM_RULESET };
 
 /**
- * Whether a log is an outing played under older roam rules (roam-1's or roam-2's log field):
- * it can't replay under these, so the server refuses it as stale (start a fresh outing) rather
- * than as a bad log.
+ * Whether a log is an outing played under older roam rules (roam-1's log field, before the
+ * climb changed; roam-2's, before the relays): it can't replay under these, so the server
+ * refuses it as stale (start a fresh outing) rather than as a bad log.
  */
 export function roamLogStale(log: Uint8Array): boolean {
   try {

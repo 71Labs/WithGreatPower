@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { fillRenderFrame, newRenderFrame } from "@wgp/game-core/sim3d";
-import { createRoamSim, fillRoamFrame, raceCourse, roamWorld, SHOT_ACT, stepRoam } from "@wgp/game-core/sim3d/roam";
+import { createRoamSim, fillRoamFrame, raceCourse, roamWorld, SHOT_ACT, stepRoam, TASK_IDS } from "@wgp/game-core/sim3d/roam";
 
 import { villainsOf } from "../chapter/contract";
 import { courseBoxes, raceRival } from "./frontrun";
@@ -33,7 +33,7 @@ describe("Front-run's scene", () => {
 
   it("hands the cast Sandwich Man (at his body's height, running) only while the race is on", () => {
     const w = roamWorld();
-    const s = createRoamSim({ stage: [0, 0, 0, 0, 0], items: [0, 0, 0, 0, 0], pages: 0, views: 0, talks: [], at: { ...w.race.spot } });
+    const s = createRoamSim({ stage: TASK_IDS.map(() => 0), items: TASK_IDS.map(() => 0), pages: 0, views: 0, talks: [], at: { ...w.race.spot } });
     const frame = () => fillRoamFrame(s, fillRenderFrame(s, newRenderFrame()));
     stepRoam(s, { dir: 0, mag: 0, web: false, shot: 0 });
     expect(raceRival(frame())).toBeNull();

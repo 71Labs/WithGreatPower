@@ -62,6 +62,9 @@ export const BURST_WORDS = {
   /** Free roam's Front-run (roam-3, scene/roam): a gate passed, the order filled. */
   "GATE!": [NAV_COLORS.ring, INK],
   "FILLED!": [CITY.windowLit, INK],
+  /** Cross-chain (roam-3, scene/roam/crosschain): a relay sparks back, its plug pulled out. */
+  "ZZT!": [CITY.windowLit, INK],
+  "CLUNK!": [CITY.neonMint, INK],
 } as const;
 
 export type BurstWord = keyof typeof BURST_WORDS;

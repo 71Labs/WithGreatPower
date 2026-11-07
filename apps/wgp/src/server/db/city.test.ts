@@ -11,20 +11,21 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { cityBase, cityRecord, emptyCity, roamStartFrom, TASK_IDS } from "@wgp/game-core/city";
 import { encodeInputCodes } from "@wgp/game-core/input";
-import { roamLog, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
-import { frontrunRace, newRoamBot, PAGE_XP, ROAM_OLD_LOG_RULESETS, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
+import { roamLog, ROAM_RULESET, startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
+import { crosschainTour, frontrunRace, newRoamBot, PAGE_XP, ROAM_OLD_LOG_RULESETS, roamBotFrame, roamWorld, TASK_DONE, TASK_XP, type RoamBotGoal } from "@wgp/game-core/sim3d/roam";
 
 import { HttpError } from "@/server/http";
 
 import { CITY_BUDGET_SCOPE, fileOuting, getCity } from "./city";
 import type { Db } from "./client";
-import { ensureSave } from "./players";
+import { ensureSave, writeSave } from "./players";
 import { freshDb, givePlayerHero, makePlayer } from "./test-helpers";
 
 const T0 = new Date("2026-11-07T20:00:00Z");
 const ID_A = "6f1d6a1e-6a7b-4c39-9a3b-1f9e1a2b3c4d";
 const ID_B = "0b9c3c1a-2d4e-4f50-8a61-7b8c9d0e1f2a";
 const ID_C = "5a7e2c0d-91b3-4f6a-b8d2-3c4e5f6a7b8c";
+const ID_D = "9d2b7e41-3c5a-4e86-b1f0-2a4c6e8d0b13";
 
 /** Play an outing in "the browser" from a record, the bot doing `goals`; the log and how far it got. */
 function play(base = cityBase(emptyCity()), goals: RoamBotGoal[], maxTicks = 60 * 120) {
@@ -61,7 +62,7 @@ describe("free roam on the server", () => {
     // First part of the outing: off the roof, to Dev, the chase and back.
     const first = play(cityBase(emptyCity()), chase);
     const a = await fileOuting(db, { playerId, outingId: ID_A, base: cityBase(emptyCity()), log: first.log, now: T0 });
-    expect(a.ruleset).toBe("roam-3");
+    expect(a.ruleset).toBe(ROAM_RULESET);
     expect(a.gains.tasks).toEqual(["pickpocket"]);
     expect(a.gains.xp).toBe(TASK_XP);
     expect(a.city.tasks.pickpocket).toBe(TASK_DONE);
@@ -125,7 +126,7 @@ describe("free roam on the server", () => {
         const e = await rejection(fileOuting(db, { playerId, outingId: id, base: cityBase(before), log: old, now: T0 }));
         expect(e.status).toBe(409);
         expect(e.code).toBe("old_rules");
-        expect(e.details?.ruleset).toBe("roam-3");
+        expect(e.details?.ruleset).toBe(ROAM_RULESET);
         expect(e.details?.city).toEqual(before);
       }
     }
@@ -136,7 +137,8 @@ describe("free roam on the server", () => {
     // A fresh outing from that record files.
     const fresh = play(cityBase(before), [{ kind: "wait", ticks: 20 }]);
     const ok = await fileOuting(db, { playerId, outingId: ID_C, base: cityBase(before), log: fresh.log, now: T0 });
-    expect(ok.ruleset).toBe("roam-3");
+    expect(ok.ruleset).toBe(ROAM_RULESET);
+    expect(ROAM_RULESET).toBe("roam-3");
   });
 
   it("roam-3: files Gwei Stacy's Front-run, won through the real replay, and pays its 40 XP once", async () => {
@@ -165,6 +167,31 @@ describe("free roam on the server", () => {
     const l = await fileOuting(db, { playerId: loser, outingId: ID_B, base: cityBase(emptyCity()), log: slow.log, now: T0 });
     expect(l.gains.tasks).toEqual([]);
     expect(l.city.tasks.frontrun).toBe(1);
+  });
+
+  it("roam-3: files Cross-chain over a four-task record, the whole task in one outing, and pays its 40 XP once", async () => {
+    const id = (await makePlayer(db, "relays")).id;
+    await givePlayerHero(db, id, "Relays");
+    const uncle = w.folks.find((f) => f.key === "uncle")!;
+    // A roam-2 player's record: the four old tasks done (no crosschain key), standing by Uncle Gen.
+    const stored = await ensureSave(db, id);
+    const old = { ...emptyCity(), tasks: { bread: TASK_DONE, pickpocket: TASK_DONE, pixels: TASK_DONE, graffiti: TASK_DONE }, items: { pixels: 0xff, graffiti: 0xf }, xp: 4 * TASK_XP, outings: 4, at: { x: uncle.x - 60, y: uncle.y, z: uncle.z, fx: 1, fz: 0 } };
+    expect(await writeSave(db, id, { ...stored.save, city: old }, stored.rev)).not.toBeNull();
+    const base = cityBase(cityRecord((await ensureSave(db, id)).save));
+    const xp = (await ensureSave(db, id)).save.hero!.xp;
+    // The browser plays it: Uncle Gen, the four relays (held), back to him.
+    const played = play(base, crosschainTour(w), 60 * 60 * 5);
+    const a = await fileOuting(db, { playerId: id, outingId: ID_D, base, log: played.log, now: T0 });
+    expect(a.ruleset).toBe(ROAM_RULESET);
+    expect(a.gains.tasks).toEqual(["crosschain"]);
+    expect(a.gains.xp).toBe(TASK_XP);
+    expect(a.city.tasks).toMatchObject({ bread: TASK_DONE, pickpocket: TASK_DONE, pixels: TASK_DONE, graffiti: TASK_DONE, crosschain: TASK_DONE });
+    expect(a.city.items.crosschain).toBe(0b1111);
+    expect(a.save.hero!.xp).toBe(xp + TASK_XP);
+    // Filed again (the browser files on every find): nothing more.
+    const b = await fileOuting(db, { playerId: id, outingId: ID_D, base, log: played.log, now: T0 });
+    expect(b.gains.xp).toBe(0);
+    expect((await ensureSave(db, id)).save.hero!.xp).toBe(xp + TASK_XP);
   });
 
   it("counts filings against a daily budget", () => {

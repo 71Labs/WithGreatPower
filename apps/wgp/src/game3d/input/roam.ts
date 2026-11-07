@@ -7,17 +7,21 @@
  *   over ROAM_KEY_RAMP seconds (analogue speed from digital keys); C held keeps it a walk.
  * - Shift held sprints. Space jumps (up a wall, off it, a launch off a zip). F or the left
  *   mouse button holds the web: a swing, only while it's held. Q zips the web to the point the
- *   reticle shows. E talks, takes a photo or syncs a viewpoint. X lets go of a wall or a ledge.
+ *   reticle shows. E talks, takes a photo or syncs a viewpoint; held, it unplugs a relay
+ *   (roam-3). X lets go of a wall or a ledge.
  * - Escape or P pauses, M opens the city map. Mouse look locks the pointer on the first click.
  *
  * Touch: the left of the screen is the floating stick (double-tap it to sprint while it's held),
  * the rest is the open screen: drag there to look round, hold there to swing (at once in the
  * air; on a roof or a wall a thumb that drags first is a look, never a web: touch.ts). The
- * stick and a look go together, one thumb each. The HUD's buttons push jump, zip, act, drop
- * and the sprint toggle.
+ * stick and a look go together, one thumb each. The HUD's buttons push jump, zip, drop and the
+ * sprint toggle, and hold act while a finger is on it.
  *
  * The latch queues one-shots so two presses in one tick both count, a tick each, and sends
- * the sprint one-shot every tick it's held (the sim keeps a sprint SPRINT_GRACE ticks).
+ * the sprint one-shot every tick it's held (the sim keeps a sprint SPRINT_GRACE ticks). roam-3:
+ * interact is held the same way, sent every tick it's down (game-core roam/constants.ts): a
+ * press queues one tick of it (a tap shorter than a tick still counts), the hold carries it on,
+ * and it wins over sprint (he stands still to unplug a relay).
  */
 import { SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP } from "@wgp/game-core/sim3d/roam";
 import type { InputFrame } from "@wgp/game-core/sim3d/contract";
@@ -65,6 +69,8 @@ export class RoamLatch {
   readonly base = new InputLatch();
   private queue: RoamShot[] = [];
   private readonly sprints = new Set<string>();
+  /** roam-3: sources holding interact down (the E key, the touch act button). */
+  private readonly acts = new Set<string>();
   /** The keys' stick: its unit direction and when the keys went down (seconds), for the ramp. */
   private keys = { x: 0, y: 0, since: 0, on: false };
   /** C held: keep it a walk. */
@@ -85,6 +91,21 @@ export class RoamLatch {
     return this.sprints.size > 0;
   }
 
+  /**
+   * roam-3: a source pressing interact, or letting go. Pressed, one tick of it is queued (so a
+   * tap always counts), and every tick after carries it while any source holds it.
+   */
+  setAct(source: string, held: boolean): void {
+    if (held && !this.acts.has(source)) {
+      this.acts.add(source);
+      this.push(SHOT_ACT);
+    } else if (!held) this.acts.delete(source);
+  }
+
+  get acting(): boolean {
+    return this.acts.size > 0;
+  }
+
   /** The keyboard's stick (unit or zero); the ramp starts when it goes from centred to steering. */
   setKeys(x: number, y: number, now: number): void {
     const on = x !== 0 || y !== 0;
@@ -103,7 +124,7 @@ export class RoamLatch {
       ({ dir, mag } = stickInput({ x: this.keys.x * k, y: this.keys.y * k }, view));
     } else ({ dir, mag } = this.base.peek(view));
     if (this.walk) mag = Math.min(mag, 1);
-    const shot = this.queue.shift() ?? (this.sprinting && mag > 0 ? SHOT_SPRINT : 0);
+    const shot = this.queue.shift() ?? (this.acting ? SHOT_ACT : this.sprinting && mag > 0 ? SHOT_SPRINT : 0);
     return { dir: mag ? dir : 0, mag, web: this.base.web, shot: shot as InputFrame["shot"] };
   }
 
@@ -111,6 +132,7 @@ export class RoamLatch {
     this.base.clear();
     this.queue = [];
     this.sprints.clear();
+    this.acts.clear();
     this.keys = { x: 0, y: 0, since: 0, on: false };
     this.walk = false;
   }
@@ -137,7 +159,8 @@ export interface RoamControls {
   detach(): void;
 }
 
-const SHOT_OF: Partial<Record<RoamAction, RoamShot>> = { jump: SHOT_JUMP, zip: SHOT_ZIP, act: SHOT_ACT, drop: SHOT_DROP };
+/** One-shot keys (E is held: setAct). */
+const SHOT_OF: Partial<Record<RoamAction, RoamShot>> = { jump: SHOT_JUMP, zip: SHOT_ZIP, drop: SHOT_DROP };
 
 /** Attach free roam's controls to the window and the play surface. */
 export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
@@ -231,6 +254,7 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
     } else if (action === "sprint") latch.setSprint("key", true);
     else if (action === "walk") latch.walk = true;
     else if (action === "web") latch.base.setWeb("key", true);
+    else if (action === "act") latch.setAct("key", true);
     else if (!e.repeat) {
       const shot = SHOT_OF[action];
       if (shot) latch.push(shot);
@@ -246,6 +270,7 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
     } else if (action === "sprint") latch.setSprint("key", false);
     else if (action === "walk") latch.walk = false;
     else if (action === "web") latch.base.setWeb("key", false);
+    else if (action === "act") latch.setAct("key", false);
   };
 
   const onPointerDown = (e: PointerEvent) => {
