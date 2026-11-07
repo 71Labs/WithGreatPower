@@ -234,17 +234,21 @@ export interface Toast {
 }
 
 /** Finds pop up for a few seconds, newest on top, at most three. */
-export function Toasts({ toasts }: { toasts: Toast[] }) {
+/**
+ * The toasts. `compact` (short landscape phones, where the corner is the minimap and the thumb
+ * buttons): the newest one, its title on one line, centred between the stick and the buttons.
+ */
+export function Toasts({ toasts, compact = false }: { toasts: Toast[]; compact?: boolean }) {
   return (
-    <ol aria-live="polite" className="pointer-events-none flex flex-col items-end gap-2">
-      {toasts.slice(-3).map((t) => (
-        <li key={t.id} className="wgp-rise flex max-w-[300px] items-start gap-2.5 rounded-[18px] border-[2.5px] border-game-ink bg-game-paper px-3 py-2 text-game-ink shadow-[var(--game-shadow-sm)]">
+    <ol aria-live="polite" className={`pointer-events-none flex flex-col gap-2 ${compact ? "items-center" : "items-end"}`}>
+      {toasts.slice(compact ? -1 : -3).map((t) => (
+        <li key={t.id} className={`wgp-rise flex items-start gap-2.5 rounded-[18px] border-[2.5px] border-game-ink bg-game-paper px-3 py-2 text-game-ink shadow-[var(--game-shadow-sm)] ${compact ? "max-w-[340px] items-center" : "max-w-[300px]"}`}>
           <span aria-hidden className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border-2 border-game-ink ${t.tone === "xp" ? "bg-game-gold" : t.tone === "task" ? "bg-game-mint" : "bg-game-paper-2"}`}>
             {t.tone === "page" ? <Newspaper className="size-4" strokeWidth={2.25} /> : t.tone === "sync" ? <Rocket className="size-4" strokeWidth={2.25} /> : t.tone === "task" ? <Check className="size-4" strokeWidth={3} /> : t.tone === "xp" ? <Zap className="size-4" strokeWidth={2.25} /> : <Target className="size-4" strokeWidth={2.25} />}
           </span>
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="text-[14px] font-bold leading-[18px] text-pretty">{t.title}</span>
-            {t.body ? <span className="text-[13px] leading-[18px] text-pretty text-game-muted">{t.body}</span> : null}
+            {t.body && !compact ? <span className="text-[13px] leading-[18px] text-pretty text-game-muted">{t.body}</span> : null}
           </span>
         </li>
       ))}

@@ -555,12 +555,21 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
                     />
                   }
                 />
-                <Toasts toasts={toasts} />
+                {/* Short landscape phones: the corner is minimap and thumb buttons; the toast moves to the middle (below). */}
+                <div className="[@media(max-height:520px)]:hidden">
+                  <Toasts toasts={toasts} />
+                </div>
               </div>
             </div>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 pb-[max(16px,env(safe-area-inset-bottom))]">
               <FirstHint touch={touch} hud={hud} />
               <RaceChip hud={hud} />
+              {/* Short screens: one compact toast here, and none while someone's talking (the bubble says it). */}
+              {!hud.chat ? (
+                <div className="hidden [@media(max-height:520px)]:block">
+                  <Toasts toasts={toasts} compact />
+                </div>
+              ) : null}
               <SpeechBubble hud={hud} />
               <ActPrompt hud={hud} touch={touch} progress={holdProgress} />
             </div>
