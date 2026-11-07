@@ -12,7 +12,7 @@
  * - Pins: everything on the map, each with a kind (its icon), whether it's done (drawn
  *   checked and faded), whether it's the tracked task's (others' are dimmed) and a label.
  */
-import { FOLKS, TASKS, TASK_DONE, TASK_IDS, type TaskId } from "@wgp/game-core/city";
+import { FOLKS, RELAY_NAMES, TASKS, TASK_DONE, TASK_IDS, type TaskId } from "@wgp/game-core/city";
 import type { RoamFrame, RoamMark, Vec3 } from "@wgp/game-core/sim3d/contract";
 import type { RoamWorld } from "@wgp/game-core/sim3d/roam";
 
@@ -42,8 +42,11 @@ export function marksOf(roam: Pick<RoamFrame, "marks">, task?: TaskId): RoamMark
 }
 
 /** A mark's name in a sentence: "gate 3" (its place in the race), "the next relay". */
-export function markName(marks: readonly RoamMark[], m: RoamMark): string {
+export function markName(marks: readonly RoamMark[], m: RoamMark, world?: RoamWorld): string {
   if (m.kind === "gate") return `gate ${marks.filter((x) => x.task === m.task && x.kind === "gate").indexOf(m) + 1}`;
+  // Relays are marked in the world's own order (render.ts), so the n-th relay mark is world.relays[n].
+  const key = world?.relays[marks.filter((x) => x.task === m.task && x.kind === "relay").indexOf(m)]?.key;
+  if (key) return `the relay on ${RELAY_NAMES[key]}`;
   return m.next ? "the next relay" : "a relay";
 }
 
@@ -72,7 +75,7 @@ export function taskTarget(id: TaskId, roam: RoamFrame, hero: Vec3, world: RoamW
   const marks = marksOf(roam, id);
   const open = marks.filter((m) => !m.done);
   const mark = open.find((m) => m.next) ?? nearest(open, (m) => m.pos, hero);
-  if (mark) return { task: id, at: mark.pos, who: markName(roam.marks ?? [], mark), kind: mark.kind };
+  if (mark) return { task: id, at: mark.pos, who: markName(roam.marks ?? [], mark, world), kind: mark.kind };
   if (id === "pickpocket" && stage === 1) return roam.bot && roam.bot.state !== "caught" ? { task: id, at: roam.bot.pos, who: "the pickpocket bot", kind: "bot" } : null;
   if (id === "pixels" && stage === 1) {
     const p = nearest(
@@ -162,7 +165,7 @@ export function roamPins(roam: RoamFrame, world: RoamWorld, tracked: TaskId | nu
     });
   const marks = marksOf(roam);
   marks.forEach((m, i) => {
-    const name = markName(marks, m);
+    const name = markName(marks, m, world);
     const order = m.kind === "gate" ? Number(name.slice(5)) : undefined;
     const label = `${name.charAt(0).toUpperCase()}${name.slice(1)}${m.done ? (m.kind === "gate" ? ", passed" : ", unplugged") : ""}`;
     pins.push({ key: `m${i}`, kind: m.kind, x: m.pos.x, z: m.pos.z, done: m.done, tracked: tracked === m.task, task: m.task, order, next: m.next && !m.done, label });

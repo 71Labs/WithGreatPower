@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TASK_DONE, TASK_IDS } from "@wgp/game-core/city";
+import { RELAY_NAMES, TASK_DONE, TASK_IDS } from "@wgp/game-core/city";
 import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import { marksFixture, roamFrameFixture } from "./roam-fixture";
@@ -45,7 +45,7 @@ describe("free roam's task targets", () => {
     expect(uncle.takes).toBe("bread");
     expect(w.folks.some((f) => f.takes === "crosschain")).toBe(false);
     const relays = marksFixture("relay", "crosschain", spawn, { unplugged: 2 });
-    expect(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: 1 }, marks: relays }), spawn, w)).toMatchObject({ kind: "relay", who: "the next relay" });
+    expect(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: 1 }, marks: relays }), spawn, w)).toMatchObject({ kind: "relay", who: `the relay on ${RELAY_NAMES[w.relays[2].key]}` });
     // Stage 2 (every relay down): it has no taker, so the map falls back to the giver, with the
     // relays all done in the frame or none sent at all (it used to crash the map).
     const down = marksFixture("relay", "crosschain", spawn, { unplugged: 4 }).map((m) => ({ ...m, next: false }));
@@ -71,7 +71,7 @@ describe("free roam's task targets", () => {
     const t = taskTarget("pickpocket", roamFrameFixture(w, { stage: { pickpocket: 1 }, marks: unflagged }), { x: gates[4].pos.x + 10, y: 0, z: gates[4].pos.z }, w);
     expect(t?.who).toBe("gate 5");
     const relays = marksFixture("relay", "graffiti", spawn, { unplugged: 1 });
-    expect(taskTarget("graffiti", roamFrameFixture(w, { stage: { graffiti: 1 }, marks: relays }), spawn, w)).toMatchObject({ kind: "relay", who: "the next relay" });
+    expect(taskTarget("graffiti", roamFrameFixture(w, { stage: { graffiti: 1 }, marks: relays }), spawn, w)).toMatchObject({ kind: "relay", who: expect.stringMatching(/^the relay on /) });
   });
 
   it("ignores another task's marks, and falls back once every mark is done", () => {
@@ -85,6 +85,10 @@ describe("free roam's task targets", () => {
     const gates = marksFixture("gate", "bread", spawn);
     expect(markName(gates, gates[0])).toBe("gate 1");
     expect(markName(gates, gates[5])).toBe("gate 6");
+    // Relays by place: the n-th relay mark is the world's n-th relay.
+    const relays = w.relays.map((r, i) => ({ task: "crosschain" as const, kind: "relay" as const, pos: { x: r.x, y: r.y, z: r.z }, done: i === 0, next: i === 1 }));
+    expect(markName(relays, relays[0], w)).toBe(`the relay on ${RELAY_NAMES[w.relays[0].key]}`);
+    expect(markName(relays, relays[1])).toBe("the next relay");
   });
 });
 
@@ -150,7 +154,7 @@ describe("the map's pins", () => {
     const r = pins.filter((p) => p.kind === "relay");
     expect(r).toHaveLength(4);
     expect(r.filter((p) => p.done)).toHaveLength(1);
-    expect(r.find((p) => p.done)?.label).toBe("A relay, unplugged");
+    expect(r.find((p) => p.done)?.label).toMatch(/^The relay on .+, unplugged$/);
     expect(r.every((p) => !p.tracked)).toBe(true);
   });
 
