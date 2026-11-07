@@ -15,7 +15,11 @@
  *   them. A car that knocks the hero down: "WHAM!" over him and a short camera shake (none on
  *   the Steady camera or with reduced motion).
  *
- * Reduced motion: no flutter, no bob, no beam shimmer, no shake. About six draw calls in all.
+ * - roam-3: Doc Octochain's relays (roam/crosschain.ts), their sparks and the hold ring, five
+ *   draw calls; a red arrow over the nearest one still plugged in while Cross-chain is on.
+ *
+ * Reduced motion: no flutter, no bob, no beam shimmer, no shake, no blinking lamps. About eleven
+ * draw calls in all.
  */
 import {
   BackSide,
@@ -39,16 +43,20 @@ import {
 } from "three";
 
 import type { City, RenderFrame3D, Vec3 } from "@wgp/game-core/sim3d/contract";
+import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import type { SharedUniforms } from "../city/materials";
 import type { BurstOptions } from "../effects";
 import { C, rgb } from "../palette";
 import { RoamCars } from "./cars";
+import { RoamRelays } from "./crosschain";
 
 export interface RoamHost {
   burst(word: string, at: Vec3, opts?: BurstOptions): void;
   /** A short camera shake (the host leaves it out on the Steady camera and with reduced motion). */
   shake?(amount: number): void;
+  /** roam-3: comic debris for a hit word, without the word (a relay's spark). */
+  impact?(word: string, at: Vec3): void;
 }
 
 /** A roam sim event, typed loosely (the scene only reads a few fields). */
@@ -61,6 +69,8 @@ export interface RoamSceneEvent {
   state?: string;
   /** roam-car-hit: the car's speed. */
   speed?: number;
+  /** roam-relay (roam-3): which relay. */
+  relay?: number;
 }
 
 const KIND = { page: 0, pixel: 1, marker: 2, next: 3, reticle: 4, beam: 5 } as const;
@@ -330,6 +340,8 @@ export class RoamScene {
   private lastFrame: RenderFrame3D | null = null;
   /** roam-2: the sim's cars (built on the first frame that has them). */
   private cars: RoamCars | null = null;
+  /** roam-3: Doc Octochain's relays (crosschain.ts), built with the parts. */
+  private relays: RoamRelays | null = null;
 
   constructor(
     private readonly city: City,
@@ -433,7 +445,11 @@ export class RoamScene {
         this.host.burst("GOT IT!", at, { size: 70, life: 0.8 });
         break;
       case "roam-item":
-        this.host.burst(ev.task === "graffiti" ? "SNAP!" : "PIXEL!", at, { size: 64, life: 0.7 });
+        // roam-3: a relay's own event bursts it (below).
+        if (ev.task !== "crosschain") this.host.burst(ev.task === "graffiti" ? "SNAP!" : "PIXEL!", at, { size: 64, life: 0.7 });
+        break;
+      case "roam-relay":
+        if (ev.relay !== undefined && ev.state) this.relays?.event(ev.state, ev.relay, this.host, this.reducedMotion);
         break;
       case "roam-sync":
         this.host.burst("SYNCED!", at, { size: 84, life: 1.1 });
@@ -460,6 +476,11 @@ export class RoamScene {
       return;
     }
     this.parts ??= this.build();
+    if (!this.relays) {
+      this.relays = new RoamRelays(this.shared, roamWorld().relays);
+      this.root.add(this.relays.root);
+    }
+    this.relays.update(frame, time, this.reducedMotion);
     if (r.cars && r.cars.length) {
       if (!this.cars || this.cars.max < r.cars.length) {
         this.cars?.dispose();
@@ -510,8 +531,10 @@ export class RoamScene {
       const gives = GIVES[f.key];
       const takes = TAKES[f.key];
       if (gives && stage(gives) === 0) put(f.pos.x, head, f.pos.z, 30, 30, KIND.marker, 0, GOLD);
-      else if (takes && isHandIn(takes, stage(takes))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+      else if (takes?.some((t) => isHandIn(t, stage(t)))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
     }
+    // roam-3: the next place a task under way wants you (the nearest relay still plugged in).
+    for (const m of r.marks ?? []) if (m.next) put(m.pos.x, m.pos.y + 62 + (still ? 0 : Math.sin(time * 2.4) * 4), m.pos.z, 24, 28, KIND.next, 0, HERO_RED);
     // The bot's arrow while it's loose.
     if (r.bot && r.bot.state !== "caught" && stage("pickpocket") === 1) put(r.bot.pos.x, r.bot.pos.y + 108, r.bot.pos.z, 24, 28, KIND.next, 0, HERO_RED);
     // Viewpoint beams until synced.
@@ -586,13 +609,15 @@ export class RoamScene {
     this.parts = null;
     this.cars?.dispose();
     this.cars = null;
+    this.relays?.dispose();
+    this.relays = null;
     void this.city;
   }
 }
 
-/** Who hands out which task, and who takes it back (rules/city.ts, by folk key). */
-const GIVES: Record<string, string> = { aunt: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti" };
-const TAKES: Record<string, string> = { uncle: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti" };
+/** Who hands out which task, and who takes which back (rules/city.ts, by folk key; roam-3: Uncle Gen gives Cross-chain and takes it and the bread). */
+const GIVES: Record<string, string> = { aunt: "bread", dev: "pickpocket", mary: "pixels", bearson: "graffiti", uncle: "crosschain" };
+const TAKES: Record<string, string[]> = { uncle: ["bread", "crosschain"], dev: ["pickpocket"], mary: ["pixels"], bearson: ["graffiti"] };
 
 /** Whether a task's next step is handing it in to its taker. */
 function isHandIn(task: string, stage: number): boolean {
