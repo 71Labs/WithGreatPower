@@ -430,10 +430,11 @@ export interface RoamFrame {
   /**
    * v1.9 (roam-3, additive): the tracked tasks' map marks, from each task's own state, empty when
    * no task with marks is under way: Front-run's six gates (kind "gate") while its race runs.
+   * Always filled by render.ts; absent on an older frame.
    */
-  marks: RoamMark[];
-  /** v1.9 (roam-3): Front-run's race while it runs or has just ended, else null (sim3d/roam/task-frontrun.ts). */
-  race: RaceFrame | null;
+  marks?: RoamMark[];
+  /** v1.9 (roam-3): Front-run's race while it runs or has just ended, else null (sim3d/roam/task-frontrun.ts); absent on an older frame. */
+  race?: RaceFrame | null;
 }
 
 /** A map mark (RoamFrame.marks): which task's, what it is, where (its centre), passed, and whether it's the one to go for next. */

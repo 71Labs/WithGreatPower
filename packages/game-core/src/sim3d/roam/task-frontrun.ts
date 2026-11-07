@@ -45,7 +45,7 @@ export const FINISH_RISE = 80;
 /** After the race is over, this long (ticks) before the reset (lost) or the race closes (won). */
 export const RACE_HOLD = 96;
 /** Sandwich Man reads the mempool this long before he runs (seconds). */
-export const RIVAL_WAIT = 1.5;
+export const RIVAL_WAIT = 2.2;
 /** His pace: on a roof, up a facade, and across a hop (horizontal units a second). */
 export const RIVAL_RUN = 430;
 export const RIVAL_CLIMB = 300;
@@ -129,7 +129,7 @@ function layCourse(): Omit<RaceCourse, "times" | "total"> {
     { x: 3810, y: 425, z: lane, r: 80, move: "leap" },
     { x: 4165, y: 245 + 95, z: lane, r: 75, move: "vault" },
     { x: 4885, y: 620 + 44, z: 1640, r: 95, move: "zip" },
-    { x: 5560, y: 562 + 44, z: 1990, r: 85, move: "leap" },
+    { x: 5560, y: 562 + 44, z: 2020, r: 85, move: "leap" },
   ];
   const route: RaceNode[] = [
     // From the street corner south of the stall, up the facade beside the hero's way.
@@ -148,8 +148,8 @@ function layCourse(): Omit<RaceCourse, "times" | "total"> {
     node(4335, 245, 1340, "run"),
     node(4870, 620, 1630, "hop", 4, 60),
     node(5200, 620, 1790, "run"),
-    node(5520, 562, 1985, "hop", 5, 20),
-    node(5905, 562, 2045, "run"),
+    node(5520, 562, 2010, "hop", 5, 20),
+    node(5915, 562, 2000, "run"),
   ];
   return {
     stall: { x: 3098, y: 0, z: 1236, yaw: -1.5708 },
@@ -163,8 +163,8 @@ function layCourse(): Omit<RaceCourse, "times" | "total"> {
       { how: "go", x: 4300, y: 245, z: lane },
       { how: "zip", x: 4836, y: 620, z: 1596 },
       { how: "go", x: 4890, y: 620, z: 1645 },
-      { how: "go", x: 5180, y: 620, z: 1760 },
-      { how: "go", x: 5940, y: 562, z: 2050 },
+      { how: "go", x: 4950, y: 620, z: 1960 },
+      { how: "go", x: 5895, y: 562, z: 2048 },
     ],
     solids: [
       // The bread barricade: loaves stacked across the whole roof (vault it; nothing goes round).
@@ -464,6 +464,7 @@ export function startFrontrun(stage: number[], items: number[]) {
 /* ------------------------------------------------------------------ render and hash */
 
 const place: RivalPlace = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, fx: 1, fz: 0, seg: 0, gates: 0, move: "wait" };
+const rivalNow: RivalPlace = { ...place };
 
 const v3 = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 
@@ -473,19 +474,20 @@ export function fillRaceFrame(s: SimState, prev: RaceFrame | null): RaceFrame | 
   const race = r.race;
   if (race.state === 0) return null;
   const c = r.world.race;
-  rivalAt(c, race.t * DT, place);
+  // Over, he runs on through the hold (beaten, he finishes his leap and gets there too late;
+  // first, he's at the buyer already): the picture only, the race's clock stopped at the end.
+  const over = race.state === 2;
+  rivalAt(c, (race.t + (over ? RACE_HOLD - race.hold : 0)) * DT, place);
   const f = prev ?? { rival: v3(), rivalVel: v3(), rivalYaw: 0, rivalMove: "wait", rivalGate: 0, heroGate: 0, of: c.gates.length, ticks: 0, left: 0, over: null, why: null };
   f.rival.x = place.x;
   f.rival.y = place.y;
   f.rival.z = place.z;
-  // Held still once it's over (won: he stops where the hero beat him; lost: he's at the buyer).
-  const still = race.state === 2;
-  f.rivalVel.x = still ? 0 : place.vx;
-  f.rivalVel.y = still ? 0 : place.vy;
-  f.rivalVel.z = still ? 0 : place.vz;
+  f.rivalVel.x = place.vx;
+  f.rivalVel.y = place.vy;
+  f.rivalVel.z = place.vz;
   f.rivalYaw = datan2(place.fx, place.fz);
-  f.rivalMove = still && race.end === 1 ? "beaten" : place.move;
-  f.rivalGate = place.gates;
+  f.rivalMove = over && race.end === 1 && place.move === "won" ? "beaten" : place.move;
+  f.rivalGate = over ? rivalAt(c, race.t * DT, rivalNow).gates : place.gates;
   f.heroGate = gatesPassed(s);
   f.of = c.gates.length;
   f.ticks = race.t;

@@ -218,7 +218,7 @@ describe("Front-run's race", () => {
     expect(p.story.slice(0, 2)).toEqual(["task-1", "start"]);
     expect(p.story).toContain("lost:rival");
     expect(p.story[p.story.length - 1]).toBe("reset:rival");
-    expect(p.story).not.toContain("g5");
+    expect(p.story).not.toContain("won");
     const lost = p.events.find(({ e }) => e.type === "roam-race" && e.state === "lost")!;
     expect(lost.tick * DT).toBeCloseTo(c.total, 1);
     // Reset: at the stall, the gates cleared, the stage still 1, Gwei's line for it.
@@ -267,7 +267,7 @@ describe("Front-run's race", () => {
     steps(run, ACT);
     const frame = () => fillRoamFrame(run.sim, fillRenderFrame(run.sim, newRenderFrame())).roam!;
     let f = frame();
-    expect(f.marks.map((m) => [m.task, m.kind, m.done, m.next])).toEqual(c.gates.map((_, i) => ["frontrun", "gate", false, i === 0]));
+    expect(f.marks!.map((m) => [m.task, m.kind, m.done, m.next])).toEqual(c.gates.map((_, i) => ["frontrun", "gate", false, i === 0]));
     expect(f.race).toMatchObject({ heroGate: 0, rivalGate: 0, of: 6, over: null, rivalMove: "wait" });
     steps(run, IDLE, Math.ceil((c.times[2] + 0.1) / DT));
     f = frame();
