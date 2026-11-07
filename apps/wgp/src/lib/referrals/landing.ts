@@ -1,18 +1,20 @@
 /**
  * The invite landing's lookup, for the server only (the page, its metadata and its Open
- * Graph image): GET /api/invite/{code} on this deployment's own origin, through the HTTP
- * contract the referral server build answers. Deduplicated per request, so the page and
- * its metadata share one call.
+ * Graph image): the same read GET /api/invite/{code} answers (server/db/referrals.ts
+ * inviteView), called directly rather than over HTTP, so a cold function or a waking database
+ * can't time the card out. Deduplicated per request, so the page and its metadata share one
+ * call.
  *
  *   valid        the code is real: who sent it
  *   unknown      the API said no, or the code can't be one (no request made)
- *   unavailable  the API couldn't answer: the page still offers the invite, and the accept
+ *   unavailable  the lookup couldn't answer: the page still offers the invite, and the accept
  *                route decides
- *
- * Once both builds merge, the integrator can swap the fetch for a direct server call.
  */
 import { headers } from "next/headers";
 import { cache } from "react";
+
+import { getDb } from "@/server/db/client";
+import { inviteView } from "@/server/db/referrals";
 
 import type { InviteLookup, InviteReferrer } from "./api";
 import { inviteCodeFromParam } from "./code";
@@ -42,13 +44,12 @@ export function toLanding(code: string, lookup: InviteLookup | "unavailable"): L
   return { state: "unknown", code };
 }
 
-async function lookup(origin: string, code: string): Promise<InviteLookup | "unavailable"> {
+async function lookup(code: string): Promise<InviteLookup | "unavailable"> {
   try {
-    const res = await fetch(`${origin}/api/invite/${encodeURIComponent(code)}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return "unavailable";
-    const body = (await res.json()) as Partial<InviteLookup> | null;
-    if (typeof body?.valid !== "boolean") return "unavailable";
-    return { valid: body.valid, referrer: body.referrer ?? null };
+    const view = await inviteView(await getDb(), code);
+    if (typeof view?.valid !== "boolean") return "unavailable";
+    // The save holds a suit id, the same one the API sends as JSON.
+    return { valid: view.valid, referrer: (view.referrer as InviteReferrer | null) ?? null };
   } catch {
     return "unavailable";
   }
@@ -63,7 +64,5 @@ export const loadLandingInvite = cache(async (param: string, fixture?: string | 
   if (!code) return { state: "unknown", code: null };
   const canned = landingFixture(fixture ?? undefined);
   if (canned) return toLanding(code, canned);
-  const origin = await requestOrigin();
-  if (!origin) return { state: "unavailable", code };
-  return toLanding(code, await lookup(origin, code));
+  return toLanding(code, await lookup(code));
 });

@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadLandingInvite, requestOrigin, toLanding } from "./landing";
 
 /**
- * The invite landing (src/app/invite/[code]): its lookup through GET /api/invite/{code} on
- * the request's own origin, and the page it draws for a valid, unknown or unanswered code.
+ * The invite landing (src/app/invite/[code]): its lookup (the server's inviteView, called
+ * directly) and the page it draws for a valid, unknown or unanswered code.
  */
 
 let requestHeaders: Headers;
@@ -14,6 +14,15 @@ vi.mock("next/headers", () => ({ headers: async () => requestHeaders }));
 type Reply = { status: number; body: unknown } | "network";
 let reply: Reply;
 let fetched: string[];
+// The server read the landing calls: answers `reply`, or throws as a database that's down would.
+vi.mock("@/server/db/client", () => ({ getDb: async () => ({}) }));
+vi.mock("@/server/db/referrals", () => ({
+  inviteView: async (_db: unknown, code: string) => {
+    fetched.push(code);
+    if (reply === "network" || reply.status !== 200) throw new Error("unavailable");
+    return reply.body;
+  },
+}));
 
 beforeEach(() => {
   requestHeaders = new Headers({ host: "127.0.0.1:3970" });
@@ -23,9 +32,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
     // next/og loads its own wasm and fonts through fetch (file: URLs): let those through.
     if (!String(url).includes("/api/invite/")) return real(url, init);
-    fetched.push(String(url));
-    if (reply === "network") throw new TypeError("Failed to fetch");
-    return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "content-type": "application/json" } });
+    throw new TypeError("the landing must not fetch its own API");
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -46,19 +53,19 @@ describe("the request's origin", () => {
 });
 
 describe("the lookup", () => {
-  it("asks the API on this origin and names the inviter", async () => {
+  it("asks the server for the code and names the inviter", async () => {
     expect(await loadLandingInvite("k7q2m9x")).toEqual({ state: "valid", code: "K7Q2M9X", referrer: { handle: "sele", heroName: "Web Weaver", suit: "midnight" } });
-    expect(fetched).toEqual(["http://127.0.0.1:3970/api/invite/K7Q2M9X"]);
+    expect(fetched).toEqual(["K7Q2M9X"]);
   });
 
-  it("is unknown when the API says so, or the code can't be one (no request)", async () => {
+  it("is unknown when the server says so, or the code can't be one (no lookup)", async () => {
     reply = { status: 200, body: { valid: false, referrer: null } };
     expect(await loadLandingInvite("K7Q2M9Y")).toEqual({ state: "unknown", code: "K7Q2M9Y" });
     expect(await loadLandingInvite("not-a-code")).toEqual({ state: "unknown", code: null });
     expect(fetched).toHaveLength(1);
   });
 
-  it("is unavailable when the API can't answer, so the page still offers the invite", async () => {
+  it("is unavailable when the server can't answer, so the page still offers the invite", async () => {
     for (const r of ["network", { status: 404, body: "<html>" }, { status: 500, body: {} }, { status: 200, body: { nope: 1 } }] as Reply[]) {
       reply = r;
       expect(await loadLandingInvite("K7Q2M9Z")).toEqual({ state: "unavailable", code: "K7Q2M9Z" });
