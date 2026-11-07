@@ -19,6 +19,10 @@
  * - The Daily Run's badges (src/server/db/compete.ts settleDailies): when the Compete hub or a
  *   Daily board is read, at most once every 10 minutes; a finished day's top three are queued
  *   their badges once (idempotent by outbox key), then sent with the mints.
+ * - Referrals (src/server/db/referrals.ts): after a run is submitted, an X handle is saved or an
+ *   invite code is claimed, the player's referrer (or the named referrer) is counted again and
+ *   granted the "Invite 3 friends" reward once they reach it. Per player, so every trigger
+ *   runs (no window); the grant is idempotent by its table's primary key.
  *
  * Every job is idempotent, and the windows are rows in budget_counters, so they hold
  * across serverless instances. The /api/cron/* routes stay as manual triggers, guarded by
@@ -28,6 +32,7 @@ import { after } from "next/server";
 
 import { getDb, type Db } from "@/server/db/client";
 import { settleDailies } from "@/server/db/compete";
+import { evaluateReferrals } from "@/server/db/referrals";
 import { runSeasonPass } from "@/server/db/season-close";
 import { sweep } from "@/server/db/sweep";
 import { recordSnapshots } from "@/server/market/history";
@@ -69,6 +74,22 @@ function whenDue(job: BackgroundJob, work: (db: Db) => Promise<unknown>): void {
     try {
       const db = await getDb();
       if (await claimWindow(db, job)) await work(db);
+    } catch (error) {
+      console.error(`[background] ${job}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    // Not inside a request scope.
+  }
+}
+
+/** Runs `work` after the response, every time (per-player work with no shared window). Failures are logged, never thrown. */
+function afterResponse(job: string, work: (db: Db) => Promise<unknown>): void {
+  const run = async () => {
+    try {
+      await work(await getDb());
     } catch (error) {
       console.error(`[background] ${job}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -129,6 +150,21 @@ export function settleDailiesSoon(): void {
   whenDue("dailies", async (db) => {
     const queued = await settleDailies(db);
     if (queued.length > 0 && canMint()) await drainRewards(db, { maxBatches: 1 });
+  });
+}
+
+/**
+ * Counts referrals again after this request (src/server/db/referrals.ts `evaluateReferrals`):
+ * `friend` may now count (a verified run, an X handle saved), so their referrer is evaluated;
+ * `referrer` is evaluated as is (a claim named them, or their own run ended, which frees a
+ * grant held back while it was in flight). A grant's Recruiter badge is sent straight away if
+ * it can be.
+ */
+export function checkReferralsSoon(input: { friend?: string; referrer?: string }): void {
+  if (!input.friend && !input.referrer) return;
+  afterResponse("referrals", async (db) => {
+    const granted = await evaluateReferrals(db, input);
+    if (granted && canMint()) await drainRewards(db, { maxBatches: 1 });
   });
 }
 
