@@ -169,10 +169,12 @@ export interface CrewChecklist {
 }
 
 /**
- * "Count for {referrer}": what a referred player still has to do, until they count. Uses
- * the server's `self` when it sends one. Otherwise X is the account's saved handle, and a
- * night played is a night on the server save of an account that didn't import a browser
- * save (an imported save's nights weren't verified runs, so they can't say).
+ * "Count for {referrer}": what a referred player still has to do, until they count.
+ * - X: the account's saved handle when it's given (current the moment the account sheet
+ *   saves it), else the server's `self`.
+ * - Played: the server's `self` (a verified run, any mode). Without it, a night on the server
+ *   save of an account that didn't import a browser save (an imported save's nights weren't
+ *   verified runs, so they can't say).
  */
 export function crewChecklist(input: {
   view: Pick<ReferralsView, "referredBy" | "self"> | null;
@@ -183,7 +185,7 @@ export function crewChecklist(input: {
   const { view } = input;
   if (!view?.referredBy) return null;
   if (view.self?.qualified) return null;
-  const x = view.self?.x ?? !!input.xHandle;
+  const x = input.xHandle !== undefined ? !!input.xHandle : (view.self?.x ?? false);
   const played = view.self?.played ?? (!input.migrated && (input.nights ?? 0) > 0);
   if (x && played) return null;
   return { referrer: view.referredBy, x, played };

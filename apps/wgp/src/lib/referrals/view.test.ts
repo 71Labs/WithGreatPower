@@ -150,6 +150,17 @@ describe("the friend's checklist", () => {
     expect(crewChecklist({ view: { referredBy: "sele" }, xHandle: "nora", nights: 4, migrated: true })).toEqual({ referrer: "sele", x: true, played: false });
   });
 
+  it("ticks Play a night for an imported save once the server says a run verified", () => {
+    expect(crewChecklist({ view: { referredBy: "sele", self: { x: false, played: true, qualified: false } }, xHandle: null, nights: 4, migrated: true })).toEqual({ referrer: "sele", x: false, played: true });
+    expect(crewChecklist({ view: { referredBy: "sele", self: { x: true, played: true, qualified: true } }, xHandle: "nora", nights: 4, migrated: true })).toBeNull();
+  });
+
+  it("takes X from the account's handle over a server answer from before it was saved", () => {
+    expect(crewChecklist({ view: { referredBy: "sele", self: { x: false, played: false, qualified: false } }, xHandle: "nora" })).toEqual({ referrer: "sele", x: true, played: false });
+    expect(crewChecklist({ view: { referredBy: "sele", self: { x: false, played: true, qualified: false } }, xHandle: "nora" })).toBeNull();
+    expect(crewChecklist({ view: { referredBy: "sele", self: { x: true, played: false, qualified: false } }, xHandle: null })).toEqual({ referrer: "sele", x: false, played: false });
+  });
+
   it("welcomes them by the inviter's handle; guests are asked to sign in", () => {
     expect(crewWelcomeText("sele", false)).toBe("You joined sele’s crew.");
     expect(crewWelcomeText("sele", true)).toBe("You joined sele’s crew. Sign in so your nights count for them.");

@@ -107,7 +107,8 @@ Errors follow the repo's shape: `{ error: "<code>", message: "<for people>", …
   "invited": [{ "handle": "nora", "joinedAt": "2026-11-07T10:00:00.000Z", "x": true, "played": false, "qualified": false }],
   "reward": { "state": "locked", "xp": 300, "badge": "recruiter", "tx": null },
   "referredBy": "sele",
-  "canClaim": false
+  "canClaim": false,
+  "self": { "x": true, "played": false, "qualified": false }
 }
 ```
 
@@ -120,6 +121,7 @@ Errors follow the repo's shape: `{ error: "<code>", message: "<for people>", …
   - `granted`: earned, with no badge row. This isn't expected in practice; show it like `queued`.
 - `referredBy`: the inviter's game handle, or null.
 - `canClaim`: no inviter yet, not banned, and the account is under 48 hours old.
+- `self`: this player's own steps as their inviter's friend, scored by the same rules that count them (`x`: an X handle added; `played`: a verified run; `qualified`: they count). Null without an inviter. The friend side's Tonight checklist reads it, because a hero brought in from the browser carries nights that were never verified runs.
 
 ### `POST /api/referrals/claim { code }` (signed in, JSON)
 
@@ -177,6 +179,7 @@ The server build owns the contract. These are the places where it now says more 
 - **`qualified`** can pass `goal`. `invited` is capped at 100 friends, oldest first.
 - **`PUT /api/me/social`** refuses a handle another player already added (`409 x_taken`, with `field: "xHandle"`).
 - **New admin route:** `GET /api/admin/referrals` (JSON, and the CSV with `?format=csv`).
+- **`GET /api/referrals` adds `self`** (a friend's own steps; null without an inviter), so the friend's checklist ticks "Play a night" from verified runs.
 
 ## Tests
 

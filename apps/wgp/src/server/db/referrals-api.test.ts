@@ -102,6 +102,7 @@ describe("GET /api/referrals", () => {
       reward: { state: "locked", xp: 300, badge: "recruiter", tx: null },
       referredBy: null,
       canClaim: true,
+      self: null,
     });
     // The same code on every read.
     expect(((await (await referralsGet(req("/api/referrals", { token: await sessionOf(p.id) }))).json()) as { code: string }).code).toBe(code);
@@ -323,8 +324,12 @@ describe("Invite 3 friends, end to end", () => {
     const heroAfter = (await ensureSave(db, sele.id)).save.hero!;
     expect(heroAfter.level * 10_000 + heroAfter.xp).toBeGreaterThan(heroBefore.level * 10_000 + heroBefore.xp);
 
-    // A friend's own page: who invited them.
+    // A friend's own page: who invited them, and their own steps done (the Tonight checklist goes).
     const nora = await signIn("nora");
-    expect(((await (await referralsGet(req("/api/referrals", { token: nora.token }))).json()) as { referredBy: string; canClaim: boolean })).toMatchObject({ referredBy: "sele", canClaim: false });
+    expect(((await (await referralsGet(req("/api/referrals", { token: nora.token }))).json()) as { referredBy: string; canClaim: boolean })).toMatchObject({
+      referredBy: "sele",
+      canClaim: false,
+      self: { x: true, played: true, qualified: true },
+    });
   }, 120_000);
 });

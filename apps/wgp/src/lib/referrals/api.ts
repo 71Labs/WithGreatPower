@@ -54,11 +54,11 @@ export interface ReferralsView {
   /** Whether "Got an invite code?" can still go through (no inviter yet, account under 48 h). */
   canClaim: boolean;
   /**
-   * Not in the Nov 7 contract: this player's own progress as somebody's friend, if the
-   * server adds it. Without it the Tonight checklist reads the account instead
-   * (src/lib/referrals/view.ts crewChecklist).
+   * This player's own progress as their inviter's friend, counted by the server's rules (null
+   * without an inviter; absent from older servers, when the Tonight checklist reads the
+   * account instead: src/lib/referrals/view.ts crewChecklist).
    */
-  self?: { x: boolean; played: boolean; qualified: boolean };
+  self?: { x: boolean; played: boolean; qualified: boolean } | null;
 }
 
 /** Who sent an invite, as the public lookup tells it. */

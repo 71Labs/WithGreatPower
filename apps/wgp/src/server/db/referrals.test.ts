@@ -455,8 +455,8 @@ describe("the views", () => {
     const { sele, code, friends } = await referrerWithThree();
     const { view, granted } = await referralView(db, sele.id, { origin: "https://www.wgponnear.fun/", now: minutes(200) });
     expect(granted).toBe(true);
-    expect(Object.keys(view).sort()).toEqual(["canClaim", "code", "goal", "invited", "link", "qualified", "referredBy", "reward"]);
-    expect(view).toMatchObject({ code, link: `https://www.wgponnear.fun/invite/${code}`, goal: 3, qualified: 3, referredBy: null });
+    expect(Object.keys(view).sort()).toEqual(["canClaim", "code", "goal", "invited", "link", "qualified", "referredBy", "reward", "self"]);
+    expect(view).toMatchObject({ code, link: `https://www.wgponnear.fun/invite/${code}`, goal: 3, qualified: 3, referredBy: null, self: null });
     expect(view.reward).toEqual({ state: "queued", xp: 300, badge: "recruiter", tx: null });
     expect(view.invited.map((f) => f.handle)).toEqual(["nora", "omar", "pia"]);
     for (const f of view.invited) expect(Object.keys(f).sort()).toEqual(["handle", "joinedAt", "played", "qualified", "x"]);
@@ -474,7 +474,31 @@ describe("the views", () => {
     // A friend sees who invited them, and can't claim again.
     const nora = (await referralView(db, friends[0]!.id, { origin: "http://127.0.0.1:3107", now: minutes(200) })).view;
     expect(nora).toMatchObject({ referredBy: "sele", canClaim: false, qualified: 0, invited: [], reward: { state: "locked", tx: null } });
+    // Their own steps, for the friend side's checklist (an imported save's nights can't say).
+    expect(nora.self).toEqual({ x: true, played: true, qualified: true });
     expect(nora.link).toMatch(/^http:\/\/127\.0\.0\.1:3107\/invite\/[0-9A-HJKMNP-TV-Z]{7}$/);
+  }, 60_000);
+
+  it("tells a friend their own steps by the rules that count them, and nobody else's", async () => {
+    const sele = await hero("sele");
+    await setX(sele.id, "Sele");
+    const code = await ensureReferralCode(db, sele.id);
+    const nora = await friendOf(code, "nora");
+    const omar = await friendOf(code, "omar", minutes(20));
+    const self = async (id: string) => (await referralView(db, id, { origin: "https://wgp.test", now: minutes(90) })).view.self;
+
+    expect(await self(nora.id)).toEqual({ x: false, played: false, qualified: false });
+    await setX(nora.id, "nora_x");
+    expect(await self(nora.id)).toEqual({ x: true, played: false, qualified: false });
+    await verifiedNight(nora.id, minutes(30));
+    expect(await self(nora.id)).toEqual({ x: true, played: true, qualified: true });
+
+    // The inviter's own handle is added, but doesn't count.
+    await setX(omar.id, "@sele");
+    await verifiedNight(omar.id, minutes(50));
+    expect(await self(omar.id)).toEqual({ x: true, played: true, qualified: false });
+    // A player nobody invited has no steps to show.
+    expect(await self(sele.id)).toBeNull();
   }, 60_000);
 
   it("offers a late claim only to a new, uninvited player", async () => {

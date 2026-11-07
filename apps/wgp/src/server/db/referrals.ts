@@ -423,6 +423,19 @@ export interface ReferralView {
   referredBy: string | null;
   /** A late claim is open: no inviter yet, and the account is under 48 hours old. */
   canClaim: boolean;
+  /**
+   * This player's own steps as their inviter's friend (the friend side's Tonight checklist), by
+   * the same rules that count them: X added, a verified run, and whether they count. Null
+   * without an inviter.
+   */
+  self: FriendSelf | null;
+}
+
+/** A referred player's own progress toward their inviter's 3. */
+export interface FriendSelf {
+  x: boolean;
+  played: boolean;
+  qualified: boolean;
 }
 
 /** The invite link for a code on a site (an origin, no trailing slash). */
@@ -468,7 +481,9 @@ export async function referralView(db: Db, playerId: string, opts: { origin: str
     granted = out.granted;
     if (out.state === "granted") reward = await rewardView(db, playerId);
   }
-  const [inviter] = player.referredBy ? await db.select({ handle: players.handle }).from(players).where(eq(players.id, player.referredBy)).limit(1) : [];
+  const inviter = player.referredBy ? await getPlayer(db, player.referredBy) : null;
+  // Scored among the inviter's friends, so a shared or the inviter's own X handle reads as it counts.
+  const mine = inviter ? (await friendsOf(db, inviter)).friends.find((f) => f.id === playerId) : undefined;
   return {
     granted,
     view: {
@@ -480,6 +495,7 @@ export async function referralView(db: Db, playerId: string, opts: { origin: str
       reward: { state: reward.state, xp: reward.xp, badge: reward.badge, tx: reward.tx },
       referredBy: inviter?.handle ?? null,
       canClaim: !player.referredBy && !player.bannedAt && now.getTime() - player.createdAt.getTime() <= CLAIM_WINDOW_MS,
+      self: mine ? { x: mine.x, played: mine.played, qualified: mine.qualified } : null,
     },
   };
 }
