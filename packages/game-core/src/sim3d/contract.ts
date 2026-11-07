@@ -8,10 +8,13 @@
  * Case File 002's clues (docs/chapters/case-002.md); v1.7 (free roam, ruleset tag roam-1, patrol
  * nights untouched) the frame's `roam`, with roam-2's `roam.cars`, `roam.knock` and the move
  * "knocked" (additive); v1.8 (Case File 003, ruleset c003-1) the frame's `fee`
- * (docs/chapters/case-003.md).
+ * (docs/chapters/case-003.md); v1.9 (render only, no sim change) `roam.marks`, the City
+ * tasks' map marks.
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
+
+import type { TaskId } from "./roam/types";
 
 export interface Vec3 {
   x: number;
@@ -426,6 +429,23 @@ export interface RoamFrame {
    * or getting up; seconds into that phase; the way the car pushed him (unit xz).
    */
   knock?: { phase: "flung" | "down" | "up"; t: number; dir: Vec3 } | null;
+  /**
+   * v1.9 (render only; never read back by the sim or hashed): the map marks of the tasks under
+   * way, filled by each task from its own state and empty (or absent) when none is: the race's
+   * rooftop gates, the relays to unplug. `done` once passed or unplugged, `next` on the one to
+   * head for. The HUD draws them on the city map and the minimap and points the waypoint at the
+   * tracked task's `next` mark. Absent on an older frame.
+   */
+  marks?: RoamMark[] | null;
+}
+
+/** A task's mark on the map (RoamFrame.marks, v1.9): `pos` at feet level. */
+export interface RoamMark {
+  task: TaskId;
+  kind: "gate" | "relay";
+  pos: Vec3;
+  done: boolean;
+  next: boolean;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */
