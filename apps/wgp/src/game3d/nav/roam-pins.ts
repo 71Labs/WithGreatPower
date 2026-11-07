@@ -90,6 +90,8 @@ export function taskTarget(id: TaskId, roam: RoamFrame, hero: Vec3, world: RoamW
     );
     return t ? { task: id, at: t.pos, who: "the nearest tag", kind: "tag" } : null;
   }
+  // Front-run between tries (stage 1, no race running): back to Gwei's stall to race again.
+  if (id === "frontrun" && stage === 1) return giver ? folk(giver) : null;
   const back = taker ?? giver;
   return back ? folk(back) : null;
 }

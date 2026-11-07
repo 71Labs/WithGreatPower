@@ -34,6 +34,11 @@ describe("free roam's task targets", () => {
     expect(taskTarget("graffiti", r, spawn, w)).toMatchObject({ kind: "tag", who: "the nearest tag" });
   });
 
+  it("sends Front-run back to Gwei between tries (no race running, so no gates)", () => {
+    const r = roamFrameFixture(w, { stage: { frontrun: 1 } });
+    expect(taskTarget("frontrun", { ...r, marks: [] }, spawn, w)).toMatchObject({ kind: "folk", at: { x: giver("frontrun").x, z: giver("frontrun").z } });
+  });
+
   it("follows the pickpocket bot while it runs", () => {
     const bot = { x: 1234, y: 300, z: 2345 };
     const r = roamFrameFixture(w, { stage: { pickpocket: 1 }, bot });
