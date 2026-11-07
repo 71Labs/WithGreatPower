@@ -4,10 +4,11 @@
  * { action: "nonce", accountId }
  *     200 { nonce, message, recipient, token, expiresAt }: pass nonce (base64 → 32 bytes),
  *     message and recipient to `wallet.signMessage`, keep `token`.
- * { action: "verify", accountId, publicKey, signature, token }
+ * { action: "verify", accountId, publicKey, signature, token, ref? }
  *     Checks the signature, that publicKey is a full-access key of accountId on chain, and
  *     the challenge (once on any instance, 5 minutes). 200 { accountId, playerId } and a
- *     session cookie.
+ *     session cookie. An invite (the `wgp_ref` cookie, else `ref`) is attached when this
+ *     sign-in creates the player (docs/referrals.md).
  * { action: "session-key", publicKey }   (signed in)
  *     "Enable quick play": after the wallet added a function-call key for the game
  *     contract, records it so the relayer accepts it. Checked on chain first.
@@ -18,10 +19,11 @@
 import { z } from "zod";
 
 import { SESSION_KEY_ALLOWANCE, isAccountId } from "@/lib/near/policy";
+import { attachInviteOnSignIn, refField } from "@/server/auth/referral";
 import { secret } from "@/server/auth/secrets";
 import { createSession, requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
-import { findOrCreatePlayer } from "@/server/db/players";
+import { findOrCreatePlayerOutcome } from "@/server/db/players";
 import { HttpError, assertJson, clientIp, handle, json, readJson, unauthorized } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
 import { chainEnv } from "@/server/near/env";
@@ -35,7 +37,7 @@ const publicKey = z.string().regex(/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,50}$/, "an 
 
 const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("nonce"), accountId }),
-  z.object({ action: z.literal("verify"), accountId, publicKey, signature: z.string().min(40).max(200), token: z.string().max(300) }),
+  z.object({ action: z.literal("verify"), accountId, publicKey, signature: z.string().min(40).max(200), token: z.string().max(300), ref: refField }),
   z.object({ action: z.literal("session-key"), publicKey }),
 ]);
 
@@ -69,7 +71,7 @@ export const POST = handle("auth/wallet", (request: Request) =>
       }
       const db = await getDb();
       if (!(await burnChallenge(db, input.token))) throw unauthorized("Sign-in challenge rejected: Challenge already used");
-      const player = await findOrCreatePlayer(db, {
+      const { player, created } = await findOrCreatePlayerOutcome(db, {
         nearAccountId: input.accountId,
         authKind: "wallet",
         authSub: `wallet:${input.accountId}`,
@@ -77,6 +79,7 @@ export const POST = handle("auth/wallet", (request: Request) =>
       });
       if (player.bannedAt) throw new HttpError(403, "banned", "This account is suspended");
       await createSession(player.id, request);
+      await attachInviteOnSignIn(db, request, { playerId: player.id, created, ref: input.ref });
       return json({ accountId: player.nearAccountId, playerId: player.id });
     }
 

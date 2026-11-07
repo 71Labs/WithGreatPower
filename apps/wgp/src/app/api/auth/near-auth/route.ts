@@ -5,9 +5,11 @@
  * ID token's `nonce` claim must equal this browser's nonce cookie and be unused, so a
  * token minted for another app, or replayed, is refused (src/server/near/login-nonce.ts).
  *
- * Body: { mode?: "sign-in" | "verify", idToken, handle?, sessionPublicKey? }
+ * Body: { mode?: "sign-in" | "verify", idToken, handle?, sessionPublicKey?, ref? }
  *   idToken           the Auth0 ID token from the NEAR Auth login (raw JWT)
  *   handle            new players only: the account becomes <handle>.<FACTORY_ACCOUNT_ID>
+ *   ref               an invite code, used when the `wgp_ref` cookie is missing: attached only
+ *                     when this sign-in creates the player (docs/referrals.md)
  *   sessionPublicKey  this browser's ed25519 session key ("ed25519:…")
  *
  * sign-in, new player, no handle   200 { needsHandle: true, suggestedHandle? }
@@ -29,7 +31,8 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { getDb } from "@/server/db/client";
-import { findOrCreatePlayer, findPlayerForLogin, normalizeEmail, rememberEmail } from "@/server/db/players";
+import { findOrCreatePlayerOutcome, findPlayerForLogin, normalizeEmail, rememberEmail } from "@/server/db/players";
+import { attachInviteOnSignIn, refField } from "@/server/auth/referral";
 import { createSession } from "@/server/auth/session";
 import { HttpError, badRequest, clientIp, handle, json, readJson } from "@/server/http";
 import { rateLimiter } from "@/server/rate-limit";
@@ -47,6 +50,7 @@ const body = z.object({
   idToken: z.string().min(20).max(8 * 1024),
   handle: z.string().max(40).optional(),
   sessionPublicKey: publicKey.optional(),
+  ref: refField,
 });
 
 /** The nonce did its job: drop the cookie so it can't be paired with anything else. */
@@ -92,6 +96,8 @@ export const POST = handle("auth/near-auth", (request: Request) =>
       await redeemNearAuthNonce(db, { ...nonce, consume: true });
       await clearNonceCookie();
       await createSession(existing.id, request);
+      // A returning player is never attached; this only drops a leftover invite cookie.
+      await attachInviteOnSignIn(db, request, { playerId: existing.id, created: false, ref: input.ref });
       const live = input.sessionPublicKey ? (await liveSessionKeys(db, existing.id)).includes(input.sessionPublicKey) : false;
       return json({ accountId: existing.nearAccountId, created: false, sessionKeyLive: live });
     }
@@ -113,9 +119,11 @@ export const POST = handle("auth/near-auth", (request: Request) =>
       throw error;
     }
     await clearNonceCookie();
-    const player = await findOrCreatePlayer(db, { nearAccountId: created.accountId, authKind: "near_auth", authSub: identity.sub, handle: handleName, email });
+    const made = await findOrCreatePlayerOutcome(db, { nearAccountId: created.accountId, authKind: "near_auth", authSub: identity.sub, handle: handleName, email });
+    const player = made.player;
     await addSessionKey(db, { playerId: player.id, publicKey: input.sessionPublicKey, addTx: created.txHash });
     await createSession(player.id, request);
+    await attachInviteOnSignIn(db, request, { playerId: player.id, created: made.created, ref: input.ref });
     return json({ accountId: created.accountId, created: true, txHash: created.txHash, sessionKeyLive: true }, { status: 201 });
   }),
 );
