@@ -4,21 +4,23 @@
  * The City HUD, in the sticker kit, over the 3D city. It reads the loop's snapshot (about ten
  * a second, never per frame):
  *
- * - Top: the task tracker (what's next on each task under way) and the finds so far (pages,
- *   viewpoints); the map and pause buttons.
+ * - Top: the task tracker (the tracked task first, then what's next on another under way) and
+ *   the finds so far (pages, viewpoints); the pause button, and the minimap under it (which
+ *   opens the city map).
  * - Bottom middle: what E does here ("Talk to Aunt Mainnet"), and the line someone said, in a
  *   paper speech bubble.
  * - Finds pop up as toasts (a page's headline, a task done, the XP it paid).
  * - Touch: the move buttons by the right thumb (jump, zip, the act button when there's
  *   something to do, let go while on a wall, the sprint toggle); the left of the screen is
- *   the stick.
+ *   the stick, and a drag anywhere else looks round.
  *
- * Only buttons take touches; every panel lets them through to the play surface.
+ * Only buttons (and the minimap) take touches; every panel lets them through to the play
+ * surface. Panels and buttons are marked `data-hud-zone` so the waypoint keeps clear of them.
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
 
 import { StickerPanel } from "@/components/game/kit";
-import { Camera, Check, MapIcon, Newspaper, Pause, Rocket, Target, Zap } from "@/components/icons";
+import { Camera, Check, Newspaper, Pause, Rocket, Target, Zap } from "@/components/icons";
 import { FOLKS, PAGES, TASKS, VIEW_NAMES, TASK_DONE, taskStep, type TaskId } from "@wgp/game-core/city";
 import { roamWorld } from "@wgp/game-core/sim3d/roam";
 import type { CastId } from "@wgp/game-core/cast";
@@ -55,19 +57,20 @@ function Speaker({ folk }: { folk: number }) {
   );
 }
 
-/** Tasks under way first, then the next to start; at most `max`. */
-function trackerTasks(h: RoamHud, max: number): { id: TaskId; stage: number; got: number }[] {
+/** The tracked task first (picked on the map, even one not started), then the others under way; at most `max`. */
+export function trackerTasks(h: Pick<RoamHud, "tasks">, tracked: TaskId | null, max: number): { id: TaskId; stage: number; got: number }[] {
   const all = h.tasks as { id: TaskId; stage: number; got: number }[];
-  const on = all.filter((t) => t.stage > 0 && t.stage < TASK_DONE);
-  return on.slice(0, max);
+  const first = tracked ? all.filter((t) => t.id === tracked && t.stage !== TASK_DONE) : [];
+  const on = all.filter((t) => t.id !== tracked && t.stage > 0 && t.stage < TASK_DONE);
+  return [...first, ...on].slice(0, max);
 }
 
-/** The tracker: the steps of the tasks under way, and the finds so far. */
-export function TaskTracker({ hud }: { hud: RoamHud }) {
-  const tasks = trackerTasks(hud, 2);
+/** The tracker: the tracked task's step, another under way, and the finds so far. */
+export function TaskTracker({ hud, tracked = null }: { hud: RoamHud; tracked?: TaskId | null }) {
+  const tasks = trackerTasks(hud, tracked, 2);
   const done = hud.tasks.filter((t) => t.stage === TASK_DONE).length;
   return (
-    <StickerPanel as="section" aria-label="City tasks" className="pointer-events-none flex w-[min(320px,calc(100vw-120px))] flex-col gap-2 p-3">
+    <StickerPanel as="section" aria-label="City tasks" data-hud-zone="avoid" className="pointer-events-none flex w-[min(320px,calc(100vw-152px))] flex-col gap-2 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[12px] font-bold uppercase leading-4 tracking-[0.08em]">Free roam</span>
         <span className="num flex items-center gap-2 text-[12px] font-semibold leading-4 text-game-muted">
@@ -91,8 +94,12 @@ export function TaskTracker({ hud }: { hud: RoamHud }) {
       {tasks.length ? (
         <ul className="flex flex-col gap-1.5">
           {tasks.map((t) => (
-            <li key={t.id} className="flex flex-col gap-0.5 rounded-[12px] bg-game-paper-2 px-2.5 py-1.5">
-              <span className="text-[13px] font-bold leading-4">{TASKS[t.id].title}</span>
+            <li key={t.id} className={`flex flex-col gap-0.5 rounded-[12px] px-2.5 py-1.5 ${t.id === tracked ? "outline outline-2 -outline-offset-2 outline-game-ink" : ""} bg-game-paper-2`}>
+              <span className="flex items-center gap-1.5 text-[13px] font-bold leading-4">
+                {t.id === tracked ? <Target aria-hidden className="size-3.5 shrink-0 text-game-hero" strokeWidth={2.5} /> : null}
+                {TASKS[t.id].title}
+                {t.id === tracked ? <span className="sr-only">, tracked</span> : null}
+              </span>
               <span className="text-[13px] leading-[18px] text-pretty">{taskStep(t.id, t.stage, t.got)}</span>
             </li>
           ))}
@@ -226,7 +233,7 @@ export function MoveButtons({ hud, onJump, onZip, onAct, onDrop, onSprint, sprin
   const act = actLabel(hud.act);
   const onWall = hud.move === "climb" || hud.move === "hang" || hud.move === "wallrun";
   return (
-    <div className="pointer-events-none grid grid-cols-[auto_auto] items-end gap-3">
+    <div data-hud-zone="avoid" className="pointer-events-none grid grid-cols-[auto_auto] items-end gap-3">
       <div className="flex flex-col items-end gap-3">
         {act ? (
           <MoveButton label={act} tone="gold" onUse={onAct}>
@@ -254,28 +261,20 @@ export function MoveButtons({ hud, onJump, onZip, onAct, onDrop, onSprint, sprin
   );
 }
 
-/** The map and pause buttons, top right. */
-export function CornerButtons({ onMap, onPause }: { onMap(): void; onPause(): void }) {
+/** Top right: the pause button, and the minimap under it (it's the map button). */
+export function CornerButtons({ minimap, onPause }: { minimap: ReactNode; onPause(): void }) {
   return (
-    <div className="pointer-events-none flex gap-2">
-      <button
-        type="button"
-        aria-label="Open the city map"
-        aria-keyshortcuts="M"
-        onClick={onMap}
-        className="pointer-events-auto grid size-12 place-items-center rounded-full border-[2.5px] border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 active:translate-y-[2px] active:shadow-none pointer-fine:hover:bg-game-paper-2"
-      >
-        <MapIcon aria-hidden className="size-5" strokeWidth={2.25} />
-      </button>
+    <div data-hud-zone="avoid" className="pointer-events-none flex flex-col items-end gap-2">
       <button
         type="button"
         aria-label="Pause"
         aria-keyshortcuts="Escape P"
         onClick={onPause}
-        className="pointer-events-auto grid size-12 place-items-center rounded-full border-[2.5px] border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 active:translate-y-[2px] active:shadow-none pointer-fine:hover:bg-game-paper-2"
+        className="pointer-events-auto grid size-12 touch-none place-items-center rounded-full border-[2.5px] border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 active:translate-y-[2px] active:shadow-none pointer-fine:hover:bg-game-paper-2"
       >
         <Pause aria-hidden className="size-5" strokeWidth={2.25} />
       </button>
+      {minimap}
     </div>
   );
 }
@@ -291,9 +290,9 @@ export function FirstHint({ touch, hud }: { touch: boolean; hud: RoamHud }) {
   if (!shown || hud.ticks > 60 * 6) return null;
   return (
     <div className="pointer-events-none flex justify-center px-4">
-      <p className="wgp-rise max-w-[460px] rounded-[18px] border-[2.5px] border-game-ink bg-game-paper px-4 py-2.5 text-center text-[14px] leading-5 text-pretty text-game-ink shadow-[var(--game-shadow-sm)]">
+      <p data-hud-zone="avoid" className="wgp-rise max-w-[460px] rounded-[18px] border-[2.5px] border-game-ink bg-game-paper px-4 py-2.5 text-center text-[14px] leading-5 text-pretty text-game-ink shadow-[var(--game-shadow-sm)]">
         {touch
-          ? "Drag on the left to run, double-tap it to sprint. Run into a wall to climb. Hold the right side to swing."
+          ? "Drag on the left to run. Drag anywhere else to look around; hold it to swing. Run into a wall to climb."
           : "WASD to run, Shift to sprint, Space to jump. Run into a wall to climb. Hold F or the mouse to swing, Q to zip."}
       </p>
     </div>

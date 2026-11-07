@@ -10,8 +10,14 @@
  *   the hero stood.
  * - Sim events become scene effects (the web's, and the city's finds through the scene
  *   handle), sound, toasts and screen-reader lines.
+ * - The tracked task (picked on the map, else the first under way) leads the tracker, and the
+ *   minimap, the waypoint and the map's distance line point at its next step.
+ * - Touch: the left of the screen is the stick, a drag anywhere else looks round (with the
+ *   stick held too), a hold there swings (input/roam.ts, input/touch.ts); the look speed is a
+ *   setting in the pause sheet.
  * - `?autopilot=1` (development) hands the input to game-core's roam bot playing its tour;
  *   `?debug=1` shows the renderer's numbers. Either exposes `window.__wgpCity` for headless checks.
+ *   `?marks=race|relays` (development) lays fixture map marks over the overlays (fixture.ts).
  */
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -27,6 +33,7 @@ import type { LoopEvent3D } from "@/game3d/session";
 import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type StickVisual } from "@/game3d/input";
 import { attachRoamControls, RoamLatch, type RoamControls } from "@/game3d/input/roam";
+import { trackedTask } from "@/game3d/nav/roam-pins";
 import { FrameTap } from "@/game3d/nav/tap";
 import { detectTier, QUALITY_PRESETS, type QualityTier } from "@/game3d/scene/quality";
 import type { SceneHandle, SceneStats } from "@/game3d/scene/Scene";
@@ -37,9 +44,12 @@ import { useCoarsePointer, useReducedMotion } from "@/sim/ui/hooks";
 
 import { initialSettings, rememberSettings, SettingsPanel, type GraphicsChoice, type PlaySettings } from "../patrol/settings";
 import { Loading } from "../patrol/status";
+import { RoamFixtureTap, roamMarksFixture } from "./fixture";
 import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
 import { RoamMap } from "./map";
+import { CityMinimap } from "./minimap";
 import { RoamPause } from "./pause";
+import { CityWaypoint } from "./waypoint";
 
 const Stage = dynamic(() => import("./stage"), { ssr: false, loading: () => <Loading label="Heading into the city…" /> });
 
@@ -61,12 +71,19 @@ const FILE_AFTER_FIND_MS = 1200;
 const FILE_EVERY_MS = 120_000;
 /** Past this many ticks the outing files and the next one starts (on the next standing moment). */
 const ROLL_AT = MAX_TICKS - 60 * 45;
+/** In these moves a thumb on the open screen holds the web the moment it lands (in the air, a web can't wait to see if it's a look). */
+const WEB_AT_ONCE = new Set(["air", "swing", "zip", "wallrun"]);
 
 export function CitySurface({ session: first, colors, autopilot, debug }: { session: RoamSession; colors: SuitColors; autopilot: boolean; debug: boolean }) {
   const session = useRef(first);
   const [loop] = useState(() => new RoamLoop(first.run));
   const [latch] = useState(() => new RoamLatch());
-  const [tap] = useState(() => new FrameTap());
+  // The task the HUD follows (picked on the map; else the first under way).
+  const [picked, setPicked] = useState<TaskId | null>(null);
+  const [tap] = useState(() => {
+    const fixture = roamMarksFixture();
+    return fixture ? new RoamFixtureTap(fixture) : new FrameTap();
+  });
   const hud = useRoamHud(loop.hud);
   const handle = useRef<SceneHandle | null>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -76,8 +93,19 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
   const touch = useCoarsePointer();
   const reducedMotion = useReducedMotion();
   const [settings, setSettings] = useState<PlaySettings>(initialSettings);
+  // The look speed for the controls, read on every turn (a change applies without re-attaching them).
+  const look = useRef(settings.look);
+  useEffect(() => {
+    look.current = settings.look;
+  }, [settings.look]);
   const [paused, setPaused] = useState(false);
   const [map, setMap] = useState<"play" | "pause" | null>(null);
+  // The map's drawer (tasks, finds, the key), kept open or shut for the visit.
+  const [mapDrawer, setMapDrawer] = useState(true);
+  const tracked = trackedTask(hud?.tasks ?? [], picked);
+  useEffect(() => {
+    if (tap instanceof RoamFixtureTap) tap.track(tracked);
+  }, [tap, tracked]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [announce, setAnnounce] = useState("");
   const [filing, setFiling] = useState<string | null>(null);
@@ -340,6 +368,8 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
       onMap: toggleMap,
       enabled: () => !autopilot && !gate.current.paused && !gate.current.map && loop.status === "live",
       onStick,
+      lookSensitivity: () => look.current,
+      webAtOnce: () => WEB_AT_ONCE.has(loop.view.roam?.move ?? "ground"),
     });
     controls.current = c;
     return () => {
@@ -403,6 +433,10 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
     rememberSettings({ steady });
     setSettings((s) => ({ ...s, steady }));
   };
+  const setLook = (v: number) => {
+    rememberSettings({ look: v });
+    setSettings((s) => ({ ...s, look: v }));
+  };
 
   const modal = paused || !!map;
   const still = settings.steady || reducedMotion;
@@ -421,7 +455,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
           role="application"
           aria-label={
             touch
-              ? "The city. Drag on the left to run; hold the right side to swing; the buttons by your right thumb jump, zip, talk and sprint."
+              ? "The city. Drag on the left to run; drag anywhere else to look around, and hold there to swing; the buttons by your right thumb jump, zip, talk and sprint."
               : "The city. WASD runs, Shift sprints, Space jumps, F or the mouse swings, Q zips, E talks, Escape pauses."
           }
         >
@@ -438,6 +472,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
             paused={modal}
             tap={tap}
           />
+          {hud ? <CityWaypoint tap={tap} tracked={tracked} still={still} /> : null}
           <div ref={stickRing} aria-hidden data-active="false" className="pointer-events-none absolute left-0 top-0 opacity-0 will-change-transform data-[active=true]:opacity-100 motion-safe:transition-[opacity] motion-safe:duration-150">
             <span className="absolute block rounded-full border-[2.5px] border-dashed border-game-paper/80 bg-game-ink/25" style={{ left: -STICK_RADIUS, top: -STICK_RADIUS, width: 2 * STICK_RADIUS, height: 2 * STICK_RADIUS }} />
             <span className="absolute block rounded-full border-2 border-game-paper bg-game-ink/50" style={{ left: -STICK_DEAD_ZONE, top: -STICK_DEAD_ZONE, width: 2 * STICK_DEAD_ZONE, height: 2 * STICK_DEAD_ZONE }} />
@@ -448,9 +483,24 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         {hud ? (
           <>
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 px-3 pt-[max(12px,env(safe-area-inset-top))] sm:px-4">
-              <TaskTracker hud={hud} />
+              <TaskTracker hud={hud} tracked={tracked} />
               <div className="flex flex-col items-end gap-3">
-                <CornerButtons onMap={() => openMap("play")} onPause={() => togglePause(true)} />
+                <CornerButtons
+                  onPause={() => togglePause(true)}
+                  minimap={
+                    <CityMinimap
+                      tap={tap}
+                      city={city}
+                      heroColor={heroSuit.suit}
+                      tracked={tracked}
+                      trackedTitle={tracked ? TASKS[tracked].title : null}
+                      northUp={settings.northUp}
+                      still={still}
+                      touch={touch}
+                      onOpen={() => openMap("play")}
+                    />
+                  }
+                />
                 <Toasts toasts={toasts} />
               </div>
             </div>
@@ -476,9 +526,22 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         ) : null}
       </div>
       {paused && !map ? (
-        <RoamPause onResume={() => togglePause(false)} onMap={() => openMap("pause")} touch={touch} filing={filing} settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />} />
+        <RoamPause onResume={() => togglePause(false)} onMap={() => openMap("pause")} touch={touch} filing={filing} settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} onLook={setLook} />} />
       ) : null}
-      {map ? <RoamMap city={city} frame={loop.view} hero={heroSuit} onClose={closeMap} still={still} touch={touch} /> : null}
+      {map ? (
+        <RoamMap
+          city={city}
+          frame={tap instanceof RoamFixtureTap ? tap.dress(loop.view) : loop.view}
+          hero={heroSuit}
+          onClose={closeMap}
+          still={still}
+          touch={touch}
+          tracked={tracked}
+          onTrack={setPicked}
+          drawer={mapDrawer}
+          onDrawer={setMapDrawer}
+        />
+      ) : null}
       <p role="status" aria-live="polite" className="sr-only">
         {announce}
       </p>

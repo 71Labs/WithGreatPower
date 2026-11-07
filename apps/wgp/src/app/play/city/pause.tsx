@@ -2,7 +2,7 @@
 
 /**
  * Free roam's pause sheet: resume, the map, how to play (the keys on a keyboard, the thumbs on
- * a touch screen), the 3D settings, and the way back to tonight. What the city found so far is
+ * a touch screen), the 3D settings (the look speed among them), and the way back to tonight. What the city found so far is
  * filed when the sheet opens.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -25,13 +25,12 @@ const KEYS: [string, string][] = [
 
 const THUMBS: [string, string][] = [
   ["Left side", "Drag to run, further to go faster. Double-tap and hold to sprint"],
-  ["Right side", "Hold to swing on the web; lift to let go"],
+  ["Anywhere else", "Drag to look around (with the left thumb still running). Hold to swing on the web; in the air it swings at once. Lift to let go"],
   ["Jump", "Jump; up a wall, off it, or a launch off the end of a zip"],
   ["Zip", "Zip the web to the marked point"],
   ["Sprint", "Toggle a sprint"],
   ["Talk", "Appears when someone’s in reach (or a tag to photograph, a mast to sync)"],
   ["Drop", "Let go of a wall or a ledge"],
-  ["Two fingers", "Drag to turn the camera"],
 ];
 
 function Moves({ touch }: { touch: boolean }) {
