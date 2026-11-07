@@ -554,8 +554,9 @@ export class RoamScene {
       const head = f.pos.y + (f.cast ? 118 : 110) + (still ? 0 : Math.sin(time * 2 + f.id) * 4);
       const gives = GIVES[f.key];
       const takes = TAKES[f.key];
-      if (gives && stage(gives) === 0) put(f.pos.x, head, f.pos.z, 30, 30, KIND.marker, 0, GOLD);
-      else if (takes?.some((t) => isHandIn(t, stage(t)))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+      // A hand-in first (Uncle Gen takes the loaf before he hands out Cross-chain, as the sim does).
+      if (takes?.some((t) => isHandIn(t, stage(t)))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
+      else if (gives && stage(gives) === 0) put(f.pos.x, head, f.pos.z, 30, 30, KIND.marker, 0, GOLD);
     }
     // roam-3: an arrow over each task's next map mark: Front-run's next gate, and the nearest relay
     // still plugged in until the hold's ring takes its place.
