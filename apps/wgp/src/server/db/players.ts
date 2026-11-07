@@ -24,6 +24,14 @@ export interface NewPlayer {
  * handle; `authSub` is filled in if it was missing. The save row is created with it.
  */
 export async function findOrCreatePlayer(db: Db, input: NewPlayer): Promise<Player> {
+  return (await findOrCreatePlayerOutcome(db, input)).player;
+}
+
+/**
+ * `findOrCreatePlayer`, saying whether this call inserted the row (`created`). A sign-in
+ * attaches an invite code only to a player it created (src/server/auth/referral.ts).
+ */
+export async function findOrCreatePlayerOutcome(db: Db, input: NewPlayer): Promise<{ player: Player; created: boolean }> {
   const [created] = await db
     .insert(players)
     .values({ nearAccountId: input.nearAccountId, authKind: input.authKind, authSub: input.authSub ?? null, handle: input.handle, email: input.email ?? null })
@@ -31,16 +39,16 @@ export async function findOrCreatePlayer(db: Db, input: NewPlayer): Promise<Play
     .returning();
   if (created) {
     await ensureSave(db, created.id);
-    return created;
+    return { player: created, created: true };
   }
   const [existing] = await db.select().from(players).where(eq(players.nearAccountId, input.nearAccountId)).limit(1);
   if (!existing) throw new Error(`Player for ${input.nearAccountId} vanished`);
   const fill = { ...(!existing.authSub && input.authSub ? { authSub: input.authSub } : {}), ...(!existing.email && input.email ? { email: input.email } : {}) };
   if (Object.keys(fill).length > 0) {
     const [updated] = await db.update(players).set(fill).where(eq(players.id, existing.id)).returning();
-    return updated ?? existing;
+    return { player: updated ?? existing, created: false };
   }
-  return existing;
+  return { player: existing, created: false };
 }
 
 /** A plausible email, trimmed and lowercased, as players store it; null for anything else. Pure. */
