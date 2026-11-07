@@ -8,8 +8,9 @@
  * - Mouse: the left button holds the web, and the first click also locks the pointer to
  *   the surface for mouse look (Escape releases it). Without pointer lock, a right-button
  *   drag orbits the camera.
- * - Touch: the floating stick, hold-to-web and two-finger orbit (touch.ts).
- * - `lookSensitivity` scales mouse look, drag orbit and two-finger orbit alike.
+ * - Touch: the floating stick on the left, the web on the right (held the moment a thumb
+ *   lands), and a drag of any finger but the stick turns the camera (touch.ts).
+ * - `lookSensitivity` (the look speed setting) scales mouse look, drag orbit and touch look alike.
  *
  * While `enabled()` is false (paused, an errand sheet open) presses are ignored and keys
  * pass through to the page, so a sheet's own shortcuts (1–3 on an errand) still work.
@@ -35,8 +36,8 @@ export interface ControlsOptions {
   onStick?(visual: StickVisual): void;
   /** Lock the pointer on the first click for mouse look (default true). */
   pointerLock?: boolean;
-  /** Multiplies every look speed: mouse look, drag orbit, two-finger orbit (default 1). */
-  lookSensitivity?: number;
+  /** Multiplies every look speed: mouse look, drag orbit, touch look (default 1). A function is read on every turn, so a changed setting applies at once. */
+  lookSensitivity?: number | (() => number);
 }
 
 const isEditable = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT");
@@ -53,8 +54,14 @@ export function attachControls(opts: ControlsOptions): Controls {
   const held: Record<Direction, boolean> = { forward: false, back: false, left: false, right: false };
   let touchStick = false;
   let mouseOrbit: { id: number; x: number; y: number } | null = null;
-  const sens = opts.lookSensitivity ?? 1;
-  const orbit = (dYaw: number, dPitch: number, holding: boolean) => opts.orbit(dYaw * sens, dPitch * sens, holding);
+  const sens = () => {
+    const v = typeof opts.lookSensitivity === "function" ? opts.lookSensitivity() : opts.lookSensitivity;
+    return v ?? 1;
+  };
+  const orbit = (dYaw: number, dPitch: number, holding: boolean) => {
+    const k = sens();
+    opts.orbit(dYaw * k, dPitch * k, holding);
+  };
   const lockable = opts.pointerLock !== false && typeof surface.requestPointerLock === "function";
   const locked = () => typeof document !== "undefined" && document.pointerLockElement === surface;
   const touch = new TouchRouter({
@@ -123,7 +130,7 @@ export function attachControls(opts: ControlsOptions): Controls {
       // or the stick any more.
       if (e.isPrimary && touch.size > 0) touch.reset();
       surface.setPointerCapture(e.pointerId);
-      touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth);
+      touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth, performance.now());
       return;
     }
     if (e.button === 0) {
@@ -146,7 +153,7 @@ export function attachControls(opts: ControlsOptions): Controls {
 
   const onPointerMove = (e: PointerEvent) => {
     if (e.pointerType === "touch") {
-      touch.move(e.pointerId, e.clientX, e.clientY);
+      touch.move(e.pointerId, e.clientX, e.clientY, performance.now());
       return;
     }
     if (locked()) {

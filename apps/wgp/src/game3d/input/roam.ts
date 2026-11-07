@@ -11,7 +11,10 @@
  * - Escape or P pauses, M opens the city map. Mouse look locks the pointer on the first click.
  *
  * Touch: the left of the screen is the floating stick (double-tap it to sprint while it's held),
- * the rest holds the web; the HUD's buttons push jump, zip, act, drop and the sprint toggle.
+ * the rest is the open screen: drag there to look round, hold there to swing (at once in the
+ * air; on a roof or a wall a thumb that drags first is a look, never a web: touch.ts). The
+ * stick and a look go together, one thumb each. The HUD's buttons push jump, zip, act, drop
+ * and the sprint toggle.
  *
  * The latch queues one-shots so two presses in one tick both count, a tick each, and sends
  * the sprint one-shot every tick it's held (the sim keeps a sprint SPRINT_GRACE ticks).
@@ -19,7 +22,7 @@
 import { SHOT_ACT, SHOT_DROP, SHOT_JUMP, SHOT_SPRINT, SHOT_ZIP } from "@wgp/game-core/sim3d/roam";
 import type { InputFrame } from "@wgp/game-core/sim3d/contract";
 
-import { LOOK_PITCH_PER_PX, LOOK_YAW_PER_PX, ORBIT_PITCH_PER_PX, ORBIT_YAW_PER_PX } from "./bindings";
+import { LOOK_PITCH_PER_PX, LOOK_YAW_PER_PX, ORBIT_PITCH_PER_PX, ORBIT_YAW_PER_PX, WEB_HOLD_MS } from "./bindings";
 import { InputLatch } from "./latch";
 import { keysStick, stickInput, type View } from "./stick";
 import { TouchRouter, type StickVisual } from "./touch";
@@ -121,7 +124,10 @@ export interface RoamControlsOptions {
   onMap(): void;
   enabled(): boolean;
   onStick?(visual: StickVisual): void;
-  lookSensitivity?: number;
+  /** The look speed setting: a multiplier on every look; a function is read on every turn, so a change applies at once. */
+  lookSensitivity?: number | (() => number);
+  /** Whether a thumb on the web side holds the web the moment it lands (in the air), else it waits to see if it drags (default: at once). */
+  webAtOnce?(): boolean;
 }
 
 const isEditable = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT");
@@ -140,8 +146,29 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
   let touchOn = false;
   let lastStickEnd = -Infinity;
   let mouseOrbit: { id: number; x: number; y: number } | null = null;
-  const sens = opts.lookSensitivity ?? 1;
-  const orbit = (dy: number, dp: number, holding: boolean) => opts.orbit(dy * sens, dp * sens, holding);
+  const sens = () => {
+    const v = typeof opts.lookSensitivity === "function" ? opts.lookSensitivity() : opts.lookSensitivity;
+    return v ?? 1;
+  };
+  const orbit = (dy: number, dp: number, holding: boolean) => {
+    const k = sens();
+    opts.orbit(dy * k, dp * k, holding);
+  };
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearPoll = () => {
+    if (pollTimer !== null) clearTimeout(pollTimer);
+    pollTimer = null;
+  };
+  /** A web-side thumb waiting to see if it drags: decide it once it has stayed put long enough. */
+  const schedulePoll = () => {
+    clearPoll();
+    if (!touch.waiting) return;
+    pollTimer = setTimeout(() => {
+      pollTimer = null;
+      touch.poll(performance.now());
+      schedulePoll();
+    }, WEB_HOLD_MS + 4);
+  };
   const lockable = typeof surface.requestPointerLock === "function";
   const locked = () => typeof document !== "undefined" && document.pointerLockElement === surface;
   const now = () => performance.now() / 1000;
@@ -149,6 +176,7 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
   const touch = new TouchRouter({
     latch: latch.base,
     orbit,
+    webAtOnce: opts.webAtOnce,
     stick: (v) => {
       if (v.active && !touchOn) {
         // A double tap of the stick sprints while the thumb stays down.
@@ -172,6 +200,7 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
 
   const letGo = () => {
     held.forward = held.back = held.left = held.right = false;
+    clearPoll();
     touch.reset();
     touchOn = false;
     if (mouseOrbit) opts.orbit(0, 0, false);
@@ -225,7 +254,8 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
       e.preventDefault();
       if (e.isPrimary && touch.size > 0) touch.reset();
       surface.setPointerCapture(e.pointerId);
-      touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth);
+      touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth, performance.now());
+      if (touch.waiting) schedulePoll();
       return;
     }
     if (e.button === 0) {
@@ -241,7 +271,7 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
 
   const onPointerMove = (e: PointerEvent) => {
     if (e.pointerType === "touch") {
-      touch.move(e.pointerId, e.clientX, e.clientY);
+      touch.move(e.pointerId, e.clientX, e.clientY, performance.now());
       return;
     }
     if (locked()) {
@@ -280,6 +310,7 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
   return {
     release: letGo,
     detach: () => {
+      clearPoll();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", letGo);
