@@ -181,6 +181,21 @@ describe("Cross-chain: holding interact on a relay", () => {
     expect(fillRoamFrame(run.sim, newRenderFrame()).roam!.relay).toBeNull();
   });
 
+  it("keeps a hold begun at the edge of reach: the sparks' shoves never pull the relay out of his hands", () => {
+    // On the crane's jib, stopped the moment the prompt shows (as a player does), out along it.
+    const r = relay("crane");
+    const run = quiet(startRoamRun(at(r.x, 716.2489302158356, r.z + r.fz * (RELAY_REACH - 2), -r.fx, -r.fz, cross(1))));
+    stepRoamRun(run, IDLE);
+    expect(actTarget(run.sim)).toEqual({ kind: "unplug", relay: 0 });
+    const states: string[] = [];
+    for (let t = 0; t < RELAY_HOLD; t++) states.push(...relayEvents(stepRoamRun(run, ACT)));
+    expect(states).toEqual(["hold", "spark", "spark", "unplugged"]);
+    // Shoved past where a new hold could start, still standing on the jib.
+    expect(Math.hypot(run.sim.hero.x - r.x, run.sim.hero.z - r.z)).toBeGreaterThan(RELAY_REACH);
+    expect(run.sim.roam!.body.move).toBe("ground");
+    expect(run.sim.hero.y - 26).toBeCloseTo(716.2489302158356, 3);
+  });
+
   it("letting go resets the relay: a release or a jump in the middle, and the hold starts over", () => {
     const run = quiet(startRoamRun(atAntenna()));
     stepRoamRun(run, IDLE);

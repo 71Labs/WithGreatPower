@@ -22,4 +22,4 @@ export { greenLeft, placeCar, trafficLoops } from "./traffic";
 export { knockPhase } from "./knock";
 export { columnTop, ledgeOpen } from "../parkour/geometry";
 export { crosschainTour, relayClimb, roamBotFrame, newRoamBot, roamTour, streetRoute, type RoamBotGoal, type RoamBotMemory } from "./bot";
-export { RELAY_HALF, RELAY_HALF_Y, RELAY_HOLD, RELAY_KNOCK, RELAY_REACH, RELAY_RISE, RELAY_SPARKS, relaySolids, type RoamMark } from "./task-crosschain";
+export { RELAY_HALF, RELAY_HALF_Y, RELAY_HOLD, RELAY_KEEP, RELAY_KNOCK, RELAY_REACH, RELAY_RISE, RELAY_SPARKS, relaySolids, type RoamMark } from "./task-crosschain";

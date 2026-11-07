@@ -12,8 +12,9 @@
  * - Unplugging: interact held RELAY_HOLD ticks (1.5 s) within reach (RELAY_REACH across,
  *   RELAY_RISE up or down, on his feet, on a wall or hanging from a ledge). The relay fights back:
  *   at RELAY_SPARKS ticks into the hold it sparks and shoves him back a step (RELAY_KNOCK, slow
- *   enough that a roof's edge still stops him). Letting go (a frame without interact, out of
- *   reach, knocked off his feet) resets that relay's progress.
+ *   enough that a roof's edge still stops him); a hold under way keeps its relay RELAY_KEEP
+ *   further out, so the shove alone never breaks it. Letting go (a frame without interact, out
+ *   of reach, knocked off his feet) resets that relay's progress.
  * - How a hold is logged: the interact one-shot (SHOT_ACT) is sent every tick the button is down,
  *   as sprint is (constants.ts). RoamHold.act remembers last tick's, so a talk, a photo or a sync
  *   takes only a hold's first tick (step.ts) and a relay takes every tick of it.
@@ -35,13 +36,18 @@ export const RELAY_SPARKS: readonly number[] = [30, 60];
 export const RELAY_REACH = 78;
 export const RELAY_RISE = 92;
 /**
+ * A hold once begun keeps its relay this much further out (across and up or down), so a spark's
+ * shove never pulls it out of the hands of a hero who started at the edge of reach.
+ */
+export const RELAY_KEEP = 30;
+/**
  * The shove a spark gives (units a second, away from the relay, on his feet only): about a step.
  * Friction takes it under EDGE_WALK on the next tick, so a roof's edge (or a crane's jib) stops him.
  */
 export const RELAY_KNOCK = 210;
-/** A relay's box: half its width across, half its height. */
-export const RELAY_HALF = 9;
-export const RELAY_HALF_Y = 12;
+/** A relay's box: half its width across, half its height (a big junction box, about 0.5 by 0.6 m). */
+export const RELAY_HALF = 12;
+export const RELAY_HALF_Y = 15;
 /**
  * A bridge tower's relay stands this far in from its leg's outer face (to its box's near side):
  * clear of where a climber pulls up onto the cap (his body, R across, on the cap's middle line
@@ -177,22 +183,26 @@ export function relaySolids(relays: readonly RoamRelay[]): SolidBox[] {
 
 /* ------------------------------------------------------------------ the hold */
 
-/** The relay he could unplug now (the task under way, not yet unplugged, in reach, the body able), or −1. */
+/**
+ * The relay he could unplug now (the task under way, not yet unplugged, in reach, the body able),
+ * or −1. The one he's holding stays in reach RELAY_KEEP further out.
+ */
 export function relayInReach(s: SimState): number {
   const r = s.roam!;
   if (r.progress.stage[CX] !== 1 || !canTalk(s)) return -1;
   const got = r.progress.items[CX];
   const h = s.hero;
   let best = -1;
-  let bd = RELAY_REACH;
+  let bd = Infinity;
   const list = r.world.relays;
   for (let i = 0; i < list.length; i++) {
     if (got & (1 << i)) continue;
     const rl = list[i];
+    const keep = i === r.hold.relay ? RELAY_KEEP : 0;
     const dy = h.y - rl.y;
-    if (dy > RELAY_RISE || dy < -RELAY_RISE) continue;
+    if (dy > RELAY_RISE + keep || dy < -RELAY_RISE - keep) continue;
     const d = len2(rl.x - h.x, rl.z - h.z);
-    if (d < bd) {
+    if (d < RELAY_REACH + keep && d < bd) {
       bd = d;
       best = i;
     }
