@@ -2,7 +2,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { TASK_DONE } from "@wgp/game-core/city";
+import { TASK_DONE, TASK_IDS } from "@wgp/game-core/city";
 import { roamCity, roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import { marksFixture, renderFrameFixture, roamFrameFixture, type RoamFixture } from "@/game3d/nav/roam-fixture";
@@ -152,8 +152,11 @@ describe("the city map", () => {
     expect(still).not.toMatch(/class="[^"]*wgp-pulse/);
   });
 
-  it("says every task's done once they are", () => {
-    const t = text(render({ stage: { bread: TASK_DONE, pickpocket: TASK_DONE, pixels: TASK_DONE, graffiti: TASK_DONE } }));
+  it("says every task's done once they are (all six, not just the first four)", () => {
+    const t = text(render({ stage: Object.fromEntries(TASK_IDS.map((id) => [id, TASK_DONE])) }));
     expect(t).toContain("Every task’s done. The pages and the masts are still out there.");
+    // Four done, Front-run and Cross-chain still to pick up: not all done.
+    const four = text(render({ stage: { bread: TASK_DONE, pickpocket: TASK_DONE, pixels: TASK_DONE, graffiti: TASK_DONE } }));
+    expect(four).not.toContain("Every task’s done.");
   });
 });
