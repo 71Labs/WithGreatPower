@@ -24,7 +24,7 @@ import type { CastId } from "@wgp/game-core/cast";
 import type { SuitColors } from "@/components/cast";
 import type { LoopEvent3D } from "@/game3d/session";
 
-import { playSfx, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
+import { playSfx, playSting, setAmbience, setAudioPaused, stopMusic } from "@/audio/player";
 import { STICK_DEAD_ZONE, STICK_RADIUS, stickKnob, viewFromPose, type StickVisual } from "@/game3d/input";
 import { attachRoamControls, RoamLatch, type RoamControls } from "@/game3d/input/roam";
 import { FrameTap } from "@/game3d/nav/tap";
@@ -37,7 +37,7 @@ import { useCoarsePointer, useReducedMotion } from "@/sim/ui/hooks";
 
 import { initialSettings, rememberSettings, SettingsPanel, type GraphicsChoice, type PlaySettings } from "../patrol/settings";
 import { Loading } from "../patrol/status";
-import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
+import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, RaceChip, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
 import { RoamMap } from "./map";
 import { RoamPause } from "./pause";
 
@@ -54,8 +54,11 @@ html:has([data-city]), html:has([data-city]) body { overscroll-behavior: none; o
 [data-city], [data-city] * { -webkit-tap-highlight-color: transparent; }
 `;
 
-/** The allies on their roofs (their bodies come with the city's zones). */
-const CAST: CastId[] = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson"];
+/**
+ * The allies on their roofs (their bodies come with the city's zones), and roam-3's Front-run:
+ * Gwei Stacy at her stall and Sandwich Man, who races you (their files queue behind the hero's).
+ */
+const CAST: CastId[] = ["aunt-mainnet", "uncle-gen", "mary-jpeg", "bearson", "gwei", "sandwich-man"];
 /** File a beat after a find, and at least this often while playing. */
 const FILE_AFTER_FIND_MS = 1200;
 const FILE_EVERY_MS = 120_000;
@@ -191,6 +194,21 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         case "roam-splash":
           playSfx("street-thud", { volume: 0.5 });
           break;
+        // roam-3: Front-run's race (the task's own start and finish come as roam-task).
+        case "roam-race":
+          if (ev.state === "start") {
+            playSting("sting-sandwich-man");
+            setAnnounce("The race is on. Six gates, in order, then the buyer. Sandwich Man’s running too.");
+          } else if (ev.state === "lost") {
+            playSfx("bread-clap", { volume: 0.7 });
+            toast({ tone: "info", title: ev.why === "river" ? "The parcel’s in the river" : "Sandwich Man filled it first", body: "Gwei will give you the order again. Talk to her to race." });
+            setAnnounce(ev.why === "river" ? "You dropped the parcel in the river. The race is lost." : "Sandwich Man reached the buyer first. The race is lost.");
+          } else if (ev.state === "reset") setAnnounce("Back at Gwei Stacy’s stall. Talk to her to race again.");
+          break;
+        case "roam-gate":
+          playSfx("release-perfect", { volume: 0.5, rate: 1 + ev.got * 0.04 });
+          setAnnounce(ev.got === ev.of ? `Gate ${ev.got} of ${ev.of}. Now the buyer.` : `Gate ${ev.got} of ${ev.of}.`);
+          break;
         case "roam-car-hit":
           // roam-2: knocked down by a car (the scene bursts and shakes; he gets up on his own).
           playSfx("pow", { volume: 0.55 + 0.35 * Math.min(1, ev.speed / 330) });
@@ -258,6 +276,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
             chat: r.chat,
             act: loop.view.roam?.act ?? null,
             bot: { state: r.bot.state, x: Math.round(r.bot.x), y: Math.round(r.bot.y), z: Math.round(r.bot.z) },
+            race: { ...r.race, frame: loop.view.roam?.race ?? null },
             input: s.input,
             pose: handle.current?.pose() ?? null,
           };
@@ -456,6 +475,7 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
             </div>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 pb-[max(16px,env(safe-area-inset-bottom))]">
               <FirstHint touch={touch} hud={hud} />
+              <RaceChip hud={hud} />
               <SpeechBubble hud={hud} />
               <ActPrompt hud={hud} touch={touch} />
             </div>

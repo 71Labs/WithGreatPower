@@ -7,7 +7,7 @@
  * - Top: the task tracker (what's next on each task under way) and the finds so far (pages,
  *   viewpoints); the map and pause buttons.
  * - Bottom middle: what E does here ("Talk to Aunt Mainnet"), and the line someone said, in a
- *   paper speech bubble.
+ *   paper speech bubble; over them, Front-run's race chip while its race is on (roam-3).
  * - Finds pop up as toasts (a page's headline, a task done, the XP it paid).
  * - Touch: the move buttons by the right thumb (jump, zip, the act button when there's
  *   something to do, let go while on a wall, the sprint toggle); the left of the screen is
@@ -125,6 +125,41 @@ export function SpeechBubble({ hud }: { hud: RoamHud }) {
         {/* The tail points down at the street. */}
         <span aria-hidden className="absolute -bottom-[11px] left-10 size-5 rotate-45 border-b-[2.5px] border-r-[2.5px] border-game-ink bg-game-paper" />
       </div>
+    </div>
+  );
+}
+
+/** What the race chip says: the score while Front-run's race runs, how it ended, or how to go again. */
+export function raceChipText(hud: RoamHud): { tone: "race" | "won" | "lost" | "again"; title: string; detail: string } | null {
+  const r = hud.race;
+  const stage = hud.tasks.find((t) => t.id === "frontrun")?.stage ?? 0;
+  if (!r) return stage === 1 ? { tone: "again", title: "Front-run", detail: "Talk to Gwei Stacy to race again" } : null;
+  if (r.over === "won") return { tone: "won", title: "Order filled", detail: "You beat Sandwich Man to the buyer" };
+  if (r.over === "lost") return { tone: "lost", title: r.why === "river" ? "The parcel’s in the river" : "Sandwich Man filled it first", detail: "Back to Gwei’s stall" };
+  const lead = r.heroGate > r.rivalGate ? "You’re ahead" : r.heroGate < r.rivalGate ? "He’s ahead" : "Neck and neck";
+  return { tone: "race", title: `Gate ${r.heroGate} of ${r.of} · Sandwich Man: gate ${r.rivalGate}`, detail: lead };
+}
+
+/** Front-run's race chip: "Gate 3 of 6 · Sandwich Man: gate 4", who's ahead, then how it ended. */
+export function RaceChip({ hud }: { hud: RoamHud }) {
+  const t = raceChipText(hud);
+  if (!t) return null;
+  const mark = t.tone === "won" ? "bg-game-mint" : "bg-game-gold";
+  return (
+    <div className="pointer-events-none flex justify-center px-4">
+      <p role="status" aria-live="polite" className="wgp-pop flex max-w-full items-center gap-2.5 rounded-[22px] border-[2.5px] border-game-ink bg-game-paper py-1.5 pl-1.5 pr-4 text-game-ink shadow-[var(--game-shadow-sm)]">
+        {t.tone === "race" || t.tone === "lost" ? (
+          <Face id="sandwich-man" className="size-8" />
+        ) : (
+          <span aria-hidden className={`grid size-8 shrink-0 place-items-center rounded-full border-2 border-game-ink ${mark}`}>
+            {t.tone === "won" ? <Check className="size-4" strokeWidth={3} /> : <Zap className="size-4" strokeWidth={2.25} />}
+          </span>
+        )}
+        <span className="flex min-w-0 flex-col">
+          <span className="num text-[14px] font-bold leading-[18px] text-pretty">{t.title}</span>
+          <span className="text-[12px] font-medium leading-4 text-pretty text-game-muted">{t.detail}</span>
+        </span>
+      </p>
     </div>
   );
 }
