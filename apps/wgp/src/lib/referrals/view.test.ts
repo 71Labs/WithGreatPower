@@ -4,6 +4,7 @@ import type { InvitedFriend, ReferralReward, ReferralsView } from "./api";
 import {
   checkClaimInput,
   claimProblem,
+  crewArrivalToast,
   crewChecklist,
   crewWelcomeText,
   friendSteps,
@@ -159,6 +160,27 @@ describe("the friend's checklist", () => {
     expect(crewChecklist({ view: { referredBy: "sele", self: { x: false, played: false, qualified: false } }, xHandle: "nora" })).toEqual({ referrer: "sele", x: true, played: false });
     expect(crewChecklist({ view: { referredBy: "sele", self: { x: false, played: true, qualified: false } }, xHandle: "nora" })).toBeNull();
     expect(crewChecklist({ view: { referredBy: "sele", self: { x: true, played: false, qualified: false } }, xHandle: null })).toEqual({ referrer: "sele", x: false, played: false });
+  });
+
+  it("tells a player who signed in after arriving from an invite how it went", () => {
+    const base = { referredBy: null, canClaim: false, fromInvite: true, fresh: true, newAccount: true, inviter: "sele" };
+    // A new account the sign-in attached.
+    expect(crewArrivalToast({ ...base, referredBy: "sele" })).toEqual({ text: "You joined sele’s crew.", tone: "success" });
+    // An existing account: not attached by a link, so pointed at the code while it can still add one.
+    expect(crewArrivalToast({ ...base, canClaim: true, fresh: false, newAccount: false })).toEqual({
+      text: "You already have an account, so add sele’s invite code under Invite friends to join their crew.",
+      tone: "info",
+    });
+    expect(crewArrivalToast({ ...base, canClaim: true, inviter: null })?.text).toBe("You already have an account, so add your friend’s invite code under Invite friends to join their crew.");
+    expect(crewArrivalToast({ ...base, fresh: false, newAccount: false })).toEqual({ text: "You already have an account, so this invite can’t add you to sele’s crew.", tone: "info" });
+  });
+
+  it("welcomes a new crew member once without an invite visit, and stays quiet otherwise", () => {
+    const base = { referredBy: "sele", canClaim: false, fromInvite: false, fresh: true, newAccount: true, inviter: null };
+    expect(crewArrivalToast(base)).toEqual({ text: "You joined sele’s crew.", tone: "success" });
+    expect(crewArrivalToast({ ...base, fresh: false })).toBeNull();
+    expect(crewArrivalToast({ ...base, newAccount: false })).toBeNull();
+    expect(crewArrivalToast({ ...base, referredBy: null, canClaim: true })).toBeNull();
   });
 
   it("welcomes them by the inviter's handle; guests are asked to sign in", () => {

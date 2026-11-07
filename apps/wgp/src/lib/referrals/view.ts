@@ -196,3 +196,28 @@ export function crewWelcomeText(referrer: string | null, guest: boolean): string
   const who = referrer ? `${referrer}’s` : "a friend’s";
   return guest ? `You joined ${who} crew. Sign in so your nights count for them.` : `You joined ${who} crew.`;
 }
+
+/**
+ * What a signed-in player hears once their referrals load, or null.
+ * - `fromInvite`: they came through an invite link (/play?invited=1) and haven't been told how
+ *   it went since signing in, even if they heard the guest toast first.
+ * - `fresh`: not welcomed in this browser yet; `newAccount`: the account is under a week old.
+ * - `inviter`: the handle the invite landing saw.
+ * An existing account isn't added to a crew by a link: it's pointed at "Got an invite code?"
+ * while that's open, and told plainly when it isn't.
+ */
+export function crewArrivalToast(input: {
+  referredBy: string | null;
+  canClaim: boolean;
+  fromInvite: boolean;
+  fresh: boolean;
+  newAccount: boolean;
+  inviter: string | null;
+}): { text: string; tone: "success" | "info" } | null {
+  if (input.referredBy) return input.fromInvite || (input.fresh && input.newAccount) ? { text: crewWelcomeText(input.referredBy, false), tone: "success" } : null;
+  if (!input.fromInvite) return null;
+  const whose = input.inviter ? `${input.inviter}’s` : "your friend’s";
+  return input.canClaim
+    ? { text: `You already have an account, so add ${whose} invite code under Invite friends to join their crew.`, tone: "info" }
+    : { text: `You already have an account, so this invite can’t add you to ${whose} crew.`, tone: "info" };
+}
