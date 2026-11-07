@@ -46,6 +46,13 @@ export const RATE_LIMITS = {
   socialPerPlayer: { limit: 20, windowMs: 60_000 },
   /** GET /api/social/card/run/:id (public; cached by the CDN once drawn). */
   cardPerIp: { limit: 60, windowMs: 60_000 },
+  /** GET /api/referrals: the invite page. */
+  referralsPerPlayer: { limit: 60, windowMs: 60_000 },
+  /** POST /api/referrals/claim: a code is allowed once, so a few tries is plenty (and codes can't be guessed this way). */
+  referralClaimPerPlayer: { limit: 8, windowMs: 10 * 60_000 },
+  referralClaimPerIp: { limit: 30, windowMs: 10 * 60_000 },
+  /** GET /api/invite/:code and …/accept (public). */
+  invitePerIp: { limit: 60, windowMs: 60_000 },
 } satisfies Record<string, RateLimit>;
 
 const MAX_KEYS = 50_000;

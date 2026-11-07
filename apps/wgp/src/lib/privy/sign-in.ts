@@ -14,6 +14,7 @@
  */
 import { actions, buildDelegateAction, PublicKey } from "near-api-js";
 
+import { withRef } from "../referrals/ref";
 import { GAME_CONTRACT_ID, RPC_URLS } from "../near/config";
 import { DELEGATE_TTL_BLOCKS, SESSION_KEY_ALLOWANCE, SESSION_KEY_METHODS, isImplicitAccountId } from "../near/policy";
 import { accessKeyNonce, finalBlockHeight, makeProvider } from "../near/rpc";
@@ -96,11 +97,15 @@ export async function finishPrivySignIn(opts: { handle?: string } = {}): Promise
   const api = await whenPrivy({ authenticated: true, timeoutMs: 30_000 });
   await api.ensureNearWallet();
   const key = opts.handle ? await keyForNewAccount() : await ensureSessionKey();
-  const body = await post<Partial<PrivySignIn> & { needsHandle?: boolean; suggestedHandle?: string; parentId?: string }>("/api/auth/privy", {
-    accessToken: await api.accessToken(),
-    handle: opts.handle,
-    sessionPublicKey: key.publicKey,
-  });
+  // `ref`: the invite code this browser holds, in case the invite cookie was lost.
+  const body = await post<Partial<PrivySignIn> & { needsHandle?: boolean; suggestedHandle?: string; parentId?: string }>(
+    "/api/auth/privy",
+    withRef({
+      accessToken: await api.accessToken(),
+      handle: opts.handle,
+      sessionPublicKey: key.publicKey,
+    }),
+  );
   if (body.needsHandle) return { status: "needs-handle", suggestedHandle: body.suggestedHandle, parentId: body.parentId };
   if (!body.accountId) throw new PrivySignInError("The server didn’t say which account you’re on", "bad_response");
   if (body.sessionKeyLive) await bindSessionKey(body.accountId);

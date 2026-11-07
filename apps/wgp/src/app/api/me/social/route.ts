@@ -1,12 +1,15 @@
 /**
  * PUT /api/me/social { xHandle: string | null, xTagOk: boolean } → 200 { social }
+ *   409 x_taken: another player already added that handle (compared lowercased, without the @)
  * DELETE /api/me/social → 200 { social } (handle removed, tagging off)
  * The signed-in player's X handle (1–15 of A–Z, a–z, 0–9 and _, any leading @ dropped)
  * and whether drafts may tag them. Self-reported and unverified; off by default.
+ * A saved handle may make the player count for whoever invited them (docs/referrals.md).
  */
 import { z } from "zod";
 
 import { requireSession } from "@/server/auth/session";
+import { checkReferralsSoon } from "@/server/background";
 import { getDb } from "@/server/db/client";
 import { assertJson, handle, json, readJson } from "@/server/http";
 import { RATE_LIMITS, rateLimiter } from "@/server/rate-limit";
@@ -19,7 +22,9 @@ export const PUT = handle("me/social", async (request: Request) => {
   rateLimiter.enforce("me-social", session.playerId, RATE_LIMITS.socialPerPlayer);
   assertJson(request);
   const input = await readJson(request, body, 1024);
-  return json({ social: await setXProfile(await getDb(), session.playerId, input) });
+  const social = await setXProfile(await getDb(), session.playerId, input);
+  if (social.xHandle) checkReferralsSoon({ friend: session.playerId });
+  return json({ social });
 });
 
 export const DELETE = handle("me/social", async (request: Request) => {

@@ -5,8 +5,10 @@
 import { z } from "zod";
 
 import type { Db } from "@/server/db/client";
-import { findOrCreatePlayer } from "@/server/db/players";
+import { findOrCreatePlayerOutcome } from "@/server/db/players";
 import type { Player } from "@/server/db/schema";
+
+import { refField } from "./referral";
 
 export function devAuthEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.NODE_ENV !== "production" && env.ALLOW_DEV_AUTH === "1";
@@ -19,9 +21,11 @@ export const devLoginBody = z.object({
     .toLowerCase()
     .regex(/^[a-z0-9][a-z0-9-]{1,30}$/, "2–31 characters: a–z, 0–9 and dashes")
     .default("dev-hero"),
+  /** An invite code (docs/referrals.md), attached if this sign-in creates the player. */
+  ref: refField,
 });
 
-/** A dev player per handle, under a namespace no real NEAR account uses. */
-export function findOrCreateDevPlayer(db: Db, handle: string): Promise<Player> {
-  return findOrCreatePlayer(db, { nearAccountId: `${handle}.dev.wgp.testnet`, authKind: "dev", authSub: `dev:${handle}`, handle });
+/** A dev player per handle, under a namespace no real NEAR account uses. `created`: this call made them. */
+export function findOrCreateDevPlayer(db: Db, handle: string): Promise<{ player: Player; created: boolean }> {
+  return findOrCreatePlayerOutcome(db, { nearAccountId: `${handle}.dev.wgp.testnet`, authKind: "dev", authSub: `dev:${handle}`, handle });
 }

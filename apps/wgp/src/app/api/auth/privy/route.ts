@@ -6,10 +6,12 @@
  * issuer, audience = our app id, expiry) and reads the user's verified email and NEAR
  * wallet from Privy, never from the body (src/server/auth/privy.ts).
  *
- * Body: { accessToken, handle?, sessionPublicKey? }
+ * Body: { accessToken, handle?, sessionPublicKey?, ref? }
  *   accessToken       Privy's access token (getAccessToken())
  *   handle            new players only, while the factory is live: <handle>.<FACTORY_ACCOUNT_ID>
  *   sessionPublicKey  this browser's ed25519 session key ("ed25519:…")
+ *   ref               an invite code, used when the `wgp_ref` cookie is missing: attached only
+ *                     when this sign-in creates the player (docs/referrals.md)
  *
  * new player, factory live, no handle  200 { needsHandle: true, suggestedHandle?, parentId }
  *     Post again with the same token (or a fresh one) and a handle.
@@ -28,6 +30,7 @@
 import { z } from "zod";
 
 import { isUnclaimed } from "@/lib/near/policy";
+import { attachInviteOnSignIn, refField } from "@/server/auth/referral";
 import { createSession } from "@/server/auth/session";
 import { privySignIn } from "@/server/auth/privy-sign-in";
 import { identityFromToken, openFactory, privyRoute } from "@/server/auth/privy-route";
@@ -42,6 +45,7 @@ const body = z.object({
   accessToken: z.string().min(20).max(8 * 1024),
   handle: z.string().max(40).optional(),
   sessionPublicKey: publicKey.optional(),
+  ref: refField,
 });
 
 export const POST = handle("auth/privy", (request: Request) =>
@@ -59,6 +63,7 @@ export const POST = handle("auth/privy", (request: Request) =>
 
     const { player } = outcome;
     await createSession(player.id, request);
+    await attachInviteOnSignIn(db, request, { playerId: player.id, created: outcome.fresh, ref: input.ref });
     return json(
       {
         accountId: player.nearAccountId,

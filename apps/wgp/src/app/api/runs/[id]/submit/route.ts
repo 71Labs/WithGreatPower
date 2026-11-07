@@ -18,7 +18,7 @@ import { refreshBoards } from "@/server/db/leaderboard-cache";
 import { submitRun } from "@/server/db/runs";
 import { HttpError, clientIp, handle, json, notFound, readJson } from "@/server/http";
 import { RATE_LIMITS, rateLimiter } from "@/server/rate-limit";
-import { draftSocialSoon, sendMintsSoon, sweepSoon } from "@/server/background";
+import { checkReferralsSoon, draftSocialSoon, sendMintsSoon, sweepSoon } from "@/server/background";
 import { VERIFY_RULES } from "@/server/verify";
 
 const MAX_LOG_BASE64 = Math.ceil(VERIFY_RULES.maxLogBytes / 3) * 4;
@@ -45,6 +45,9 @@ export const POST = handle("runs/submit", async (request: Request, { params }: {
 
   const outcome = await submitRun(await getDb(), { playerId: session.playerId, runId: id, log, clientHash: input.clientHash });
   sweepSoon();
+  // Referrals: a verified run may make this player count for their referrer, and any finished
+  // run frees this player's own reward if it was held back while the run was in flight.
+  checkReferralsSoon({ friend: outcome.status === "verified" ? session.playerId : undefined, referrer: session.playerId });
   if (outcome.status === "verified") {
     if (outcome.tags.length > 0) {
       refreshBoards(outcome.tags);

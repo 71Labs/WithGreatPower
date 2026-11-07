@@ -24,6 +24,8 @@ import { EXPLORER_URL, NETWORK, PLAYER_PARENT_ID } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 import { clearPrivyFailure, endOAuthReturn, getPrivyState, requestPrivy, signOutOfPrivy, usePrivyReturning } from "@/lib/privy/bridge";
 import { GOOGLE_SIGN_IN, PRIVY_APP_ID } from "@/lib/privy/config";
+import { forgetInvite } from "@/lib/referrals/ref";
+import { InviteRow } from "@/components/referrals/invite-tile";
 
 import { googleProblem, walletProblem, type SignInProblem } from "./errors";
 import { HandleField, handleProblem } from "./handle-field";
@@ -125,6 +127,7 @@ function SignedIn({ me, problem }: { me: Me; problem: SignInProblem | null }) {
         </Suspense>
       )}
       <XHandleSection me={me} />
+      <InviteRow onNavigate={closeAccountSheet} />
       <div className="flex flex-col gap-1.5">
         <StickerMeter label="Ranked runs today" value={used} max={limit} fill="bg-game-gold" />
         <p className="text-[13px] leading-5 text-game-muted">
@@ -227,8 +230,11 @@ export function AccountSheet() {
     const next = await refreshAccount();
     reset();
     closeAccountSheet();
-    if (next.status === "signed-in") showToast(`Signed in as ${next.me.player.handle}.${note ? ` ${note}` : ""}`, "success");
-    else showToast("Signed in, but the server didn’t remember it. Try again.", "error");
+    if (next.status === "signed-in") {
+      // The invite code went with the sign-in request (`ref`), and the server has decided on it.
+      forgetInvite();
+      showToast(`Signed in as ${next.me.player.handle}.${note ? ` ${note}` : ""}`, "success");
+    } else showToast("Signed in, but the server didn’t remember it. Try again.", "error");
   }
 
   /** A failed Google step: say why, and offer the options again. */

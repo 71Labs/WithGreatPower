@@ -14,7 +14,7 @@
 import { isUnclaimed } from "@/lib/near/policy";
 import type { Db } from "@/server/db/client";
 import { movePlayerAccount } from "@/server/db/move-account";
-import { findOrCreatePlayer, findPlayerForLogin, rememberEmail } from "@/server/db/players";
+import { findOrCreatePlayerOutcome, findPlayerForLogin, rememberEmail } from "@/server/db/players";
 import type { Player } from "@/server/db/schema";
 import { HttpError, badRequest, conflict } from "@/server/http";
 import { HandleError, normalizeHandle, playerAccountId, suggestHandle, type AccountKeys } from "@/server/near/factory";
@@ -39,6 +39,8 @@ export type PrivySignIn =
       player: Player;
       /** This sign-in made the player. */
       created: boolean;
+      /** This sign-in inserted the player's row (an invite attaches only then; src/server/auth/referral.ts). */
+      fresh: boolean;
       /** The account-creation transaction, when one was sent. */
       txHash: string | null;
       /** This browser's session key can play now. */
@@ -99,7 +101,7 @@ export async function privySignIn(
     assertNotBanned(found.player);
     const player = await rememberEmail(db, found.player, identity.email);
     const live = input.sessionPublicKey ? (await liveSessionKeys(db, player.id)).includes(input.sessionPublicKey) : false;
-    return { kind: "signed-in", player, created: false, txHash: null, sessionKeyLive: live, linked: found.linked };
+    return { kind: "signed-in", player, created: false, fresh: false, txHash: null, sessionKeyLive: live, linked: found.linked };
   }
 
   // A new player: their Privy NEAR wallet is the key their account will hold.
@@ -110,19 +112,19 @@ export async function privySignIn(
   if (!factory) {
     // The factory isn't live yet: play now on the key's implicit account, claim a name later.
     const handle = input.handle ? normalizeHandle(input.handle) : unclaimedHandle(near.implicitAccountId);
-    const player = await findOrCreatePlayer(db, { nearAccountId: near.implicitAccountId, authKind: "privy", authSub: identity.userId, handle, email: identity.email });
+    const { player, created: fresh } = await findOrCreatePlayerOutcome(db, { nearAccountId: near.implicitAccountId, authKind: "privy", authSub: identity.userId, handle, email: identity.email });
     assertNotBanned(player);
-    return { kind: "signed-in", player, created: player.authSub === identity.userId, txHash: null, sessionKeyLive: false, linked: false };
+    return { kind: "signed-in", player, created: player.authSub === identity.userId, fresh, txHash: null, sessionKeyLive: false, linked: false };
   }
 
   if (!input.handle) return { kind: "needs-handle", suggestedHandle: suggestHandle(identity.email ?? undefined), parentId: factory.parentId };
   if (!input.sessionPublicKey) throw badRequest("sessionPublicKey is required to create an account");
   const handle = normalizeHandle(input.handle);
   const made = await createOrAdopt(factory, { handle, userPublicKey: near.publicKey, sessionPublicKey: input.sessionPublicKey });
-  const player = await findOrCreatePlayer(db, { nearAccountId: made.accountId, authKind: "privy", authSub: identity.userId, handle, email: identity.email });
+  const { player, created: fresh } = await findOrCreatePlayerOutcome(db, { nearAccountId: made.accountId, authKind: "privy", authSub: identity.userId, handle, email: identity.email });
   assertNotBanned(player);
   if (made.sessionKeyLive) await addSessionKey(db, { playerId: player.id, publicKey: input.sessionPublicKey, addTx: made.txHash });
-  return { kind: "signed-in", player, created: true, txHash: made.txHash, sessionKeyLive: made.sessionKeyLive, linked: false };
+  return { kind: "signed-in", player, created: true, fresh, txHash: made.txHash, sessionKeyLive: made.sessionKeyLive, linked: false };
 }
 
 /* ------------------------------------------------------------------ claiming a name */

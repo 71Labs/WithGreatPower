@@ -86,11 +86,22 @@ export const players = pgTable(
     xHandle: text("x_handle"),
     /** Opt-in to being tagged on X when they place on a board. Off by default; drafts use the in-game handle otherwise. */
     xTagOk: boolean("x_tag_ok").notNull().default(false),
+    /**
+     * The player's invite code (migration 0008): 7 of Crockford base32, uppercase, set the
+     * first time they open their invite page (src/server/db/referrals.ts). Null until then.
+     */
+    referralCode: text("referral_code"),
+    /** Who invited this player: set once, by the sign-in that created them carrying a code, or by a late claim. */
+    referredBy: uuid("referred_by").references((): AnyPgColumn => players.id, { onDelete: "set null" }),
+    referredAt: at("referred_at"),
   },
   (t) => [
     uniqueIndex("players_near_account_id_key").on(t.nearAccountId),
     uniqueIndex("players_auth_sub_key").on(t.authSub),
     index("players_email_idx").on(t.email),
+    uniqueIndex("players_referral_code_key").on(t.referralCode),
+    // A referrer's friends.
+    index("players_referred_by_idx").on(t.referredBy).where(sql`referred_by IS NOT NULL`),
   ],
 );
 
@@ -427,6 +438,26 @@ export const socialDraftLog = pgTable(
   },
   (t) => [index("social_draft_log_draft_idx").on(t.draftId, t.at)],
 );
+
+/* ------------------------------------------------------------------ referrals */
+
+/**
+ * The "Invite 3 friends" reward (src/server/db/referrals.ts): one row per player, ever, written
+ * in the transaction that adds the XP to their save and queues the Recruiter badge. The primary
+ * key is what makes the grant idempotent.
+ */
+export const referralRewards = pgTable("referral_rewards", {
+  playerId: uuid("player_id")
+    .primaryKey()
+    .references(() => players.id, { onDelete: "cascade" }),
+  /** Qualified friends it took (3). */
+  goal: integer("goal").notNull(),
+  /** The qualified friends' player ids when it was granted. */
+  friends: jsonb("friends").notNull(),
+  /** XP added to the save. */
+  xp: integer("xp").notNull(),
+  grantedAt: at("granted_at").notNull().defaultNow(),
+});
 
 export type Player = typeof players.$inferSelect;
 export type SocialDraft = typeof socialDrafts.$inferSelect;
