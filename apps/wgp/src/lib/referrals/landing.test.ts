@@ -10,6 +10,10 @@ import { loadLandingInvite, requestOrigin, toLanding } from "./landing";
 
 let requestHeaders: Headers;
 vi.mock("next/headers", () => ({ headers: async () => requestHeaders }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: async () => {},
+}));
 
 type Reply = { status: number; body: unknown } | "network";
 let reply: Reply;
