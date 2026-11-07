@@ -10,7 +10,11 @@ import { useSyncExternalStore } from "react";
 /** `window.dispatchEvent(new Event("wgp:sign-in"))` opens the account sheet. */
 export const SIGN_IN_EVENT = "wgp:sign-in";
 
+/** A field the sheet should open on: "x", the X handle (the invite checklist's "Add your X"). */
+export type AccountSheetFocus = "x";
+
 let open = false;
+let focus: AccountSheetFocus | null = null;
 const listeners = new Set<() => void>();
 
 function set(next: boolean) {
@@ -19,16 +23,28 @@ function set(next: boolean) {
   listeners.forEach((l) => l());
 }
 
+function subscribe(l: () => void) {
+  listeners.add(l);
+  return () => listeners.delete(l);
+}
+
 export const openAccountSheet = () => set(true);
-export const closeAccountSheet = () => set(false);
+export const closeAccountSheet = () => {
+  focus = null;
+  set(false);
+};
+
+/** Opens the sheet with focus on one field (signed in), e.g. "x". */
+export function openAccountSheetAt(target: AccountSheetFocus) {
+  focus = target;
+  set(true);
+}
 
 export function useAccountSheetOpen(): boolean {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => open,
-    () => false,
-  );
+  return useSyncExternalStore(subscribe, () => open, () => false);
+}
+
+/** The field the open sheet was asked to start on, if any. */
+export function useAccountSheetFocus(): AccountSheetFocus | null {
+  return useSyncExternalStore(subscribe, () => (open ? focus : null), () => null);
 }

@@ -12,6 +12,7 @@
  */
 import { Suspense, lazy, useEffect } from "react";
 
+import { CrewWelcome } from "@/components/referrals/crew-welcome";
 import { PrivyBridgeError, beginOAuthReturn, reportPrivyFailure, usePrivyWanted } from "@/lib/privy/bridge";
 import { GOOGLE_SIGN_IN } from "@/lib/privy/config";
 
@@ -55,6 +56,8 @@ export function AccountCenter({ chrome }: { chrome: boolean }) {
       {/* One sheet at a time: the offer waits until the sign-in sheet has closed. */}
       <MigrationSheet blocked={sheetOpen} />
       <GameToaster raised={chrome} />
+      {/* "You joined {handle}’s crew.": from an invite link (/play?invited=1), or once signed in with an inviter. */}
+      <CrewWelcome />
       {privyWanted ? (
         <Suspense fallback={null}>
           <PrivyHost />

@@ -8,6 +8,7 @@ import type { Action } from "@wgp/game-core/engine";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import type { CasesResponse } from "@/lib/cases/types";
+import { withRef } from "@/lib/referrals/ref";
 import type { ClaimInfo } from "@/server/auth/privy-sign-in";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { CaseOutcome } from "@/server/db/cases";
@@ -58,7 +59,8 @@ export interface ActionResponse {
 
 export type MigrateResponse = ImportResult;
 
-async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<ApiResult<T>> {
+/** The shared fetcher, for other typed API modules (src/lib/referrals/api.ts). */
+export async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<ApiResult<T>> {
   const { json, ...rest } = init;
   const headers = new Headers(rest.headers);
   if (json !== undefined) headers.set("content-type", "application/json");
@@ -84,8 +86,11 @@ export const getMe = (signal?: AbortSignal) => call<MeResponse>("/api/me", { sig
 
 export const signOut = () => call<{ signedIn: false }>("/api/me", { method: "DELETE" });
 
-/** Local development only (ALLOW_DEV_AUTH=1): signs in as a throwaway test player. */
-export const devSignIn = (handle?: string) => call<{ player: { id: string; handle: string } }>("/api/auth/dev", { method: "POST", json: handle ? { handle } : {} });
+/**
+ * Local development only (ALLOW_DEV_AUTH=1): signs in as a throwaway test player. Carries
+ * the invite code this browser holds (`ref`), in case the invite cookie was lost.
+ */
+export const devSignIn = (handle?: string) => call<{ player: { id: string; handle: string } }>("/api/auth/dev", { method: "POST", json: withRef(handle ? { handle } : {}) });
 
 /** Whether dev sign-in is switched on here: ok only with ALLOW_DEV_AUTH=1 outside production, 404 otherwise. */
 export const devSignInAvailable = (signal?: AbortSignal) => call<{ enabled: true }>("/api/auth/dev", { signal });

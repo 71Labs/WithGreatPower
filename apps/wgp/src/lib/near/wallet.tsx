@@ -13,6 +13,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { NearConnector } from "@hot-labs/near-connect";
 
+import { withRef } from "../referrals/ref";
+
 import { GAME_CONTRACT_ID, NETWORK, RPC_URLS } from "./config";
 import { SESSION_KEY_ALLOWANCE, TGAS } from "./policy";
 import { bindSessionKey, createSessionKey } from "./session-key";
@@ -148,13 +150,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       network: NETWORK,
     });
     if (signed.accountId !== id) throw new Error("The wallet signed with another account");
-    const result = await postWallet<{ accountId: string }>({
-      action: "verify",
-      accountId: id,
-      publicKey: signed.publicKey,
-      signature: signed.signature,
-      token: challenge.token,
-    });
+    // `ref`: the invite code this browser holds, in case the invite cookie was lost.
+    const result = await postWallet<{ accountId: string }>(
+      withRef({
+        action: "verify",
+        accountId: id,
+        publicKey: signed.publicKey,
+        signature: signed.signature,
+        token: challenge.token,
+      }),
+    );
     return result.accountId;
   }, [accountId, connect, connector]);
 

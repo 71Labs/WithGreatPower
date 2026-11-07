@@ -7,6 +7,7 @@ import { HeroArt } from "@/components/cast";
 import { StickerButton, StickerChip, StickerFrame, StickerMeter, StickerPanel } from "@/components/game/kit";
 import { GameLoading, GameSheet, StickerTabs, tabPanelProps, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { Check, Lock, Sparkles } from "@/components/icons";
+import { InviteTile } from "@/components/referrals/invite-tile";
 import { MAX_LOADOUT, POWERS, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
 import type { PowerId, Stats } from "@wgp/game-core/types";
@@ -393,6 +394,9 @@ export function HeroSheet() {
       <StickerPanel className="p-4 [--vs-focus:var(--game-hero)] sm:p-5" {...tabPanelProps(TABS_ID, tab)}>
         {tab === "overview" ? <Overview save={save} /> : tab === "powers" ? <Powers save={save} /> : <Loadout save={save} />}
       </StickerPanel>
+
+      {/* "Invite 3 friends": the Recruiter badge sits on the hero too. */}
+      <InviteTile className="sm:max-w-[420px]" />
 
       <PickPowerSheet save={save} open={picking && picks > 0} onClose={() => setPicking(false)} onLearn={learn} />
     </div>
