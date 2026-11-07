@@ -47,6 +47,8 @@ const nextConfig: NextConfig = {
   // (src/server/social/fonts.ts): ship those files with the functions that draw them.
   outputFileTracingIncludes: {
     "/api/social/card/**": ["./public/fonts/NeueMontreal-*"],
+    // The invite link's card image (src/app/invite/[code]/opengraph-image.tsx).
+    "/invite/**": ["./public/fonts/NeueMontreal-*"],
   },
   images: {
     // AVIF where the browser takes it (about a fifth smaller than WebP for the landing's stills).
