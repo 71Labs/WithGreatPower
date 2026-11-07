@@ -14,9 +14,13 @@ import { refreshAccount, showToast } from "@/game/store";
 import { removeXProfile, saveXProfile, type Me } from "@/lib/api/client";
 import { X_HANDLE_MAX, normalizeXHandle } from "@/lib/social/x";
 
+import { useAccountSheetFocus } from "./sheet-state";
+
 export function XHandleSection({ me }: { me: Me }) {
   const saved = me.social ?? { xHandle: null, xTagOk: false, verified: false };
   const ids = useId();
+  // Opened from "Add your X" (the invite checklist): the sheet starts on this field.
+  const startHere = useAccountSheetFocus() === "x";
   const inputRef = useRef<HTMLInputElement>(null);
   const [handle, setHandle] = useState(saved.xHandle ?? "");
   const [tagOk, setTagOk] = useState(saved.xTagOk);
@@ -38,6 +42,8 @@ export function XHandleSection({ me }: { me: Me }) {
     setBusy(null);
     if (!res.ok) {
       setError(res.status === 0 ? "Couldn’t reach the server. Try again." : (res.message ?? "Couldn’t save your handle. Try again."));
+      // A refusal of the handle itself (e.g. 409 x_taken, field "xHandle"): back to the field it's about.
+      if (res.body?.field === "xHandle") inputRef.current?.focus();
       return;
     }
     setHandle(res.data.social.xHandle ?? "");
@@ -94,6 +100,7 @@ export function XHandleSection({ me }: { me: Me }) {
               }}
               aria-invalid={error ? true : undefined}
               aria-describedby={`${ids}-x-help`}
+              data-autofocus={startHere ? "" : undefined}
               className="h-11 min-w-0 flex-1 rounded-r-[10px] bg-transparent pl-0.5 pr-3 text-[16px] font-semibold text-game-ink outline-none"
             />
           </div>
