@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TASK_DONE } from "@wgp/game-core/city";
+import { TASK_DONE, TASK_IDS } from "@wgp/game-core/city";
 import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import { marksFixture, roamFrameFixture } from "./roam-fixture";
@@ -39,6 +39,23 @@ describe("free roam's task targets", () => {
     expect(taskTarget("frontrun", { ...r, marks: [] }, spawn, w)).toMatchObject({ kind: "folk", at: { x: giver("frontrun").x, z: giver("frontrun").z } });
   });
 
+  it("sends Cross-chain to its next relay, then back to Uncle Gen, its giver (he takes only the bread)", () => {
+    const uncle = giver("crosschain");
+    expect(uncle.key).toBe("uncle");
+    expect(uncle.takes).toBe("bread");
+    expect(w.folks.some((f) => f.takes === "crosschain")).toBe(false);
+    const relays = marksFixture("relay", "crosschain", spawn, { unplugged: 2 });
+    expect(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: 1 }, marks: relays }), spawn, w)).toMatchObject({ kind: "relay", who: "the next relay" });
+    // Stage 2 (every relay down): it has no taker, so the map falls back to the giver, with the
+    // relays all done in the frame or none sent at all (it used to crash the map).
+    const down = marksFixture("relay", "crosschain", spawn, { unplugged: 4 }).map((m) => ({ ...m, next: false }));
+    const at = { x: uncle.x, z: uncle.z };
+    expect(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: 2 }, marks: down }), spawn, w)).toMatchObject({ kind: "folk", who: "Uncle Gen", at });
+    expect(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: 2 } }), spawn, w)).toMatchObject({ kind: "folk", who: "Uncle Gen", at });
+    expect(whereLine(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: 2 } }), spawn, w), spawn, false)).toMatch(/^Cross-chain: Uncle Gen is \d+ m /);
+    expect(taskTarget("crosschain", roamFrameFixture(w, { stage: { crosschain: TASK_DONE } }), spawn, w)).toBeNull();
+  });
+
   it("follows the pickpocket bot while it runs", () => {
     const bot = { x: 1234, y: 300, z: 2345 };
     const r = roamFrameFixture(w, { stage: { pickpocket: 1 }, bot });
@@ -72,7 +89,7 @@ describe("free roam's task targets", () => {
 });
 
 describe("the tracked task", () => {
-  const tasks = (s: Record<string, number>) => ["bread", "pickpocket", "pixels", "graffiti"].map((id) => ({ id, stage: s[id] ?? 0, got: 0 }));
+  const tasks = (s: Record<string, number>) => TASK_IDS.map((id) => ({ id, stage: s[id] ?? 0, got: 0 }));
 
   it("is the one you picked while it isn't done, a new one included", () => {
     expect(trackedTask(tasks({ bread: 1, pixels: 1 }), "pixels")).toBe("pixels");
