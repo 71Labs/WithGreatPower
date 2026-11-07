@@ -107,6 +107,9 @@ import {
   FolderSearch01Icon,
   Camera01Icon,
   Cursor01Icon,
+  CrosshairIcon,
+  ElectricPlugsIcon,
+  ListViewIcon,
 } from "@hugeicons/core-free-icons";
 
 export type IconProps = Omit<ComponentProps<"svg">, "ref"> & { strokeWidth?: number; size?: number | string };
@@ -223,6 +226,9 @@ export const Folder = make(Folder01Icon, "Folder");
 export const FolderSearch = make(FolderSearch01Icon, "FolderSearch");
 export const Camera = make(Camera01Icon, "Camera");
 export const Cursor = make(Cursor01Icon, "Cursor");
+export const Crosshair = make(CrosshairIcon, "Crosshair");
+export const Plug = make(ElectricPlugsIcon, "Plug");
+export const ListView = make(ListViewIcon, "ListView");
 
 /** Lucide's `LucideIcon` type, for components that take an icon as a prop. */
 export type LucideIcon = Icon;

@@ -178,6 +178,11 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const controls = useRef<Controls | null>(null);
   const lastAnnounce = useRef(0);
   const [settings, setSettings] = useState<PlaySettings>(initialSettings);
+  // The look speed for the controls, read on every turn (a change applies without re-attaching them).
+  const look = useRef(settings.look);
+  useEffect(() => {
+    look.current = settings.look;
+  }, [settings.look]);
   const [paused, setPaused] = useState(false);
   /** The city map: open over play (the night paused for it) or over the pause sheet. */
   const [map, setMap] = useState<"play" | "pause" | null>(null);
@@ -422,6 +427,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
         return !autopilot && !g.paused && !g.map && !g.errand && !g.ended && (loop.status === "live" || loop.status === "intro");
       },
       onStick,
+      lookSensitivity: () => look.current,
     });
     controls.current = c;
     return () => {
@@ -514,6 +520,10 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
   const setSteady = (steady: boolean) => {
     rememberSettings({ steady });
     setSettings((s) => ({ ...s, steady }));
+  };
+  const setLook = (v: number) => {
+    rememberSettings({ look: v });
+    setSettings((s) => ({ ...s, look: v }));
   };
   const setNorthUp = useCallback((northUp: boolean) => {
     rememberSettings({ northUp });
@@ -686,7 +696,7 @@ export function PlaySurface({ session, autopilot, debug, onDone, ended, onFallba
           touch={touch}
           onResume={() => togglePause(false)}
           onMap={() => openMap("pause")}
-          settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} />}
+          settings={<SettingsPanel settings={settings} onTier={pickTier} onSteady={setSteady} onLook={setLook} />}
           help={vote ? <VoteTips touch={touch} /> : feeOn ? <FeeTips touch={touch} /> : chapterOn ? <ChapterTips touch={touch} /> : undefined}
         />
       ) : null}

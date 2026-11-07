@@ -192,7 +192,7 @@ export function stickerBitmap(art: CanvasImageSource, px: number): HTMLCanvasEle
 
 /* ------------------------------------------------------------------ shared marks */
 
-function heroArrow(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number, fill: string) {
+export function heroArrow(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number, fill: string) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
