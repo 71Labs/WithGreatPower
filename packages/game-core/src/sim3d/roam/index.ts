@@ -1,10 +1,10 @@
 /**
- * Free roam (the City mode, `"roam"`, ruleset tag roam-2): a deterministic sim of the hero
+ * Free roam (the City mode, `"roam"`, ruleset tag roam-3): a deterministic sim of the hero
  * moving freely through one fixed city (run, sprint, jump, vault, climb, wall-run, hang, mantle,
  * roll, web-zip and, on demand, swing), its people, side tasks and collectibles, everything it
  * draws in his way solid (furniture.ts) and its street traffic, which knocks him down (traffic.ts,
- * knock.ts). Its own files, reached only through SimState.roam; patrol nights and chapters never
- * touch it.
+ * knock.ts); roam-3's held interact and Cross-chain's relays (task-crosschain.ts). Its own files,
+ * reached only through SimState.roam; patrol nights and chapters never touch it.
  */
 export * from "./constants";
 export type * from "./types";
@@ -21,4 +21,5 @@ export type { FurniturePart, PartLook, RoamDrawnProp, RoamFurniture, SolidBox } 
 export { greenLeft, placeCar, trafficLoops } from "./traffic";
 export { knockPhase } from "./knock";
 export { columnTop, ledgeOpen } from "../parkour/geometry";
-export { roamBotFrame, newRoamBot, roamTour, streetRoute, type RoamBotGoal, type RoamBotMemory } from "./bot";
+export { crosschainTour, relayClimb, roamBotFrame, newRoamBot, roamTour, streetRoute, type RoamBotGoal, type RoamBotMemory } from "./bot";
+export { RELAY_HALF, RELAY_HALF_Y, RELAY_HOLD, RELAY_KNOCK, RELAY_REACH, RELAY_RISE, RELAY_SPARKS, relaySolids, type RoamMark } from "./task-crosschain";

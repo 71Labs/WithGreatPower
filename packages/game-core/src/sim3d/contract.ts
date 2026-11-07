@@ -8,7 +8,8 @@
  * Case File 002's clues (docs/chapters/case-002.md); v1.7 (free roam, ruleset tag roam-1, patrol
  * nights untouched) the frame's `roam`, with roam-2's `roam.cars`, `roam.knock` and the move
  * "knocked" (additive); v1.8 (Case File 003, ruleset c003-1) the frame's `fee`
- * (docs/chapters/case-003.md).
+ * (docs/chapters/case-003.md); v1.9 (free roam roam-3) `roam.marks`, `roam.relay` and the act
+ * kind "unplug" (additive).
  *
  * Units: one unit ≈ one CSS pixel at 1× (the hero is ~88 tall), Y up, the street at y = 0.
  */
@@ -405,8 +406,11 @@ export interface RoamFrame {
   folks: { id: number; key: string; pos: Vec3; yaw: number; body: number; cast: string | null; talking: boolean }[];
   /** The line on screen: who said it, which (rules/city.ts FOLKS[key].lines), and what's still to find for `{left}`. */
   chat: { folk: number; line: number; left: number } | null;
-  /** What the interact button would do now: talk to folk `index`, photograph tag `index`, sync view `index`. */
-  act: { kind: "talk" | "photo" | "sync"; index: number } | null;
+  /**
+   * What the interact button would do now: talk to folk `index`, photograph tag `index`, sync view
+   * `index`; v1.9 (roam-3): "unplug", hold it to unplug relay `index` (RoamWorld.relays).
+   */
+  act: { kind: "talk" | "photo" | "sync" | "unplug"; index: number } | null;
   pages: { pos: Vec3; found: boolean }[];
   /** Viewpoints: `pos` is the perch on top of the mast; `roof` the roof it stands on. */
   views: { pos: Vec3; roof: number; synced: boolean }[];
@@ -426,6 +430,15 @@ export interface RoamFrame {
    * or getting up; seconds into that phase; the way the car pushed him (unit xz).
    */
   knock?: { phase: "flung" | "down" | "up"; t: number; dir: Vec3 } | null;
+  /**
+   * v1.9 (roam-3, additive): the map marks of the tasks under way that have places to go
+   * (Cross-chain's relays, kind "relay"; Front-run's gates, kind "gate"), in a fixed order: where,
+   * whether it's done, and the one to go for next. Empty when no such task is under way. The map
+   * and the minimap draw them; task builds fill them (sim3d/roam/task-*.ts).
+   */
+  marks?: { task: string; kind: "gate" | "relay"; pos: Vec3; done: boolean; next: boolean }[];
+  /** v1.9 (roam-3): Cross-chain's relay being held: its index (RoamWorld.relays) and how far unplugged (0–1), else null. */
+  relay?: { index: number; progress: number } | null;
 }
 
 /* ------------------------------------------------------------------ replay (server verifier) */

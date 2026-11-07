@@ -1,8 +1,9 @@
 /**
  * Free roam's part of the render frame (RenderFrame3D.roam, v1.6), filled in place after the
  * night's own fillRenderFrame: the body's move, the zip reticle, the bot, the people, what's
- * found, the cars and a knock (roam-2), and the hero's `action` read off the move for the
- * animator. Presentation only: nothing here is read back by the sim or hashed.
+ * found, the cars and a knock (roam-2), the map marks and a relay being held (v1.9, roam-3), and
+ * the hero's `action` read off the move for the animator. Presentation only: nothing here is read
+ * back by the sim or hashed.
  */
 import { HERO_RADIUS } from "../constants";
 import type { HeroAction, RenderFrame3D, RoamFrame, Vec3 } from "../contract";
@@ -10,6 +11,7 @@ import { datan2, len2 } from "../dmath";
 import { knockPhase } from "./knock";
 import type { SimState } from "../types";
 import { roamHeading } from "../parkour/move";
+import { fillRelayMarks, relayHold } from "./task-crosschain";
 import { actTarget } from "./tasks";
 import { TASK_IDS } from "./types";
 import { zipTarget } from "../parkour/zip";
@@ -58,7 +60,7 @@ interface Track {
 const tracks = new WeakMap<SimState, Track>();
 
 function emptyRoam(): RoamFrame {
-  return { move: "ground", moveT: 0, sprint: false, wall: null, path: null, zip: null, bot: null, folks: [], chat: null, act: null, pages: [], views: [], pixels: [], tags: [], tasks: [], cars: [], knock: null };
+  return { move: "ground", moveT: 0, sprint: false, wall: null, path: null, zip: null, bot: null, folks: [], chat: null, act: null, pages: [], views: [], pixels: [], tags: [], tasks: [], cars: [], knock: null, marks: [], relay: null };
 }
 
 /** Write the outing into `out.roam` (and the hero's action off the move). A night's state leaves it null. */
@@ -146,7 +148,7 @@ export function fillRoamFrame(s: SimState, out: RenderFrame3D): RenderFrame3D {
     const who = folks[r.chat.folk];
     const task = who?.gives ?? who?.takes;
     const ti = task ? TASK_IDS.indexOf(task) : -1;
-    const of = task === "pixels" ? r.world.pixels.length : task === "graffiti" ? r.world.tags.length : 0;
+    const of = task === "pixels" ? r.world.pixels.length : task === "graffiti" ? r.world.tags.length : task === "crosschain" ? r.world.relays.length : 0;
     c.left = ti >= 0 ? Math.max(0, of - bits(r.progress.items[ti])) : 0;
   } else f.chat = null;
 
@@ -154,8 +156,18 @@ export function fillRoamFrame(s: SimState, out: RenderFrame3D): RenderFrame3D {
   if (a) {
     const fa = f.act ?? (f.act = { kind: "talk", index: 0 });
     fa.kind = a.kind;
-    fa.index = a.kind === "talk" ? a.folk : a.kind === "photo" ? a.tag : a.view;
+    fa.index = a.kind === "talk" ? a.folk : a.kind === "unplug" ? a.relay : a.kind === "photo" ? a.tag : a.view;
   } else f.act = null;
+
+  // v1.9 (roam-3): the map marks of every task under way that has them, and a relay being held.
+  const marks = f.marks ?? (f.marks = []);
+  marks.length = fillRelayMarks(s, marks, 0);
+  const held = relayHold(s);
+  if (held) {
+    const fr = f.relay ?? (f.relay = { index: 0, progress: 0 });
+    fr.index = held.index;
+    fr.progress = held.progress;
+  } else f.relay = null;
 
   const p = r.progress;
   const fill = (list: { pos: Vec3; found: boolean }[], spots: readonly { x: number; y: number; z: number }[], got: number) => {

@@ -14,17 +14,20 @@ export const ROAM_MODE = "roam";
  * roam-2: everything the City draws in the hero's way is solid as drawn (roam/furniture.ts), and
  * the street traffic is in the sim (roam/traffic.ts): cars that stop at lights, queue, brake for
  * him standing in the road, and knock him flying when he isn't.
+ * roam-3: interact is held over ticks (a talk, a photo or a sync takes a hold's first tick), and
+ * Uncle Gen's side task, Cross-chain: Doc Octochain's relays on the city's highest points, solid
+ * as drawn, unplugged by holding interact (task-crosschain.ts).
  */
-export const ROAM_RULESET = "roam-2";
+export const ROAM_RULESET = "roam-3";
 /**
- * The ruleset field a roam log carries (hex "F 001 2 04": free roam, city 001, rules rev 2, on
+ * The ruleset field a roam log carries (hex "F 001 3 04": free roam, city 001, rules rev 3, on
  * patrol ruleset 4), so a roam log never replays as a patrol night or a chapter, and neither of
  * those as a roam outing. Rev 2 (roam-2): the climb's pace, and the stick back climbing down a
- * wall instead of letting go.
+ * wall instead of letting go. Rev 3 (roam-3): interact held, and the relays.
  */
-export const ROAM_LOG_RULESET = 0x0f001204;
-/** Older roam rules' log fields (roam-1's), refused as a stale outing (the server says start a fresh one). */
-export const ROAM_OLD_LOG_RULESETS: readonly number[] = [0x0f001104];
+export const ROAM_LOG_RULESET = 0x0f001304;
+/** Older roam rules' log fields (roam-1's, roam-2's), refused as a stale outing (the server says start a fresh one). */
+export const ROAM_OLD_LOG_RULESETS: readonly number[] = [0x0f001104, 0x0f001204];
 /** The same list under the climbing branch's name (roam-run.ts). */
 export const ROAM_LOG_RULESETS_PAST: readonly number[] = ROAM_OLD_LOG_RULESETS;
 
@@ -39,6 +42,10 @@ export const ROAM_CITY_SEED = 0x0c17_0002;
  * - 1 jump, 2 web-zip, 3 interact (talk, photograph, sync), 5 drop (let go of a wall or ledge).
  * - 4 sprint, sent every tick the sprint button is held; the sim keeps sprinting SPRINT_GRACE
  *   ticks past the last one, so a jump or a talk taking a tick doesn't break a sprint.
+ * - roam-3: 3 interact is held the same way, sent every tick the button is down (a tap sends it
+ *   for at least one tick). A run of 3s is one hold: its first tick is the press (a talk, a photo,
+ *   a sync), and every tick of it holds a relay (task-crosschain.ts). Any other frame ends the
+ *   hold, so a jump or a sprint tick in the middle lets go.
  */
 export const SHOT_JUMP = 1;
 export const SHOT_ZIP = 2;

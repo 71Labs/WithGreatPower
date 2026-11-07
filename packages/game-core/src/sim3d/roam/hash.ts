@@ -39,5 +39,9 @@ export function roamHashState(s: SimState): string {
   }
   // roam-2: the traffic (every car's place round its loop, speed and hold) and the knock.
   hashTraffic(r.traffic, (v) => f.num(v));
+  // roam-3: interact held (last tick's), and the relay being held and for how long.
+  f.bool(r.hold.act);
+  f.num(r.hold.relay);
+  f.num(r.hold.ticks);
   return f.hex();
 }
