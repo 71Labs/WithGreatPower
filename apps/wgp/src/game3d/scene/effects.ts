@@ -59,6 +59,9 @@ export const BURST_WORDS = {
   "SNAP!": [PAPER, INK],
   "PIXEL!": [CITY.neonMint, INK],
   "SYNCED!": [CITY.neonMint, PAPER],
+  /** Cross-chain (roam-3, scene/roam/crosschain): a relay sparks back, its plug pulled out. */
+  "ZZT!": [CITY.windowLit, INK],
+  "CLUNK!": [CITY.neonMint, INK],
 } as const;
 
 export type BurstWord = keyof typeof BURST_WORDS;

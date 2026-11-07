@@ -2,8 +2,8 @@
  * Cross-chain in the City (game-core sim3d/roam/task-crosschain.ts, roam-3): Doc Octochain's
  * four relays where the sim has them solid, drawn from the frame's v1.9 fields.
  *
- * - The relays, one instanced draw (and its ink hull): a gunmetal junction box clamped with ink
- *   straps, a steel front panel, a hazard band, Doc's green badge, a socket with a red plug in
+ * - The relays, one instanced draw (and its ink hull): a junction box in Doc's green clamped with
+ *   gunmetal straps, a steel front panel, a hazard band, his badge, a socket with a red plug in
  *   it, and a red warning lamp on top that blinks while it's live. Unplugged, the lamp goes dark
  *   and the plug hangs out of its socket. Every box lies inside the sim's solid box.
  * - Chain-link cables, one instanced draw (and its hull): two chains per relay, from the box's
@@ -12,7 +12,7 @@
  * - Sprites, one instanced draw: a lamp's glow (never smaller than a few pixels, so a live
  *   relay reads from across the city like an aircraft light) and, while one is held, a progress
  *   ring over it filling to unplugged.
- * - The relay's events: a spark ("ZZT!", yellow debris, a small shake) and "UNPLUGGED!".
+ * - The relay's events: a spark ("ZZT!", yellow debris, a small shake) and its plug out ("CLUNK!").
  *
  * Reduced motion (or the Steady camera): the lamps hold steady (no flashing), no debris, no
  * shake. Five draw calls in all, the ring's only while a relay is held.
@@ -41,8 +41,8 @@ const RING_GOLD = rgb("#FFD95A");
 const CHAINS: Record<RoamRelay["key"], { side: number; lip: number }> = {
   crane: { side: 4.5, lip: 0 },
   antenna: { side: 6.5, lip: 0 },
-  bridge: { side: 7, lip: 11 },
-  deck: { side: 7, lip: 11 },
+  bridge: { side: 9, lip: 11 },
+  deck: { side: 9, lip: 11 },
 };
 /** Box parts per relay (the plug and the lamp are the last two, moved each frame). */
 const PARTS = 9;
@@ -52,7 +52,7 @@ const MAX_LINKS = 400;
 const BLINK = { period: 1.1, on: 0.55 } as const;
 /** A lamp's glow (world size, and never under this many CSS px across), and the hold ring (this far over the box). */
 const GLOW = { size: 16, minPx: 7 } as const;
-const RING = { size: 28, minPx: 48, up: 34 } as const;
+const RING = { size: 28, minPx: 48, up: 46 } as const;
 
 const BOX_VERTEX = /* glsl */ `
 attribute vec4 aColor; // rgb, w: 1 unlit (the lamp)
@@ -277,9 +277,9 @@ export class RoamRelays {
     this.root.add(this.boxHull, this.boxes, this.linkHull, this.links, this.sprites);
   }
 
-  /** The relay's frame: its centre, right (across the front), up, out (the front). */
+  /** The relay's frame: right (across the front), up, out (the front), right-handed (right × up = out), so no box is drawn mirrored. */
   private frame(rl: RoamRelay) {
-    return { rx: -rl.fz, rz: rl.fx, ox: rl.fx, oz: rl.fz };
+    return { rx: rl.fz, rz: -rl.fx, ox: rl.fx, oz: rl.fz };
   }
 
   /** A relay's box parts, plugged in or out: all inside its solid box but the hanging plug and the lamp on top. */
@@ -289,19 +289,20 @@ export class RoamRelays {
     const hz = rl.hz;
     const face = hz;
     return [
-      { r: 0, u: 0, o: 0, w: hx * 2 - 1, h: hy * 2, d: hz * 2 - 1, color: GUNMETAL },
-      // Ink straps clamping it on, a steel front panel, the hazard band and Doc's badge.
-      { r: 0, u: hy - 5, o: 0, w: hx * 2, h: 2.2, d: hz * 2, color: C.ink },
-      { r: 0, u: -hy + 5, o: 0, w: hx * 2, h: 2.2, d: hz * 2, color: C.ink },
-      { r: 0, u: 0, o: face - 0.6, w: hx * 2 - 5, h: hy * 2 - 9, d: 1.2, color: PANEL },
-      { r: 0, u: 5.5, o: face - 0.3, w: hx * 2 - 6, h: 2.6, d: 0.8, color: HAZARD },
-      { r: -3.4, u: 0.5, o: face - 0.3, w: 4, h: 4, d: 0.8, color: DOC_GREEN },
+      // Doc's green housing (his coat's), so it reads against the night from a roof away.
+      { r: 0, u: 0, o: 0, w: hx * 2 - 1, h: hy * 2, d: hz * 2 - 1, color: DOC_GREEN },
+      // Gunmetal straps clamping it on, a steel front panel, the hazard band and Doc's badge.
+      { r: 0, u: hy - 6, o: 0, w: hx * 2, h: 2.8, d: hz * 2, color: GUNMETAL },
+      { r: 0, u: -hy + 6, o: 0, w: hx * 2, h: 2.8, d: hz * 2, color: GUNMETAL },
+      { r: 0, u: 0, o: face - 0.6, w: hx * 2 - 6, h: hy * 2 - 11, d: 1.2, color: PANEL },
+      { r: 0, u: 6.5, o: face - 0.3, w: hx * 2 - 8, h: 3.2, d: 0.8, color: HAZARD },
+      { r: -4.6, u: 0.5, o: face - 0.3, w: 5.5, h: 5.5, d: 0.8, color: GUNMETAL },
       // The socket.
-      { r: 2.6, u: -3.5, o: face - 0.3, w: 6, h: 5, d: 0.8, color: C.ink },
+      { r: 3.4, u: -4.5, o: face - 0.3, w: 8, h: 6.5, d: 0.8, color: C.ink },
       // The plug: in the socket, or pulled out and hanging by its lead under it.
-      dark ? { r: 3.8, u: -hy + 4.5, o: face + 1.6, w: 3.6, h: 6, d: 2.8, color: PLUG } : { r: 2.6, u: -3.5, o: face + 1.6, w: 4.4, h: 3.6, d: 3.4, color: PLUG },
+      dark ? { r: 5, u: -hy + 5.5, o: face + 1.8, w: 4.6, h: 7.5, d: 3.4, color: PLUG } : { r: 3.4, u: -4.5, o: face + 2, w: 5.6, h: 4.6, d: 4, color: PLUG },
       // The lamp on top.
-      { r: 0, u: hy + 2.2, o: 0, w: 5, h: 4.4, d: 5, color: dark ? LAMP_OFF : LAMP_ON, unlit: !dark },
+      { r: 0, u: hy + 2.6, o: 0, w: 6.5, h: 5.2, d: 6.5, color: dark ? LAMP_OFF : LAMP_ON, unlit: !dark },
     ];
   }
 
@@ -373,10 +374,12 @@ export class RoamRelays {
           for (let k = 0; k < steps && n < MAX_LINKS; k++) {
             const u = (k + 0.5) / steps;
             _p.set(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, a.z + (b.z - a.z) * u);
-            // The torus lies in its xy plane: x across the link, y along the chain, z its face.
-            _a.copy(turn % 2 ? _z : _x).multiplyScalar(1.25);
+            // The torus lies in its xy plane: x across the link, y along the chain, z its face
+            // (x × y, so the basis is right-handed and the link isn't drawn inside out).
+            _a.copy(turn % 2 ? _z : _x);
+            _c.crossVectors(_a, _t).multiplyScalar(1.25);
+            _a.multiplyScalar(1.25);
             _b.copy(_t).multiplyScalar(2.1);
-            _c.copy(turn % 2 ? _x : _z).multiplyScalar(1.25);
             _m.makeBasis(_a, _b, _c).setPosition(_p);
             this.links.setMatrixAt(n, _m);
             this.linkHull.setMatrixAt(n, _m);
@@ -420,7 +423,7 @@ export class RoamRelays {
       const lamp = (i * PARTS + PARTS - 1) * 4;
       const k = blinkOn ? 1 : 0.35;
       for (let c = 0; c < 3; c++) col[lamp + c] = LAMP_ON[c] * k + LAMP_OFF[c] * (1 - k);
-      this.sprite(n++, rl.x, rl.y + rl.hy + 2.5, rl.z, GLOW.size, 0, blinkOn ? 1 : 0.18, GLOW.minPx);
+      this.sprite(n++, rl.x, rl.y + rl.hy + 3, rl.z, GLOW.size, 0, blinkOn ? 1 : 0.18, GLOW.minPx);
     }
     this.color.needsUpdate = true;
     const held = r.relay;
@@ -471,15 +474,17 @@ export class RoamRelays {
   event(state: string, index: number, host: RelayHost, still: boolean): void {
     const rl = this.relays[index];
     if (!rl) return;
-    const at = { x: rl.x + rl.fx * (rl.hz + 4), y: rl.y + 34, z: rl.z + rl.fz * (rl.hz + 4) };
+    // Off to the side of the relay, clear of it and of the ring over it.
+    const side = index % 2 ? 1 : -1;
+    const at = { x: rl.x + rl.fx * (rl.hz + 6) - rl.fz * side * 44, y: rl.y + 4, z: rl.z + rl.fz * (rl.hz + 6) + rl.fx * side * 44 };
     if (state === "spark") {
-      host.burst("ZZT!", at, { size: 58, life: 0.55 });
+      host.burst("ZZT!", at, { size: 50, life: 0.5 });
       if (!still) {
         host.impact?.("POW!", at);
         host.shake?.(0.22);
       }
     } else if (state === "unplugged") {
-      host.burst("UNPLUGGED!", { x: rl.x, y: rl.y + 46, z: rl.z }, { size: 76, life: 1.1 });
+      host.burst("CLUNK!", { x: rl.x, y: rl.y + 40, z: rl.z }, { size: 84, life: 1 });
       if (!still) host.impact?.("POW!", at);
     }
   }

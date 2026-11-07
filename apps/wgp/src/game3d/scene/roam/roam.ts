@@ -533,8 +533,9 @@ export class RoamScene {
       if (gives && stage(gives) === 0) put(f.pos.x, head, f.pos.z, 30, 30, KIND.marker, 0, GOLD);
       else if (takes?.some((t) => isHandIn(t, stage(t)))) put(f.pos.x, head, f.pos.z, 26, 30, KIND.next, 0, HERO_RED);
     }
-    // roam-3: the next place a task under way wants you (the nearest relay still plugged in).
-    for (const m of r.marks ?? []) if (m.next) put(m.pos.x, m.pos.y + 62 + (still ? 0 : Math.sin(time * 2.4) * 4), m.pos.z, 24, 28, KIND.next, 0, HERO_RED);
+    // roam-3: the next place a task under way wants you (the nearest relay still plugged in), until
+    // the hold's ring takes its place.
+    if (!r.relay) for (const m of r.marks ?? []) if (m.next) put(m.pos.x, m.pos.y + 62 + (still ? 0 : Math.sin(time * 2.4) * 4), m.pos.z, 24, 28, KIND.next, 0, HERO_RED);
     // The bot's arrow while it's loose.
     if (r.bot && r.bot.state !== "caught" && stage("pickpocket") === 1) put(r.bot.pos.x, r.bot.pos.y + 108, r.bot.pos.z, 24, 28, KIND.next, 0, HERO_RED);
     // Viewpoint beams until synced.

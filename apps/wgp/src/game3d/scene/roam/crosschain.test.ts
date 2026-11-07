@@ -4,6 +4,7 @@
  * eye takes as the box), their chains on the structure under them, dark once unplugged, the ring
  * only while one is held, and five draw calls at most.
  */
+import { Matrix4 } from "three";
 import { describe, expect, it } from "vitest";
 
 import { startRoamRun, stepRoamRun } from "@wgp/game-core/roam";
@@ -67,6 +68,15 @@ describe("Cross-chain's relays in the City", () => {
     expect(held.roam!.relay).toEqual({ index: 2, progress: 0.5 });
     scene.update(held, 2, true);
     expect(scene.draws).toBe(5);
+  });
+
+  it("never draws a box or a link mirrored (a mirrored one shows its inside, and its ink hull over its face)", () => {
+    const meshes = scene as unknown as Record<"boxes" | "links", { count: number; instanceMatrix: { array: ArrayLike<number> } }>;
+    const m = new Matrix4();
+    for (const key of ["boxes", "links"] as const) {
+      const mesh = meshes[key];
+      for (let i = 0; i < mesh.count; i++) expect(m.fromArray(mesh.instanceMatrix.array, i * 16).determinant(), `${key} ${i}`).toBeGreaterThan(0);
+    }
   });
 
   it("runs its chains down the structure under each relay, within reach of it", () => {
