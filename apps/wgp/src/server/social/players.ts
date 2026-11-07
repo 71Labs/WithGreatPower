@@ -6,10 +6,10 @@
  * Verification can come later (Privy can link a Twitter account): `xHandleVerified` is the
  * one place that would read it.
  */
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { normalizeXHandle } from "@/lib/social/x";
-import { badRequest } from "@/server/http";
+import { badRequest, conflict } from "@/server/http";
 
 import type { Db } from "../db/client";
 import { players, type Player } from "../db/schema";
@@ -33,6 +33,11 @@ export const xProfile = (p: Pick<Player, "xHandle" | "xTagOk">): XProfile => ({ 
 /**
  * Sets (or with null, removes) the player's X handle and their tagging choice. Tagging
  * needs a handle; removing the handle also turns tagging off.
+ *
+ * A handle another player already added (compared lowercased) is refused, 409 x_taken: an
+ * invited friend counts by their X handle (docs/referrals.md). There's no unique index, since
+ * older rows may already share one, so a player keeping the handle they have is let through,
+ * and saves of one handle take a transaction lock so two players can't both take it at once.
  */
 export async function setXProfile(db: Db, playerId: string, input: { xHandle: string | null; xTagOk: boolean }): Promise<XProfile> {
   let handle: string | null = null;
@@ -42,11 +47,27 @@ export async function setXProfile(db: Db, playerId: string, input: { xHandle: st
     handle = checked.handle;
   }
   if (input.xTagOk && !handle) throw badRequest("Add your X handle before turning on tags.", { field: "xTagOk" });
-  const [row] = await db
-    .update(players)
-    .set({ xHandle: handle, xTagOk: !!handle && input.xTagOk })
-    .where(eq(players.id, playerId))
-    .returning({ xHandle: players.xHandle, xTagOk: players.xTagOk });
+  const row = await db.transaction(async (tx) => {
+    if (handle) {
+      const key = handle.toLowerCase();
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`wgp:x-handle:${key}`}))`);
+      const [mine] = await tx.select({ xHandle: players.xHandle }).from(players).where(eq(players.id, playerId)).limit(1);
+      if (mine?.xHandle?.toLowerCase() !== key) {
+        const [other] = await tx
+          .select({ id: players.id })
+          .from(players)
+          .where(and(sql`lower(${players.xHandle}) = ${key}`, ne(players.id, playerId)))
+          .limit(1);
+        if (other) throw conflict("x_taken", "Another player already added that X handle. If it’s yours, remove it from the other account first.", { field: "xHandle" });
+      }
+    }
+    const [updated] = await tx
+      .update(players)
+      .set({ xHandle: handle, xTagOk: !!handle && input.xTagOk })
+      .where(eq(players.id, playerId))
+      .returning({ xHandle: players.xHandle, xTagOk: players.xTagOk });
+    return updated;
+  });
   if (!row) throw badRequest("No such player");
   return xProfile(row);
 }
