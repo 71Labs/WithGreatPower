@@ -265,13 +265,15 @@ node ../../scripts/near/fetch-deployed-wasm.mjs game.wgpnear.near target/near/wg
 bash rollback/build.sh                                # target/near/wgp-v2-rollback.wasm
 ```
 
-**2. Rehearse.** The sandbox test does the whole upgrade from the live wasm, then the rollback and the upgrade again:
+**2. Rehearse.** The sandbox tests do the whole upgrade from the live wasm, then the rollback and the upgrade again. The last command repeats it on a copy of mainnet's contract as it is at that moment, code and state, pulled into a local sandbox with read-only queries (nothing is sent to mainnet; the copies get sandbox keys):
 
 ```sh
-cd contracts/wgp/sandbox && cargo test -- --nocapture --test-threads=1
+cd contracts/wgp/sandbox
+cargo test -- --nocapture --test-threads=1
+WGP_MAINNET_REHEARSAL=1 cargo test --test mainnet_rehearsal -- --nocapture
 ```
 
-Better still, do steps 3 to 6 on testnet first (`MODE=upgrade KEYCHAIN=legacy scripts/near/deploy-testnet.sh`).
+Run the rehearsal again right before step 4: it checks the state that will actually be migrated. Steps 3 to 6 can also be tried on testnet first (`MODE=upgrade KEYCHAIN=legacy scripts/near/deploy-testnet.sh`).
 
 **3. Deploy the token images** (this branch's `apps/wgp/public/tokens`) so the URLs answer before the metadata points at them. Check `https://www.wgponnear.fun/tokens/bits.png`.
 
@@ -362,7 +364,7 @@ Three levels, mildest first.
 
 Two days before the deadline, honestly:
 
-- **It is a state migration on a live contract with real players' assets.** The migration rewrites one storage entry (the root) and touches no player, listing or season entry; it is tested from the exact live wasm in a sandbox, and a failed migration undoes the deploy. But the sandbox state is one I made, not mainnet's. The strongest rehearsal left undone is running the upgrade against a copy of mainnet's actual state (near-workspaces can import it) or on testnet.
+- **It is a state migration on a live contract with real players' assets.** The migration rewrites one storage entry (the root) and touches no player, listing or season entry, and a failed migration undoes the deploy. It was rehearsed on Nov 12 on a sandbox copy of mainnet's contract and state (63 storage entries): after the upgrade the 62 entries other than the root were byte-identical, every v2 view answered the same, a real seller's copy cancelled a listing and traded, and v2 → v3 → rollback gave back the original state byte for byte. That is strong evidence, not proof: mainnet's state will have moved by the time you upgrade (rerun the rehearsal), and a sandbox is not mainnet's protocol version to the letter, which is what the import guard is for.
 - **No independent review.** About 1,600 new lines of contract code, written and tested by one author in one day. The investing maths is small and its invariants are tested, but nobody else has tried to break it. Keeping `invest_open` false after the upgrade means the new money-moving code can't run until you choose.
 - **The app doesn't use any of it yet.** Metadata and enumeration help a screener or a wallet immediately. Investing has no UI, the relayer doesn't allow its methods, and the refusal texts don't know its messages. Opened on chain without the app, only someone calling the contract directly can invest, with nothing explaining the risk of waiting.
 - **Turning on the crafting cost before the app shows it** would make crafts fail with no explanation. It stays 0 until you set it.
@@ -395,5 +397,6 @@ The market UI is untouched on this branch.
 | Sandbox: v2's own tests on the v3 wasm | `contracts/wgp/sandbox/tests/sandbox.rs` | pass |
 | Sandbox: upgrade from the live v2 wasm, v3 methods, second upgrade, rollback and back | `contracts/wgp/sandbox/tests/upgrade_v3.rs` | pass |
 | Sandbox: an upgrade the account can't pay storage for | same file | fails whole, v2 intact; passes after a top-up |
+| Sandbox: the upgrade, v3 views, a trade and the rollback on a copy of mainnet's code and state | `contracts/wgp/sandbox/tests/mainnet_rehearsal.rs` (`WGP_MAINNET_REHEARSAL=1`; skipped otherwise) | pass on Nov 12: 63 entries, only the root changed; 65.2 Tgas |
 
 The sandbox tests need cargo-near 0.22 and the three wasms from step 1 of the upgrade.
