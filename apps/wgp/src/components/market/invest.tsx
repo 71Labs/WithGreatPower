@@ -15,7 +15,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { StickerButton, StickerPanel } from "@/components/game/kit";
 import { GameSheet } from "@/components/game/ui";
-import { CircleAlert, HandCoins, KeyRound, Lock, RotateCcw, TestTube, TriangleAlert } from "@/components/icons";
+import { CircleAlert, ExternalLink, HandCoins, KeyRound, Lock, RotateCcw, TestTube, TriangleAlert } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
@@ -467,12 +467,15 @@ export function PracticeBanner({
   seededFrom,
   signedIn,
   drainName,
+  live = null,
   onDrain,
   onReset,
   onLeave,
 }: {
   seededFrom: "near" | "simulated" | "defaults" | null;
   signedIn: boolean;
+  /** The real market's contract, when it is on chain: a guest can still go and look at it. */
+  live?: { network: string; contractId: string; href: string } | null;
   /** The item a staged crowd would empty the till of, or null when every shop is already broke. */
   drainName: string | null;
   onDrain(): void;
@@ -508,6 +511,19 @@ export function PracticeBanner({
           <StickerButton size="sm" onClick={onLeave} className="max-sm:w-full">
             Go back to the real market
           </StickerButton>
+        ) : null}
+        {/* The real market is still one tap away to look at: its contract, on the explorer. */}
+        {live ? (
+          <a
+            href={live.href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-[8px] px-1 text-[13px] font-semibold text-game-ink underline decoration-game-ink/40 underline-offset-[3px] [overflow-wrap:anywhere] [text-decoration-skip-ink:auto] focus-visible:outline-offset-2 pointer-coarse:min-h-11 pointer-fine:hover:decoration-game-ink"
+          >
+            See the real market on NEAR {live.network}: {live.contractId}
+            <ExternalLink aria-hidden className="size-4 shrink-0" strokeWidth={2} />
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
         ) : null}
       </div>
     </section>

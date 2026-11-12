@@ -560,6 +560,7 @@ export function MarketScreen() {
           seededFrom={practice.seededFrom}
           signedIn={signedIn}
           drainName={practice.drainItem ? (view?.items.find((i) => i.item === practice.drainItem)?.name ?? null) : null}
+          live={liveView?.onChain && liveView.contractId ? { network: liveView.network ?? "", contractId: liveView.contractId, href: `${EXPLORER_URL}/address/${liveView.contractId}` } : null}
           onDrain={() => {
             const item = practice.drainItem;
             const name = view?.items.find((i) => i.item === item)?.name ?? "that item";

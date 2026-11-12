@@ -204,6 +204,15 @@ describe("the player's stakes", () => {
 });
 
 describe("the practice market's labels", () => {
+  it("still points a guest at the real market's contract when it is on chain", () => {
+    const live = { network: "mainnet", contractId: "game.wgpnear.near", href: "https://nearblocks.io/address/game.wgpnear.near" };
+    const out = html(createElement(PracticeBanner, { seededFrom: "near", signedIn: false, drainName: null, live, onDrain: noop, onReset: noop, onLeave: noop }));
+    expect(out).toContain('href="https://nearblocks.io/address/game.wgpnear.near"');
+    expect(text(out)).toContain("See the real market on NEAR mainnet: game.wgpnear.near");
+    // Simulated, there is no contract to show.
+    expect(html(createElement(PracticeBanner, { seededFrom: "simulated", signedIn: false, drainName: null, onDrain: noop, onReset: noop, onLeave: noop }))).not.toContain("See the real market");
+  });
+
   it("carries the label word for word, where its prices came from, and its controls", () => {
     const words = text(html(createElement(PracticeBanner, { seededFrom: "near", signedIn: false, drainName: "Crumbs", onDrain: noop, onReset: noop, onLeave: noop })));
     expect(words).toContain(PRACTICE_LABEL);
