@@ -6,27 +6,41 @@
  * other. Guests read prices; signed-in players buy, sell and list. On chain, trades are
  * session-key calls with no popup ("quick play"); until the contract's market is live,
  * the server runs the same rules and everything is flagged as simulated.
+ *
+ * The market is part of the nightly loop, not a side room: a link from the results, the
+ * Suit lab or Tonight (src/lib/market/prompts.ts) opens the trade sheet prefilled; the
+ * player's next trade and today's market quest sit above the prices; a first visit gets a
+ * three-step coach; and whatever stops a player trading (signed out, no name, quick play
+ * off) is said in one sentence on the sheet's own button instead of hiding the buttons.
  */
-import { createElement, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createElement, useEffect, useState } from "react";
 
 import { StickerButton, StickerFrame, StickerPanel } from "@/components/game/kit";
 import { StickerTabs, tabPanelProps, type StickerTab } from "@/components/game/ui";
 import { AVATARS } from "@/components/cast";
 import { CircleAlert, Coins, ExternalLink, Hourglass, KeyRound, LogIn, Store, Tag } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { showToast, useAccount } from "@/game/store";
+import { showToast, useAccount, useGame } from "@/game/store";
 import { RARITY_LABEL } from "@wgp/game-core/data";
+import type { ItemId } from "@wgp/game-core/types";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
 import type { MarketParams } from "@/lib/market/config";
+import { holdingsOf, MARKET_PATH, nextTrade, parseTradeIntent } from "@/lib/market/prompts";
+import { countsForQuest } from "@/lib/market/quest";
 import { explainPrice } from "@/lib/market/reasoning";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
+import { COACH_RING, CoachCard, coachSteps, markCoachSeen, useCoachSeen } from "./coach";
 import { ITEM_SOURCE, VENDOR_AFTER, vendorLine } from "./copy";
-import { FillSheet, ListSheet, TradeSheet, type Side } from "./sheets";
+import { QuestStrip } from "./quest-strip";
+import { FillSheet, ListSheet, TradeSheet, type Side, type TradeGate } from "./sheets";
 import { ChangePill, formatBits, formatChange, formatPrice, Sparkline } from "./sparkline";
+import { TradePromptCard } from "./trade-prompt";
 import { askToSignIn, trade, useMarketData, useQuickPlay, type QuickPlay } from "./use-market";
+import { useGuestBits, useMarketQuest } from "./use-market-peek";
 import { VendorChips, WhyPrice } from "./why-price";
 
 type Tab = "vendor" | "listings";
@@ -34,9 +48,29 @@ const ID = "market";
 
 /* ------------------------------------------------------------------ the stall */
 
-function Vendor({ view, me, signedIn, unclaimed, quickPlay, line }: { view: MarketView; me: MarketMe | null; signedIn: boolean; unclaimed: boolean; quickPlay: QuickPlay; line: string }) {
+function Vendor({
+  view,
+  me,
+  signedIn,
+  unclaimed,
+  quickPlay,
+  line,
+  guestBits,
+  coached,
+}: {
+  view: MarketView;
+  me: MarketMe | null;
+  signedIn: boolean;
+  unclaimed: boolean;
+  quickPlay: QuickPlay;
+  line: string;
+  /** What a guest's nights in this browser would have paid, had they been verified. */
+  guestBits: number;
+  /** The coach is pointing at the Bits. */
+  coached: boolean;
+}) {
   return (
-    <StickerPanel as="section" aria-labelledby="vendor-name" className="flex flex-col gap-4 p-3 sm:flex-row sm:items-center sm:gap-5 sm:p-4">
+    <StickerPanel as="section" aria-labelledby="vendor-name" className={`flex flex-col gap-4 p-3 sm:flex-row sm:items-center sm:gap-5 sm:p-4 ${coached ? COACH_RING : ""}`}>
       <div className="flex min-w-0 flex-1 items-start gap-3.5 sm:items-center">
         <StickerFrame drop="sm" label="Gwei Stacy, the vendor" className="[--s:76px] sm:[--s:96px]">
           {createElement(AVATARS.gwei)}
@@ -58,6 +92,10 @@ function Vendor({ view, me, signedIn, unclaimed, quickPlay, line }: { view: Mark
               <span className="text-[12px] font-semibold leading-4 text-game-muted">Your Bits</span>
               <span className="num text-[30px] font-bold leading-9 tracking-[-0.02em]">{me ? formatBits(me.bits) : "—"}</span>
             </p>
+            {/* A guest has no Bits yet: say what their nights would have paid, so the price of entry is clear. */}
+            {!signedIn && guestBits > 0 ? (
+              <p className="num max-w-[24ch] text-[12px] font-semibold leading-4 text-game-muted [text-wrap:pretty]">Your guest nights would have paid about {formatBits(guestBits)}</p>
+            ) : null}
             {/* A night's Bits between the results screen and the wallet: say so, never let them look lost. */}
             <p role="status" className="empty:hidden">
               {me && me.pendingBits > 0 ? (
@@ -77,10 +115,13 @@ function Vendor({ view, me, signedIn, unclaimed, quickPlay, line }: { view: Mark
           </p>
         </div>
         {!signedIn ? (
-          <StickerButton variant="hero" onClick={askToSignIn} className="w-full">
-            <LogIn aria-hidden className="size-5" strokeWidth={2} />
-            Sign in to trade
-          </StickerButton>
+          <div className="flex flex-col gap-1.5">
+            <StickerButton variant="hero" onClick={askToSignIn} className="w-full">
+              <LogIn aria-hidden className="size-5" strokeWidth={2} />
+              Sign in to trade
+            </StickerButton>
+            <p className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">Signed in, every verified night pays Bits you can spend here.</p>
+          </div>
         ) : view.onChain && unclaimed ? (
           // A Google player still on their key's address: nothing reaches NEAR until they pick a name.
           <div className="flex flex-col gap-1.5">
@@ -110,7 +151,7 @@ function Vendor({ view, me, signedIn, unclaimed, quickPlay, line }: { view: Mark
 const cardButton =
   "inline-flex h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[12px] border-2 border-game-ink bg-game-paper px-1.5 text-[14px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 motion-safe:ease-out active:translate-y-[2px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 pointer-fine:hover:bg-game-paper-2";
 
-function ItemCard({ item, me, params, canTrade, onTrade }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; canTrade: boolean; onTrade(side: Side): void }) {
+function ItemCard({ item, me, params, coached, onTrade }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; coached: boolean; onTrade(side: Side): void }) {
   const held = me?.items[item.item] ?? 0;
   const first = item.spark[0] ?? item.priceMilli;
   // Gwei's own account of this price, from the pool the server just read.
@@ -118,7 +159,7 @@ function ItemCard({ item, me, params, canTrade, onTrade }: { item: MarketItemVie
   const blocked = [why.buyBlocked, why.sellBlocked].filter((t, i, all) => t !== null && all.indexOf(t) === i);
   const blockedId = `${ID}-${item.item}-blocked`;
   return (
-    <li className="group/card flex min-w-0 flex-col gap-2 rounded-[20px] border-2 border-game-ink bg-game-paper p-2.5 text-game-ink shadow-[var(--game-shadow-sm)] sm:gap-3 sm:p-3">
+    <li className={`group/card flex min-w-0 flex-col gap-2 rounded-[20px] border-2 border-game-ink bg-game-paper p-2.5 text-game-ink shadow-[var(--game-shadow-sm)] sm:gap-3 sm:p-3 ${coached ? COACH_RING : ""}`}>
       <div className="flex items-center gap-2 sm:gap-2.5">
         <MiniAvatar id={ITEM_SOURCE[item.item]} className="size-8 rounded-[9px] sm:size-10 sm:rounded-[11px]" />
         <span className="flex min-w-0 flex-1 flex-col">
@@ -145,9 +186,9 @@ function ItemCard({ item, me, params, canTrade, onTrade }: { item: MarketItemVie
       </p>
       {/* The popover spreads from the card's own edge: the right-hand column opens leftwards, so it stays on a phone's screen. */}
       <WhyPrice name={`for ${item.name}`} reasoning={why} popoverClassName="start-0 group-even/card:start-auto group-even/card:end-0" />
-      {canTrade ? (
-        <div className="flex flex-col gap-1.5">
-          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+      {/* Always there, for guests and players without quick play too: the sheet they open says what's needed. */}
+      <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
             <button type="button" className={cardButton} onClick={() => onTrade("buy")} disabled={why.buyBlocked !== null || item.buyOne === null} aria-describedby={why.buyBlocked ? blockedId : undefined}>
               Buy
               {why.buyBlocked === null && item.buyOne !== null ? (
@@ -167,14 +208,13 @@ function ItemCard({ item, me, params, canTrade, onTrade }: { item: MarketItemVie
               ) : null}
             </button>
           </div>
-          {/* A disabled button can't explain itself in a tooltip, so the reason is printed under it. */}
-          {blocked.length > 0 ? (
-            <p id={blockedId} className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">
-              {blocked.join(" ")}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+        {/* A disabled button can't explain itself in a tooltip, so the reason is printed under it. */}
+        {blocked.length > 0 ? (
+          <p id={blockedId} className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">
+            {blocked.join(" ")}
+          </p>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -328,8 +368,10 @@ export function MarketScreen() {
   const view = market.state === "ready" ? market.data : null;
   const quickPlay = useQuickPlay(!!view?.onChain, me?.accountId ?? null);
   const [tab, setTab] = useState<Tab>("vendor");
-  const [sheet, setSheet] = useState<{ item: MarketItemView; side: Side } | null>(null);
+  // `amount` and `from` come from a prompt: the sheet opens on that amount, remounted per prompt.
+  const [sheet, setSheet] = useState<{ item: MarketItemView; side: Side; amount?: number; from?: string } | null>(null);
   const [listing, setListing] = useState(false);
+  const [listItem, setListItem] = useState<ItemId | null>(null);
   const [filling, setFilling] = useState<ListingView | null>(null);
   const [after, setAfter] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<number | null>(null);
@@ -338,6 +380,84 @@ export function MarketScreen() {
 
   const unclaimed = account.status === "signed-in" && isUnclaimed(account.me.player);
   const canTrade = signedIn && !!me && (!view?.onChain || (quickPlay === "ready" && !unclaimed));
+  const playerId = account.status === "signed-in" ? account.me.player.id : null;
+  const { quest, refresh: refreshQuest } = useMarketQuest(playerId);
+  const guestBits = useGuestBits();
+  const { save } = useGame();
+
+  /* A link from the results, the Suit lab or Tonight: open its sheet prefilled, once, then tidy the address. */
+  const router = useRouter();
+  const query = useSearchParams();
+  const intentKey = query.toString();
+  const intent = view ? parseTradeIntent(query, view.params.maxAmount) : null;
+  const [handled, setHandled] = useState<string | null>(null);
+  if (view && intent && handled !== intentKey) {
+    setHandled(intentKey);
+    if (intent.kind === "trade") {
+      const item = view.items.find((i) => i.item === intent.item);
+      if (item) {
+        setTab("vendor");
+        setSheet({ item, side: intent.side, amount: intent.amount, from: intentKey });
+      }
+    } else {
+      setTab("listings");
+      setListItem(intent.item);
+      // Listing needs an account that can trade; otherwise the tab itself says what's needed.
+      if (canTrade) setListing(true);
+    }
+  } else if (!intentKey && handled !== null) {
+    // The address is clean again: the same link can open its sheet next time.
+    setHandled(null);
+  }
+  useEffect(() => {
+    if (handled !== null && handled === intentKey) router.replace(MARKET_PATH, { scroll: false });
+  }, [handled, intentKey, router]);
+
+  /* What stands between this player and a trade, said on the trade sheet's own button. */
+  const stepAside = (then: () => void) => () => {
+    setSheet(null);
+    then();
+  };
+  const gate: TradeGate | null = !view
+    ? null
+    : !signedIn
+      ? {
+          label: "Sign in to trade",
+          text:
+            guestBits > 0
+              ? `Trading needs an account. Your guest nights would have paid about ${formatBits(guestBits)} Bits; signed in, every verified night pays Bits you can spend here.`
+              : "Trading needs an account. Signed in, every verified night pays Bits you can spend here.",
+          onAct: stepAside(askToSignIn),
+        }
+      : view.onChain && unclaimed
+        ? { label: "Claim your name", text: "Your Bits and loot are saved. They reach your wallet once you pick a name, and then you can trade.", onAct: stepAside(askToSignIn) }
+        : view.onChain && quickPlay === "needed"
+          ? {
+              label: "Enable quick play",
+              text: "Trades on NEAR are signed by a game-only key, so there’s no popup each time. One approval adds it, and it can never move your tokens.",
+              onAct: stepAside(askToSignIn),
+            }
+          : null;
+
+  /* The player's next trade, from what they hold (their wallet on chain, else the save) and the pools on screen. */
+  const prompt =
+    view && save?.hero ? nextTrade(holdingsOf({ ...save, inventory: me?.items ?? save.inventory }), view, me ? me.bits + me.pendingBits : null) : null;
+
+  /* The first-visit coach: signed in, the wallet loaded, and nothing open over the stall. */
+  const coachSeen = useCoachSeen();
+  const [coachStep, setCoachStep] = useState(0);
+  const steps = coachSteps(me?.bits ?? null);
+  const coaching = signedIn && !!view && !!me && !coachSeen && !sheet && !listing && !filling;
+  const coachTarget = coaching ? steps[coachStep]!.target : null;
+  const coach = coaching ? (
+    <CoachCard
+      step={steps[coachStep]!}
+      index={coachStep}
+      count={steps.length}
+      onNext={() => (coachStep >= steps.length - 1 ? markCoachSeen() : setCoachStep(coachStep + 1))}
+      onSkip={markCoachSeen}
+    />
+  ) : null;
 
   async function run(req: SimTradeRequest) {
     const res = await trade(!!view?.onChain, req);
@@ -346,10 +466,13 @@ export function MarketScreen() {
     else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     if (res.ok) {
       setAfter(VENDOR_AFTER[req.action]);
-      showToast(
-        req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Taken down. Your items are back.",
-        "success",
-      );
+      // A player who has traded doesn't need the tour.
+      markCoachSeen();
+      // The server completes today's quest when a trade lands; look, and say so in the same breath.
+      const q = countsForQuest(req.action) && !quest?.done ? await refreshQuest() : null;
+      const done =
+        req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Taken down. Your items are back.";
+      showToast(q?.done ? `${done} Market quest done: +${q.xp} XP.` : done, "success");
     } else if (res.code === "quick_play") {
       askToSignIn();
     }
@@ -395,13 +518,38 @@ export function MarketScreen() {
       ) : null}
       {view ? (
         <>
-          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day)} />
+          {coachTarget === "bits" ? coach : null}
+          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day)} guestBits={guestBits} coached={coachTarget === "bits"} />
+          <div className={`grid gap-3 ${prompt ? "lg:grid-cols-2" : ""}`}>
+            <QuestStrip quest={quest} signedIn={signedIn} now={Date.parse(view.updatedAt)} />
+            {prompt ? (
+              <TradePromptCard
+                prompt={prompt}
+                className="shadow-[var(--game-shadow-sm)]"
+                onAct={() => {
+                  const item = view.items.find((i) => i.item === prompt.intent.item);
+                  if (item) {
+                    setTab("vendor");
+                    setSheet({ item, side: prompt.intent.side, amount: prompt.intent.amount, from: `prompt:${prompt.intent.side}:${prompt.intent.amount}` });
+                  }
+                }}
+              />
+            ) : null}
+          </div>
           <StickerTabs tabs={tabs} value={tab} onChange={setTab} label="Market" idPrefix={ID} className="self-stretch sm:min-w-[360px] sm:self-start" />
+          {coachTarget === "price" || coachTarget === "trade" ? coach : null}
           {tab === "vendor" ? (
             <section {...tabPanelProps(ID, "vendor")} aria-label="Gwei’s prices" className="focus-visible:outline-offset-4">
               <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-                {view.items.map((item) => (
-                  <ItemCard key={item.item} item={item} me={me} params={view.params} canTrade={canTrade} onTrade={(side) => setSheet({ item, side })} />
+                {view.items.map((item, i) => (
+                  <ItemCard
+                    key={item.item}
+                    item={item}
+                    me={me}
+                    params={view.params}
+                    coached={i === 0 && (coachTarget === "price" || coachTarget === "trade")}
+                    onTrade={(side) => setSheet({ item, side })}
+                  />
                 ))}
               </ul>
               <p className="mt-3 flex items-center gap-2 text-[12px] leading-4 text-game-paper/75">
@@ -424,7 +572,9 @@ export function MarketScreen() {
             </StickerPanel>
           )}
           <TradeSheet
-            key={sheet?.item.item ?? "none"}
+            key={`${sheet?.item.item ?? "none"}:${sheet?.from ?? ""}`}
+            initialAmount={sheet?.amount}
+            gate={canTrade ? null : gate}
             item={sheet ? (view.items.find((i) => i.item === sheet.item.item) ?? sheet.item) : null}
             side={sheet?.side ?? "buy"}
             view={view}
@@ -433,7 +583,7 @@ export function MarketScreen() {
             onClose={() => setSheet(null)}
             onTrade={run}
           />
-          <ListSheet open={listing} view={view} me={me} onClose={() => setListing(false)} onTrade={run} />
+          <ListSheet key={listItem ?? "any"} open={listing} view={view} me={me} initialItem={listItem} onClose={() => setListing(false)} onTrade={run} />
           <FillSheet key={filling?.id ?? 0} listing={filling} me={me} onClose={() => setFilling(null)} onTrade={run} />
         </>
       ) : null}

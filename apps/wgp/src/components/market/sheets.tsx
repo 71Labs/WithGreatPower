@@ -11,7 +11,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { StickerButton } from "@/components/game/kit";
 import { GameSheet } from "@/components/game/ui";
-import { CircleAlert, Minus, Plus } from "@/components/icons";
+import { CircleAlert, KeyRound, Minus, Plus } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
@@ -29,6 +29,16 @@ import { VendorChips } from "./why-price";
 export const SLIPPAGE_BPS = 300;
 
 export type Side = "buy" | "sell";
+
+/**
+ * What stands between this player and trading (signed out, no name yet, quick play off):
+ * one sentence saying why, and the button that fixes it, in place of the trade button.
+ */
+export interface TradeGate {
+  text: string;
+  label: string;
+  onAct(): void;
+}
 
 const plural = (n: number, name: string) => `${formatBits(n)} ${name}`;
 
@@ -127,6 +137,8 @@ export function TradeSheet({
   side,
   view,
   me,
+  initialAmount = 1,
+  gate = null,
   onSide,
   onClose,
   onTrade,
@@ -135,12 +147,15 @@ export function TradeSheet({
   side: Side;
   view: MarketView;
   me: MarketMe | null;
+  /** The amount the sheet opens on (a prompt's prefill). Remount with a new `key` to apply it. */
+  initialAmount?: number;
+  gate?: TradeGate | null;
   onSide(side: Side): void;
   onClose(): void;
   onTrade(req: SimTradeRequest): Promise<TradeOutcome>;
 }) {
   const ids = useId();
-  const [amount, setAmount] = useState(1);
+  const [amount, setAmount] = useState(() => Math.max(1, Math.min(view.params.maxAmount, Math.floor(initialAmount) || 1)));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const open = !!item;
@@ -160,15 +175,26 @@ export function TradeSheet({
   const why = explainPrice({ pool, open: view.params.open, feeBps: fee, change24h: item.change24h, trades24h: item.trades24h });
   const cant = side === "buy" ? why.buyBlocked : why.sellBlocked;
 
+  // A night's mint (its Bits and its loot) can still be on its way to the wallet on chain.
+  const onTheWay = (me?.pendingBits ?? 0) > 0;
+
   function blocker(): string | null {
     if (!me) return "Sign in to trade.";
     if (side === "buy") {
       if (!buy) return `The vendor has only ${plural(pool.stock, item!.name)} in stock.`;
-      if (buy.total > bits) return `You need ${formatBits(buy.total - bits)} more Bits for that.`;
+      if (buy.total > bits) {
+        const short = buy.total - bits;
+        // Tonight's Bits would cover it: say they're coming instead of sending the player away.
+        if (onTheWay && me.pendingBits >= short) return `Your ${bitsText(me.pendingBits)} from tonight are still on their way to your wallet. Give it a minute, then buy.`;
+        return `You need ${formatBits(short)} more Bits for that.`;
+      }
       if (me.tradesLeft <= 0) return "That’s today’s vendor trades used up. The market resets at midnight UTC.";
       return null;
     }
-    if (held < amount) return held === 0 ? `You don’t have any ${item!.name} to sell.` : `You have only ${formatBits(held)} to sell.`;
+    if (held < amount) {
+      if (onTheWay) return "Tonight’s loot is still on its way to your wallet. Give it a minute, then sell.";
+      return held === 0 ? `You don’t have any ${item!.name} to sell.` : `You have only ${formatBits(held)} to sell.`;
+    }
     if (!sell) return "The vendor’s till can’t pay for that many. Try fewer.";
     // The contract would take the item and pay nothing once the fee is out.
     if (sell.net < 1) return "That’s worth less than a Bit after the gas fee. Sell more at once, or keep it.";
@@ -203,9 +229,16 @@ export function TradeSheet({
       eyebrow="Mempool Market"
       title={`${verb} ${item.name}`}
       footer={
-        <StickerButton variant="hero" size="lg" onClick={submit} disabled={busy || cant !== null} aria-describedby={cant !== null ? `${ids}-cant` : `${ids}-problem`} className="w-full sm:w-auto">
-          {busy ? (side === "buy" ? "Buying…" : "Selling…") : total !== null ? `${verb} ${formatBits(amount)} for ${bitsText(total)}` : `${verb} ${formatBits(amount)}`}
-        </StickerButton>
+        gate ? (
+          // Not able to trade yet: the one button is the step that fixes it, explained above it.
+          <StickerButton variant="hero" size="lg" onClick={gate.onAct} aria-describedby={`${ids}-gate`} className="w-full sm:w-auto">
+            {gate.label}
+          </StickerButton>
+        ) : (
+          <StickerButton variant="hero" size="lg" onClick={submit} disabled={busy || cant !== null} aria-describedby={cant !== null ? `${ids}-cant` : `${ids}-problem`} className="w-full sm:w-auto">
+            {busy ? (side === "buy" ? "Buying…" : "Selling…") : total !== null ? `${verb} ${formatBits(amount)} for ${bitsText(total)}` : `${verb} ${formatBits(amount)}`}
+          </StickerButton>
+        )
       }
     >
       <div className="flex flex-col gap-5">
@@ -272,6 +305,12 @@ export function TradeSheet({
             <span className="[text-wrap:pretty]">{cant}</span>
           </p>
         ) : null}
+        {gate ? (
+          <p id={`${ids}-gate`} className="flex items-start gap-2 rounded-[14px] border-2 border-game-ink bg-game-gold px-3.5 py-3 text-[14px] font-medium leading-5">
+            <KeyRound aria-hidden className="mt-px size-5 shrink-0" strokeWidth={2} />
+            <span className="[text-wrap:pretty]">{gate.text}</span>
+          </p>
+        ) : null}
         <Problem id={`${ids}-problem`} text={problem} />
       </div>
     </GameSheet>
@@ -284,18 +323,21 @@ export function ListSheet({
   open,
   view,
   me,
+  initialItem = null,
   onClose,
   onTrade,
 }: {
   open: boolean;
   view: MarketView;
   me: MarketMe | null;
+  /** The item the sheet opens on (a "List your spares" link). Remount with a new `key` to apply it. */
+  initialItem?: ItemId | null;
   onClose(): void;
   onTrade(req: SimTradeRequest): Promise<TradeOutcome>;
 }) {
   const ids = useId();
   const held = view.items.filter((i) => (me?.items[i.item] ?? 0) > 0);
-  const [choice, setChoice] = useState<ItemId | null>(null);
+  const [choice, setChoice] = useState<ItemId | null>(initialItem);
   const [amount, setAmount] = useState(1);
   const [price, setPrice] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);

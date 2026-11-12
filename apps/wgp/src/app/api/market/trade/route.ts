@@ -24,7 +24,7 @@ import { requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { clientIp, conflict, handle, json, readJson } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
-import { simAct } from "@/server/market/sim";
+import { simActWithQuest } from "@/server/market/quest";
 import { marketSnapshot, marketView, refreshMarket } from "@/server/market/view";
 import { rateLimiter } from "@/server/rate-limit";
 
@@ -48,7 +48,8 @@ export const POST = handle("market/trade", (request: Request) =>
     const act = await readJson(request, body, 2 * 1024);
     if ((await marketView()).onChain) throw conflict("on_chain", "The market is on NEAR now; trade with quick play");
     const player = { playerId: session.playerId, accountId: session.player.nearAccountId };
-    const result = await simAct(await getDb(), { ...player, act });
+    // A trade that lands also completes today's market quest (XP, once a day); the save in the answer then has it on.
+    const result = await simActWithQuest(await getDb(), { ...player, act });
     refreshMarket();
     // The cached view can still be the one from before the trade: answer with the market as it is now.
     const market = await marketSnapshot(player).catch(() => null);

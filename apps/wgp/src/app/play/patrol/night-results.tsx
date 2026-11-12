@@ -13,7 +13,10 @@ import { useEffect, type ReactNode } from "react";
 import { StickerButton, StickerLink } from "@/components/game/kit";
 import { BadgeCheck, CircleAlert, Coins, Medal } from "@/components/icons";
 import { CopyRaceLink } from "@/components/compete/race-link";
+import { TradePromptCard, useTradePrompt } from "@/components/market/trade-prompt";
+import { recordGuestNight } from "@/components/market/use-market-peek";
 import { ShareOnX } from "@/components/social/share-on-x";
+import { nightBits } from "@/lib/market/rewards";
 import { runShareText } from "@/lib/social/share";
 import { useAccount } from "@/game/store";
 import type { NightOutcome, NightSession } from "@/game3d/session";
@@ -63,7 +66,7 @@ function Score({ label, value }: { label: string; value: number }) {
 }
 
 /** The night's Bits, as the server minted them (src/lib/market/rewards.ts: the score, a level-up and the Bits tokens collected). */
-function EarnedBits({ bits }: { bits: number }) {
+function EarnedBits({ bits, prompted }: { bits: number; prompted: boolean }) {
   const account = useAccount();
   // The mint goes out after this screen; say when they'll be spendable so they never look lost.
   const unclaimed = account.status === "signed-in" && isUnclaimed(account.me.player);
@@ -78,10 +81,50 @@ function EarnedBits({ bits }: { bits: number }) {
           {unclaimed ? "Saved for you. Claim your name to spend them." : "They reach your market wallet within a minute or two."}
         </p>
       </div>
-      <StickerLink href="/play/market" size="sm">
-        Spend them at the market
-      </StickerLink>
+      {/* With a trade to offer, that prompt is the one next step; otherwise point at the stall. */}
+      {prompted ? null : (
+        <StickerLink href="/play/market" size="sm">
+          Spend them at the market
+        </StickerLink>
+      )}
     </div>
+  );
+}
+
+/**
+ * The night's loot against the recipes and Gwei's prices: the one trade worth making now
+ * (finish a suit that's one part short, or sell loot no suit needs), linked into the
+ * market with the sheet prefilled. Nothing shows until the market answers. With a prompt,
+ * it replaces the plain link to the stall as the one next step.
+ */
+function VerifiedTrade({ bits, save }: { bits: number; save: HeroSave }) {
+  const { prompt } = useTradePrompt(save);
+  return (
+    <>
+      <EarnedBits bits={bits} prompted={!!prompt} />
+      {prompt ? <TradePromptCard prompt={prompt} /> : null}
+    </>
+  );
+}
+
+/** A guest's night earns no Bits; say what a verified one like it pays, and show the trade it would open. */
+function GuestTrade({ score, save }: { score: number; save: HeroSave }) {
+  const wouldPay = nightBits({ score, levelledUp: false });
+  const night = save.patrol?.night ?? save.night;
+  const { prompt } = useTradePrompt(save);
+  useEffect(() => {
+    recordGuestNight(night, wouldPay);
+  }, [night, wouldPay]);
+  return (
+    <>
+      <p className="flex items-start gap-2 rounded-[12px] border-2 border-game-ink bg-game-gold px-3 py-2.5 text-[14px] font-medium leading-5">
+        <Coins aria-hidden className="mt-px size-5 shrink-0" strokeWidth={2.25} />
+        <span className="[text-wrap:pretty]">
+          Signed in, a night like this pays about <span className="num font-bold">{fmt(wouldPay)}</span> Bits to spend at the Mempool Market.
+        </span>
+      </p>
+      {prompt ? <TradePromptCard prompt={prompt} /> : null}
+    </>
   );
 }
 
@@ -123,7 +166,7 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
               </div>
             ) : null}
           </div>
-          <EarnedBits bits={o.bits} />
+          <VerifiedTrade bits={o.bits} save={o.save as HeroSave} />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {o.ranked ? <ShareOnX text={runShareText(o.score, o.runId)} className="w-full sm:w-auto" /> : null}
             {/* Race my ghost: anyone with the link races this night again, against this run. */}
@@ -154,6 +197,7 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
           <p className="text-[14px] leading-5 text-pretty">
             Guest nights are saved in this browser and stay off the boards. Sign in and the server checks every night you play, and a ranked night gets a link you can share on X.
           </p>
+          <GuestTrade score={o.score} save={o.save as HeroSave} />
           <StickerButton variant="ink" size="md" onClick={() => window.dispatchEvent(new CustomEvent("wgp:sign-in"))} className="w-full sm:w-auto sm:self-start">
             Sign in to rank and share
           </StickerButton>
