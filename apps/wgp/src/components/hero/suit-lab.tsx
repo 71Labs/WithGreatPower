@@ -19,7 +19,7 @@ import { ArrowRight, Check, CircleDashed, Coins, ExternalLink, Hourglass, Lock, 
 import { SuitShare } from "@/components/first-minute/suit-share";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { PartOffers, SpareOffers } from "@/components/market/trade-prompt";
-import { useMarketPeek } from "@/components/market/use-market-peek";
+import { useMarketPeek, useRevisits } from "@/components/market/use-market-peek";
 import { craftCost, craftGate, type CraftGate, type CraftWallet } from "@/lib/market/craft";
 import { bitsText, formatBits } from "@/lib/market/format";
 import { holdingsOf, suitGaps, type MarketFacts } from "@/lib/market/prompts";
@@ -518,7 +518,10 @@ export function SuitLab() {
   const activity = useChainActivity();
   // One look at the market per visit, and again each time the server confirms a change to the save
   // (its revision moves): a craft may have burned Bits, and the wallet is read after the burn, not before.
-  const peek = useMarketPeek(account.status === "signed-in" ? account.me.rev : 0);
+  // ...and each time the player comes back to this page (another tab, the market and back): Bits earned or
+  // spent elsewhere must not leave Craft wrongly on or off.
+  const revisits = useRevisits();
+  const peek = useMarketPeek(`${account.status === "signed-in" ? account.me.rev : 0}:${revisits}`);
   const market = peek.view;
   const [openId, setOpenId] = useState<SuitId | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
