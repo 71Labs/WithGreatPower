@@ -19,9 +19,11 @@ import { Reasoning } from "@/components/market/why-price";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
-import { Economy, type DaySnapshot } from "@/lib/market/bots";
+import { Economy, LAB_BROKE_SEED, type DaySnapshot } from "@/lib/market/bots";
 import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
 import { explainPrice } from "@/lib/market/reasoning";
+
+import { NpcPanel } from "./npc-panel";
 
 const SPEEDS = [
   { id: "1x", label: "1×", ms: 450 },
@@ -346,6 +348,8 @@ export function EconomyLab() {
             ))}
           </ul>
         </section>
+
+        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, sink: true })} />
 
         <details className="rounded-[20px] border-2 border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)]">
           <summary className="flex min-h-12 cursor-pointer items-center px-4 text-[14px] font-semibold focus-visible:outline-offset-2">See the numbers</summary>

@@ -40,6 +40,11 @@ export interface EconomyConfig {
 
 /** Sandwich Man's account in the fast-forward. */
 export const LAB_NPC_ACCOUNT = "sandwich-man.lab";
+/**
+ * A seed in which he runs out of Bits, clears stock and reopens within the lab's default
+ * run (21 days, 60 heroes, crafting burns 25 Bits); `bots.test.ts` checks it still does.
+ */
+export const LAB_BROKE_SEED = 211;
 /** How many times a day he looks at the market: after each of this many slices of the bots. */
 const NPC_TURNS_PER_DAY = 8;
 
