@@ -159,7 +159,7 @@ function HeroChip({ hero }: { hero: Hero }) {
       </span>
       {hero.pendingPicks > 0 ? (
         <>
-          <StickerBadge className="absolute -right-2 -top-3">+{hero.pendingPicks}</StickerBadge>
+          <StickerBadge className="absolute -right-2.5 -top-3.5">+{hero.pendingPicks}</StickerBadge>
           <span className="sr-only">, {plural(hero.pendingPicks, "new power")} to pick</span>
         </>
       ) : null}
