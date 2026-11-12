@@ -27,6 +27,7 @@ import type { CastId } from "@wgp/game-core/cast";
 
 import type { RoamHud, RoamHudStore } from "@/game3d/session/roam-loop";
 import { Face, Kbd } from "@/sim/ui/bits";
+import { capturePointer } from "@/lib/pointer";
 
 export function useRoamHud(store: RoamHudStore): RoamHud | null {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, () => null);
@@ -325,7 +326,7 @@ function ActButton({ act, label, onAct, progress }: { act: NonNullable<RoamHud["
       onPointerDown={(e: PointerEvent<HTMLButtonElement>) => {
         if (e.pointerType !== "touch") return;
         e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
+        capturePointer(e.currentTarget, e.pointerId);
         touchedAt.current = e.timeStamp;
         held.current = true;
         onAct(true);

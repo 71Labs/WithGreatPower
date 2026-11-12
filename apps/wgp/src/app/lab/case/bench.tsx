@@ -21,6 +21,7 @@ import { SceneCanvas, type SceneHandle, type SceneStats } from "@/game3d/scene/S
 import { sceneEffects } from "@/game3d/session/effects";
 
 import { CASE_SCENES, CaseScript, CLUE_VIEWS, caseCity, type CaseScene, type ClueView, type PhaseChoice } from "./script";
+import { capturePointer } from "@/lib/pointer";
 
 const STEP = 1 / 60;
 const PHASES: PhaseChoice[] = ["cycle", ...RIGHT_CLICKER_PHASES];
@@ -173,7 +174,7 @@ export default function CaseBench() {
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     handle.current?.orbit(0, 0, true);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {

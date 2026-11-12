@@ -18,6 +18,7 @@ import { QUALITY_PRESETS, TIERS, detectTier, hasWebGL2, type QualityTier } from 
 import { SceneCanvas, type SceneHandle, type SceneStats } from "@/game3d/scene/Scene";
 
 import { SwingScript, type SwingEvent } from "./swing";
+import { capturePointer } from "@/lib/pointer";
 
 type CameraMode = "chase" | "arena";
 
@@ -155,7 +156,7 @@ export default function CityBench() {
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     handle.current?.orbit(0, 0, true);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {

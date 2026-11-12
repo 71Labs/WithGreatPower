@@ -20,6 +20,7 @@ import { actionForKey, isDirection, LOOK_PITCH_PER_PX, LOOK_YAW_PER_PX, ORBIT_PI
 import type { InputLatch } from "./latch";
 import { keysStick } from "./stick";
 import { TouchRouter, type StickVisual } from "./touch";
+import { capturePointer } from "@/lib/pointer";
 
 export interface ControlsOptions {
   latch: InputLatch;
@@ -129,7 +130,7 @@ export function attachControls(opts: ControlsOptions): Controls {
       // lost its pointerup (a system gesture, a notification shade), so it can't hold the web
       // or the stick any more.
       if (e.isPrimary && touch.size > 0) touch.reset();
-      surface.setPointerCapture(e.pointerId);
+      capturePointer(surface, e.pointerId);
       touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth, performance.now());
       return;
     }
@@ -142,10 +143,10 @@ export function attachControls(opts: ControlsOptions): Controls {
         // A rejected lock (no gesture, an unsupported browser) leaves drag orbit as the fallback.
         Promise.resolve(surface.requestPointerLock()).catch(() => {});
       }
-      surface.setPointerCapture(e.pointerId);
+      capturePointer(surface, e.pointerId);
       latch.setWeb("mouse", true);
     } else if (e.button === 2 && !locked()) {
-      surface.setPointerCapture(e.pointerId);
+      capturePointer(surface, e.pointerId);
       mouseOrbit = { id: e.pointerId, x: e.clientX, y: e.clientY };
       opts.orbit(0, 0, true);
     }
