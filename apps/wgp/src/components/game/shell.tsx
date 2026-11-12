@@ -9,7 +9,7 @@ import { playMusic, setSoundEnabled, soundEnabled, subscribeSound } from "@/audi
 import { SoundSliders } from "@/components/game/sound-sliders";
 import { AccountCenter, AccountChip } from "@/components/account/account-center";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
-import { ArrowUpRight, City, Compass, FolderSearch, HelpCircle, Medal, Newspaper, Settings, Shirt, Store, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
+import { ArrowUpRight, ChevronRight, City, Compass, FolderSearch, HelpCircle, Medal, Menu, Newspaper, Settings, Shirt, Store, TriangleAlert, Vote, Zap, Award } from "@/components/icons";
 import type { CastId } from "@wgp/game-core/cast";
 import { XP_TO_NEXT } from "@wgp/game-core/data";
 import { useAccount, useGame } from "@/game/store";
@@ -21,17 +21,22 @@ import { GameBackdrop, type BackdropVariant } from "./backdrop";
 import { KitStyles, ON_PAPER, StickerBadge, StickerButton, StickerIconButton, StickerLink } from "./kit";
 import { GameSheet, HeroTile } from "./ui";
 
+/**
+ * Every game screen. `primary` ones keep a tab in the dock at every width; the rest sit in
+ * the dock too where it has room for all nine (wide screens) and behind "More" elsewhere.
+ * `about` is the line under the name in the More sheet.
+ */
 export const GAME_NAV = [
-  { href: "/play", label: "Tonight", icon: City },
-  { href: "/play/city", label: "City", icon: Compass },
-  { href: "/play/hero", label: "Hero", icon: Zap },
-  { href: "/play/suits", label: "Suits", icon: Shirt },
-  { href: "/play/market", label: "Market", icon: Store },
-  { href: "/play/album", label: "Album", icon: Medal },
-  { href: "/play/rug", label: "Daily Rug", icon: Newspaper },
-  { href: CASE_PATHS.list, label: "Cases", icon: FolderSearch },
+  { href: "/play", label: "Tonight", icon: City, primary: true, about: "" },
+  { href: "/play/city", label: "City", icon: Compass, primary: true, about: "" },
+  { href: "/play/hero", label: "Hero", icon: Zap, primary: false, about: "Your level, powers and loadout" },
+  { href: "/play/suits", label: "Suits", icon: Shirt, primary: false, about: "Stitch loot into new suits" },
+  { href: "/play/market", label: "Market", icon: Store, primary: true, about: "" },
+  { href: "/play/album", label: "Album", icon: Medal, primary: false, about: "Stickers from the neighbors you help" },
+  { href: "/play/rug", label: "Daily Rug", icon: Newspaper, primary: false, about: "Bearson’s paper, his poll and his quest" },
+  { href: CASE_PATHS.list, label: "Cases", icon: FolderSearch, primary: false, about: "Mystery nights from Bearson’s desk" },
   // Compete: the Daily Run, time trials, rivals, and the way to the Season boards (it stays lit on them).
-  { href: "/play/compete", label: "Compete", icon: Award },
+  { href: "/play/compete", label: "Compete", icon: Award, primary: true, about: "" },
 ] as const;
 
 const isActive = (pathname: string | null, href: string) =>
@@ -127,12 +132,15 @@ function HeroChip({ hero }: { hero: Hero }) {
         <HeroTile suit={hero.suit} className="size-[30px] rounded-full ring-0" />
       </XpRing>
       <span className="flex min-w-0 flex-col">
-        <span className="max-w-[9.5rem] truncate text-[14px] font-semibold leading-4 sm:max-w-[14rem]">{hero.name}</span>
+        <span title={hero.name} className="max-w-[9.5rem] truncate text-[14px] font-semibold leading-4 sm:max-w-[14rem]">{hero.name}</span>
         <span className="num whitespace-nowrap text-[12px] font-medium leading-4 text-game-muted">
           Lv {hero.level}
-          <span aria-hidden> · </span>
-          <span className="sr-only">, </span>
-          {hero.xp}/{need} XP
+          {/* A 320px phone has no room for the numbers; the ring round the tile shows the same progress. */}
+          <span className="max-[359px]:sr-only">
+            <span aria-hidden> · </span>
+            <span className="sr-only">, </span>
+            {hero.xp}/{need} XP
+          </span>
         </span>
       </span>
       {hero.pendingPicks > 0 ? (
@@ -198,7 +206,7 @@ function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
         ))}
       </ol>
       <p className="mt-4 text-[13px] leading-5 text-game-muted">
-        {signedIn ? "Your hero is saved to your account." : "Your hero is saved in this browser."} Swing out from Tonight; everything else is one tap away in the
+        {signedIn ? "Your hero is saved to your account." : "Your hero is saved in this browser."} Swing out from Tonight; everything else is a tap or two away in the
         dock.
       </p>
       <Link
@@ -365,7 +373,7 @@ function TopChips({ save }: { save: Save | null }) {
         className="pointer-events-none fixed inset-x-0 top-0 z-20 h-24 bg-[linear-gradient(to_bottom,var(--game-night)_35%,transparent)]"
       />
       <header className="pointer-events-none fixed inset-x-0 top-0 z-30 px-3 pt-[max(12px,env(safe-area-inset-top))] sm:px-6">
-        <div className="mx-auto flex max-w-[1180px] items-start justify-between gap-2">
+        <div data-wgp-topbar="" className="mx-auto flex max-w-[1180px] items-start justify-between gap-2">
           <div className="flex min-w-0 gap-2">
             {hero ? (
               <>
@@ -396,7 +404,26 @@ function TopChips({ save }: { save: Save | null }) {
 /** Short-landscape and wide screens lay each tab out in a row; upright phones stack it. */
 const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(max-height:520px)]:gap-2";
 
+/** One tab: at least 44px each way, its label on one line and never cut. */
+const TAB =
+  `relative flex h-14 w-full min-w-11 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[18px] px-1 text-[12px] font-semibold leading-4 focus-visible:outline-offset-1 motion-safe:transition-[scale] motion-safe:duration-200 motion-safe:ease-out active:scale-[0.97] sm:h-12 sm:px-3 sm:text-[13px] lg:px-3.5 [@media(max-height:520px)]:h-11 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-[13px] ${ROW}`;
+const TAB_ON = "bg-game-ink text-game-paper";
+const TAB_OFF = "text-game-ink pointer-fine:hover:bg-game-paper-2";
+/** A tab's badge sits on the tab's top corner, clear of the icon and the label. */
+const TAB_BADGE = "absolute -top-1.5 right-0";
+
+interface TabBadge {
+  value: string;
+  label: string;
+}
+
+/**
+ * The dock. Nine screens don't fit a phone as nine tabs (the labels touched and "Daily Rug"
+ * was cut), so under 1024px it keeps the four you use every night plus "More", which opens
+ * the other five as a sheet; from 1024px up all nine sit in one row, sized to their labels.
+ */
 function Dock({ pathname, save }: { pathname: string | null; save: Save | null }) {
+  const [more, setMore] = useState(false);
   const picks = save?.hero?.pendingPicks ?? 0;
   const unread = useUnreadEdition(save);
   // Any case still unopened (its folder or intro not seen yet) makes the Cases tab new.
@@ -404,52 +431,100 @@ function Dock({ pathname, save }: { pathname: string | null; save: Save | null }
   const newCase002 = useNewCase(save, "case-002");
   const newCase003 = useNewCase(save, "case-003");
   const newCase = newCase001 || newCase002 || newCase003;
+
+  const badgeOf = (href: string): TabBadge | null =>
+    href === "/play/hero" && picks > 0
+      ? { value: `+${picks}`, label: `${plural(picks, "new power")} to pick` }
+      : href === "/play/rug" && unread
+        ? { value: "New", label: "new edition" }
+        : href === CASE_PATHS.list && newCase
+          ? { value: "New", label: "new case file" }
+          : null;
+
+  const rest = GAME_NAV.filter((item) => !item.primary);
+  const current = rest.find((item) => isActive(pathname, item.href));
+  const restBadges = rest.map((item) => badgeOf(item.href)).filter((b): b is TabBadge => b !== null);
+  // One badge for everything behind More: the powers to pick as a number, anything else as "New".
+  const moreBadge: TabBadge | null = restBadges.length ? { value: picks > 0 ? `+${picks}` : "New", label: restBadges.map((b) => b.label).join(", ") } : null;
+
   return (
-    <nav
-      aria-label="Game"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-2 sm:px-6"
-    >
-      {/* Nine tabs: on a 360px phone the labels go a hair smaller and tighter so each fits its column. */}
-      <ul
-        className={`pointer-events-auto grid w-full max-w-[720px] grid-cols-9 gap-0.5 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-1.5 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 min-[400px]:gap-1 min-[400px]:px-2 sm:max-w-[900px] ${ON_PAPER}`}
-      >
-        {GAME_NAV.map((item) => {
-          const active = isActive(pathname, item.href);
-          const Icon = item.icon;
-          const badge =
-            item.href === "/play/hero" && picks > 0
-              ? { value: `+${picks}`, label: `${plural(picks, "new power")} to pick` }
-              : item.href === "/play/rug" && unread
-                ? { value: "New", label: "new edition" }
-                : item.href === CASE_PATHS.list && newCase
-                  ? { value: "New", label: "new case file" }
-                  : null;
-          return (
-            <li key={item.href} className="min-w-0">
-              <Link
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={`relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[18px] px-0.5 text-[10.5px] font-semibold leading-3 tracking-[-0.01em] focus-visible:outline-offset-1 min-[400px]:px-1 min-[400px]:text-[11px] min-[400px]:tracking-normal sm:h-12 sm:text-[13px] [@media(max-height:520px)]:h-11 [@media(max-height:520px)]:text-[13px] ${ROW} ${
-                  active ? "bg-game-ink text-game-paper" : "text-game-ink pointer-fine:hover:bg-game-paper-2"
-                }`}
-              >
-                <Icon aria-hidden className="size-[22px] shrink-0 sm:size-5" strokeWidth={active ? 2.25 : 1.9} />
-                {/* A line tall enough for descenders, which `truncate` would otherwise clip ("Daily Rug"). */}
-                <span className="truncate leading-[14px] sm:leading-4">{item.label}</span>
-                {badge ? (
-                  <>
-                    <StickerBadge className="absolute right-[calc(50%-26px)] top-0.5 sm:-top-1.5 sm:right-1 [@media(max-height:520px)]:-top-1.5 [@media(max-height:520px)]:right-1">
-                      {badge.value}
-                    </StickerBadge>
-                    <span className="sr-only">, {badge.label}</span>
-                  </>
-                ) : null}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <>
+      <nav aria-label="Game" className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-2 sm:px-6">
+        <ul
+          data-wgp-dock=""
+          className={`pointer-events-auto grid w-full max-w-[560px] grid-cols-5 gap-1 rounded-t-[26px] border-[2.5px] border-b-0 border-game-ink bg-game-paper px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:flex lg:w-auto lg:max-w-none ${ON_PAPER}`}
+        >
+          {GAME_NAV.map((item) => {
+            const active = isActive(pathname, item.href);
+            const Icon = item.icon;
+            const badge = badgeOf(item.href);
+            return (
+              <li key={item.href} className={item.primary ? "min-w-0" : "min-w-0 max-lg:hidden"}>
+                <Link href={item.href} aria-current={active ? "page" : undefined} className={`${TAB} ${active ? TAB_ON : TAB_OFF}`}>
+                  <Icon aria-hidden className="size-[22px] shrink-0 sm:size-5" strokeWidth={active ? 2.25 : 1.9} />
+                  <span>{item.label}</span>
+                  {badge ? (
+                    <>
+                      <StickerBadge className={TAB_BADGE}>{badge.value}</StickerBadge>
+                      <span className="sr-only">, {badge.label}</span>
+                    </>
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+          <li className="min-w-0 lg:hidden">
+            <button type="button" aria-haspopup="dialog" aria-expanded={more} onClick={() => setMore(true)} className={`${TAB} ${current ? TAB_ON : TAB_OFF}`}>
+              <Menu aria-hidden className="size-[22px] shrink-0 sm:size-5" strokeWidth={current ? 2.25 : 1.9} />
+              <span>More</span>
+              {current ? <span className="sr-only">, you’re on {current.label}</span> : null}
+              {moreBadge ? (
+                <>
+                  <StickerBadge className={TAB_BADGE}>{moreBadge.value}</StickerBadge>
+                  <span className="sr-only">, {moreBadge.label}</span>
+                </>
+              ) : null}
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <GameSheet open={more} onClose={() => setMore(false)} eyebrow="With Great Power" title="More to do">
+        <ul className="flex flex-col gap-2">
+          {rest.map((item) => {
+            const active = isActive(pathname, item.href);
+            const Icon = item.icon;
+            const badge = badgeOf(item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMore(false)}
+                  className={`flex min-h-16 items-center gap-3 rounded-[20px] border-2 border-game-ink p-2 pr-3 focus-visible:outline-offset-2 motion-safe:transition-[scale] motion-safe:duration-200 motion-safe:ease-out active:scale-[0.98] ${
+                    active ? "bg-game-ink text-game-paper" : "bg-game-paper-2 text-game-ink pointer-fine:hover:bg-game-paper"
+                  }`}
+                >
+                  <span aria-hidden className={`grid size-11 shrink-0 place-items-center rounded-[12px] border-2 ${active ? "border-game-paper/40" : "border-game-ink bg-game-paper"}`}>
+                    <Icon className="size-[22px]" strokeWidth={2} />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-[15px] font-semibold leading-5">{item.label}</span>
+                    <span className={`text-[13px] leading-[18px] [text-wrap:pretty] ${active ? "text-game-paper/75" : "text-game-muted"}`}>{item.about}</span>
+                  </span>
+                  {badge ? (
+                    <>
+                      <StickerBadge>{badge.value}</StickerBadge>
+                      <span className="sr-only">, {badge.label}</span>
+                    </>
+                  ) : null}
+                  <ChevronRight aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </GameSheet>
+    </>
   );
 }
 
