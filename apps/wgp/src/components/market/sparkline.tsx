@@ -1,32 +1,13 @@
 /**
  * Small market pieces shared by the market, The Daily Rug and the economy lab: a
  * sparkline (one series, a 2px ink line over a faint wash, the current price dotted),
- * the 24-hour change pill (a sign and an arrow, never color alone) and number formats.
- * Server-safe: no hooks.
+ * the 24-hour change pill (a sign and an arrow, never color alone) and the number
+ * formats (they live in src/lib/market/format.ts). Server-safe: no hooks.
  */
 import { ArrowRight } from "@/components/icons";
+import { formatChange } from "@/lib/market/format";
 
-const bits = new Intl.NumberFormat("en-US");
-
-/** A price in Bits from milli-Bits: 2 decimals under 10, 1 under 100, whole above. */
-export function formatPrice(milli: number): string {
-  const v = milli / 1000;
-  const digits = v < 10 ? 2 : v < 100 ? 1 : 0;
-  return v.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-
-export const formatBits = (n: number) => bits.format(n);
-
-/** "1 Bit", "39 Bits". */
-export const bitsText = (n: number) => `${bits.format(n)} ${n === 1 ? "Bit" : "Bits"}`;
-
-/** "+12%", "−3%", "0%" with a real minus sign. */
-export function formatChange(change: number): string {
-  const pct = Math.round(change * 100);
-  if (pct > 0) return `+${pct}%`;
-  if (pct < 0) return `−${Math.abs(pct)}%`;
-  return "0%";
-}
+export { bitsText, formatBits, formatChange, formatPrice } from "@/lib/market/format";
 
 export function Sparkline({ points, label, className = "h-9 w-full" }: { points: number[]; label: string; className?: string }) {
   const pts = points.length > 1 ? points : [points[0] ?? 0, points[0] ?? 0];
