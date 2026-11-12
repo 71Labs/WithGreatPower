@@ -20,7 +20,7 @@ import { AccountSheet } from "./account-sheet";
 import { ChainSync } from "./chain-sync";
 import { GameToaster } from "./game-toast";
 import { MigrationSheet } from "./migrate-sheet";
-import { SIGN_IN_EVENT, openAccountSheet, useAccountSheetOpen } from "./sheet-state";
+import { SIGN_IN_EVENT, openAccountSheet, openAccountSheetWith, useAccountSheetOpen } from "./sheet-state";
 
 export { AccountChip } from "./account-chip";
 export { SIGN_IN_EVENT, openAccountSheet } from "./sheet-state";
@@ -39,7 +39,11 @@ export function AccountCenter({ chrome }: { chrome: boolean }) {
   const privyWanted = usePrivyWanted();
 
   useEffect(() => {
-    const ask = () => openAccountSheet();
+    const ask = (event: Event) => {
+      const detail = event instanceof CustomEvent ? (event.detail as { with?: unknown } | null) : null;
+      if (detail?.with === "google") openAccountSheetWith("google");
+      else openAccountSheet();
+    };
     window.addEventListener(SIGN_IN_EVENT, ask);
     return () => window.removeEventListener(SIGN_IN_EVENT, ask);
   }, []);

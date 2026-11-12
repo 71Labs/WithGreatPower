@@ -10,7 +10,7 @@ import { NAV, REPO_URL } from "@/lib/site";
 import "./landing.css";
 
 const footerLink =
-  "inline-flex h-10 items-center gap-1.5 px-2 underline-offset-4 pointer-coarse:h-11 [@media(hover:hover)]:hover:text-ink-strong [@media(hover:hover)]:hover:underline";
+  "inline-flex h-10 items-center justify-center gap-1.5 px-2 underline-offset-4 pointer-coarse:h-11 pointer-coarse:min-w-11 [@media(hover:hover)]:hover:text-ink-strong [@media(hover:hover)]:hover:underline";
 
 export default function SiteLayout({ children }: { children: ReactNode }) {
   return (

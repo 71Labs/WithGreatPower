@@ -20,7 +20,7 @@
  *   `?marks=race|relays` (development) lays fixture map marks over the overlays (fixture.ts).
  */
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { MAX_TICKS } from "@wgp/game-core/sim3d/constants";
 import { FOLKS, RELAY_NAMES, TASKS, VIEW_NAMES, type TaskId } from "@wgp/game-core/city";
@@ -45,7 +45,7 @@ import { useCoarsePointer, useReducedMotion } from "@/sim/ui/hooks";
 import { initialSettings, rememberSettings, SettingsPanel, type GraphicsChoice, type PlaySettings } from "../patrol/settings";
 import { Loading } from "../patrol/status";
 import { RoamFixtureTap, roamMarksFixture } from "./fixture";
-import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, RaceChip, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
+import { ActPrompt, CornerButtons, FirstHint, MoveButtons, pageToast, RaceChip, raceChipText, SpeechBubble, TaskTracker, Toasts, useRoamHud, type Toast } from "./hud";
 import { RoamMap } from "./map";
 import { CityMinimap } from "./minimap";
 import { RoamPause } from "./pause";
@@ -537,7 +537,19 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
         {hud ? (
           <>
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 px-3 pt-[max(12px,env(safe-area-inset-top))] sm:px-4">
-              <TaskTracker hud={hud} tracked={tracked} />
+              {/*
+                A phone (on its side, or upright) has room for one thing in this corner: the race's
+                chip while Front-run's race is on (it says what the tracker's row would, and it stays
+                out of the middle, where he's running), the tracker otherwise.
+              */}
+              <div className="flex min-w-0 flex-col items-start">
+                <div className={raceChipText(hud) ? "max-[520px]:hidden [@media(max-height:520px)]:hidden" : ""}>
+                  <TaskTracker hud={hud} tracked={tracked} />
+                </div>
+                <div className="hidden max-[520px]:block [@media(max-height:520px)]:block">
+                  <RaceChip hud={hud} className="justify-start" />
+                </div>
+              </div>
               <div className="flex flex-col items-end gap-3">
                 <CornerButtons
                   onPause={() => togglePause(true)}
@@ -555,18 +567,32 @@ export function CitySurface({ session: first, colors, autopilot, debug }: { sess
                     />
                   }
                 />
-                {/* Short landscape phones: the corner is minimap and thumb buttons; the toast moves to the middle (below). */}
-                <div className="[@media(max-height:520px)]:hidden">
+                {/* Phones, upright (no width under the minimap) or on their side (the corner is the thumb's): the toast moves to the middle (below). */}
+                <div className="max-[520px]:hidden [@media(max-height:520px)]:hidden">
                   <Toasts toasts={toasts} />
                 </div>
               </div>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 pb-[max(16px,env(safe-area-inset-bottom))]">
+            {/*
+              What's being said and shown, bottom middle. On touch it keeps clear of the thumb's
+              buttons (bottom right; two high, three on a wall): beside them on a phone on its
+              side, above them on one held upright or any screen too narrow to pass them.
+            */}
+            <div
+              style={{ "--thumbs": hud.move === "climb" || hud.move === "hang" || hud.move === "wallrun" ? "226px" : "174px" } as CSSProperties}
+              className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 pb-[max(16px,env(safe-area-inset-bottom))] ${
+                touch
+                  ? "max-[840px]:[@media(min-height:521px)]:pb-[calc(var(--thumbs)+env(safe-area-inset-bottom))] [@media(max-height:520px)]:pr-[calc(162px+max(16px,env(safe-area-inset-right)))]"
+                  : ""
+              }`}
+            >
               <FirstHint touch={touch} hud={hud} />
-              <RaceChip hud={hud} />
-              {/* Short screens: one compact toast here, and none while someone's talking (the bubble says it). */}
+              <div className="max-[520px]:hidden [@media(max-height:520px)]:hidden">
+                <RaceChip hud={hud} />
+              </div>
+              {/* Phones: one compact toast here, and none while someone's talking (the bubble says it). */}
               {!hud.chat ? (
-                <div className="hidden [@media(max-height:520px)]:block">
+                <div className="hidden max-[520px]:block [@media(max-height:520px)]:block">
                   <Toasts toasts={toasts} compact />
                 </div>
               ) : null}

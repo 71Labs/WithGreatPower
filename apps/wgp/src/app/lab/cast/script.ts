@@ -40,6 +40,8 @@ export const RIGHT_CLICKER_STATES = ["idle", "walk", "aim", "flash", "recover", 
 export function statesFor(c: LabCharacter): readonly string[] {
   if (c === "hero") return HERO_STATES;
   if (c === "right-clicker") return RIGHT_CLICKER_STATES;
+  // Sandwich Man's climb in free roam's race (Front-run): a run at the wall, up it, a hop over the top.
+  if (c === "sandwich-man") return [...VILLAIN_STATES, "climb"];
   if (VILLAINS.includes(c)) return VILLAIN_STATES;
   return ALLY_STATES;
 }
@@ -469,7 +471,7 @@ export class CastScript {
     f.villains.length = 0;
     // `hit`: a blow lands every 1.4 s (the hits count drops, then resets).
     const hits = this.state === "hit" ? 5 - (Math.floor(t / 1.4) % 5) : 3;
-    const push = (pos: Vec3, vel: Vec3, copy = false) => f.villains.push({ id, copy, pos, vel, hits, hitsMax: 5, state, stateTicks: Math.floor(t * 60) });
+    const push = (pos: Vec3, vel: Vec3, copy = false, as: string = state, facing?: Vec3) => f.villains.push({ id, copy, pos, vel, hits, hitsMax: 5, state: as, stateTicks: Math.floor(t * 60), facing });
     if (id === "gas-goblin") {
       // A lazy figure-eight over the roof.
       const a = t * 0.55;
@@ -490,6 +492,23 @@ export class CastScript {
         const u = t % 1.2;
         const y = ROOF + 44 + Math.max(0, 840 * u - 0.5 * 1700 * u * u);
         push(v(0, y, 0), v(0, y > ROOF + 45 ? 840 - 1700 * u : 0, 0));
+      } else if (state === "climb") {
+        // As the race has him (task-frontrun.ts): a run at the wall, up its face at 300 a second to
+        // just over the top, a hop onto the roof, a beat standing there.
+        const x = WALL_X - 26;
+        const top = 680;
+        const rise = top + 14 - ROOF;
+        const run = 0.6;
+        const up = rise / 300;
+        const hop = 0.35;
+        const u = t % (run + up + hop + 0.7);
+        const face = v(1, 0, 0);
+        if (u < run) push(v(x - (1 - u / run) * 258, ROOF + 44, 0), v(430, 0, 0), false, "idle", face);
+        else if (u < run + up) push(v(x, ROOF + 44 + (u - run) * 300, 0), v(0, 300, 0), false, "climb", face);
+        else if (u < run + up + hop) {
+          const k = (u - run - up) / hop;
+          push(v(x + k * 90, top + 14 + 44 - 14 * k + 60 * k * (1 - k), 0), v(90 / hop, (60 * (1 - 2 * k) - 14) / hop, 0), false, "idle", face);
+        } else push(v(x + 90, top + 44, 0), v(), false, "idle", face);
       } else push(v(0, ROOF + 44, 0), v());
     } else if (id === "doc-octochain") {
       const pos = v(0, ROOF + 190 + Math.sin(t * 1.3) * 12, 0);

@@ -27,6 +27,7 @@ import { useCoarsePointer, useHeroSave, useReducedMotion, type HeroSave } from "
 import { Hud, useHud } from "./hud";
 import { Results } from "./results";
 import { EncounterBanner, ErrandSheet, MotionChoice, PauseMenu, WonCaption } from "./sheets";
+import { capturePointer } from "@/lib/pointer";
 
 declare global {
   interface Window {
@@ -411,7 +412,7 @@ function PlaySurface({ save }: { save: HeroSave }) {
     if (e.pointerType === "touch" && e.clientX > window.innerWidth * (2 / 3)) return;
     if (e.button > 0) return;
     pointers.current.add(e.pointerId);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     loop.setHold(true);
   };
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {

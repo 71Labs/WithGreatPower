@@ -1,7 +1,7 @@
 import { COLUMN } from "@/components/frame";
 import { StickerLink } from "@/components/game/kit";
 import { ArrowRight, Github } from "@/components/icons";
-import { PLAY_URL, REPO_URL } from "@/lib/site";
+import { START_URL, REPO_URL } from "@/lib/site";
 
 /** The last word, back in the night sky: one line and the red button. */
 export function Closing() {
@@ -17,10 +17,10 @@ export function Closing() {
           <span className="text-(--night-ink)">a friendly neighborhood hero.</span>
         </h2>
         <p className="max-w-[44ch] text-[17px] leading-7">
-          Gas Goblin is already out. Swing in as a guest, or sign in with Google or a NEAR wallet to make the board.
+          Gas Goblin is already out. One tap and you’re swinging: free, in your browser, no wallet needed.
         </p>
         <div className="mt-3 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
-          <StickerLink href={PLAY_URL} variant="hero" size="lg" className="w-full sm:w-auto">
+          <StickerLink href={START_URL} variant="hero" size="lg" className="w-full sm:w-auto">
             Play now
             <ArrowRight aria-hidden strokeWidth={2.25} className="size-5" />
           </StickerLink>

@@ -272,6 +272,14 @@
   [id] {
     scroll-margin-top: 96px;
   }
+
+  /*
+   * Game screens sit between the fixed chips and the fixed dock (components/game/shell.tsx):
+   * a control scrolled into view by the keyboard stops clear of both, not underneath them.
+   */
+  html:has([data-wgp-dock]) {
+    scroll-padding-block: 84px 96px;
+  }
 }
 
 @layer components {

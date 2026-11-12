@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { RunView } from "@/components/social/run-view";
 import { SITE_URL, runPath } from "@/lib/site";
-import { loadPublicRun } from "@/server/social/run-cache";
+import { loadPublicRun, loadRunRaceable } from "@/server/social/run-cache";
 
 /**
  * /r/<runId>: a verified run's public page, what share posts link to, with a card image
@@ -38,5 +38,7 @@ export default async function RunPage({ params }: PageProps<"/r/[runId]">) {
   const { runId } = await params;
   const run = await loadPublicRun(runId);
   if (!run) notFound();
-  return <RunView run={run} />;
+  // If the check itself fails, keep the race on offer: its own page answers for a run it can't open.
+  const raceable = await loadRunRaceable(run.runId).catch(() => true);
+  return <RunView run={run} raceable={raceable} />;
 }

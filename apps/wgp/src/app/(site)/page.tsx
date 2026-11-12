@@ -9,6 +9,7 @@ import { Night } from "@/components/landing/night";
 import { Ranked } from "@/components/landing/ranked";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/" },
   description:
     "With Great Power is a free-roam 3D web-swinging parody game in a comic-book city. Every ranked night is replayed on the server before it counts, a player-driven market sets the prices, and your items are NEP-245 tokens on NEAR with no gas to sign.",
 };

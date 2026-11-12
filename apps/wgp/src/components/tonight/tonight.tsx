@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createElement } from "react";
+import { createElement, useEffect, useState } from "react";
 
 import { AVATARS, HeroArt } from "@/components/cast";
 import { CaseTile } from "@/components/cases/case-tile";
 import { CompeteTile } from "@/components/compete/compete-tile";
 import { MarketTile } from "@/components/market/market-tile";
 import { CityTile } from "@/components/tonight/city-tile";
+import { ComeBackTile } from "@/components/first-minute/come-back-tile";
+import { MakeItYoursTile } from "@/components/first-minute/make-it-yours";
 import { CrewChecklistTile } from "@/components/referrals/crew-checklist";
 import { InviteTile } from "@/components/referrals/invite-tile";
 import { stickerTileClass, StickerBadge, StickerButton, StickerChip, StickerFrame, StickerLink } from "@/components/game/kit";
@@ -100,7 +102,7 @@ function RouteRow({ save, stops }: { save: HeroSave; stops: Stop[] }) {
             </span>
             <span
               aria-hidden
-              className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink px-2 text-[11px] font-bold uppercase tracking-[0.04em] ${
+              className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink px-2 text-[11px] font-bold uppercase tracking-[0.04em] max-[359px]:gap-0.5 max-[359px]:px-1.5 max-[359px]:text-[10px] max-[359px]:tracking-normal ${
                 current ? "bg-game-gold text-game-ink" : stop.kind === "fight" && stop.boss ? "bg-game-hero text-game-paper" : "bg-game-paper text-game-ink"
               }`}
             >
@@ -126,6 +128,10 @@ function PrimaryAction({ save }: { save: HeroSave }) {
   const router = useRouter();
   const p = save.patrol;
   const mid = !!p && p.phase !== "briefing";
+  // The patrol's code is the heaviest page in the game: fetch it while the player reads the hub,
+  // and say so on the button if the tap still has to wait for it.
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => router.prefetch("/play/patrol"), [router]);
 
   let action;
   if (save.nightDone) {
@@ -148,12 +154,14 @@ function PrimaryAction({ save }: { save: HeroSave }) {
         variant="hero"
         size="xl"
         className="w-full"
+        aria-busy={leaving || undefined}
         onClick={() => {
+          setLeaving(true);
           dispatch({ type: "start-patrol" });
           router.push("/play/patrol");
         }}
       >
-        Swing out
+        {leaving ? "Swinging out…" : "Swing out"}
         <ArrowRight aria-hidden className="size-6" strokeWidth={2.25} />
       </StickerButton>
     );
@@ -292,11 +300,13 @@ export function Tonight() {
           <QuestTile save={save} />
         </div>
         <div className="flex w-full flex-col gap-3 [grid-area:case] lg:max-w-[400px]">
+          <MakeItYoursTile save={save} />
           <CrewChecklistTile save={save} />
           <CaseTile save={save} />
           <MarketTile save={save} />
           <CompeteTile />
           <CityTile save={save} />
+          <ComeBackTile nightDone={save.nightDone} />
           <InviteTile />
         </div>
       </div>

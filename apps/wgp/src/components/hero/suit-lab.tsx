@@ -16,6 +16,7 @@ import { HeroArt } from "@/components/cast";
 import { StickerButton, StickerFrame, StickerLink, StickerPanel, stickerTileClass } from "@/components/game/kit";
 import { GameLoading, GameSheet, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight, Check, CircleDashed, Coins, ExternalLink, Hourglass, Lock, Shirt, Sparkles, X, Zap, type Icon } from "@/components/icons";
+import { SuitShare } from "@/components/first-minute/suit-share";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { PartOffers, SpareOffers } from "@/components/market/trade-prompt";
 import { useMarketPeek } from "@/components/market/use-market-peek";
@@ -605,6 +606,8 @@ export function SuitLab() {
       <LootStrip save={save} />
 
       <Notice notice={shown} />
+      {/* A suit just stitched from loot is worth showing off (components/first-minute/suit-share.tsx). */}
+      <SuitShare suit={shown && lastAction?.type === "craft-suit" ? lastAction.suit : null} />
 
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {ALL_SUITS.map((id) => {
