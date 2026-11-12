@@ -19,10 +19,12 @@ import { Reasoning } from "@/components/market/why-price";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
+import { DRAIN, MAINNET, RECOMMENDED, economyConfig, type Setting } from "@/lib/market/balance";
 import { Economy, LAB_BROKE_SEED, type DaySnapshot } from "@/lib/market/bots";
 import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
 import { explainPrice } from "@/lib/market/reasoning";
 
+import { FlowPanel } from "./flow-panel";
 import { NpcPanel } from "./npc-panel";
 
 const SPEEDS = [
@@ -34,7 +36,6 @@ const SPEEDS = [
 type Speed = (typeof SPEEDS)[number]["id"];
 
 const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
-const CRAFT_BITS = 25;
 const noop = () => () => {};
 /** Each item's curve as seeded; a day's stock and till go on top to rebuild that day's pool. */
 const SEEDED = new Map(seededPools().map((p) => [p.item, p]));
@@ -51,9 +52,11 @@ function ItemChart({
   history,
   hover,
   onHover,
+  feeBps,
 }: {
   item: ItemId;
   history: DaySnapshot[];
+  feeBps: number;
   hover: number | null;
   onHover(day: number | null): void;
 }) {
@@ -75,7 +78,7 @@ function ItemChart({
   const why = explainPrice({
     pool: { ...SEEDED.get(item)!, stock: stock[at]!, bits: history[at]!.tills[item] ?? 0 },
     open: true,
-    feeBps: DEFAULT_PARAMS.feeBps,
+    feeBps,
     change24h: at > 0 && prices[at - 1] ? (prices[at]! - prices[at - 1]!) / prices[at - 1]! : null,
   });
 
@@ -194,20 +197,26 @@ interface Setup {
   days: number;
   bots: number;
   seed: number;
-  sink: boolean;
+  /** The recommended on-chain settings (docs/ECONOMY.md) instead of what mainnet holds today. */
+  recommended: boolean;
+  /** The stress mix of heroes that runs Gwei out of stock and Bits. */
+  drain: boolean;
 }
 
-const build = (s: Setup) => new Economy({ days: s.days, bots: s.bots, seed: s.seed, params: { craftBits: s.sink ? CRAFT_BITS : 0 } });
+const settingOf = (s: Setup): Setting => (s.recommended ? RECOMMENDED : MAINNET);
+/** Mainnet's rules and curves unless `recommended`; heroes craft each suit once, as the contract requires. */
+const build = (s: Setup) => new Economy(economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain ? DRAIN.mix : undefined }));
 
 export function EconomyLab() {
   const ids = useId();
-  const [setup, setSetup] = useState<Setup>({ days: 21, bots: 60, seed: 2026, sink: true });
+  const [setup, setSetup] = useState<Setup>({ days: 21, bots: 60, seed: 2026, recommended: false, drain: false });
   const [speed, setSpeed] = useState<Speed>("4x");
   const [running, setRunning] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   const [econ, setEcon] = useState(() => build(setup));
   const [history, setHistory] = useState<DaySnapshot[]>(() => econ.history.slice());
-  const { days, bots, seed, sink } = setup;
+  const { days, bots, seed, recommended, drain } = setup;
+  const setting = settingOf(setup);
 
   /** A fresh run, for `next` setup (any change to the setup starts over). */
   function fresh(next: Setup = setup): Economy {
@@ -296,9 +305,17 @@ export function EconomyLab() {
             </div>
           </div>
           <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-semibold">
-            <input type="checkbox" checked={sink} onChange={(e) => change({ sink: e.target.checked })} className="size-5 accent-[var(--game-hero)]" />
-            Crafting burns {CRAFT_BITS} Bits
+            <input type="checkbox" checked={recommended} onChange={(e) => change({ recommended: e.target.checked })} className="size-5 accent-[var(--game-hero)]" />
+            <span className="flex flex-col leading-4">
+              Recommended settings
+              <span className="num text-[12px] font-medium text-game-muted">
+                Crafting burns {RECOMMENDED.craftBits} Bits, {RECOMMENDED.feeBps / 100}% gas fee
+              </span>
+            </span>
           </label>
+          <StickerButton size="sm" aria-pressed={drain} onClick={() => (drain ? change({ drain: false }) : change({ days: DRAIN.days, bots: DRAIN.bots, recommended: false, drain: true }))} className="h-11">
+            {drain ? "Stop draining Gwei" : "Drain Gwei"}
+          </StickerButton>
           <div className="flex items-end gap-2">
             <div className="flex flex-col gap-1">
               <label htmlFor={`${ids}-seed`} className="text-[13px] font-semibold leading-4">
@@ -333,10 +350,12 @@ export function EconomyLab() {
           <Stat label="Day" value={`${last.day} / ${days}`} />
           <Stat label="Bits in play" value={formatBits(last.supply)} hint="Held by heroes, plus Gwei’s till" />
           <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The vendor’s own wallet" />
-          <Stat label="Bits burned" value={formatBits(last.burned)} hint={`Gas fee${sink ? " and crafting" : ""}, of ${formatBits(last.minted)} earned`} />
+          <Stat label="Bits burned" value={formatBits(last.burned)} hint={`Gas fee${setting.craftBits ? " and crafting" : ""}, of ${formatBits(last.minted)} earned`} />
           <Stat label="Suits crafted" value={formatBits(last.crafted)} />
           <Stat label="Trades" value={formatBits(totals.trades + totals.fills)} hint={`${formatBits(totals.fills)} player-to-player · ${last.listings} listed now`} />
         </dl>
+
+        <FlowPanel history={history} days={days} feeBps={setting.feeBps} headingId={`${ids}-flow`} />
 
         <section aria-labelledby={`${ids}-prices`} className="flex flex-col gap-3">
           <h2 id={`${ids}-prices`} className="text-[13px] font-bold uppercase leading-4 tracking-[0.08em] text-game-paper/85">
@@ -344,12 +363,12 @@ export function EconomyLab() {
           </h2>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ITEM_IDS.map((item) => (
-              <ItemChart key={item} item={item} history={history} hover={hover} onHover={setHover} />
+              <ItemChart key={item} item={item} history={history} hover={hover} onHover={setHover} feeBps={setting.feeBps} />
             ))}
           </ul>
         </section>
 
-        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, sink: true })} />
+        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, recommended: false, drain: false })} />
 
         <details className="rounded-[20px] border-2 border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)]">
           <summary className="flex min-h-12 cursor-pointer items-center px-4 text-[14px] font-semibold focus-visible:outline-offset-2">See the numbers</summary>
@@ -398,8 +417,8 @@ export function EconomyLab() {
           </div>
         </details>
         <p className="text-[12px] leading-4 text-game-paper/70">
-          Starting curves and rules: {DEFAULT_PARAMS.feeBps / 100}% gas fee, listings between {DEFAULT_PARAMS.floorBps / 100}% and {DEFAULT_PARAMS.ceilingBps / 100}% of Gwei’s price,{" "}
-          {DEFAULT_PARAMS.dailyTrades} vendor trades per hero a day. Runs are deterministic for a seed. Gwei’s pricing rules are one file, <code className="font-mono">apps/wgp/src/lib/market/math.ts</code>,
+          {recommended ? "The recommended settings, not yet on mainnet" : "Mainnet’s settings today"}: {setting.feeBps / 100}% gas fee, crafting burns {setting.craftBits === 0 ? "no" : setting.craftBits} Bits, listings between {DEFAULT_PARAMS.floorBps / 100}% and {DEFAULT_PARAMS.ceilingBps / 100}% of Gwei’s price,{" "}
+          {DEFAULT_PARAMS.dailyTrades} vendor trades per hero a day. Each hero crafts a suit once, as the contract requires.{drain ? " Drain Gwei is a stress run: three hoarders buying rares for every dumper selling loot." : ""} Runs are deterministic for a seed. Gwei’s pricing rules are one file, <code className="font-mono">apps/wgp/src/lib/market/math.ts</code>,
           and every line she says here is worked out from that day’s stock and till.
         </p>
       </div>
