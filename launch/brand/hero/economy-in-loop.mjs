@@ -16,7 +16,10 @@
  * quest); the Suit lab prints each recipe's cost, burns 250 Bits per craft and refuses a
  * craft when the Bits are short (the button is off with the reason, and the server answers
  * the contract's words); then /lab/economy: the default run, Recommended settings, Drain
- * Gwei and Sandwich Man's panel. Checks and console errors are printed; exits 1 on a failure.
+ * Gwei and Sandwich Man's panel. At 1440 and at 375 wide it also checks that the trade
+ * prompt, the quest strip, the "Other traders" strip and the Suit lab's cost chip, cost row
+ * and blocked-craft reason are on screen, inside the viewport, not under the nav or anything
+ * else, with no sideways scroll. Checks and console errors are printed; exits 1 on a failure.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -100,6 +103,31 @@ async function click(expr, what = expr) {
   await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: p.x, y: p.y, button: "left", clickCount: 1 });
   await sleep(300);
 }
+/**
+ * The same state at 1440 and at a 375-wide phone: each named element is scrolled to the
+ * middle, and must have a size, sit inside the viewport's width, be the thing on top at its
+ * own centre (so not under the nav, a sheet or a neighbour), with no sideways page scroll.
+ */
+async function layout(name, parts) {
+  for (const [width, height, mobile] of [
+    [1440, 900, false],
+    [375, 812, true],
+  ]) {
+    await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: mobile ? 2 : 1, mobile });
+    await sleep(700);
+    for (const [label, expr] of Object.entries(parts)) {
+      const m = await ev(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "center", inline: "nearest" }); const r = el.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { w: Math.round(r.width), h: Math.round(r.height), left: Math.round(r.left), right: Math.round(r.right), y: Math.round(r.top), vw: innerWidth, vh: innerHeight, onTop: !!top && (el.contains(top) || top === el), by: top ? top.tagName + "." + String(top.className).slice(0, 50) : null, sideways: document.documentElement.scrollWidth - innerWidth }; })()`);
+      const ok = !!m && m.w > 0 && m.h > 0 && m.left >= -1 && m.right <= m.vw + 1 && m.y >= 0 && m.y + m.h <= m.vh + 1 && m.onTop && m.sideways <= 1;
+      check(ok, `${name} at ${width}: ${label} is on screen, inside the viewport and not covered`, ok ? `${m.w}×${m.h} at x ${m.left}` : m);
+    }
+    await sleep(300);
+    const { data } = await send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(join(OUT, `${name}-${width}.png`), Buffer.from(data, "base64"));
+    console.log(`shot ${name}-${width}.png`);
+  }
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(600);
+}
 const post = (path, body) =>
   evaluate(`fetch(${JSON.stringify(path)}, { method: "POST", headers: { "content-type": "application/json" }, body: ${JSON.stringify(JSON.stringify(body))} }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`);
 const get = (path) => evaluate(`fetch(${JSON.stringify(path)}, { cache: "no-store" }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`);
@@ -158,6 +186,10 @@ try {
   check(/(Sell|Buy) (it|them) (to|from) Gwei · \+?[\d,]+ Bits?/i.test(promptText), "the results show one next trade, with Gwei’s quote", promptText);
   check(/^\/play\/market\?item=[a-z-]+&side=(buy|sell)&amount=\d+$/i.test(promptHref ?? ""), "it links into the market with item, side and amount", promptHref);
   await shot("02-results-trade-prompt", `document.querySelector('section[aria-label="Your next trade"]')`);
+  await layout("02-layout-trade-prompt", {
+    "the trade prompt": `document.querySelector('section[aria-label="Your next trade"]')`,
+    "its button": `document.querySelector('section[aria-label="Your next trade"] a')`,
+  });
   const q = new URLSearchParams(promptHref.split("?")[1]);
   const item = q.get("item");
   const side = q.get("side");
@@ -229,6 +261,11 @@ try {
   const xpAfterNpc = heroOf(await me());
   check(xpAfterNpc.xp === xpBeforeNpc.xp && xpAfterNpc.level === xpBeforeNpc.level, "his buy adds no quest XP to the seller", { xp: xpAfterNpc.xp });
   await shot("06-sandwich-man-bought", `[...document.querySelectorAll("section")].find((s) => /Other traders/i.test(T(s.querySelector("h2"))))`);
+  await layout("06-layout-market", {
+    "the quest strip": `document.querySelector('section[aria-label="Today’s market quest"]')`,
+    "the Other traders heading": `[...document.querySelectorAll("section h2")].find((h) => /Other traders/i.test(T(h)))`,
+    "Sandwich Man’s latest move": `[...[...document.querySelectorAll("section")].find((s) => /Other traders/i.test(T(s.querySelector("h2")))).querySelectorAll("li, p")].find((e) => /Bought .* listing/i.test(T(e)))`,
+  });
 
   /* ---------- 5. the Suit lab: the cost, the burn, the refusal ---------- */
   step = "5 Suit lab";
@@ -239,6 +276,11 @@ try {
   const recipeSuits = ["Stealth", "Glider", "Octo rig", "Sesame"];
   check(recipeSuits.every((n) => chips.find((c) => c.name === n)?.cost === String(COST)) && chips.filter((c) => c.cost).length === 4, `the four recipe suits print ${COST} Bits; starter suits print none`, chips);
   await shot("07-suit-lab-costs");
+  await layout("07-layout-suit-tiles", {
+    "Stealth’s cost chip": `[...document.querySelectorAll("ul > li > button")].find((b) => /Stealth/.test(T(b)))?.querySelector("[data-craft-cost]")`,
+    "Sesame’s cost chip": `[...document.querySelectorAll("ul > li > button")].find((b) => /Sesame/.test(T(b)))?.querySelector("[data-craft-cost]")`,
+    "Sesame’s tile": `[...document.querySelectorAll("ul > li > button")].find((b) => /Sesame/.test(T(b)))`,
+  });
 
   // Craft while the Bits last, then meet the refusal.
   let crafted = 0;
@@ -256,7 +298,13 @@ try {
     check(text.includes(`Costs ${COST} Bits`) && text.includes(`${w.bits.toLocaleString("en-US")} / ${COST}`), `${suit.name}: the recipe prints “Costs ${COST} Bits” beside the wallet’s ${w.bits}`, text.slice(0, 200));
     if (w.bits >= COST) {
       check(button && !button.disabled && button.label.includes(`${COST} Bits`), `${suit.name}: Craft is on and carries the price`, button);
-      if (crafted === 0) await shot("08-suit-sheet-can-pay");
+      if (crafted === 0) {
+        await shot("08-suit-sheet-can-pay");
+        await layout("08-layout-suit-sheet", {
+          "the “Costs N Bits” row": `sheet().querySelector("li[data-craft-cost]")`,
+          "the Craft button": `[...sheet().querySelectorAll("button")].find((b) => /^Craft /i.test(T(b)))`,
+        });
+      }
       await click(`[...sheet().querySelectorAll("button")].find((b) => /^Craft /i.test(T(b)))`, `Craft ${suit.name}`);
       await waitFor(`!sheet()`, "the craft");
       const notice = await waitFor(`[...document.querySelectorAll('[role="status"]')].map(T).find((t) => /burned ${COST} Bits/i.test(t))`, "the notice with the burn", 10_000).catch(() => null);
@@ -278,6 +326,12 @@ try {
       check(reason === `Crafting burns ${COST} Bits and you have ${w.bits.toLocaleString("en-US")} ${w.bits === 1 ? "Bit" : "Bits"}. Sell spare loot to Gwei or finish a ranked night for the other ${(COST - w.bits).toLocaleString("en-US")}.`, "the reason is printed next to it, with the shortfall", reason);
       notes.spareOffer = await ev(`(() => { const a = byText("dialog[open] a", "List your spares"); return a ? T(a.closest("p")) + " → " + a.getAttribute("href") : null; })()`);
       await shot("10-craft-blocked-bits-short");
+      await layout("10-layout-craft-blocked", {
+        "the “Costs N Bits” row": `sheet().querySelector("li[data-craft-cost]")`,
+        "the blocked-craft reason": `sheet().querySelector("#craft-blocked")`,
+        "the Craft button (off)": `[...sheet().querySelectorAll("button")].find((b) => /^Craft /i.test(T(b)))`,
+        "the spare-loot offer": `byText("dialog[open] a", "List your spares")`,
+      });
       // The server refuses it too, in the contract's words, and the save doesn't move.
       const id = { Stealth: "stealth", Glider: "glider", "Octo rig": "octo", Sesame: "sesame" }[suit.name];
       const m = await me();
