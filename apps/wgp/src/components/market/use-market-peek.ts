@@ -29,7 +29,7 @@ interface Loaded {
   quest: MarketQuestView | null;
 }
 
-/** `stamp`: change it to look again (the Suit lab does after a craft, which may have burned Bits). */
+/** `stamp`: change it to look again (the Suit lab passes the save's revision: a craft may have burned Bits). */
 export function useMarketPeek(stamp = 0): MarketPeek {
   const account = useAccount();
   const key = account.status === "signed-in" ? account.me.player.id : account.status;

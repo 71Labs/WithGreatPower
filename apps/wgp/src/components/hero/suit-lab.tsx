@@ -515,8 +515,9 @@ export function SuitLab() {
   const account = useAccount();
   const chain = useChain();
   const activity = useChainActivity();
-  // One look at the market per visit, and again after each suit the hero gains (a craft may have burned Bits).
-  const peek = useMarketPeek(save?.suits.length ?? 0);
+  // One look at the market per visit, and again each time the server confirms a change to the save
+  // (its revision moves): a craft may have burned Bits, and the wallet is read after the burn, not before.
+  const peek = useMarketPeek(account.status === "signed-in" ? account.me.rev : 0);
   const market = peek.view;
   const [openId, setOpenId] = useState<SuitId | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);

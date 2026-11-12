@@ -14,10 +14,11 @@
  * Shots at 1440 and 375 land in <out>; checks and console errors are printed; exits 1 on a failure.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -32,7 +33,7 @@ const HANDLE = opt("handle", "loop-hero");
 const NIGHT_MS = Number(opt("night-ms", String(8 * 60_000)));
 mkdirSync(OUT, { recursive: true });
 
-const chrome = await launch({ port: PORT, profile: `/private/tmp/claude-501/wgp-market-loop-${PORT}` });
+const chrome = await launch({ port: PORT, profile: join(tmpdir(), `wgp-market-loop-${PORT}`) });
 const { send, evaluate, logs, on } = chrome;
 const failures = [];
 const notes = {};
