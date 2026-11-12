@@ -116,4 +116,35 @@ describe("the Drain Gwei run", () => {
       expect(m.broke, `seed ${seed}`).toBeGreaterThan(0.1);
     }
   });
+
+  it("still does in the lab, where Sandwich Man trades too (seed 2026)", () => {
+    const m = measureEconomy("drain", play(economyConfig(MAINNET, { ...DRAIN, seed: 2026, npc: true })));
+    expect(m.soldOut).toBeGreaterThan(0);
+    expect(m.broke).toBeGreaterThan(0.1);
+  });
+});
+
+describe("Sandwich Man in the measurements", () => {
+  it("is off unless asked for, so the documented tables are measured without him", () => {
+    expect(economyConfig(RECOMMENDED, { ...SEASON, seed: 1 }).npc).toBe(false);
+    expect(play(economyConfig(RECOMMENDED, { ...SEASON, seed: 1 })).history.every((d) => d.npc === null)).toBe(true);
+    expect(play(economyConfig(RECOMMENDED, { ...SEASON, seed: 1, npc: true })).history.every((d) => d.npc !== null)).toBe(true);
+  });
+
+  it("balances to the Bit with him trading, his one-off seed counted once", () => {
+    for (const setting of [MAINNET, RECOMMENDED]) {
+      const e = play(economyConfig(setting, { ...SEASON, seed: 3, npc: true }));
+      const till = e.history[0]!.till;
+      for (const d of e.history) expect(d.supply, `${setting.id} day ${d.day}`).toBe(till + d.minted - d.burned);
+    }
+  });
+
+  it("moves the season's burn share by under a point, and the recommendation still meets the band (docs/ECONOMY.md)", () => {
+    const without = measured(RECOMMENDED, SEASON, SEEDS);
+    const season = measured(RECOMMENDED, { ...SEASON, npc: true }, SEEDS);
+    const sixty = measured(RECOMMENDED, { ...SIXTY, npc: true }, SEEDS);
+    expect(Math.abs(season.burnShare - without.burnShare)).toBeLessThan(0.01);
+    expect(season.burned.craft).toBe(without.burned.craft);
+    expect(verdict(season, sixty).ok).toBe(true);
+  });
 });

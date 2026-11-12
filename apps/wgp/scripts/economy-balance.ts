@@ -10,6 +10,7 @@
  *   ... --offline           skip the mainnet read
  *   ... --search            also sweep craft_bits × fee × price × depth and rank them
  *   ... --drain             also run the lab's "Drain Gwei" stress run for each seed
+ *   ... --npc               also measure a season and 60 days with Sandwich Man trading
  *   ... --out <file>        where the JSON goes (default docs/economy/balance.json)
  *
  * Deterministic: the same seeds give the same numbers. Only the `mainnet` block changes.
@@ -216,7 +217,7 @@ async function main() {
   json.audit = audited;
 
   // The lab as it shipped: crafters re-craft forever and crafting burns 25 Bits.
-  const shipped = new Economy({ days: 21, bots: 60, seed: 2026, params: { craftBits: 25 } });
+  const shipped = new Economy({ days: 21, bots: 60, seed: 2026, params: { craftBits: 25 }, npc: false });
   while (!shipped.done) shipped.step();
   const lab = shipped.history.at(-1)!;
   console.log(`The lab's old default (seed 2026, crafting burns 25, suits re-crafted): ${int(lab.minted)} earned, ${int(lab.burned)} burned, ${lab.crafted} suits.`);
@@ -314,6 +315,31 @@ async function main() {
     const found = drain();
     table(`Drain Gwei: ${DRAIN.days} days, ${DRAIN.bots} heroes, ${DRAIN.mix.join(" + ")}, on mainnet's rules`, ["seed", "item-days sold out", "item-days broke", "till at the end"], found.map((f) => [f.seed, pct(f.soldOut), pct(f.broke), int(f.till)]));
     json.drain = found;
+  }
+
+  if (flag("npc")) {
+    // Every table above is measured without Sandwich Man (he is off on mainnet until funded). These rows turn him on.
+    const rows: (string | number)[][] = [];
+    const out: Record<string, Record<string, Measure>> = {};
+    for (const [id, title, run] of runs.slice(0, 2)) {
+      out[id] = {};
+      for (const s of [MAINNET, RECOMMENDED]) {
+        const without = tables[id]![s.id]!;
+        const withNpc = measured(s, { ...run, npc: true }, SEEDS);
+        out[id]![s.id] = withNpc;
+        rows.push(line(`${title.split(" (")[0]} · ${s.label}`, without), line(`${title.split(" (")[0]} · ${s.label} + Sandwich Man`, withNpc));
+      }
+    }
+    table(`With Sandwich Man trading (seeded 300 Bits once, not counted in "earned"); mean of ${SEEDS.length} seeds`, HEAD, rows);
+    const v = verdict(out.season!.recommended!, out.sixty!.recommended!);
+    console.log(`  ${v.ok ? "PASS" : "FAIL"}  Recommended + Sandwich Man   burn share ${v.burnShare ? "ok" : "no"} · first suit ${v.firstSuit ? "ok" : "no"} · vendor ${v.vendor ? "ok" : "no"}`);
+    // What /lab/economy shows for its default seed: the lab always runs with him.
+    const lab = Object.fromEntries([MAINNET, RECOMMENDED].map((s) => [s.id, measure(s, { ...SEASON, seed: 2026, npc: true })]));
+    console.log(`  The lab's seed 2026 with him: mainnet today ${int(lab.mainnet!.minted.total)} earned / ${int(lab.mainnet!.burned.total)} burned; recommended ${int(lab.recommended!.minted.total)} earned / ${int(lab.recommended!.burned.total)} burned.`);
+    const labDrain = measureEconomy("drain", play(economyConfig(MAINNET, { ...DRAIN, seed: 2026, npc: true })));
+    const cells = DRAIN.days * Object.keys(ITEMS).length;
+    console.log(`  The lab's Drain Gwei, seed 2026 with him: ${Math.round(labDrain.soldOut * cells)} item-days sold out and ${Math.round(labDrain.broke * cells)} unable to buy, of ${cells}.`);
+    json.npc = { tables: out, verdict: v, lab, labDrain: { soldOut: labDrain.soldOut, broke: labDrain.broke, itemDays: cells } };
   }
 
   // The owner's `set_market_params` arguments for the recommendation.

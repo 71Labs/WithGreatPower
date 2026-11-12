@@ -5,7 +5,7 @@ This is the balance report for the Mempool Market. It says where Bits come from 
 Every number below comes from one script, and the same seeds always give the same numbers:
 
 ```bash
-pnpm --filter wgp exec tsx scripts/economy-balance.ts --search --drain
+pnpm --filter wgp exec tsx scripts/economy-balance.ts --search --drain --npc
 ```
 
 - **Code:** `apps/wgp/src/lib/market/balance.ts` (the measurements and the settings), `bots.ts` (the bot heroes), `scripts/economy-balance.ts` (the tables).
@@ -55,7 +55,7 @@ The supply identity is exact: supply = seeded till + minted − burned, so 15,13
 
 About 97% of every Bit earned stays in the supply.
 
-**The lab overstated the sink.** The old default (seed 2026) showed 98,255 earned and 10,021 burned, with a 25-Bit crafting burn that mainnet doesn't have and bots that crafted 295 suits. The contract refuses a second copy of a suit ("You already own this suit"), so 60 heroes with 23 crafters can craft at most 92. With mainnet's real settings and the one-suit rule, the same seed gives 97,680 earned and 2,788 burned. The lab now shows that.
+**The lab overstated the sink.** The old default (seed 2026) showed 98,255 earned and 10,021 burned, with a 25-Bit crafting burn that mainnet doesn't have and bots that crafted 295 suits. The contract refuses a second copy of a suit ("You already own this suit"), so 60 heroes with 23 crafters can craft at most 92. With mainnet's real settings and the one-suit rule, the same seed gives 97,680 earned and 2,788 burned. The lab now runs those settings; it also runs Sandwich Man (below), so its counters for seed 2026 read 99,022 earned (his 300-Bit seed included) and 2,847 burned.
 
 ## Method
 
@@ -187,7 +187,7 @@ pnpm --filter wgp exec tsx ../../scripts/near/market-args.ts --craft-bits 250 --
 
 ## The Drain Gwei run
 
-In `/lab/economy`, **Drain Gwei** runs 30 days of 60 heroes on mainnet's settings with three hoarders buying rares for every dumper selling loot. Gwei sells out of rares and her tills for the rest run dry. For seeds 1 to 8 she ends 5.0% to 8.7% of item-days sold out and 29.2% to 34.6% unable to buy; with seed 2026 it is 18 and 71 of 240. It's a stress mix, not a forecast, and the page says so.
+In `/lab/economy`, **Drain Gwei** runs 30 days of 60 heroes on mainnet's settings with three hoarders buying rares for every dumper selling loot. Gwei sells out of rares and her tills for the rest run dry. For seeds 1 to 8 she ends 5.0% to 8.7% of item-days sold out and 29.2% to 34.6% unable to buy; with seed 2026 it is 18 and 71 of 240 (18 and 70 in the lab, where Sandwich Man also trades). It's a stress mix, not a forecast, and the page says so.
 
 ## What was not fixed
 
@@ -198,4 +198,21 @@ In `/lab/economy`, **Drain Gwei** runs 30 days of 60 heroes on mainnet's setting
 - **The taper isn't live**, and the Suit lab doesn't yet check the Bits cost (above).
 - **The bots are an assumption.** Their mix, one night a day, and a hoarder who never spends are choices, not observations. Mainnet has 23 players and a handful of trades, too few to fit behaviour to.
 - **Vendor limits are read at each day's close.** A sell-out that refills the same day isn't counted.
-- **Sandwich Man isn't in these runs.** Another branch adds him to the lab; the numbers will move a little when it merges.
+- **Sandwich Man is measured separately.** Every table above runs without him, because he is off on mainnet until his account is funded. The next section turns him on.
+
+## With Sandwich Man
+
+Sandwich Man is the NPC trader ([npc-trader.md](npc-trader.md)): one more account using the market calls players use, started with a one-off 300 Bits. `--npc` measures a season and 60 days with him trading among the 60 heroes (`balance.ts`, `npc: true`; mean of 8 seeds). His 300 Bits are minted once and are not counted in "earned".
+
+| Run | Setting | Earned | Burned | Fee | Craft | Burned ÷ earned | Net per hero per day | First suit | Sold out + broke |
+|---|---|---|---|---|---|---|---|---|---|
+| 21 days, 60 heroes | Mainnet today | 97,324 | 2,801 | 2,801 | 0 | 2.9% | 74.5 | night 2 | 0.0% |
+| | + Sandwich Man | 97,516 | 2,847 | 2,847 | 0 | 2.9% | 74.8 | night 2 | 0.0% |
+| | **Recommended** | 97,618 | 28,063 | 5,063 | 23,000 | 28.8% | 57.3 | night 5 | 0.1% |
+| | **+ Sandwich Man** | 97,524 | 28,049 | 5,049 | 23,000 | **28.7%** | 59.3 | night 5 | 0.1% |
+| 60 days, 60 heroes | Mainnet today | 277,718 | 8,436 | 8,436 | 0 | 3.0% | 74.7 | night 2 | 0.4% |
+| | + Sandwich Man | 278,121 | 8,691 | 8,691 | 0 | 3.1% | 74.7 | night 2 | 0.0% |
+| | **Recommended** | 278,581 | 36,703 | 13,703 | 23,000 | 13.2% | 73.8 | night 5 | 2.5% |
+| | **+ Sandwich Man** | 278,467 | 36,815 | 13,815 | 23,000 | 13.2% | 73.6 | night 5 | 2.3% |
+
+**The difference is small.** One trader with 300 Bits among 60 heroes who earn about 97,000 a season moves the burn share by a tenth of a point at most, and the recommendation still passes the band with him (28.7%, night 5, 2.3%). He doesn't craft, so he adds nothing to the crafting sink; his trades add a little fee burn on mainnet's settings (46 Bits a season) and none to speak of at 5%. Over 60 days Gwei is a little less often unable to buy with him around (0.0% against 0.4% on mainnet's settings), because he buys what dumpers sell her and lists it. "Earned" differs by a few hundred Bits between the paired rows only because his trades change what the bots do next, and so which nights they roll.
