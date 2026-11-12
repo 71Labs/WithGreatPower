@@ -1,7 +1,9 @@
 "use client";
 
 /**
- * "Other traders" on the Mempool Market: Sandwich Man, the NPC arbitrageur. Who he is,
+ * "Other traders" on the Mempool Market: Sandwich Man, the NPC arbitrageur. While he has no
+ * account on this market he is shown as practice only, with a link to the economy lab where
+ * he does trade, and no wallet is claimed for him. Otherwise: who he is,
  * his wallet (his own NEAR account, linked to NearBlocks, when he trades on chain), what
  * he holds, his latest moves with the reason for each in his own words, and his rules in
  * a popover that links to the one file they live in (src/lib/market/npc-rules.ts).
@@ -10,11 +12,12 @@
  * The popover is "Why this price?"'s own (`usePopover`): it opens on hover, keyboard focus or
  * a press that pins it, closes on Escape or a press elsewhere, and stays clear of the dock.
  */
+import Link from "next/link";
 import { createElement, useEffect, useId, useRef, useState } from "react";
 
 import { StickerFrame, StickerPanel } from "@/components/game/kit";
 import { AVATARS } from "@/components/cast";
-import { CircleAlert, CircleSlash, ExternalLink, HelpCircle, Lock, Moon, Store } from "@/components/icons";
+import { ArrowRight, CircleAlert, ExternalLink, HelpCircle, Lock, Moon, Store, TestTube } from "@/components/icons";
 import { getNpcTrader, type NpcTraderView } from "@/lib/market/npc-api";
 
 import { formatBits } from "./sparkline";
@@ -82,12 +85,7 @@ function Chips({ npc }: { npc: NpcTraderView }) {
           Simulated
         </span>
       ) : null}
-      {npc.status === "off" ? (
-        <span className={`${chip} bg-game-paper-2`}>
-          <CircleSlash aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
-          Off
-        </span>
-      ) : npc.status === "closed-shop" ? (
+      {npc.status === "closed-shop" ? (
         <span className={`${chip} bg-game-gold`}>
           <Lock aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
           Closed shop
@@ -113,7 +111,7 @@ function Rules({ npc }: { npc: NpcTraderView }) {
 
   return (
     <div {...boxProps} className="relative shrink-0">
-      <button {...buttonProps} className={`inline-flex min-h-8 items-center gap-1 text-start text-[12px] leading-4 pointer-coarse:min-h-11 ${link}`}>
+      <button {...buttonProps} className={`inline-flex min-h-8 items-center gap-1 text-start text-[12px] leading-4 max-sm:min-h-11 pointer-coarse:min-h-11 ${link}`}>
         <HelpCircle aria-hidden className="size-4 shrink-0" strokeWidth={2} />
         How he trades
       </button>
@@ -176,7 +174,7 @@ function Moves({ npc }: { npc: NpcTraderView }) {
       </h3>
       {npc.log.length === 0 ? (
         <p className="max-w-[52ch] text-[14px] leading-5 [text-wrap:pretty]">
-          {npc.mode === "off" ? npc.statusLine : `“${npc.statusLine}” No moves yet: he acts when a trade or a listing lands.`}
+          “{npc.statusLine}” No moves yet: he acts when a trade or a listing lands.
         </p>
       ) : (
         <ol aria-labelledby={headingId} className="flex flex-col divide-y-2 divide-dashed divide-game-ink/10">
@@ -204,26 +202,58 @@ function Moves({ npc }: { npc: NpcTraderView }) {
   );
 }
 
+/** Where a reader can watch him trade while he isn't on this market. */
+export const NPC_LAB_HREF = "/lab/economy#lab-npc";
+
 /**
- * The strip. Renders nothing until the first answer arrives, so the market never waits on
- * it. `onMove` fires when a new move of his shows up after the first load: he may have
- * bought the viewer's listing, so the screen reloads its listings and wallet.
+ * Sandwich Man when he isn't configured for this market (no account of his own yet): said
+ * plainly, with where he does trade. No wallet, no "latest moves", nothing that reads as broken.
  */
-export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?: number; onMove?(): void }) {
-  const npc = useNpcTrader(stamp, bump);
+function PracticeOnly({ npc, headingId }: { npc: NpcTraderView; headingId: string }) {
+  return (
+    <StickerPanel as="section" aria-labelledby={headingId} className="flex flex-col gap-3 p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id={headingId} className="text-[12px] font-bold uppercase leading-4 tracking-[0.08em] text-game-muted">
+          Other traders
+        </h2>
+        <Rules npc={npc} />
+      </div>
+      <div className="flex min-w-0 items-start gap-3.5">
+        <StickerFrame drop="sm" label={`${npc.name}, the arbitrageur`} className="[--s:64px] sm:[--s:76px]">
+          {createElement(AVATARS[npc.id])}
+        </StickerFrame>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[16px] font-semibold leading-5">
+              {npc.name} <span className="font-normal text-game-muted">· the arbitrageur</span>
+            </p>
+            <p className="flex flex-wrap gap-1.5">
+              <span className={`${chip} bg-game-paper-2 pl-2`}>NPC</span>
+              <span className={`${chip} bg-game-paper-2`}>
+                <TestTube aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+                Practice only
+              </span>
+            </p>
+          </div>
+          <p className="max-w-[62ch] text-[14px] leading-5 [text-wrap:pretty]">
+            {npc.name} isn’t trading on this market yet: his NEAR account isn’t funded. For now he trades only in the economy lab’s simulation, by the same rules he’ll follow here.
+          </p>
+          <Link href={NPC_LAB_HREF} className={`inline-flex min-h-8 items-center gap-1 self-start text-[14px] leading-5 max-sm:min-h-11 pointer-coarse:min-h-11 ${link}`}>
+            Watch him trade in the economy lab
+            <ArrowRight aria-hidden className="size-4 shrink-0" strokeWidth={2.25} />
+          </Link>
+        </div>
+      </div>
+    </StickerPanel>
+  );
+}
+
+/** The strip for one answer from the server: his practice-only notice while he's off, else who he is, what he holds and his moves. */
+export function TraderStrip({ npc }: { npc: NpcTraderView }) {
   const headingId = useId();
-  const newest = npc ? (npc.log[0] ? `${npc.log[0].at}-${npc.log[0].text}` : "") : null;
-  const seen = useRef<string | null>(null);
-  const moved = useRef(onMove);
-  useEffect(() => {
-    moved.current = onMove;
-  }, [onMove]);
-  useEffect(() => {
-    if (newest === null) return;
-    if (seen.current !== null && seen.current !== newest) moved.current?.();
-    seen.current = newest;
-  }, [newest]);
-  if (!npc) return null;
+  if (npc.mode === "off") return <PracticeOnly npc={npc} headingId={headingId} />;
+  // His Bits are real tokens only on chain; in the simulated market nothing moves.
+  const how = npc.mode === "on-chain" ? "He trades by fixed rules from his own NEAR account." : "He trades by fixed rules with his own simulated Bits.";
   return (
     <StickerPanel as="section" aria-labelledby={headingId} className="flex flex-col gap-3 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
@@ -246,7 +276,7 @@ export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?
             </div>
             {/* A status the reader should hear when it changes: he closed shop, he reopened. */}
             <p role="status" className="text-[13px] leading-[18px] [text-wrap:pretty]">
-              {npc.mode === "off" ? "He trades by fixed rules from his own wallet. He’s off right now." : npc.log.length > 0 ? `“${npc.statusLine}”` : "He trades by fixed rules from his own wallet."}
+              {npc.log.length > 0 ? `“${npc.statusLine}”` : how}
             </p>
             <Wallet npc={npc} />
           </div>
@@ -255,4 +285,26 @@ export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?
       </div>
     </StickerPanel>
   );
+}
+
+/**
+ * The strip on the market. Renders nothing until the first answer arrives, so the market
+ * never waits on it. `onMove` fires when a new move of his shows up after the first load:
+ * he may have bought the viewer's listing, so the screen reloads its listings and wallet.
+ */
+export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?: number; onMove?(): void }) {
+  const npc = useNpcTrader(stamp, bump);
+  const newest = npc ? (npc.log[0] ? `${npc.log[0].at}-${npc.log[0].text}` : "") : null;
+  const seen = useRef<string | null>(null);
+  const moved = useRef(onMove);
+  useEffect(() => {
+    moved.current = onMove;
+  }, [onMove]);
+  useEffect(() => {
+    if (newest === null) return;
+    if (seen.current !== null && seen.current !== newest) moved.current?.();
+    seen.current = newest;
+  }, [newest]);
+  if (!npc) return null;
+  return <TraderStrip npc={npc} />;
 }

@@ -30,7 +30,7 @@ const off = (now: number): NpcTraderView => ({
   accountId: null,
   explorerUrl: null,
   status: "off",
-  statusLine: "Not in line today. When he trades, every move shows up here, labelled as his.",
+  statusLine: "Practice only. His NEAR account isn’t funded yet, so he trades in the economy lab’s simulation.",
   bits: null,
   items: [],
   listings: [],

@@ -44,7 +44,7 @@ export function NpcPanel({ history, hover, onShowBroke }: { history: DaySnapshot
             {mounted ? createElement(AVATARS[NPC_ID]) : null}
           </StickerFrame>
           <div className="flex min-w-0 flex-col gap-1.5">
-            <h2 id="lab-npc" className="text-[16px] font-semibold leading-5">
+            <h2 id="lab-npc" className="scroll-mt-24 text-[16px] font-semibold leading-5 text-game-ink">
               {NPC_NAME} <span className="font-normal text-game-muted">· the arbitrageur</span>
             </h2>
             <p className="flex flex-wrap gap-1.5">
@@ -62,7 +62,7 @@ export function NpcPanel({ history, hover, onShowBroke }: { history: DaySnapshot
               )}
             </p>
             <p className="max-w-[60ch] text-[13px] leading-[18px] text-game-muted [text-wrap:pretty]">
-              One more trader among the bots, with his own wallet and a one-off seed of {formatBits(NPC_RULES.seedBits)} Bits. He flips cheap listings, buys dips and undercuts Gwei, by the same rules file the live market
+              One more trader among the bots, with his own simulated Bits: a one-off seed of {formatBits(NPC_RULES.seedBits)}. He flips cheap listings, buys dips and undercuts Gwei, by the same rules file the live market
               runs. Under {NPC_RULES.closeBelowBits} Bits he closes shop and sells down until he’s back to {NPC_RULES.reopenAtBits}.
             </p>
             <a
