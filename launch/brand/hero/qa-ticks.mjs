@@ -30,7 +30,7 @@ const tier = opt("tier", "high");
 const chapter = opt("case", "");
 const out = opt("out", join(here, "game-shots/qa-sweep/ticks"));
 const NAMES = ["Peter Parquet", "Miles Mempool", "Gwen Gasless", "Ben Blockly", "May Merkle", "Otto Oracle"];
-const save = JSON.parse(readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8"));
+const save = JSON.parse(readFileSync(opt("save", "launch/brand/hero/fixtures/hero-save.json"), "utf8"));
 save.night = level === 1 ? 1 : 2 * level - 1;
 save.patrol = null;
 save.nightDone = false;
@@ -76,7 +76,7 @@ const WATCH = `(() => {
   return true;
 })()`;
 
-const { send, evaluate, close } = await launch({ port: 9500 + Math.floor(Math.random() * 200), profile: `/private/tmp/claude-501/wgp-qa/ticks-${Date.now()}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const { send, evaluate, close } = await launch({ port: 9500 + Math.floor(Math.random() * 200), profile: `/tmp/wgp-qa/ticks-${Date.now()}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const log = [];
 try {
   await send("Page.enable");

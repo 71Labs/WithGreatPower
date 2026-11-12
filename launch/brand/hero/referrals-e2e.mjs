@@ -46,9 +46,9 @@ const opt = (name, def) => {
 };
 const BASE = opt("base", "http://127.0.0.1:3980");
 const PORT = Number(opt("port", "9982"));
-const OUT = opt("out", "/Users/eromonseleodigie/near-hackathon/launch/brand/hero/game-shots/referrals-e2e");
-const PROFILE = opt("profile", `/private/tmp/claude-501/wgp-referrals-e2e-${PORT}`);
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const OUT = opt("out", "launch/brand/hero/game-shots/referrals-e2e");
+const PROFILE = opt("profile", `/tmp/wgp-referrals-e2e-${PORT}`);
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const SUFFIX = opt("suffix", "");
 const NIGHT_MS = Number(opt("night-ms", String(8 * 60_000)));
@@ -79,7 +79,7 @@ if (opt("outbox", null)) {
     ...found.players.map((p) => `| ${p.handle} | ${p.referred_by ?? "none"} | ${p.x_handle ?? "none"} | ${p.verified_runs} |`),
     "",
   ];
-  appendFileSync(join(opt("out", "/Users/eromonseleodigie/near-hackathon/launch/brand/hero/game-shots/referrals-e2e"), "report.md"), md.join("\n"));
+  appendFileSync(join(opt("out", "launch/brand/hero/game-shots/referrals-e2e"), "report.md"), md.join("\n"));
   process.exit(0);
 }
 

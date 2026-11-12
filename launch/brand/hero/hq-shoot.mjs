@@ -196,7 +196,7 @@ window.__ev = [];
 
 async function browser({ viewport, cpu = 1, inject = [] }) {
   const port = 9800 + Math.floor(Math.random() * 80);
-  const c = await launch({ port, profile: `/private/tmp/claude-501/wgp-hq/cdp-${port}`, flags: GL_FLAGS });
+  const c = await launch({ port, profile: `/tmp/wgp-hq/cdp-${port}`, flags: GL_FLAGS });
   const v = VIEWPORTS[viewport];
   await c.send("Page.enable");
   await c.send("Runtime.enable");

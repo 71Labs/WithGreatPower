@@ -243,10 +243,10 @@ async function sleepNight(p: Player, step = "sleep") {
   }
 }
 
-/** The server refuses a night whose game time runs more than 60 s ahead of the wall clock. */
+/** The server refuses a night whose game time runs more than 5 s ahead of the wall clock. */
 function waitForWallClock(players: Player[]): number {
   const ready = players.filter((p) => !p.dead && p.played && p.run);
-  const waits = ready.map((p) => p.played!.ticks / SIM_HZ - 60 + 1 - (Date.now() - p.run!.startedAt) / 1000);
+  const waits = ready.map((p) => p.played!.ticks / SIM_HZ - 5 + 1 - (Date.now() - p.run!.startedAt) / 1000);
   return Math.max(0, ...waits) * 1000;
 }
 

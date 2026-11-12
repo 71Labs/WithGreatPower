@@ -40,7 +40,7 @@ const DEVICES = {
 };
 
 const port = 9760 + Math.floor(Math.random() * 30);
-const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-case/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const { send, evaluate, close, logs } = await launch({ port, profile: `/tmp/wgp-case/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const shot = async (file) => {
   const { data } = await send("Page.captureScreenshot", { format: "png" });
   writeFileSync(file, Buffer.from(data, "base64"));

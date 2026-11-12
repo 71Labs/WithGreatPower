@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {

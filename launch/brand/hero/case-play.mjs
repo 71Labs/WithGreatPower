@@ -27,7 +27,7 @@ const base = opt("base", "http://127.0.0.1:3861");
 const out = opt("out", "launch/brand/hero/game-shots/case-001/final");
 const tier = opt("tier", "high");
 /** A save with a hero (and no night under way): the guest plays from it, the dev player imports it. */
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 const DEVICES = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
   phone: { width: 390, height: 844, deviceScaleFactor: 3, mobile: true },
@@ -173,7 +173,7 @@ async function playOnce(who, dev, opts = {}) {
   const name = opts.name ?? `${who}-${dev}`;
   const dir = join(out, name);
   mkdirSync(dir, { recursive: true });
-  const { send, evaluate, close, logs } = await launch({ port: port + Math.floor(Math.random() * 1000), profile: `/private/tmp/claude-501/wgp-case/play-${name}-${Date.now()}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+  const { send, evaluate, close, logs } = await launch({ port: port + Math.floor(Math.random() * 1000), profile: `/tmp/wgp-case/play-${name}-${Date.now()}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
   const run = { who, dev, tier: tierHere, cpu: opts.cpu ?? 1, shots: [], beats: [], errors: [], stats: {}, result: null };
   const shot = async (n) => {
     const { data } = await send("Page.captureScreenshot", { format: "png" });

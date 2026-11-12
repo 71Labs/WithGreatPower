@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -33,10 +33,10 @@ const base = opt("base", "http://127.0.0.1:3920");
 const out = opt("out", "launch/brand/hero/game-shots/free-roam/play");
 const who = opt("who", "guest");
 const tier = opt("tier", "high");
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 mkdirSync(out, { recursive: true });
 
-const cdp = await launch({ port: 9751 + (who === "dev" ? 1 : 0), profile: `/private/tmp/claude-501/wgp-city-play-${who}` });
+const cdp = await launch({ port: 9751 + (who === "dev" ? 1 : 0), profile: `/tmp/wgp-city-play-${who}` });
 const { logs, close } = cdp;
 /** Every CDP call gives up after 8 s (a stalled page never hangs the run). */
 const within = (promise, what) => Promise.race([promise, new Promise((_, j) => setTimeout(() => j(new Error(`timed out: ${what}`)), 8000))]);

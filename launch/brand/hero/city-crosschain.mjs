@@ -22,7 +22,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -33,10 +33,10 @@ const base = opt("base", "http://127.0.0.1:4020");
 const out = opt("out", "launch/brand/hero/game-shots/city-crosschain");
 const tier = opt("tier", "high");
 const port = Number(opt("port", "9420"));
-const SAVE = JSON.parse(readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8"));
+const SAVE = JSON.parse(readFileSync(opt("save", "launch/brand/hero/fixtures/hero-save.json"), "utf8"));
 mkdirSync(out, { recursive: true });
 
-const cdp = await launch({ port, profile: `/private/tmp/claude-501/wgp-city-crosschain-${port}` });
+const cdp = await launch({ port, profile: `/tmp/wgp-city-crosschain-${port}` });
 const { logs, close } = cdp;
 const within = (promise, what) => Promise.race([promise, new Promise((_, j) => setTimeout(() => j(new Error(`timed out: ${what}`)), 10000))]);
 const send = (method, params) => within(cdp.send(method, params), method);

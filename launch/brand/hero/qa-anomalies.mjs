@@ -44,7 +44,7 @@ const only = opt("only", "");
 const maxMinutes = Number(opt("minutes", "4"));
 /** The probe (`--probe` another copy: run an older checkout with today's measurements). */
 const PROBE = readFileSync(opt("probe", join(here, "qa-probe.js")), "utf8");
-const HERO = JSON.parse(readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8"));
+const HERO = JSON.parse(readFileSync(opt("save", "launch/brand/hero/fixtures/hero-save.json"), "utf8"));
 const NAMES = ["Peter Parquet", "Miles Mempool", "Gwen Gasless", "Ben Blockly", "May Merkle", "Otto Oracle"];
 
 /** A save for a villain level: the night it falls on and a hero levelled to match. */
@@ -68,7 +68,7 @@ async function playNight(n, slot) {
   const dir = join(out, n.name);
   mkdirSync(dir, { recursive: true });
   const port = 9300 + slot * 7 + Math.floor(Math.random() * 6);
-  const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-qa/${label}-${n.name}-${Date.now()}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--window-size=1280,800"] });
+  const { send, evaluate, close, logs } = await launch({ port, profile: `/tmp/wgp-qa/${label}-${n.name}-${Date.now()}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--window-size=1280,800"] });
   const res = { name: n.name, tier: n.tier, chapter: n.chapter, night: n.save.night, hero: n.save.hero.name, shots: [], errors: [], beats: [], perf: [], qa: null };
   const t0 = Date.now();
   try {
