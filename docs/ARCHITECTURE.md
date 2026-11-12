@@ -2,7 +2,7 @@
 
 The build plan for the 3D game, its leaderboard, NEAR contracts and Google sign-in. Milestone PRs implement it in order; when code and this document disagree, fix one of them in the same PR.
 
-**Status (Nov 3, 2026):** M0–M3 have shipped and run on NEAR mainnet (`game.wgpnear.near`; the README lists the transactions). Google sign-in goes through Privy while NEAR Auth waits for its mainnet client (§5). The sections below describe what's built; §7 keeps the original plan and dates.
+**Status (Nov 12, 2026):** everything below is built and live on NEAR mainnet (`game.wgpnear.near`), and players use it: the README lists the transactions and how to check them. Since the first milestones the game has grown new modes, each with its own ruleset tag so its logs never replay as another mode's: three case files ([chapters/](chapters/)), the Daily Run, time trials and duels ([compete.md](compete.md)), the free-roam City, and referrals ([referrals.md](referrals.md)). The player's loop is in [GAME-LOOP.md](GAME-LOOP.md). Google sign-in goes through Privy while NEAR Auth waits for its mainnet client (§5). §7 keeps the original plan and dates.
 
 ## Architecture
 A pnpm workspace at the repo root. Only the deterministic core becomes a package.
