@@ -31,7 +31,7 @@ const HIDE = `details { display: none !important; } nextjs-portal { display: non
 const save = join(HERE, "..", "..", "out", "saves", "night-a.json");
 
 const port = 9700 + Math.floor(Math.random() * 50);
-const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-cast/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const { send, evaluate, close, logs } = await launch({ port, profile: `/tmp/wgp-cast/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const shot = async (file) => {
   const { data } = await send("Page.captureScreenshot", { format: "png" });
   writeFileSync(file, Buffer.from(data, "base64"));

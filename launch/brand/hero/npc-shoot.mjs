@@ -56,7 +56,7 @@ const EXTRA = opt("q", "") ? `&${opt("q", "")}` : "";
 
 async function browser({ view, cpu = 1, inject = [], save = true }) {
   const port = 9300 + Math.floor(Math.random() * 120);
-  const c = await launch({ port, profile: `/private/tmp/claude-501/wgp-npcs/cdp-${port}`, flags: GL_FLAGS });
+  const c = await launch({ port, profile: `/tmp/wgp-npcs/cdp-${port}`, flags: GL_FLAGS });
   const v = VIEWS[view];
   await c.send("Page.enable");
   await c.send("Runtime.enable");
@@ -243,7 +243,7 @@ async function table() {
   td:first-child { font-weight: 600; white-space: nowrap; }
   </style><h1>The city's people: perf over a full autopilot night</h1><p>Production build, headless Chrome on this Mac's GPU (ANGLE Metal). Frame times are every animation frame from GO to the outro; draw calls are sampled four times a second.</p><table><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("")}</table>`;
   writeFileSync(join(ROOT, "perf.html"), html);
-  const c = await launch({ port: 9450 + Math.floor(Math.random() * 40), profile: "/private/tmp/claude-501/wgp-npcs/table", flags: [] });
+  const c = await launch({ port: 9450 + Math.floor(Math.random() * 40), profile: "/tmp/wgp-npcs/table", flags: [] });
   try {
     await c.send("Page.enable");
     await c.send("Emulation.setDeviceMetricsOverride", { width: 1700, height: 600, deviceScaleFactor: 2, mobile: false });
