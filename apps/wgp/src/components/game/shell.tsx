@@ -132,10 +132,10 @@ function HeroChip({ hero }: { hero: Hero }) {
         <HeroTile suit={hero.suit} className="size-[30px] rounded-full ring-0" />
       </XpRing>
       <span className="flex min-w-0 flex-col">
-        <span title={hero.name} className="max-w-[9.5rem] truncate text-[14px] font-semibold leading-4 sm:max-w-[14rem]">{hero.name}</span>
-        <span className="num whitespace-nowrap text-[12px] font-medium leading-4 text-game-muted">
+        <span title={hero.name} className="max-w-[9.5rem] truncate text-[14px] font-semibold leading-4 max-[359px]:sr-only sm:max-w-[14rem]">{hero.name}</span>
+        <span className="num whitespace-nowrap text-[12px] font-medium leading-4 text-game-muted max-[359px]:text-[13px] max-[359px]:font-semibold max-[359px]:text-game-ink">
           Lv {hero.level}
-          {/* A 320px phone has no room for the numbers; the ring round the tile shows the same progress. */}
+          {/* A 320px phone has room for the level only: the name is on the Hero screen, and the ring round the tile shows the XP. */}
           <span className="max-[359px]:sr-only">
             <span aria-hidden> · </span>
             <span className="sr-only">, </span>
@@ -406,7 +406,7 @@ const ROW = "sm:flex-row sm:gap-2 [@media(max-height:520px)]:flex-row [@media(ma
 
 /** One tab: at least 44px each way, its label on one line and never cut. */
 const TAB =
-  `relative flex h-14 w-full min-w-11 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[18px] px-1 text-[12px] font-semibold leading-4 focus-visible:outline-offset-1 motion-safe:transition-[scale] motion-safe:duration-200 motion-safe:ease-out active:scale-[0.97] sm:h-12 sm:px-3 sm:text-[13px] lg:px-3.5 [@media(max-height:520px)]:h-11 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-[13px] ${ROW}`;
+  `relative flex h-14 w-full min-w-11 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[18px] px-1 text-[12px] font-semibold leading-4 focus-visible:outline-offset-1 max-[359px]:px-0.5 max-[359px]:text-[11px] motion-safe:transition-[scale] motion-safe:duration-200 motion-safe:ease-out active:scale-[0.97] sm:h-12 sm:px-3 sm:text-[13px] lg:px-3.5 [@media(max-height:520px)]:h-11 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-[13px] ${ROW}`;
 const TAB_ON = "bg-game-ink text-game-paper";
 const TAB_OFF = "text-game-ink pointer-fine:hover:bg-game-paper-2";
 /** A tab's badge sits on the tab's top corner, clear of the icon and the label. */
