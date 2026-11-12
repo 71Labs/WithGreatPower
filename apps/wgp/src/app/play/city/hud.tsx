@@ -103,7 +103,8 @@ export function TaskTracker({ hud, tracked = null }: { hud: RoamHud; tracked?: T
   return (
     <StickerPanel as="section" aria-label="City tasks" data-hud-zone="avoid" className="pointer-events-none flex w-[min(320px,calc(100vw-152px))] flex-col gap-2 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-bold uppercase leading-4 tracking-[0.08em]">Free roam</span>
+        {/* Under 420px the counts need the whole row; the panel is already named "City tasks". */}
+        <span className="whitespace-nowrap text-[12px] font-bold uppercase leading-4 tracking-[0.08em] max-[419px]:hidden">Free roam</span>
         <span className="num flex items-center gap-2 text-[12px] font-semibold leading-4 text-game-muted">
           <span className="flex items-center gap-1" title="Tasks done">
             <Target aria-hidden className="size-3.5" strokeWidth={2.25} />
@@ -124,8 +125,12 @@ export function TaskTracker({ hud, tracked = null }: { hud: RoamHud; tracked?: T
       </div>
       {tasks.length ? (
         <ul className="flex flex-col gap-1.5">
-          {tasks.map((t) => (
-            <li key={t.id} className={`flex flex-col gap-0.5 rounded-[12px] px-2.5 py-1.5 ${t.id === tracked ? "outline outline-2 -outline-offset-2 outline-game-ink" : ""} bg-game-paper-2`}>
+          {tasks.map((t, i) => (
+            // A phone on its side shows the first task only: the corner is short, and the map has the rest.
+            <li
+              key={t.id}
+              className={`flex flex-col gap-0.5 rounded-[12px] px-2.5 py-1.5 ${t.id === tracked ? "outline outline-2 -outline-offset-2 outline-game-ink" : ""} bg-game-paper-2 ${i > 0 ? "[@media(max-height:520px)]:hidden" : ""}`}
+            >
               <span className="flex items-center gap-1.5 text-[13px] font-bold leading-4">
                 {t.id === tracked ? <Target aria-hidden className="size-3.5 shrink-0 text-game-hero" strokeWidth={2.5} /> : null}
                 {TASKS[t.id].title}
@@ -179,12 +184,12 @@ export function raceChipText(hud: RoamHud): { tone: "race" | "won" | "lost" | "a
 }
 
 /** Front-run's race chip: "Gate 3 of 6 · Sandwich Man: gate 4", who's ahead, then how it ended. */
-export function RaceChip({ hud }: { hud: RoamHud }) {
+export function RaceChip({ hud, className = "justify-center px-4" }: { hud: RoamHud; className?: string }) {
   const t = raceChipText(hud);
   if (!t) return null;
   const mark = t.tone === "won" ? "bg-game-mint" : "bg-game-gold";
   return (
-    <div className="pointer-events-none flex justify-center px-4">
+    <div data-hud-zone="avoid" className={`pointer-events-none flex ${className}`}>
       <p role="status" aria-live="polite" className="wgp-pop flex max-w-full items-center gap-2.5 rounded-[22px] border-[2.5px] border-game-ink bg-game-paper py-1.5 pl-1.5 pr-4 text-game-ink shadow-[var(--game-shadow-sm)]">
         {t.tone === "race" || t.tone === "lost" ? (
           <Face id="sandwich-man" className="size-8" />
