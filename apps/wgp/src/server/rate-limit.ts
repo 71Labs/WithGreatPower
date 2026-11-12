@@ -53,6 +53,8 @@ export const RATE_LIMITS = {
   referralClaimPerIp: { limit: 30, windowMs: 10 * 60_000 },
   /** GET /api/invite/:code and …/accept (public). */
   invitePerIp: { limit: 60, windowMs: 60_000 },
+  /** GET /api/stats (public; the counts themselves are cached for a minute). */
+  statsPerIp: { limit: 60, windowMs: 60_000 },
 } satisfies Record<string, RateLimit>;
 
 const MAX_KEYS = 50_000;
