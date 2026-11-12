@@ -2216,3 +2216,82 @@ fn a_state_in_no_known_layout_is_refused() {
     })
     .contains("no known layout"));
 }
+
+/// `token-metadata-args.json` is what `scripts/near/token-metadata.mjs` prints: the owner's
+/// `set_token_metadata` arguments. It must parse, fit one call and name every token.
+#[test]
+fn the_shipped_metadata_table_applies() {
+    #[derive(near_sdk::serde::Deserialize)]
+    #[serde(crate = "near_sdk::serde")]
+    struct Args {
+        name: Option<String>,
+        base_uri: Option<String>,
+        entries: Vec<(String, Option<TokenMeta>)>,
+    }
+    let args: Args = serde_json::from_str(include_str!("../token-metadata-args.json")).unwrap();
+    let mut c = one_of_each();
+    mint(
+        &mut c,
+        RewardMint {
+            account_id: alice(),
+            nonce: 2,
+            items: vec![],
+            level: None,
+            badges: vec!["brand-new".into()],
+            digest: DIGEST.into(),
+        },
+    );
+    c.meta.table.flush();
+    let before = near_sdk::env::storage_usage();
+    as_(owner(), 1);
+    c.set_token_metadata(args.name, args.base_uri, args.entries);
+    c.meta.table.flush();
+    println!(
+        "METADATA_TABLE_STORAGE_BYTES={}",
+        near_sdk::env::storage_usage() - before
+    );
+
+    let (items, suits) = rules();
+    let mut ids: Vec<String> = items.iter().map(|i| format!("item:{i}")).collect();
+    ids.extend(suits.iter().map(|s| format!("suit:{}", s.id)));
+    ids.extend(
+        [
+            "item:bits",
+            "hero:alice.wgp.testnet",
+            "trophy:badge:day-one",
+        ]
+        .map(String::from),
+    );
+    let base = "https://www.wgponnear.fun/tokens/";
+    for (id, m) in ids.iter().zip(c.mt_metadata_token_by_token_id(ids.clone())) {
+        let m = m.unwrap_or_else(|| panic!("{id} has no metadata"));
+        assert!(m.media.as_ref().unwrap().starts_with(base), "{id}");
+        assert_eq!(m.media_hash.as_ref().map(String::len), Some(44), "{id}");
+        assert!(m.title.is_some() && m.description.is_some(), "{id}");
+    }
+    let m = c.mt_metadata_token_by_token_id(vec![
+        "item:fee-bomb".into(),
+        "hero:alice.wgp.testnet".into(),
+        "trophy:badge:brand-new".into(),
+        "trophy:s1:1".into(),
+    ]);
+    let bomb = m[0].as_ref().unwrap();
+    assert_eq!(bomb.title.as_deref(), Some("Fee bomb"));
+    assert!(bomb
+        .description
+        .as_ref()
+        .unwrap()
+        .starts_with("Defused. Mostly."));
+    // The hero keeps its own name; a badge with no picture yet shows the shared one.
+    assert_eq!(m[1].as_ref().unwrap().title.as_deref(), Some("Peter"));
+    let badge = m[2].as_ref().unwrap();
+    assert_eq!(badge.title.as_deref(), Some("Brand new badge"));
+    assert_eq!(
+        badge.media.as_deref(),
+        Some("https://www.wgponnear.fun/tokens/badge.png")
+    );
+    assert_eq!(
+        m[3].as_ref().unwrap().media.as_deref(),
+        Some("https://www.wgponnear.fun/tokens/trophy/1.png")
+    );
+}
