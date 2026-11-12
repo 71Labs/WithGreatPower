@@ -25,6 +25,8 @@ const DEFAULT_CONTRACT = "game.wgpnear.near";
 const NEARBLOCKS_API = "https://api.nearblocks.io/v1";
 /** The game's own senders: the operator mints rewards, the relayer pays gas for players' trades. */
 const OWN_ACCOUNTS = ["operator.wgpnear.near", "relayer.wgpnear.near"];
+/** The methods players call from their own accounts (signed by their session key, relayed). */
+const PLAYER_METHODS = ["register_hero", "craft_suit", "equip_suit", "market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
 const PER_PAGE = 25;
 const PAGE_GAP_MS = 1000;
 /** A stop for a runaway loop: 25,000 calls. Past it the tally says it is partial. */
@@ -185,8 +187,11 @@ async function tallyChain(contract, onPage = () => {}, onWait = () => {}) {
         const name = action.method ?? `(${String(action.action ?? "unknown").toLowerCase()})`;
         methods.set(name, (methods.get(name) ?? 0) + 1);
       }
+      // A player account is one that called a game method itself: not the deploy, the setup or a
+      // transfer, which the owner and the setup payer send.
       const sender = txn.predecessor_account_id;
-      if (sender && sender !== contract && !OWN_ACCOUNTS.includes(sender)) senders.add(sender);
+      const played = (txn.actions ?? []).some((a) => PLAYER_METHODS.includes(a.method));
+      if (played && sender && sender !== contract && !OWN_ACCOUNTS.includes(sender)) senders.add(sender);
     }
     onPage(page, calls);
   }
@@ -199,7 +204,7 @@ function printChain(t) {
   console.log(table("Calls the contract received", [["calls", t.calls], ["of them failed", t.failed], ["pages read", t.pages]]));
   const rows = Object.entries(t.byMethod);
   if (rows.length) console.log(table("Actions by method", rows));
-  console.log(table(`Player accounts that transacted (not ${OWN_ACCOUNTS.join(", ")} or the contract)`, [["accounts", t.playerAccounts]]));
+  console.log(table(`Player accounts that called a game method themselves`, [["accounts", t.playerAccounts]]));
 }
 
 /* ------------------------------------------------------------------ main */
