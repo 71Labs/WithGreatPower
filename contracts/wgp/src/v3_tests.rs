@@ -2109,7 +2109,15 @@ fn a_v1_state_migrates_straight_to_v3() {
     let c = upgrade_state(&bytes);
     assert_eq!(bal(&c, alice(), "item:crumbs"), 2);
     assert!(c.market_state().pools.is_empty());
-    assert_eq!(c.market_state().params, MarketParams::default());
+    // As after v1 → v2 → v3: the default rules, crafting still free, investing off.
+    assert_eq!(
+        c.market_state().params,
+        MarketParams {
+            craft_bits: U128(0),
+            invest_open: false,
+            ..Default::default()
+        }
+    );
     assert_eq!(c.get_version().state, 3);
 }
 

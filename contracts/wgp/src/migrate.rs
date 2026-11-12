@@ -164,6 +164,16 @@ fn market_v3(m: MarketV2) -> Market {
     }
 }
 
+/// A v1 state never had a market. It gets what v1 → v2 → v3 would give it: the default
+/// rules with crafting free, as v2 started it, and investing off until the owner opens it.
+/// Like any upgrade, this one changes no cost and starts nothing new.
+fn market_from_v1() -> Market {
+    let mut market = Market::new();
+    market.params.craft_bits = U128(0);
+    market.params.invest_open = false;
+    market
+}
+
 /// The current state from raw state bytes in any layout.
 pub(crate) fn upgrade_state(bytes: &[u8]) -> Wgp {
     if bytes.len() >= 4 && bytes[..4] == LAYOUT_V3.to_le_bytes() {
@@ -188,7 +198,7 @@ pub(crate) fn upgrade_state(bytes: &[u8]) -> Wgp {
     } else {
         let v1 = WgpV1::try_from_slice(bytes)
             .unwrap_or_else(|_| env::panic_str("The contract state is in no known layout"));
-        (v1, Market::new())
+        (v1, market_from_v1())
     };
     let (tokens, meta) = index_and_meta();
     Wgp {

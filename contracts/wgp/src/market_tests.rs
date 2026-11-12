@@ -984,7 +984,15 @@ fn a_v1_state_migrates_to_v2() {
     assert_eq!(bal(&c, alice(), "item:crumbs"), 2);
     assert_eq!(c.get_player(alice()).unwrap().hero.unwrap().name, "Peter");
     assert!(c.market_state().pools.is_empty());
-    assert_eq!(c.market_state().params, MarketParams::default());
+    // The default rules as v2 had them (crafting free), with investing off.
+    assert_eq!(
+        c.market_state().params,
+        MarketParams {
+            craft_bits: U128(0),
+            invest_open: false,
+            ..Default::default()
+        }
+    );
     // Running it again on a v2 state changes nothing.
     let again = upgrade_state(&near_sdk::borsh::to_vec(&c).unwrap());
     assert_eq!(again.market.next_listing_id, 1);
