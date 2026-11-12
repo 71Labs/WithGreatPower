@@ -23,8 +23,13 @@ export interface Verifier {
 export const VERIFY_RULES = {
   /** A night shorter than this (game time) isn't a real run. */
   minGameSeconds: 20,
-  /** Game time may run ahead of the wall clock by at most this (clock skew, a paused tab resuming). */
-  wallSlackSeconds: 60,
+  /**
+   * Game time may run ahead of the wall clock by at most this. Both ends are the server's clock
+   * (the run's issue time and the submit), and the game steps in real time, so a played night is
+   * never ahead; the slack only covers rounding. A log computed faster than real time (a bot) is
+   * refused until it has waited the night out.
+   */
+  wallSlackSeconds: 5,
   /** The encoded input log, decoded from base64. */
   maxLogBytes: 64 * 1024,
 } as const;

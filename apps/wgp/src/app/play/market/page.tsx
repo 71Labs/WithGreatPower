@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { MarketScreen } from "@/components/market/market-screen";
 
@@ -8,5 +9,10 @@ export const metadata: Metadata = {
 };
 
 export default function MarketPage() {
-  return <MarketScreen />;
+  // The screen reads the address (a prompt's prefilled trade), so it renders inside a boundary.
+  return (
+    <Suspense fallback={null}>
+      <MarketScreen />
+    </Suspense>
+  );
 }

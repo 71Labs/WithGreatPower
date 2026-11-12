@@ -102,7 +102,7 @@ const PROBE = `(() => {
 
 async function open(viewport, url, { save = saveName, settings = null } = {}) {
   const port = 9300 + Math.floor(Math.random() * 300);
-  const c = await launch({ port, profile: `/private/tmp/claude-501/wgp-camera/cdp-${port}`, flags: GL_FLAGS });
+  const c = await launch({ port, profile: `/tmp/wgp-camera/cdp-${port}`, flags: GL_FLAGS });
   const v = VIEWPORTS[viewport];
   await c.send("Page.enable");
   await c.send("Runtime.enable");

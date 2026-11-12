@@ -7,7 +7,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -18,11 +18,11 @@ const base = opt("base", "http://127.0.0.1:3920");
 const out = opt("out", "launch/brand/hero/game-shots/free-roam/smoke");
 const query = opt("query", "debug=1");
 const wait = Number(opt("wait", "8000"));
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 mkdirSync(out, { recursive: true });
 
 const cdpPort = Number(opt("cdp", "9731"));
-const { send, evaluate, logs, close } = await launch({ port: cdpPort, profile: `/private/tmp/claude-501/wgp-city-smoke-${cdpPort}` });
+const { send, evaluate, logs, close } = await launch({ port: cdpPort, profile: `/tmp/wgp-city-smoke-${cdpPort}` });
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });

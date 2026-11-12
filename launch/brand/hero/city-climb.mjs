@@ -20,7 +20,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -30,9 +30,9 @@ const opt = (name, def) => {
 const base = opt("base", "http://127.0.0.1:3930");
 const out = opt("out", "launch/brand/hero/game-shots/city-climb/after");
 const tier = opt("tier", "high");
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 const port = Number(opt("port", "9931"));
-const profile = opt("profile", `/private/tmp/claude-501/wgp-city-climb-${port}`);
+const profile = opt("profile", `/tmp/wgp-city-climb-${port}`);
 mkdirSync(out, { recursive: true });
 
 const cdp = await launch({ port, profile, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });

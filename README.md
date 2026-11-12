@@ -18,16 +18,16 @@ The track's prompt (["Games With Real Economies"](https://github.com/nearai/near
 
 | The track asks for | In WGP | Check |
 |---|---|---|
-| Judged on the game loop, not the token | A real-time 3D action game: swing, fight, climb, race. 8 ways to play. | Play a guest night at `/play` (check 1). The loop on paper: [docs/GAME-LOOP.md](docs/GAME-LOOP.md) |
+| Judged on the game loop, not the token | A real-time 3D action game: swing, fight, climb, race. 8 ways to play. | Play a guest night at `/play` (check 1). The loop is written up in [docs/GAME-LOOP.md](docs/GAME-LOOP.md) (Nov 12, from the shipped game; the Nov 2 plan is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
 | Bonus if players never notice the chain | Google sign-in, a game-only session key, a relayer that pays gas. No popup after sign-in. | [Try it](#try-it-do-x-see-y), steps 2, 3 and 5 |
 | Items are NEP-245 multi tokens, one contract for every item type | Heroes, suits, loot, Bits, badges and trophies are all token ids in `game.wgpnear.near` | Check 4 (command B) |
 | Social or email login, no seed phrases, popups or gas prompts in the loop | Google through Privy; NEAR wallets also work with one signed message | Step 2 |
-| NPCs with wallets | Gwei Stacy, the vendor: her stock and her till are NEP-245 balances held by the contract account | Check 3 (command A) shows each pool's `stock` and `bits` |
+| NPCs with wallets | Gwei Stacy, the vendor: her stock and her till are NEP-245 balances on chain. Her wallet is the contract's own account, not a separate one, and her reasoning is rule-based, not an AI agent. | Check 3 (command A) shows each pool's `stock` and `bits` |
 | Agent NPCs | Sandwich Man, the arbitrageur: an NPC with his own account (`sandwich.wgpnear.near`) who uses only the market calls players use. He flips cheap listings, buys dips and undercuts Gwei by rules in one file, [`apps/wgp/src/lib/market/npc-rules.ts`](apps/wgp/src/lib/market/npc-rules.ts), and closes shop when he's broke. He trades in the simulated market and in `/lab/economy`; on mainnet he is off until the owner funds his account. Disclosed: he starts from a one-off seed of 300 Bits, is always labelled NPC and is never counted as a player. | [docs/npc-trader.md](docs/npc-trader.md); `/lab/economy`, **Load a run where he goes broke** |
 | Merchant sets prices from stock and demand | A constant-product curve per item: buying raises the price, selling lowers it | [`contracts/wgp/src/market.rs`](contracts/wgp/src/market.rs) |
 | Pricing rules in one readable file | [`apps/wgp/src/lib/market/math.ts`](apps/wgp/src/lib/market/math.ts) mirrors the contract's maths line for line; both test against the same vectors | Read the file's first 15 lines |
 | A merchant's reasoning appears in a tooltip | **Why this price?** on every item in the market: Gwei explains the price from her real stock and till | `/play/market`, press **Why this price?** |
-| A merchant that goes broke stops trading | Gwei sells only what she holds and pays only from her till; sold out or broke, she says so and the button explains why | `/lab/economy` shows it happen |
+| A merchant that goes broke stops trading | Gwei sells only what she holds and pays only from her till; sold out or broke, she says so and the button explains why. There's no invest-to-reopen: she's back in business when someone trades the other way. | The rules: `contracts/wgp/src/market.rs` (`buy_cost`, `sell_payout`); her words: `apps/wgp/src/lib/market/reasoning.ts` |
 | Player-owned markets | Players list items for each other; the contract holds them in escrow | `list_item` and `buy_listing` transactions (command D) |
 | Economies that evolve without a dev patch | Prices are contract state and move with every trade. No deploy, no cron job. | Command A: prices have moved off their starting values |
 | A fast-forward mode | `/lab/economy` runs 60 bot players for 21 days on the same pricing code | Check 7 |
@@ -67,8 +67,8 @@ curl -s https://www.wgponnear.fun/api/market | jq -c '{onChain, network, contrac
 curl -s 'https://api.nearblocks.io/v1/account/game.wgpnear.near/txns?per_page=25' \
   | jq -r '.txns[] | "\(.transaction_hash)  \(.predecessor_account_id)  \([.actions[]? | .method // .action] | join(","))"'
 
-# E. One relayed session-key trade's events (NEAR JSON-RPC): mt_transfer, mt_burn of the fee, market_trade
-curl -s https://rpc.mainnet.near.org -H 'Content-Type: application/json' \
+# E. One relayed session-key trade's events (an archival NEAR RPC, since the trade is from Nov 3): mt_transfer, mt_burn of the fee, market_trade
+curl -s https://archival-rpc.mainnet.fastnear.com -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tx","params":{"tx_hash":"GxuFQYCX7DzCFRXenpQuhfxz1hUekf9t2FapLjCUeMXn","sender_account_id":"relayer.wgpnear.near","wait_until":"FINAL"}}' \
   | jq -r '.result.receipts_outcome[].outcome.logs[]'
 
@@ -109,18 +109,20 @@ Real players, counted two ways. Neither needs trust in us: the first is the publ
 | `craft_suit` / `equip_suit` | 16 / 7 |
 | Market: `market_buy`, `market_sell`, `list_item`, `buy_listing` | 2, 1, 4, 4 |
 
-**In the game** (<!-- STATS-DATE -->Nov 9, 17:04 UTC<!-- /STATS-DATE -->; live at [`/api/stats`](https://www.wgponnear.fun/api/stats)):
+**In the game** (from [`/api/stats`](https://www.wgponnear.fun/api/stats) on Nov 12, 14:42 UTC; `pnpm stats` prints the current counts):
 
 | | |
 |---|---|
-| Matches started / finished and verified | 200 / 178 |
+| Matches started / finished and verified | 258 / 229 |
 | Runs rejected by the verifier | 0 |
-| Free-roam City outings | 274 |
-| Heroes | 25 (22 have finished a match) |
-| Verified play time | 4.9 hours |
-| Verified matches by mode | Ranked nights 97 · Daily Run 44 · Case files 24 · Time trials 13 |
+| Free-roam City outings | 291, with 19 side tasks finished |
+| Heroes | 26 (23 have a verified match) |
+| Verified play time | 6.1 hours |
+| Verified matches by mode | Ranked nights 127 · Daily Run 62 · Case files 25 · Time trials 15 |
+| Reward mints queued / sent to the contract | 167 / 167 |
+| Invites | 7 friends invited, 4 count, 1 Recruiter badge earned |
 
-Play sessions (matches plus City outings) doubled between Nov 7 and Nov 9: 237 to 474.
+Play sessions (matches plus City outings) went from 237 on Nov 7 to 549 on Nov 12.
 
 ## Screenshots
 
@@ -140,7 +142,7 @@ Web3 games make players fight wallets before villains: seed phrases, a popup for
 WGP is built the other way round:
 - **The game comes first.** It's a full 3D action game you can finish a night of as a guest, with no account.
 - **The chain stays out of the loop.** A player signs in once. After that a game-only key signs their game actions and our relayer pays the gas.
-- **Scores are proven, not claimed.** The server replays each ranked night's inputs through the same deterministic simulation the browser ran, and ranks only what reproduces. Anyone can re-run that check.
+- **Scores are reproducible, not claimed.** The server replays each ranked night's inputs through the same deterministic simulation the browser ran, and ranks only what reproduces. Anyone can re-run that check.
 - **The economy is play.** Loot comes from the villains you beat, suits need specific loot, and the vendor's prices are set by what players buy and sell.
 
 ## The game loop
@@ -334,7 +336,7 @@ pnpm dev                                         # http://localhost:3000/play  (
 | Command | What it does | Expect |
 |---|---|---|
 | `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite. | game-core 283 passed, app 1,048 passed |
-| `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | No output |
+| `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | Exit 0, no errors |
 | `pnpm build` | The production build of the app; needs no environment variables | The route list |
 | `pnpm verify` | Replays the live All-time top 5 | `5/5 runs reproduced` |
 | `pnpm stats` | Prints the live game numbers and counts the contract's transactions | A table |
@@ -353,7 +355,7 @@ contracts/wgp/         NEAR contract (near-sdk 5.30): NEP-245 core, rewards, cra
 contracts/wgp/sandbox  near-workspaces tests of the built wasm
 scripts/               verify-run.ts, stats.mjs, mainnet setup and chain end-to-end tests (near/), a load test (load/)
 docs/                  the game loop, architecture, chapters, story, competitive modes, referrals, screenshots
-launch/brand/hero/     Blender pipeline for the characters, and the headless-browser playtest drivers
+launch/brand/hero/     Blender pipeline for the characters, and the headless-browser playtest drivers (run from the repo root; they use launch/lib/cdp.mjs)
 ```
 
 | Start here | |
@@ -368,9 +370,12 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 
 ## Limits and what's next
 
+- **Bots:** a replay proves a score is reproducible, not that a person played it. The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player, but a patient bot can still play.
+- **Currency:** more Bits are earned than burned (in the lab's default run, 98,255 earned and 10,021 burned). The sinks are the 2% trade fee and crafting; a Bits cost for crafting exists in the contract (`craft_bits`) and is off on mainnet.
 - **Trust:** the operator key mints rewards and the server decides which runs verify. Anyone can re-run a run's replay, but the mint itself trusts our server. The contract's owner can upgrade it.
-- **Scale:** 25 heroes so far. The relayer and operator are single accounts with daily budgets.
+- **Scale:** 26 heroes so far. The relayer and operator are single accounts with daily budgets.
 - **Market depth:** most on-chain activity is rewards and crafting; trades are still few.
+- **The plan:** costs, who players have to trust today and how that shrinks are in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md).
 - **Next:** ranked nights get the City's movement (sprint, climbing) after Season 1, since ranked rules are frozen while a season runs; Season 2; NEAR Auth as a second sign-in.
 
 ## Built during the hackathon
@@ -394,6 +399,6 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 - **Services:** Vercel (hosting), Neon (Postgres), Privy (Google login and embedded NEAR keys), and the FastNEAR and NEAR public RPC endpoints.
 - **Partner:** player airdrops during Season 1 are sent by the team through Uprail, outside the game; the game itself never sends money.
 - **3D characters:** bodies were made with [MakeHuman](http://www.makehumancommunity.org/) through MPFB in Blender (CC0 assets; the GPL tool isn't shipped). Motion capture is from [Quaternius' Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) (CC0). See `apps/wgp/public/models/LICENSES.md`.
-- **Fonts:** Neue Montreal (Pangram Pangram) is licensed and served in production but isn't in this repository; without it the site falls back to Inter. Inter, Manrope and Geist Mono are from Google Fonts (OFL).
+- **Fonts:** Neue Montreal (Pangram Pangram) is licensed and served in production but isn't in this repository; without it the site falls back to Inter. Production is deployed with `scripts/deploy-prod.sh`, which adds the font files; pushes to `main` don't deploy by themselves (`apps/wgp/vercel.json`). Inter, Manrope and Geist Mono are from Google Fonts (OFL).
 - **NEAR wordmark:** from NEAR's brand files.
-- **Parody:** all characters are original designs. With Great Power isn't affiliated with, endorsed by or sponsored by any comic book publisher or film studio.
+- **Parody:** the characters are parody designs made for this game. With Great Power isn't affiliated with, endorsed by or sponsored by any comic book publisher or film studio.

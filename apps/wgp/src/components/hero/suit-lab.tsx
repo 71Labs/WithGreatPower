@@ -13,6 +13,9 @@ import { StickerButton, StickerFrame, StickerLink, StickerPanel, stickerTileClas
 import { GameLoading, GameSheet, useHeroSave, type HeroSave } from "@/components/game/ui";
 import { ArrowRight, Check, CircleDashed, ExternalLink, Hourglass, Lock, Shirt, Sparkles, X, Zap, type Icon } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
+import { PartOffers, SpareOffers } from "@/components/market/trade-prompt";
+import { useMarketPeek } from "@/components/market/use-market-peek";
+import { holdingsOf, suitGaps, type MarketFacts } from "@/lib/market/prompts";
 import type { CastId } from "@wgp/game-core/cast";
 import { ITEMS, RARITY_LABEL, STARTER_UNLOCK_LEVEL, SUITS } from "@wgp/game-core/data";
 import { craftShortfall } from "@wgp/game-core/engine";
@@ -285,9 +288,12 @@ function SuitSheet({
   onWear,
   onChainSuits,
   offerQuickPlay,
+  market,
 }: {
   save: HeroSave;
   id: SuitId | null;
+  /** Gwei's prices, for buying a locked suit's missing parts; null until the market answers. */
+  market: MarketFacts | null;
   open: boolean;
   onClose: () => void;
   onCraft: (id: SuitId) => void;
@@ -299,6 +305,9 @@ function SuitSheet({
   const suit = id ? SUITS[id] : null;
   const status = id ? suitStatus(save, id) : null;
   const shortfall = id ? craftShortfall(save, id) : null;
+  const holdings = holdingsOf(save);
+  // What this suit is still missing, to buy from Gwei at her price right now.
+  const gap = id && status === "locked" ? (suitGaps(holdings).find((g) => g.suit === id) ?? null) : null;
 
   let footer = null;
   if (id && suit && status === "owned") {
@@ -356,6 +365,9 @@ function SuitSheet({
               {suit.starter ? "Unlocking it puts it on." : "Crafting uses the loot up and puts the suit on."}
             </p>
           )}
+          {/* A locked suit's parts don't have to drop: Gwei sells them, at a price that moves. */}
+          {gap && market ? <PartOffers gap={gap} market={market} onNavigate={onClose} /> : null}
+          {status === "locked" ? <SpareOffers holdings={holdings} onNavigate={onClose} className="pt-1" /> : null}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -417,6 +429,7 @@ export function SuitLab() {
   const account = useAccount();
   const chain = useChain();
   const activity = useChainActivity();
+  const market = useMarketPeek().view;
   const [openId, setOpenId] = useState<SuitId | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -523,6 +536,7 @@ export function SuitLab() {
         onWear={wear}
         onChainSuits={onChainSuits}
         offerQuickPlay={offerQuickPlay}
+        market={market}
       />
     </div>
   );

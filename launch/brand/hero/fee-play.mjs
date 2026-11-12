@@ -20,7 +20,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -31,8 +31,8 @@ const base = opt("base", "http://127.0.0.1:3950");
 const out = opt("out", "launch/brand/hero/game-shots/case-003/play");
 const tier = opt("tier", "high");
 const loseOn = opt("lose", "desktop");
-const scratch = opt("scratch", "/private/tmp/claude-501/-Users-eromonseleodigie-near-hackathon/b2fd1703-a9a8-45a5-a57b-1b5946998e1c/scratchpad");
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const scratch = opt("scratch", "/tmp/-Users-eromonseleodigie-near-hackathon/b2fd1703-a9a8-45a5-a57b-1b5946998e1c/scratchpad");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 const DEVICES = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
   phone: { width: 390, height: 844, deviceScaleFactor: 3, mobile: true },

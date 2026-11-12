@@ -26,7 +26,7 @@ const save = opt("save", join(HERE, "..", "..", "out", "saves", "night-a.json"))
 mkdirSync(out, { recursive: true });
 
 const port = 9750 + Math.floor(Math.random() * 40);
-const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-cast/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const { send, evaluate, close, logs } = await launch({ port, profile: `/tmp/wgp-cast/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const shot = async (file) => {
   const { data } = await send("Page.captureScreenshot", { format: "png" });
   writeFileSync(join(out, file), Buffer.from(data, "base64"));
