@@ -16,7 +16,7 @@ const dateTime = (iso: string) => `${utc(iso, { month: "short", day: "numeric" }
 const lastDay = (endsAt: string) => new Date(Date.parse(endsAt) - 1).toISOString();
 
 /** The server's clock, ticking once a second. `serverNow` is the server's answer time, `receivedAt` the device's. */
-function useServerNow(serverNow: string, receivedAt: number, ticking: boolean): number {
+export function useServerNow(serverNow: string, receivedAt: number, ticking: boolean): number {
   const skew = clockSkew(serverNow, receivedAt);
   const [deviceNow, setDeviceNow] = useState(receivedAt);
   useEffect(() => {

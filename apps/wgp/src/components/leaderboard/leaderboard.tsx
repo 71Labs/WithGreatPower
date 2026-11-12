@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { StickerBadge, StickerButton, StickerChip, StickerLink, StickerPanel } from "@/components/game/kit";
 import { HeroTile, StickerTabs, tabPanelProps, type StickerTab } from "@/components/game/ui";
-import { CircleAlert, Clock, Users } from "@/components/icons";
+import { CircleAlert, Clock, LogIn, Users } from "@/components/icons";
 import { ShareOnXIcon } from "@/components/social/share-on-x";
 import { runShareText, seasonShareText } from "@/lib/social/share";
 import type { LeaderboardView } from "@/server/db/board-view";
@@ -12,8 +12,9 @@ import type { BoardRow } from "@/server/db/leaderboard";
 
 import { plural } from "@/lib/plural";
 
-import { boardLines, placeNotice } from "./board-lines";
-import { SeasonCard, TrophyMark } from "./season-card";
+import { BOARD_TOP, boardInvite, boardLines, msToUtcMidnight, placeNotice, type BoardInvite } from "./board-lines";
+import { SeasonCard, TrophyMark, useServerNow } from "./season-card";
+import { formatLeft } from "./season-clock";
 
 type Board = LeaderboardView["board"];
 type View = LeaderboardView & { signedIn: boolean };
@@ -184,21 +185,89 @@ function PlaceNotice({ view }: { view: View }) {
   );
 }
 
-/** One list, so the viewer's row can stay pinned while the whole board scrolls under it. */
-function Board({ view }: { view: View }) {
-  if (view.rows.length === 0) return <EmptyBoard view={view} />;
+/** The short board's invitation, or null: a season that has ended takes no more scores. */
+function inviteFor(view: View): BoardInvite | null {
+  const ended = view.board === "season" && (!view.season || view.season.phase === "final" || view.season.phase === "closing");
+  return boardInvite(view, !ended);
+}
+
+/** "Resets in 05:12:09", to the server's midnight UTC. */
+function ResetClock({ serverNow, receivedAt }: { serverNow: string; receivedAt: number }) {
+  const now = useServerNow(serverNow, receivedAt, true);
   return (
-    <ol aria-label="Heroes by rank" className="flex flex-col gap-0.5">
-      {boardLines(view).map((line) =>
-        line.kind === "gap" ? (
-          <li key="gap" aria-hidden className="px-3 py-1 text-center text-[18px] font-bold leading-4 tracking-[0.3em] text-game-muted">
-            ···
-          </li>
-        ) : (
-          <Row key={line.row.playerId} row={line.row} you={line.you} trophy={trophyFor(view, line.row.rank)} share={line.you ? shareText(view, line.row) : null} />
-        ),
-      )}
-    </ol>
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <Clock aria-hidden className="size-4 shrink-0" strokeWidth={2} />
+      <span>
+        Resets in{" "}
+        <time role="timer" aria-live="off" className="num font-semibold text-game-ink">
+          {formatLeft(msToUtcMidnight(now))}
+        </time>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Under a short board's rows: the place that is the viewer's to claim (drawn as an open row,
+ * never as an entry), how many of the top places nobody holds, and when Tonight resets.
+ */
+function OpenPlaces({ view, invite, receivedAt }: { view: View; invite: BoardInvite; receivedAt: number }) {
+  const where = view.board === "tonight" ? "tonight’s" : view.board === "season" ? "the season’s" : "the";
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      {invite.claimRank !== null ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[14px] border-2 border-dashed border-game-ink/40 bg-game-paper-2 px-2.5 py-2.5 sm:px-3">
+          <span className="num grid h-8 min-w-8 shrink-0 place-items-center rounded-full border-2 border-dashed border-game-ink px-1.5 text-[13px] font-bold leading-none text-game-ink">
+            <span className="sr-only">Place </span>
+            {invite.claimRank}
+          </span>
+          <p className="flex min-w-[12rem] flex-1 flex-col">
+            <span className="text-[15px] font-semibold leading-5">This place is open</span>
+            <span className="text-[13px] leading-[18px] text-game-muted [text-wrap:pretty]">
+              {invite.needs === "sign-in" ? "Sign in and finish a ranked patrol to take it, or a higher one." : "Finish a ranked patrol and it’s yours, or a higher one."}
+            </span>
+          </p>
+          {invite.needs === "sign-in" ? (
+            <StickerButton variant="hero" size="sm" aria-haspopup="dialog" onClick={() => window.dispatchEvent(new Event("wgp:sign-in"))} className="max-sm:w-full">
+              <LogIn aria-hidden className="size-4" strokeWidth={2.25} />
+              Sign in to claim it
+            </StickerButton>
+          ) : (
+            <StickerLink href="/play" variant="hero" size="sm" className="max-sm:w-full">
+              Start tonight’s patrol
+            </StickerLink>
+          )}
+        </div>
+      ) : null}
+      <p className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2.5 pb-1 text-[13px] leading-[18px] text-game-muted sm:px-3">
+        <span>
+          <span className="num font-semibold text-game-ink">{invite.open}</span> of {where} top {BOARD_TOP} places {invite.open === 1 ? "is" : "are"} open
+        </span>
+        {view.board === "tonight" ? <ResetClock serverNow={view.now} receivedAt={receivedAt} /> : null}
+      </p>
+    </div>
+  );
+}
+
+/** One list, so the viewer's row can stay pinned while the whole board scrolls under it. */
+function Board({ view, receivedAt }: { view: View; receivedAt: number }) {
+  if (view.rows.length === 0) return <EmptyBoard view={view} />;
+  const invite = inviteFor(view);
+  return (
+    <>
+      <ol aria-label="Heroes by rank" className="flex flex-col gap-0.5">
+        {boardLines(view).map((line) =>
+          line.kind === "gap" ? (
+            <li key="gap" aria-hidden className="px-3 py-1 text-center text-[18px] font-bold leading-4 tracking-[0.3em] text-game-muted">
+              ···
+            </li>
+          ) : (
+            <Row key={line.row.playerId} row={line.row} you={line.you} trophy={trophyFor(view, line.row.rank)} share={line.you ? shareText(view, line.row) : null} />
+          ),
+        )}
+      </ol>
+      {invite ? <OpenPlaces view={view} invite={invite} receivedAt={receivedAt} /> : null}
+    </>
   );
 }
 
@@ -280,10 +349,11 @@ export function LeaderboardScreen() {
             </StickerButton>
           </div>
         ) : null}
-        {load.state === "ready" ? <Board view={load.view} /> : null}
+        {load.state === "ready" ? <Board view={load.view} receivedAt={load.receivedAt} /> : null}
       </StickerPanel>
 
-      {load.state === "ready" && load.view.rows.length > 0 ? <PlaceNotice view={load.view} /> : null}
+      {/* A short board says it inside the board (the open place); a full one pins the notice above the dock. */}
+      {load.state === "ready" && load.view.rows.length > 0 && inviteFor(load.view)?.claimRank == null ? <PlaceNotice view={load.view} /> : null}
     </div>
   );
 }

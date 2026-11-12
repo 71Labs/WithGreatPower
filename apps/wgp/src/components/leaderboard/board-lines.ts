@@ -46,3 +46,34 @@ export function placeNotice(view: BoardSource & { signedIn: boolean }): "sign-in
   if (view.me) return null;
   return view.signedIn ? "unranked" : "sign-in";
 }
+
+/** A board with fewer heroes than this is short: it invites the next one in rather than sit half empty. */
+export const BOARD_TOP = 10;
+
+export interface BoardInvite {
+  /** Places in the top `BOARD_TOP` nobody holds yet. */
+  open: number;
+  /** The place a viewer without a row would take at worst (they may rank higher); null when they have a row. */
+  claimRank: number | null;
+  /** What stands between the viewer and that place; null when they have a row. */
+  needs: "sign-in" | "patrol" | null;
+}
+
+/**
+ * The invitation a short board carries: how many top places are open, and for a viewer who
+ * isn't on it, the place that is theirs to claim. Null for a full board (`BOARD_TOP` heroes
+ * or more), an empty one (it has its own message) and a board that no longer takes scores.
+ * It counts real rows only: nothing here adds an entry.
+ */
+export function boardInvite(view: { total: number; me: BoardRow | null; signedIn: boolean }, accepting = true): BoardInvite | null {
+  if (!accepting || view.total <= 0 || view.total >= BOARD_TOP) return null;
+  const open = BOARD_TOP - view.total;
+  if (view.me) return { open, claimRank: null, needs: null };
+  return { open, claimRank: view.total + 1, needs: view.signedIn ? "patrol" : "sign-in" };
+}
+
+/** Milliseconds until the next midnight UTC, when Tonight's board resets. */
+export function msToUtcMidnight(now: number): number {
+  const day = 86_400_000;
+  return day - (((now % day) + day) % day);
+}
