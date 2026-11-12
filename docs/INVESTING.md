@@ -35,7 +35,7 @@ Only the till is real. `virtual Bits` is the part of the curve nobody has funded
 - **Caps:** 10 to 500 Bits per investment, 6 investments and 1,000 Bits per account per UTC day.
 - **Closed reasons:** `broke` (the till can't pay for one item), `sold-out` (no stock), and for the whole market `paused` and `market-closed`.
 
-The rules are one file, [`apps/wgp/src/lib/market/invest.ts`](../apps/wgp/src/lib/market/invest.ts). It mirrors the v3 contract's `invest.rs` line for line: the same integers, the same rounding, the same order of checks and the same words when it refuses.
+The rules are one file, [`apps/wgp/src/lib/market/invest.ts`](../apps/wgp/src/lib/market/invest.ts). It mirrors [the v3 contract's investing module](https://github.com/71Labs/WithGreatPower/blob/review/contract-v3/contracts/wgp/src/invest.rs) line for line: the same integers, the same rounding, the same order of checks and the same words when it refuses.
 
 ## What you risk
 
@@ -88,7 +88,7 @@ So the most a guest can bring across is what a guest could always bring: ten ite
 | Reading the contract's version and v3's views; the relayer's gate | `apps/wgp/src/server/market/chain.ts`, `relay.ts`; `apps/wgp/src/lib/near/policy.ts` (`INVEST_METHODS`) |
 | The screen | `apps/wgp/src/components/market/invest.tsx`; Gwei's lines in `apps/wgp/src/lib/market/reasoning-shop.ts` |
 | Investor bots and the showcase run | `apps/wgp/src/lib/market/bots.ts` (`LAB_INVESTORS`), `balance.ts` (`INVEST_SHOWCASE`) |
-| The contract itself (not on this branch) | `contracts/wgp/src/invest.rs` and `docs/CONTRACT-V3.md` on the branch `review/contract-v3` |
+| The contract itself (not on this branch) | [the investing module](https://github.com/71Labs/WithGreatPower/blob/review/contract-v3/contracts/wgp/src/invest.rs) and [the v3 write-up](https://github.com/71Labs/WithGreatPower/blob/review/contract-v3/docs/CONTRACT-V3.md), both on the branch review/contract-v3 |
 
 ## Check it
 

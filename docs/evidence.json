@@ -77,6 +77,11 @@
       "title": "Sandwich Man (docs/npc-trader.md)"
     },
     {
+      "id": "investing",
+      "title": "Investing in a merchant and the practice market (docs/INVESTING.md, docs/GAME-LOOP.md)",
+      "about": "Investing runs in the practice market and the simulated market. It is not on mainnet: the deployed contract is v2, and v3 is the owner's upgrade to make."
+    },
+    {
       "id": "econdoc",
       "title": "The economy report (docs/ECONOMY.md)"
     },
@@ -643,6 +648,248 @@
           "file": "apps/wgp/src/evidence/built-not-live.test.ts",
           "name": "has no way to invest in the merchant: the market's calls are trades, listings and the owner's settings"
         }
+      ],
+      "chain": [
+        "no-invest-views"
+      ],
+      "note": "About the contract on this branch and on mainnet, which is v2. The app's own investing (practice and simulated markets) is the rows below; it never reaches a v2 contract."
+    },
+    {
+      "id": "track-merchant-closed-reason",
+      "section": "track",
+      "source": "README.md",
+      "quote": "Her shop for that item shows closed, with the reason.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export function closedReasons("
+        },
+        {
+          "path": "apps/wgp/src/components/market/invest.tsx",
+          "anchor": "export function ShopLine("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/reasoning-shop.ts",
+          "anchor": "export function shopReasons("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "on contract v2 says the reason and the honest sentence, points at practice, and offers no investing"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "says closed for buying and why, and offers to invest, where the market takes investors"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "never contradict the till line: a broke till says buying from her reopens it, and investing too"
+        }
+      ],
+      "note": "The card and the tooltip are the app's; on mainnet they are worked out from the pool the contract returns (v2 has no market_shops view)."
+    },
+    {
+      "id": "track-invest-not-on-mainnet",
+      "section": "track",
+      "source": "README.md",
+      "quote": "On mainnet the market says so on a closed shop and sends no investing call.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/chain.ts",
+          "anchor": "export async function contractVersion("
+        },
+        {
+          "path": "apps/wgp/src/server/market/relay.ts",
+          "anchor": "export async function beforeInvestRelay("
+        },
+        {
+          "path": "apps/wgp/src/components/market/use-market.ts",
+          "anchor": "export async function stake("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest-routes.test.ts",
+          "name": "on contract v2 refuses every investing call before anything is submitted or any gas is spent"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "is read as a market with no investing, and is never asked a v3 question twice"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "sends nothing to a market without investing rules (contract v2), and says why"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "never opens on a market with no investing rules (contract v2)"
+        }
+      ],
+      "chain": [
+        "no-invest-views",
+        "no-get-version"
+      ],
+      "note": "Three layers: the server gives the market investing rules only for v3; the screen offers investing only with those rules; the relayer asks the contract's version again and answers 409 before submitting."
+    },
+    {
+      "id": "track-invest-practice",
+      "section": "track",
+      "source": "README.md",
+      "quote": "the app runs v3's investing rules in the practice market (any guest, in the browser, practice Bits, not on NEAR) and in the simulated market (a local checkout, server-side)",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export function investInPool("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "export function practiceStake("
+        },
+        {
+          "path": "apps/wgp/src/server/market/sim.ts",
+          "anchor": "export async function simStake("
+        },
+        {
+          "path": "apps/wgp/src/app/api/market/invest/route.ts",
+          "anchor": "export const POST"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "closes the shop with the reason, reopens it on an investment, pays a fee share and lets the stake out"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "closes a shop when its till runs dry, and an investment reopens it at the same price"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "pays the investor a share of that pool's fees, which they can claim, and locks the stake for an hour"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest-routes.test.ts",
+          "name": "invests the player's own Bits and answers with the receipt, the wallet and the market after it"
+        }
+      ],
+      "note": "Neither is mainnet. The practice market is the visitor's own copy in their browser; the simulated market is what a checkout with no chain configured runs. Played end to end by launch/brand/hero/invest-practice.mjs."
+    },
+    {
+      "id": "track-invest-vectors",
+      "section": "track",
+      "source": "README.md",
+      "quote": "tested against vectors the v3 Rust printed",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export function withdrawFromPool("
+        },
+        {
+          "path": "apps/wgp/scripts/invest-vectors/generate.mjs",
+          "anchor": "git archive",
+          "what": "(regenerates the vectors from the v3 branch in a temporary directory; needs cargo)"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "come from the reviewed v3 branch"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "between them the scenarios cover every refusal the contract has for investing"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "keeps the books balanced through 4,000 random trades and investments"
+        }
+      ],
+      "note": "invest.test.ts also replays each of the four recorded scenarios step for step (1,020 steps); those tests are named after their scenario. The vectors were printed by origin/review/contract-v3 at 718423d."
+    },
+    {
+      "id": "track-invest-risks",
+      "section": "track",
+      "source": "README.md",
+      "quote": "the sheet states what they risk before they confirm",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export const INVEST_RISKS"
+        },
+        {
+          "path": "apps/wgp/src/components/market/invest.tsx",
+          "anchor": "export function InvestSheet("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "states every risk before the button that invests"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "states the three risks before a player confirms"
+        }
+      ]
+    },
+    {
+      "id": "track-invest-lab",
+      "section": "track",
+      "source": "README.md",
+      "quote": "Drain Gwei, then invest in her",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/balance.ts",
+          "anchor": "export const INVEST_SHOWCASE"
+        },
+        {
+          "path": "apps/wgp/src/lib/market/bots.ts",
+          "anchor": "export const LAB_INVESTORS"
+        },
+        {
+          "path": "apps/wgp/src/app/lab/economy/invest-panel.tsx",
+          "anchor": "export function InvestPanel("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "has a till run dry, an investor fund it the next morning, and the shop buy again"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "is the same run every time"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "are off unless asked for: no investing rules, no investors, and the run is the one that was documented"
+        }
       ]
     },
     {
@@ -673,7 +920,8 @@
           "file": "apps/wgp/src/lib/market/bots.test.ts",
           "name": "has Sandwich Man go broke and recover in the lab's showcase seed"
         }
-      ]
+      ],
+      "note": "Simulation here covers the practice market (in a visitor's browser), the simulated market and the lab."
     },
     {
       "id": "track-player-markets",
@@ -4168,6 +4416,382 @@
           "name": "refuses a log that isn't an outing's: bad bytes, a night's or a chapter's ruleset, a late start, events"
         }
       ]
+    },
+    {
+      "id": "invest-live-where",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "Nothing sends market_invest to a v2 contract.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/chain.ts",
+          "anchor": "export async function investingLive("
+        },
+        {
+          "path": "apps/wgp/src/lib/near/policy.ts",
+          "anchor": "export const INVEST_METHODS"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest-routes.test.ts",
+          "name": "on contract v2 refuses every investing call before anything is submitted or any gas is spent"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest-routes.test.ts",
+          "name": "on contract v2 still relays a trade: the gate is only for investing"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "refuses an investing call before anything is sent"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "is treated as v2 when the version can't be read, without remembering that"
+        }
+      ],
+      "chain": [
+        "no-get-version"
+      ]
+    },
+    {
+      "id": "invest-onchain-v3",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "Upgrading is the owner's call; after an upgrade investing arrives switched off until the owner opens it.",
+      "status": "owner action needed",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/chain.ts",
+          "anchor": "export const rawStakeReceipt"
+        },
+        {
+          "path": "apps/wgp/src/server/market/relay.ts",
+          "anchor": "export async function afterInvestRelay("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/chain-calls.ts",
+          "anchor": "export function stakeCall("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest-routes.test.ts",
+          "name": "on contract v3 relays the investing call and records it as history"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "is read with its investing rules, its stalls and the player's stakes"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "is noticed as v3 after an upgrade, once the remembered answer is five minutes old"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "with investing switched off (as it arrives after an upgrade) still reads as v3, closed to new stakes"
+        }
+      ],
+      "chain": [
+        "no-invest-views"
+      ],
+      "note": "The on-chain path (reading v3's views, relaying its three calls) is tested only against a fake chain built on the TypeScript engine. It has never run against a real v3 contract, sandbox included. The contract itself is not on this branch: draft PR #59, branch review/contract-v3."
+    },
+    {
+      "id": "invest-price-unmoved",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "Investing changes what she can pay, never what she charges.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export const investRoom"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "funds the till and moves no price"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "returns exactly what went in on a round trip, and leaves the pool as it was"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "takes at most the curve's unfunded part, less one"
+        }
+      ]
+    },
+    {
+      "id": "invest-fee-share",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "With investors, half of it (invest_fee_bps, 5000) goes to them, split by stake, and the rest is burned.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export function investorCut("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "pays investors half the fee on that pool's trades, pro rata, instead of burning it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "burns the whole fee in a pool with no investors, exactly as before investing existed"
+        }
+      ]
+    },
+    {
+      "id": "invest-lock-caps",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "10 to 500 Bits per investment, 6 investments and 1,000 Bits per account per UTC day.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export const DEFAULT_INVEST_RULES"
+        },
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "export const PRACTICE_INVEST_RULES"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "locks a stake after each top-up and bounds a day's investing"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "shortens only the lock: every other investing rule is contract v3's"
+        }
+      ]
+    },
+    {
+      "id": "invest-risk-wait",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "Other players can sell loot into a till you funded and take the Bits.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/invest.ts",
+          "anchor": "export function claimFromPool("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "makes a stake wait when the till is empty, and never writes it off"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/invest.test.ts",
+          "name": "is first come, first served when the till holds less than everyone put in"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "makes a stake wait while the till is empty, and never loses it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "pays the investors a share of the fees, and shows what they risk: most of their Bits are still in her tills"
+        }
+      ]
+    },
+    {
+      "id": "invest-lab-numbers",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "With seed 2026, her shops end 11 item-days closed, against 70 in the same run without investors.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/balance.ts",
+          "anchor": "export function investStory("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "gives the numbers docs/INVESTING.md quotes for seed 2026"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "only ever funds a till that ended the day before broke, and keeps her buying far more of the time"
+        }
+      ]
+    },
+    {
+      "id": "practice-no-laundering",
+      "section": "investing",
+      "source": "docs/INVESTING.md",
+      "quote": "Nothing in it can turn into a token or a server save:",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "function ledgerOf("
+        },
+        {
+          "path": "apps/wgp/src/components/market/use-practice.ts",
+          "anchor": "export function usePractice("
+        },
+        {
+          "path": "apps/wgp/src/server/db/migrate-save.ts",
+          "anchor": "export function sanitizeLocalSave("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "never changes the save: practice items are a delta kept beside it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "has no way to write the save or reach the server: its rules and its hook only read"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "is stored under its own key, never the save's"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/migrate-save.test.ts",
+          "name": "imports nothing from a practice market: no Bits, no stake, and loot only within the usual caps"
+        }
+      ],
+      "note": "Unchanged by this: a guest can still edit the save itself and import up to three of an item and ten in all, as before. Practice adds nothing to that."
+    },
+    {
+      "id": "practice-guest-market",
+      "section": "investing",
+      "source": "docs/GAME-LOOP.md",
+      "quote": "It is labelled on every screen",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "export function seedPractice("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "export const PRACTICE_LABEL"
+        },
+        {
+          "path": "apps/wgp/src/components/market/invest.tsx",
+          "anchor": "export function PracticeBanner("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "opens on the live market's own pools and rules, open and taking investors"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "buys and sells on Gwei's curve: the quote the sheet shows is what it charges, fee burned"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "enforces the slippage cap, the caps and the wallet, and a refused trade changes nothing"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "are drawn from the practice market's own trades at their own times, not a fallback"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "carries the label word for word, where its prices came from, and its controls"
+        }
+      ],
+      "note": "A guest's trades here are not on NEAR and earn no XP. This is in the repository; the live site shows it once this branch is deployed."
+    },
+    {
+      "id": "practice-npc",
+      "section": "investing",
+      "source": "docs/GAME-LOOP.md",
+      "quote": "Sandwich Man trades in it too, labelled as the NPC.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "export function practiceNpcLooks("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "trades by his own rules from his own practice wallet, labelled as the NPC"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "labels Sandwich Man as the NPC, in practice"
+        }
+      ]
+    },
+    {
+      "id": "invest-tooltip",
+      "section": "investing",
+      "source": "docs/GAME-LOOP.md",
+      "quote": "her shop for that item is closed for buying, and the market says so on the item's card and in Why this price?",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/reasoning-shop.ts",
+          "anchor": "export function withShop("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "adds no line to a healthy shop, and says the honest thing where investing isn't live"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "in a till players funded, state her stock and till plainly and say whose Bits keep her buying"
+        }
+      ]
     }
   ],
   "checks": {
@@ -5223,6 +5847,24 @@
           "value": "market_fill"
         }
       ]
+    },
+    "no-invest-views": {
+      "kind": "view",
+      "method": "market_shops",
+      "args": {},
+      "about": "The deployed contract has no investing: no market_shops view.",
+      "expect": [],
+      "absent": true,
+      "whenFails": "v3 (or later) is deployed: rewrite the investing claims in the README, docs/INVESTING.md and docs/GAME-LOOP.md, and check investing against the real contract."
+    },
+    "no-get-version": {
+      "kind": "view",
+      "method": "get_version",
+      "args": {},
+      "about": "The deployed contract has no get_version, which is how the app reads it as v2 and offers no investing.",
+      "expect": [],
+      "absent": true,
+      "whenFails": "v3 (or later) is deployed: rewrite the investing claims in the README, docs/INVESTING.md and docs/GAME-LOOP.md, and check investing against the real contract."
     }
   }
 }
