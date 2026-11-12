@@ -77,7 +77,7 @@ async fn deploy_mint_craft_transfer() -> anyhow::Result<()> {
 
     let mint = operator
         .call(game.id(), "mint_rewards")
-        .args_json(json!({"batch": [{"account_id": alice.id(), "nonce": 1, "items": [{"item": "sybil-goo", "amount": 4}], "level": 2, "digest": DIGEST}]}))
+        .args_json(json!({"batch": [{"account_id": alice.id(), "nonce": 1, "items": [{"item": "sybil-goo", "amount": 4}, {"item": "bits", "amount": 60}], "level": 2, "digest": DIGEST}]}))
         .transact()
         .await?;
     assert!(mint.is_success(), "{mint:?}");
