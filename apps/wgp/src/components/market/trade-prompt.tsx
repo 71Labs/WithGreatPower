@@ -146,7 +146,7 @@ export function SpareOffers({ holdings, onNavigate, className = "" }: { holdings
   return (
     <p className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[13px] leading-[18px] ${className}`}>
       <span className="num min-w-0 [text-wrap:pretty]">
-        <span className="font-semibold">Spare loot:</span> {text}. No suit you’re missing uses it.
+        <span className="font-semibold">Spare loot:</span> {text}. More than the suits you’re missing need.
       </span>
       <StickerLink size="sm" href={tradeHref({ kind: "list", item })} onClick={onNavigate} className="max-sm:w-full">
         <Tag aria-hidden className="size-4" strokeWidth={2} />

@@ -125,7 +125,7 @@ describe("the one next trade (nextTrade)", () => {
     const m = market();
     const p = nextTrade(hero({ "spare-arm": 1, "chain-link": 2, crumbs: 7 }), m, 3)!;
     expect(p).toMatchObject({ kind: "sell-spares", intent: { item: "crumbs", side: "sell", amount: 3 }, toward: { suitName: "Octo rig", cost: quote(m, "chain-link", 1) } });
-    expect(promptCopy(p)).toMatchObject({ title: "No suit you’re missing uses your Crumbs ×3", note: `That goes towards the Octo rig suit’s last part (${quote(m, "chain-link", 1)} Bits).` });
+    expect(promptCopy(p)).toMatchObject({ title: "Spare Crumbs ×3: more than the suits you’re missing need", note: `That goes towards the Octo rig suit’s last part (${quote(m, "chain-link", 1)} Bits).` });
   });
 
   it("a part short, too few Bits and nothing to sell: show the price and the gap", () => {

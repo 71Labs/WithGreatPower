@@ -256,7 +256,7 @@ export function promptCopy(p: TradePrompt): { title: string; action: string; not
     };
   }
   return {
-    title: `No suit you’re missing uses your ${p.itemName} ×${p.intent.amount}`,
+    title: `Spare ${p.itemName} ×${p.intent.amount}: more than the suits you’re missing need`,
     action: `Sell ${p.intent.amount === 1 ? "it" : "them"} to Gwei · +${bitsText(p.proceeds)}`,
     note: p.toward ? `That goes towards the ${p.toward.suitName} suit’s last part (${bitsText(p.toward.cost)}).` : null,
   };

@@ -69,7 +69,7 @@ describe("the trade prompt card", () => {
     const m = view();
     const prompt = nextTrade(hero({ "spare-arm": 1, "chain-link": 2, crumbs: 7 }), m, 3)!;
     const out = html(createElement(TradePromptCard, { prompt }));
-    expect(text(out)).toContain("No suit you’re missing uses your Crumbs ×3");
+    expect(text(out)).toContain("Spare Crumbs ×3: more than the suits you’re missing need");
     expect(text(out)).toMatch(/Sell them to Gwei · \+\d+ Bits/);
     expect(text(out)).toContain("That goes towards the Octo rig suit’s last part");
     expect(out).toContain('href="/play/market?item=crumbs&amp;side=sell&amp;amount=3"');
@@ -118,7 +118,7 @@ describe("the Suit lab's lines", () => {
 
   it("lists spare loot with a link that opens the listing sheet on it", () => {
     const out = html(createElement(SpareOffers, { holdings: hero({ crumbs: 7, "press-pass": 1 }) }));
-    expect(text(out)).toContain("Spare loot: Crumbs ×3, Press pass ×1. No suit you’re missing uses it.");
+    expect(text(out)).toContain("Spare loot: Crumbs ×3, Press pass ×1. More than the suits you’re missing need.");
     expect(text(out)).toContain("List your spares");
     expect(out).toContain('href="/play/market?item=crumbs&amp;side=list"');
     expect(html(createElement(SpareOffers, { holdings: hero({ crumbs: 4 }) }))).toBe("");

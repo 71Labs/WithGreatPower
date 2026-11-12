@@ -47,7 +47,7 @@ export function MarketTileView({ pulse, quest, signedIn, className = "" }: { pul
             </span>
           ) : null}
         </span>
-        <span className="num line-clamp-2 text-[14px] font-bold leading-[18px] [overflow-wrap:anywhere]">{text ? text.line : "Gwei Stacy’s prices move with every trade"}</span>
+        <span title={text?.line} className="num line-clamp-2 text-[14px] font-bold leading-[18px] [overflow-wrap:anywhere]">{text ? text.line : "Gwei Stacy’s prices move with every trade"}</span>
         {text ? <span className="num truncate text-[12px] font-medium leading-4 text-game-muted">{text.meta}</span> : null}
       </span>
       <ChevronRight aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
