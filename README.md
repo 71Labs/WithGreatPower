@@ -108,18 +108,20 @@ Real players, counted two ways. Neither needs trust in us: the first is the publ
 | `craft_suit` / `equip_suit` | 16 / 7 |
 | Market: `market_buy`, `market_sell`, `list_item`, `buy_listing` | 2, 1, 4, 4 |
 
-**In the game** (<!-- STATS-DATE -->Nov 9, 17:04 UTC<!-- /STATS-DATE -->; live at [`/api/stats`](https://www.wgponnear.fun/api/stats)):
+**In the game** (from [`/api/stats`](https://www.wgponnear.fun/api/stats) on Nov 12, 14:42 UTC; `pnpm stats` prints the current counts):
 
 | | |
 |---|---|
-| Matches started / finished and verified | 200 / 178 |
+| Matches started / finished and verified | 258 / 229 |
 | Runs rejected by the verifier | 0 |
-| Free-roam City outings | 274 |
-| Heroes | 25 (22 have finished a match) |
-| Verified play time | 4.9 hours |
-| Verified matches by mode | Ranked nights 97 · Daily Run 44 · Case files 24 · Time trials 13 |
+| Free-roam City outings | 291, with 19 side tasks finished |
+| Heroes | 26 (23 have a verified match) |
+| Verified play time | 6.1 hours |
+| Verified matches by mode | Ranked nights 127 · Daily Run 62 · Case files 25 · Time trials 15 |
+| Reward mints queued / sent to the contract | 167 / 167 |
+| Invites | 7 friends invited, 4 count, 1 Recruiter badge earned |
 
-Play sessions (matches plus City outings) doubled between Nov 7 and Nov 9: 237 to 474.
+Play sessions (matches plus City outings) went from 237 on Nov 7 to 549 on Nov 12.
 
 ## Screenshots
 
@@ -368,7 +370,7 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 ## Limits and what's next
 
 - **Trust:** the operator key mints rewards and the server decides which runs verify. Anyone can re-run a run's replay, but the mint itself trusts our server. The contract's owner can upgrade it.
-- **Scale:** 25 heroes so far. The relayer and operator are single accounts with daily budgets.
+- **Scale:** 26 heroes so far. The relayer and operator are single accounts with daily budgets.
 - **Market depth:** most on-chain activity is rewards and crafting; trades are still few.
 - **Next:** ranked nights get the City's movement (sprint, climbing) after Season 1, since ranked rules are frozen while a season runs; Season 2; NEAR Auth as a second sign-in.
 
