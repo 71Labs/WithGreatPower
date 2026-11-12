@@ -74,14 +74,54 @@ function signIn(m: Me) {
 const posted = () => calls.filter((c) => c.path === "/api/actions");
 
 describe("guests", () => {
-  it("is loading until /api/me answers, then plays the local save", async () => {
-    expect(store.getSave()).toBeNull();
-    store.dispatch({ type: "sleep" }); // ignored while we don't know who's playing
-    await store.refreshAccount();
+  it("a browser that has never signed in plays its local save at first paint, before /api/me answers", async () => {
+    // No network answer yet: the save is already there, so a first visit never waits on a spinner.
+    expect(store.getAccount().status).toBe("guest");
+    expect(store.getSave()).not.toBeNull();
+    expect(store.getSave()!.hero).toBeNull();
+    expect(calls).toHaveLength(0);
     store.dispatch({ type: "create-hero", name: "Gwen", suit: "classic", powers: ["web-sling", "web-shield", "node-sense"] });
     expect(store.getSave()?.hero?.name).toBe("Gwen");
     expect(JSON.parse(storage.get("wgp:save:v1")!).hero.name).toBe("Gwen");
+    // The server is still asked, once, and agrees.
+    await store.refreshAccount();
+    expect(calls.filter((c) => c.path === "/api/me")).toHaveLength(1);
+    expect(store.getAccount().status).toBe("guest");
+    expect(store.getSave()?.hero?.name).toBe("Gwen");
     expect(posted()).toHaveLength(0);
+    expect(storage.has(store.SESSION_HINT_KEY)).toBe(false);
+  });
+
+  it("a browser that has held a session waits for /api/me, so a player's local save isn't mistaken for theirs", async () => {
+    storage.set(store.SESSION_HINT_KEY, "1");
+    storage.set("wgp:save:v1", JSON.stringify(created("Local Larry")));
+    vi.resetModules();
+    store = await import("./store");
+    expect(store.getAccount().status).toBe("loading");
+    expect(store.getSave()).toBeNull();
+    store.dispatch({ type: "sleep" }); // ignored while we don't know who's playing
+    await signIn(me({ save: created("Peter") }, { migrated: true }));
+    expect(store.getSave()?.hero?.name).toBe("Peter");
+  });
+
+  it("the session note follows /api/me: written when signed in, cleared when signed out, kept when offline", async () => {
+    await signIn(me({}, { migrated: true }));
+    expect(storage.get(store.SESSION_HINT_KEY)).toBe("1");
+    routes["GET /api/me"] = () => "network";
+    await store.refreshAccount();
+    expect(storage.get(store.SESSION_HINT_KEY)).toBe("1");
+    routes["GET /api/me"] = () => ({ status: 200, body: { signedIn: false } });
+    await store.refreshAccount();
+    expect(storage.has(store.SESSION_HINT_KEY)).toBe(false);
+  });
+
+  it("a signed-in player without the note (an older session) is taken over by the server's answer", async () => {
+    storage.set("wgp:save:v1", JSON.stringify(created("Local Larry")));
+    expect(store.getSave()?.hero?.name).toBe("Local Larry");
+    await signIn(me({ save: created("Peter") }, { migrated: true }));
+    expect(store.getAccount().status).toBe("signed-in");
+    expect(store.getSave()?.hero?.name).toBe("Peter");
+    expect(JSON.parse(storage.get("wgp:save:v1")!).hero.name).toBe("Local Larry");
   });
 });
 

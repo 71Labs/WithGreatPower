@@ -32,8 +32,14 @@ import { isSuitAction, routeAction, type SuitAction } from "./chain-route";
  * suit lab reads each outcome from useChainActivity().
  *
  * The guest's local save is never touched while signed in, so signing out brings it back.
- * Until /api/me answers, useGame().save is null (the loading state every screen handles),
- * so nobody is bounced to onboarding on a local save that isn't theirs.
+ *
+ * Who's playing is decided at first paint, without the network. A browser that has never
+ * held a session (no `wgp:signed-in:v1` note, which every signed-in answer from /api/me
+ * writes and every signed-out answer clears) is a guest at once: its local save shows, and
+ * a first-time visitor is on their way to the city in the same frame. /api/me is still
+ * asked, and its answer still wins. A browser with the note waits for that answer
+ * (useGame().save is null, the loading state every screen handles), so a signed-in player
+ * is never bounced to onboarding on a local save that isn't theirs.
  */
 const KEY = "wgp:save:v1";
 
@@ -44,12 +50,44 @@ export type AccountState = { status: "loading"; me: null } | { status: "guest"; 
 
 const LOADING: AccountState = { status: "loading", me: null };
 
+/** This browser's note that it has held a session. A hint for the first paint only: /api/me decides. */
+export const SESSION_HINT_KEY = "wgp:signed-in:v1";
+
+function sessionHint(): boolean {
+  try {
+    return window.localStorage.getItem(SESSION_HINT_KEY) === "1";
+  } catch {
+    // Storage is blocked, so there is no local save to mistake for theirs either: start as a guest.
+    return false;
+  }
+}
+
+function noteSession(signedIn: boolean) {
+  try {
+    if (signedIn) window.localStorage.setItem(SESSION_HINT_KEY, "1");
+    else window.localStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+    // Blocked storage: the next visit waits for nothing, as a guest.
+  }
+}
+
 /* ------------------------------------------------------------------ state */
 
 /** The guest's save, read from localStorage on first use. */
 let local: Save | null = null;
 let account: AccountState = LOADING;
 let accountInflight: Promise<AccountState> | null = null;
+/** The first look at this browser has happened (client only). */
+let booted = false;
+/** /api/me has been asked at least once. */
+let asked = false;
+
+/** First use in the browser: a visitor who has never signed in here is a guest right away. */
+function boot() {
+  if (booted || typeof window === "undefined") return;
+  booted = true;
+  if (account.status === "loading" && !sessionHint()) account = { status: "guest", me: null };
+}
 /** Signed in: menu actions shown but not yet confirmed by the server, oldest first. */
 let pending: Action[] = [];
 let pumping = false;
@@ -118,6 +156,7 @@ function serverView(me: Me): Save {
 }
 
 function current() {
+  boot();
   if (view) return view;
   if (account.status === "loading") view = { save: null, offer: null };
   else if (account.status === "guest") view = { save: localSave(), offer: null };
@@ -135,7 +174,9 @@ function current() {
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  if (account.status === "loading" && !accountInflight) void refreshAccount();
+  boot();
+  // Asked once per page load, whoever we assumed at first paint; again whenever nobody is known.
+  if ((!asked || account.status === "loading") && !accountInflight) void refreshAccount();
   // Another tab saved the guest's game: pick it up.
   const onStorage = (e: StorageEvent) => {
     if (e.key !== KEY) return;
@@ -373,8 +414,11 @@ function setAccount(next: AccountState) {
 
 /** Asks the server who's signed in. Concurrent calls share one request. */
 export function refreshAccount(): Promise<AccountState> {
+  asked = true;
   accountInflight ??= getMe()
     .then((res): AccountState => {
+      // A real answer either way: remember it for the next visit's first paint.
+      if (res.ok) noteSession(res.data.signedIn);
       // Offline or the server erred: play on as a guest rather than block the game.
       if (!res.ok || !res.data.signedIn) return { status: "guest", me: null };
       return { status: "signed-in", me: res.data };
@@ -397,11 +441,14 @@ export function adoptServerSave(save: Save, rev: number) {
   changed();
 }
 
-export const getAccount = (): AccountState => account;
+export const getAccount = (): AccountState => {
+  boot();
+  return account;
+};
 
 /** Who's playing: loading on the server render and until /api/me answers. */
 export function useAccount(): AccountState {
-  return useSyncExternalStore(subscribe, () => account, () => LOADING);
+  return useSyncExternalStore(subscribe, getAccount, () => LOADING);
 }
 
 /* ------------------------------------------------------------------ first sign-in: bring the local hero */
