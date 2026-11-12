@@ -13,6 +13,9 @@
 //!   (cd contracts/wgp/sandbox && cargo test --test upgrade_v3 -- --nocapture)
 //!
 //! `WGP_V2_WASM` overrides the v2 path. Without a v2 wasm the test says so and passes.
+//!
+//! With the rollback build too (`bash contracts/wgp/rollback/build.sh`, or
+//! `WGP_ROLLBACK_WASM`), it also rolls v3 back to v2 and upgrades to v3 again.
 
 use near_workspaces::result::ExecutionFinalResult;
 use near_workspaces::types::{AccessKey, KeyType, NearToken, SecretKey};
@@ -21,6 +24,7 @@ use serde_json::{json, Value};
 
 const V3_WASM: &str = "../target/near/wgp.wasm";
 const V2_WASM: &str = "../target/near/wgp-v2.wasm";
+const ROLLBACK_WASM: &str = "../target/near/wgp-v2-rollback.wasm";
 const DIGEST: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 const ROOT: &str = "2222222222222222222222222222222222222222222222222222222222222222";
 const ITEMS: [&str; 8] = [
@@ -356,7 +360,10 @@ async fn upgrade_from_the_live_v2_wasm_keeps_everything_and_adds_v3() -> anyhow:
         state["params"]["craft_bits"], "0",
         "the live crafting cost carries over"
     );
-    assert_eq!(state["params"]["invest_open"], true);
+    assert_eq!(
+        state["params"]["invest_open"], false,
+        "investing waits for the owner"
+    );
     assert_eq!(state["params"]["invest_fee_bps"], 5000);
     for p in state["pools"].as_array().unwrap() {
         assert_eq!(
@@ -560,7 +567,25 @@ async fn upgrade_from_the_live_v2_wasm_keeps_everything_and_adds_v3() -> anyhow:
         .await?;
     assert!(refused(nope).contains("The vendor's till holds only"));
 
-    // Alice invests through her session key: the shop reopens and no price moves.
+    // Investing is off until the owner opens it; then alice invests through her session
+    // key: the shop reopens and no price moves.
+    let closed = alice_key
+        .call(game.id(), "market_invest")
+        .args_json(json!({"item": "crumbs", "bits": "300"}))
+        .transact()
+        .await?;
+    assert!(refused(closed).contains("The vendor isn't taking investors right now"));
+    let mut rules = state["params"].clone();
+    rules["invest_open"] = json!(true);
+    pass(
+        "set_market_params (open investing)",
+        owner
+            .call(game.id(), "set_market_params")
+            .args_json(json!({"params": rules, "pools": []}))
+            .deposit(NearToken::from_yoctonear(1))
+            .transact()
+            .await?,
+    );
     let price = view(
         &game,
         "market_quote",
@@ -662,7 +687,6 @@ async fn upgrade_from_the_live_v2_wasm_keeps_everything_and_adds_v3() -> anyhow:
         .await?;
     assert!(steal.is_failure());
     // The owner shortens the lock (v3 rules; the pools aren't touched) and alice withdraws.
-    let mut rules = state["params"].clone();
     rules["invest_lock_ms"] = json!(0);
     pass(
         "set_market_params (v3 rules)",
@@ -759,5 +783,108 @@ async fn upgrade_from_the_live_v2_wasm_keeps_everything_and_adds_v3() -> anyhow:
 
     let storage = view(&game, "get_storage", json!({})).await?;
     println!("storage: {storage}");
+
+    // ---- The rollback build: v2 code whose migrate reads v3 ----
+    let rollback_path =
+        std::env::var("WGP_ROLLBACK_WASM").unwrap_or_else(|_| ROLLBACK_WASM.to_string());
+    let Ok(rollback) = std::fs::read(&rollback_path) else {
+        println!("No rollback wasm at {rollback_path}; skipping the rollback (bash contracts/wgp/rollback/build.sh builds it)");
+        return Ok(());
+    };
+    // With Bits invested it refuses, whole, and says what to do.
+    pass(
+        "market_invest (bob)",
+        bob_key
+            .call(game.id(), "market_invest")
+            .args_json(json!({"item": "sybil-goo", "bits": "100"}))
+            .transact()
+            .await?,
+    );
+    let held = owner
+        .call(game.id(), "upgrade")
+        .args(rollback.clone())
+        .deposit(NearToken::from_yoctonear(1))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(refused(held).contains("100 Bits are invested in sybil-goo: send the stakes home (market_refund) before rolling back"));
+    assert_eq!(view(&game, "get_version", json!({})).await?["state"], 3);
+    let refund = ok(
+        "market_refund(1)",
+        owner
+            .call(game.id(), "market_refund")
+            .args_json(json!({"item": "sybil-goo", "account_ids": [bob.id(), carol.id()]}))
+            .deposit(NearToken::from_yoctonear(1))
+            .transact()
+            .await?,
+    );
+    assert_eq!(refund.json::<Value>()?.as_array().unwrap().len(), 1);
+
+    let v3_view = snapshot(&game, &people).await?;
+    let tokens_v3 = view(&game, "mt_tokens", json!({})).await?;
+    let back = ok(
+        "upgrade v3 -> v2 rollback build (deploy + migrate)",
+        owner
+            .call(game.id(), "upgrade")
+            .args(rollback)
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?,
+    );
+    assert!(back.failures().is_empty(), "{:?}", back.failures());
+    // v2 again: every v2 view as it was, the v3 methods gone, v2 play carries on.
+    assert_eq!(snapshot(&game, &people).await?, v3_view);
+    assert!(game.view("get_version").await.is_err());
+    assert!(game.view("mt_tokens").args_json(json!({})).await.is_err());
+    let state = view(&game, "market_state", json!({})).await?;
+    assert!(state["params"].get("invest_open").is_none());
+    assert!(state["pools"][0].get("invested").is_none());
+    pass(
+        "market_buy on the rollback build",
+        alice_key
+            .call(game.id(), "market_buy")
+            .args_json(json!({"item": "sybil-goo", "amount": 1, "max_bits": "100"}))
+            .transact()
+            .await?,
+    );
+    pass(
+        "mint_rewards on the rollback build",
+        operator
+            .call(game.id(), "mint_rewards")
+            .args_json(
+                json!({"batch": [{"account_id": carol.id(), "nonce": 3, "digest": DIGEST,
+                "items": [{"item": "bits", "amount": 10}]}]}),
+            )
+            .transact()
+            .await?,
+    );
+    let v2_view = snapshot(&game, &people).await?;
+
+    // And forward to v3 once more: the index and the metadata table are back.
+    let forward = ok(
+        "upgrade rollback build -> v3",
+        owner
+            .call(game.id(), "upgrade")
+            .args(v3)
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?,
+    );
+    assert!(forward.failures().is_empty(), "{:?}", forward.failures());
+    assert_eq!(snapshot(&game, &people).await?, v2_view);
+    assert_eq!(view(&game, "mt_tokens", json!({})).await?, tokens_v3);
+    let m = view(
+        &game,
+        "mt_metadata_token_by_token_id",
+        json!({"token_ids": ["item:crumbs"]}),
+    )
+    .await?;
+    assert_eq!(m[0]["description"], "Left behind by Sandwich Man. Always.");
+    assert_eq!(
+        view(&game, "market_state", json!({})).await?["params"]["invest_open"],
+        false
+    );
     Ok(())
 }
