@@ -23,6 +23,7 @@ import type { Db } from "../db/client";
 import { ensureSave, writeSave } from "../db/players";
 import { rawListing, toListing, toPool } from "./chain";
 import { recordTrade } from "./history";
+import { settleMarketQuest } from "./quest";
 import { assertNoRunInFlight } from "./sim";
 import { marketView, refreshMarket } from "./view";
 
@@ -110,6 +111,11 @@ export async function afterMarketRelay(db: Db, call: RelayedMarketCall, now = ne
       }
     }
     refreshMarket();
+    // A trade that landed on chain completes today's market quest (XP, once a day; ./quest.ts).
+    if (call.method === "market_buy" || call.method === "market_sell" || call.method === "buy_listing") {
+      const quest = await settleMarketQuest(db, { playerId: call.playerId, now });
+      if (quest?.state === "completed") mirrored = true;
+    }
     return mirrored;
   } catch (error) {
     console.error(`[market] couldn't record ${call.method} ${call.txHash}: ${(error as Error).message}`);
