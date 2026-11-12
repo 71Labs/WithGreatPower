@@ -33,8 +33,12 @@ export function Sparkline({ points, label, className = "h-9 w-full" }: { points:
   );
 }
 
-/** The 24-hour change as a pill: an arrow and a signed percent; "New" without history. */
-export function ChangePill({ change, className = "" }: { change: number | null; className?: string }) {
+/**
+ * A price change as a pill: an arrow and a signed percent; "New" without history. `over`
+ * is the span the change covers, said after the number for screen readers: the market's
+ * pills are over 24 hours (the default), the economy lab's since its simulation opened.
+ */
+export function ChangePill({ change, over = "in 24 hours", className = "" }: { change: number | null; over?: string; className?: string }) {
   const pct = change === null ? null : Math.round(change * 100);
   const tone = pct === null || pct === 0 ? "bg-game-paper-2 text-game-ink" : pct > 0 ? "bg-game-mint text-game-ink" : "bg-game-hero text-game-on-hero";
   const rotate = pct === null || pct === 0 ? "" : pct > 0 ? "-rotate-45" : "rotate-45";
@@ -44,7 +48,7 @@ export function ChangePill({ change, className = "" }: { change: number | null; 
     >
       <ArrowRight aria-hidden className={`size-3.5 ${rotate}`} strokeWidth={2.75} />
       {pct === null ? "New" : formatChange(change!)}
-      <span className="sr-only">{pct === null ? ", no history yet" : " in 24 hours"}</span>
+      <span className="sr-only">{pct === null ? ", no history yet" : ` ${over}`}</span>
     </span>
   );
 }
