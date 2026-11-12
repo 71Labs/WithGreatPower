@@ -37,7 +37,7 @@ function NavLinks({ variant, onNavigate, firstRef }: LinksProps) {
             onClick={onNavigate}
             className={
               variant === "bar"
-                ? "inline-flex h-9 items-center whitespace-nowrap rounded-full px-4 text-[14px] font-medium tracking-[-0.01em] text-ink-subtle hover:bg-surface hover:text-ink-strong"
+                ? "inline-flex h-9 items-center whitespace-nowrap rounded-full px-4 text-[14px] font-medium tracking-[-0.01em] text-ink-subtle hover:bg-surface hover:text-ink-strong pointer-coarse:h-11"
                 : "flex h-12 items-center border-b border-hairline text-[17px] leading-6 text-ink"
             }
           >
