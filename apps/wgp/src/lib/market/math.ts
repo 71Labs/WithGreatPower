@@ -68,6 +68,17 @@ export interface Pool {
   stock: number;
   /** Items escrowed in open listings. */
   escrow: number;
+  /**
+   * Contract v3's investing fields (./invest.ts reads and writes them; nothing in this
+   * file does). Absent on a pool nobody has invested in. `invested` Bits sit in `bits`
+   * and came off `virtualBits`, so y never moved; `rewards` are fee earnings held for the
+   * investors, apart from the till; `feeAcc` is earnings per invested Bit × 10^12, as a
+   * decimal string; `feeCarry` is their share of fees not yet a whole Bit, in 1/10000 Bits.
+   */
+  invested?: number;
+  rewards?: number;
+  feeAcc?: string;
+  feeCarry?: number;
 }
 
 const BPS = 10_000n;
