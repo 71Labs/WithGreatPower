@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createElement } from "react";
+import { createElement, useEffect, useState } from "react";
 
 import { AVATARS, HeroArt } from "@/components/cast";
 import { CaseTile } from "@/components/cases/case-tile";
@@ -127,6 +127,10 @@ function PrimaryAction({ save }: { save: HeroSave }) {
   const router = useRouter();
   const p = save.patrol;
   const mid = !!p && p.phase !== "briefing";
+  // The patrol's code is the heaviest page in the game: fetch it while the player reads the hub,
+  // and say so on the button if the tap still has to wait for it.
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => router.prefetch("/play/patrol"), [router]);
 
   let action;
   if (save.nightDone) {
@@ -149,12 +153,14 @@ function PrimaryAction({ save }: { save: HeroSave }) {
         variant="hero"
         size="xl"
         className="w-full"
+        aria-busy={leaving || undefined}
         onClick={() => {
+          setLeaving(true);
           dispatch({ type: "start-patrol" });
           router.push("/play/patrol");
         }}
       >
-        Swing out
+        {leaving ? "Swinging out…" : "Swing out"}
         <ArrowRight aria-hidden className="size-6" strokeWidth={2.25} />
       </StickerButton>
     );
