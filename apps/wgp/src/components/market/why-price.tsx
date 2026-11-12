@@ -230,7 +230,7 @@ export function WhyPrice({
       <button
         {...buttonProps}
         aria-describedby={open ? id : undefined}
-        className="inline-flex min-h-8 items-center gap-1 rounded-[8px] text-start text-[12px] font-semibold leading-4 text-game-ink underline decoration-game-ink/40 underline-offset-[3px] [text-decoration-skip-ink:auto] focus-visible:outline-offset-2 pointer-coarse:min-h-11 pointer-fine:hover:decoration-game-ink"
+        className="inline-flex min-h-8 items-center gap-1 rounded-[8px] text-start text-[12px] font-semibold leading-4 text-game-ink underline decoration-game-ink/40 underline-offset-[3px] [text-decoration-skip-ink:auto] focus-visible:outline-offset-2 max-sm:min-h-11 pointer-coarse:min-h-11 pointer-fine:hover:decoration-game-ink"
       >
         <HelpCircle aria-hidden className="size-4 shrink-0" strokeWidth={2} />
         Why this price?

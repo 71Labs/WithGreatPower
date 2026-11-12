@@ -6,12 +6,13 @@
 import type { ApiResult } from "@/lib/api/client";
 import { EXPLORER_URL } from "@/lib/near/config";
 
+import { plural } from "@/lib/plural";
+
 import type { ClaimResponse, InvitedFriend, ReferralReward, ReferralsView } from "./api";
 import { claimCodeFromInput } from "./code";
 
 export const DEFAULT_GOAL = 3;
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /* ------------------------------------------------------------------ a friend's steps */
 

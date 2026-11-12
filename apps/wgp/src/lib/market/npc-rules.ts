@@ -62,6 +62,8 @@
 import { seededPools, type MarketParams } from "./config";
 import type { Listing } from "./engine";
 import { bitsText } from "./format";
+import { plural } from "@/lib/plural";
+
 import { buyQuote, lessSlippage, listingBounds, sellQuote, spotMilli, withSlippage, type Pool } from "./math";
 import { booksToday, costOf, lotText, type NpcBooks } from "./npc-book";
 
@@ -372,7 +374,7 @@ export function statusLine(status: NpcStatus, bits: number): string {
     case "closed-shop":
       return `Closed shop: ${bitsText(bits)} left. Everything must go. Back when something sells.`;
     case "resting":
-      return `That’s ${NPC_RULES.maxActionsPerDay} moves today. Back in line at midnight UTC.`;
+      return `That’s ${plural(NPC_RULES.maxActionsPerDay, "move")} today. Back in line at midnight UTC.`;
     case "market-closed":
       return "The market’s closed. I’m first in line for when it opens.";
     case "open":

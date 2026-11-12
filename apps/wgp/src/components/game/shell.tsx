@@ -18,6 +18,8 @@ import { useNewCase } from "@/lib/cases/local";
 import type { Hero, Save } from "@wgp/game-core/types";
 
 import { GameBackdrop, type BackdropVariant } from "./backdrop";
+import { plural } from "@/lib/plural";
+
 import { KitStyles, ON_PAPER, StickerBadge, StickerButton, StickerIconButton, StickerLink } from "./kit";
 import { GameSheet, HeroTile } from "./ui";
 
@@ -42,7 +44,6 @@ export const GAME_NAV = [
 const isActive = (pathname: string | null, href: string) =>
   !!pathname && (href === "/play" ? pathname === "/play" : pathname.startsWith(href) || (href === "/play/compete" && pathname.startsWith("/play/leaderboard")));
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0");
 
 /* ------------------------------------------------------------------ the Rug's read marker */

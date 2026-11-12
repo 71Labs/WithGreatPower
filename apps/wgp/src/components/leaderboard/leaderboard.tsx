@@ -10,6 +10,8 @@ import { runShareText, seasonShareText } from "@/lib/social/share";
 import type { LeaderboardView } from "@/server/db/board-view";
 import type { BoardRow } from "@/server/db/leaderboard";
 
+import { plural } from "@/lib/plural";
+
 import { boardLines, placeNotice } from "./board-lines";
 import { SeasonCard, TrophyMark } from "./season-card";
 
@@ -258,7 +260,7 @@ export function LeaderboardScreen() {
           )}
           {load.state === "ready" && load.view.total > 0 ? (
             <StickerChip className="num h-7 shrink-0 text-[12px]">
-              {points.format(load.view.total)} {load.view.total === 1 ? "hero" : "heroes"}
+              {plural(load.view.total, "hero", "heroes")}
             </StickerChip>
           ) : null}
         </div>

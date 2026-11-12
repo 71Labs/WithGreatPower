@@ -37,7 +37,7 @@ export function FlowPanel({ history, days, feeBps, headingId }: { history: DaySn
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-[20px] border-2 border-game-ink bg-game-paper p-4 text-game-ink shadow-[var(--game-shadow-sm)]">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id={headingId} className="text-[14px] font-semibold leading-5">
+        <h2 id={headingId} className="text-[14px] font-semibold leading-5 text-game-ink">
           Bits earned and Bits burned
         </h2>
         <p className="num text-[13px] leading-5 text-game-muted">

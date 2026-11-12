@@ -10,6 +10,7 @@
  * unclear whether the trade landed (the connection dropped after it was sent, a server
  * error) says so, so nobody pays twice by trying again blind.
  */
+import { plural } from "@/lib/plural";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
@@ -51,7 +52,7 @@ export function refusalText(said: string): string {
   if ((m = /Price it between (\d+) and (\d+) Bits/i.exec(said))) {
     return `Gwei’s price moved: price this lot between ${Number(m[1]).toLocaleString("en-US")} and ${bits(m[2]!)}.`;
   }
-  if ((m = /You can have (\d+) listings open/i.exec(said))) return `You can have ${m[1]} listings up at once. Take one down first.`;
+  if ((m = /You can have (\d+) listings open/i.exec(said))) return `You can have ${plural(Number(m[1]), "listing")} up at once. Take one down first.`;
   if (/Daily market limit/i.test(said)) return "That’s today’s market limit. It resets at midnight UTC.";
   if (/That listing is gone/i.test(said)) return "Someone bought that lot first, or it was taken down.";
   if (/your own listing/i.test(said)) return "That’s your own listing. Take it down from the Listings tab instead.";

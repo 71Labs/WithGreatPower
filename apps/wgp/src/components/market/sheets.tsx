@@ -22,6 +22,8 @@ import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
 
 import { ITEM_SOURCE } from "./copy";
+import { plural as count } from "@/lib/plural";
+
 import { bitsText, formatBits, formatChange, formatPrice } from "./sparkline";
 import type { TradeOutcome } from "./use-market";
 import { VendorChips } from "./why-price";
@@ -368,7 +370,7 @@ export function ListSheet({
           : me && me.listingsLeft <= 0
             ? "That’s today’s listings used up. The market resets at midnight UTC."
             : me && me.open.length >= view.params.maxOpenListings
-              ? `You can have ${view.params.maxOpenListings} listings up at once. Take one down first.`
+              ? `You can have ${count(view.params.maxOpenListings, "listing")} up at once. Take one down first.`
               : null;
     setProblem(why);
     if (why) return;
