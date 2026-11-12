@@ -1,6 +1,6 @@
 # The game loop
 
-What a player does every 30 seconds, every 5 minutes and every session, and where the economy sits in each. The track asks for this design before any code; this is the loop the game ships with, checked against the live build.
+What a player does every 30 seconds, every 5 minutes and every session, and where the economy sits in each. This is the loop the game ships with, written up on Nov 12 from the live build. The plan it grew from is the Nov 2 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The rule behind it: **the chain is never a step in the loop.** A player's hands are on the stick, not on a wallet. Everything that reaches NEAR happens as a consequence of play, in the background.
 
@@ -49,7 +49,7 @@ Trades are calls from the player's own account, signed by a game-only session ke
 - **Loot has a use.** Suits need specific parts from specific villains, so what you fight decides what you can build, and what you lack decides what you buy.
 - **Prices are other players.** Nobody sets a price. A villain everyone farms floods Gwei with its parts and the price falls; a rare part climbs as it's bought. `/lab/economy` fast-forwards 21 days of this with bot players on the same pricing code.
 - **The vendor has limits.** Gwei sells only what she holds and pays only from her till. Sold out, she can't sell; with an empty till for an item, she can't buy it until someone buys from her.
-- **Sinks match sources.** Bits enter only through verified nights and leave through the 2% fee; items enter as loot and leave through crafting.
+- **Sources and sinks.** Bits enter only through verified nights and leave through the 2% fee; items enter as loot and leave through crafting. Today more Bits are earned than burned; a Bits cost for crafting is in the contract and off on mainnet.
 - **No patch needed.** The pools, fee and caps are contract state. Prices move with every trade, with no deploy and no cron job.
 
 ## What the player never sees
