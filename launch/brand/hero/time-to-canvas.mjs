@@ -9,7 +9,7 @@
  * Two paths, each from an empty browser profile (no save, no session):
  *   - "landing": opens /, taps "Play now", and times from the tap.
  *   - "play":    opens /play directly, and times from the navigation.
- * For each it records when the loading pill ("Suiting up…") was last on screen, which path
+ * For each it records when a loading pill ("Suiting up…", "Loading the city…") was last on screen, which path
  * the visitor ended on, and when the 3D stage's <canvas> (three.js stamps its own with
  * `data-engine`; the backdrops and minimaps don't count) was first laid out. A path that
  * never reaches a canvas (a form in the way) reports `canvasMs: null` and where it stopped.
@@ -45,7 +45,7 @@ const PROBE = `(() => {
   const read = () => { try { return JSON.parse(sessionStorage.getItem(key) || "{}"); } catch { return {}; } };
   const write = (patch) => { try { sessionStorage.setItem(key, JSON.stringify({ ...read(), ...patch })); } catch {} };
   const look = () => {
-    const pill = [...document.querySelectorAll("[role=status]")].some((el) => /Suiting up/.test(el.textContent || ""));
+    const pill = [...document.querySelectorAll("[role=status]")].some((el) => /Suiting up|Loading the city/.test(el.textContent || ""));
     if (pill) write({ pillLast: epoch(), pillFirst: read().pillFirst ?? epoch() });
     const canvas = [...document.querySelectorAll('canvas[data-engine^="three"]')].find((c) => c.getBoundingClientRect().width > 200);
     if (canvas && !read().canvas) write({ canvas: epoch(), canvasPath: location.pathname });
@@ -136,7 +136,7 @@ for (const path of ["landing", "play"]) {
       runs,
     };
     results.push(row);
-    console.log(`${row.path.padEnd(22)} ${row.network.padEnd(12)} ended on ${row.endedOn.padEnd(14)} canvas ${row.canvasMs === null ? "never" : `${row.canvasMs} ms`}; “Suiting up…” last seen at ${row.loadingPillUntilMs} ms`);
+    console.log(`${row.path.padEnd(22)} ${row.network.padEnd(12)} ended on ${row.endedOn.padEnd(14)} canvas ${row.canvasMs === null ? "never" : `${row.canvasMs} ms`}; loading pill last seen at ${row.loadingPillUntilMs} ms`);
   }
 }
 if (OUT) writeFileSync(OUT, JSON.stringify({ base: BASE, at: new Date().toISOString(), results }, null, 2));

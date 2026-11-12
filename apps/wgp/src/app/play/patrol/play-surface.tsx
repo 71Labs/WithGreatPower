@@ -51,7 +51,7 @@ import { initialSettings, rememberSettings, SettingsPanel, type GraphicsChoice, 
 import { Loading } from "./status";
 import { Waypoint } from "./waypoint";
 
-const Stage = dynamic(() => import("./stage"), { ssr: false, loading: () => <Loading /> });
+const Stage = dynamic(() => import("./stage"), { ssr: false, loading: () => <Loading label="Loading the city…" /> });
 
 declare global {
   interface Window {
