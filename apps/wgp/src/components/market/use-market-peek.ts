@@ -29,7 +29,8 @@ interface Loaded {
   quest: MarketQuestView | null;
 }
 
-export function useMarketPeek(): MarketPeek {
+/** `stamp`: change it to look again (the Suit lab does after a craft, which may have burned Bits). */
+export function useMarketPeek(stamp = 0): MarketPeek {
   const account = useAccount();
   const key = account.status === "signed-in" ? account.me.player.id : account.status;
   const signedIn = account.status === "signed-in";
@@ -44,7 +45,7 @@ export function useMarketPeek(): MarketPeek {
       () => {},
     );
     return () => ctrl.abort();
-  }, [key, signedIn]);
+  }, [key, signedIn, stamp]);
   const now = loaded?.key === key ? loaded : null;
   return { view: now?.view ?? null, me: now?.me ?? null, quest: now?.quest ?? null, signedIn, settled: !!now };
 }

@@ -16,6 +16,9 @@ export const formatBits = (n: number) => bits.format(n);
 /** "1 Bit", "39 Bits". */
 export const bitsText = (n: number) => `${bits.format(n)} ${n === 1 ? "Bit" : "Bits"}`;
 
+/** The gas fee as a percentage, from the market's live `fee_bps`: 200 → "2%", 250 → "2.5%". */
+export const feeText = (feeBps: number) => `${Number((feeBps / 100).toFixed(2))}%`;
+
 /** "+12%", "−3%", "0%" with a real minus sign. */
 export function formatChange(change: number): string {
   const pct = Math.round(change * 100);

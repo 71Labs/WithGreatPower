@@ -2,6 +2,7 @@
  * The Mempool Market's words: who drops each item, the vendor's patter, and The Daily
  * Rug's market headlines. Copy is stored in natural case; screens set it in caps with CSS.
  */
+import { feeText } from "@/lib/market/format";
 import type { CastId } from "@wgp/game-core/cast";
 import type { ItemId } from "@wgp/game-core/types";
 
@@ -17,28 +18,39 @@ export const ITEM_SOURCE: Record<ItemId, CastId> = {
   "press-pass": "bearson",
 };
 
-/** Gwei Stacy runs the stall. One line per visit, picked by the day. */
-const VENDOR_LINES = [
+/**
+ * Gwei Stacy runs the stall. One line per visit, picked by the day. A line that names the
+ * gas fee reads it from the market's live params (`fee_bps`), never a number written here.
+ */
+const VENDOR_LINES: readonly (string | ((feeBps: number) => string))[] = [
   "Prices are set by the curve. The curve is set by you. I just invoice.",
-  "Two percent gas fee on everything. It gets burned. Don't ask me where.",
+  (feeBps) => `A ${feeText(feeBps)} gas fee on everything. It gets burned. Don't ask me where.`,
   "Buy high, sell low. That's what the last guy did. He's fine. Probably.",
   "Every trade moves the price. No patch notes, no committee, no refunds.",
   "I count in gwei. You count in Bits. We both count on Sandwich Man staying out.",
   "Stock's real, till's real, the vibes are virtual. Welcome to the Mempool Market.",
-] as const;
+];
 
-export function vendorLine(seed: number): string {
-  return VENDOR_LINES[Math.abs(Math.floor(seed)) % VENDOR_LINES.length]!;
+export function vendorLine(seed: number, feeBps: number): string {
+  const line = VENDOR_LINES[Math.abs(Math.floor(seed)) % VENDOR_LINES.length]!;
+  return typeof line === "string" ? line : line(feeBps);
 }
 
-/** What Gwei says after a trade. */
-export const VENDOR_AFTER = {
-  buy: "Pleasure doing business. The price just went up, by the way.",
-  sell: "Thanks. I'll mark it up for the next hero.",
-  list: "Listed. Someone will buy it, or Sandwich Man will try to.",
-  fill: "Sold to you. The seller says thanks, minus my two percent.",
-  cancel: "Pulled it. Your stuff is back in your pocket.",
-} as const;
+/** What Gwei says after a trade, at the market's live gas fee. */
+export function vendorAfter(action: "buy" | "sell" | "list" | "fill" | "cancel", feeBps: number): string {
+  switch (action) {
+    case "buy":
+      return "Pleasure doing business. The price just went up, by the way.";
+    case "sell":
+      return "Thanks. I'll mark it up for the next hero.";
+    case "list":
+      return "Listed. Someone will buy it, or Sandwich Man will try to.";
+    case "fill":
+      return `Sold to you. The seller says thanks, minus the ${feeText(feeBps)} gas fee.`;
+    case "cancel":
+      return "Pulled it. Your stuff is back in your pocket.";
+  }
+}
 
 /** Who The Daily Rug blames when an item moves. */
 const SUSPECT: Record<ItemId, string> = {
