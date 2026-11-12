@@ -12,6 +12,9 @@
  * - flippers buy dips and sell rips against their own moving average, list at a markup
  *   and snap up listings under Gwei's price;
  * - hoarders buy rares when they're flush and list them high.
+ *
+ * Sandwich Man trades among them (unless `npc: false`): the same `decide` the server runs
+ * for him (./npc-rules.ts), one action a turn, a few turns a day, from his one-off seed.
  */
 import { ITEMS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import type { ItemId, SuitId } from "@wgp/game-core/types";
@@ -19,6 +22,9 @@ import type { ItemId, SuitId } from "@wgp/game-core/types";
 import { BITS_TOKEN, DEFAULT_PARAMS, itemToken, seededPools, type MarketParams } from "./config";
 import { buyListing, cancelListing, listItem, marketBuy, marketSell, MarketError, memoryLedger, newBook, type MarketBook } from "./engine";
 import { buyQuote, spotMilli } from "./math";
+import { newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
+import { NPC_RULES, npcStatus, type NpcStatus } from "./npc-rules";
+import { npcTurn, walletOnBook } from "./npc-turn";
 import { nightBits } from "./rewards";
 
 export type BotKind = "crafter" | "dumper" | "flipper" | "hoarder";
@@ -28,6 +34,27 @@ export interface EconomyConfig {
   bots: number;
   seed: number;
   params?: Partial<MarketParams>;
+  /** Sandwich Man trades too (default true). */
+  npc?: boolean;
+}
+
+/** Sandwich Man's account in the fast-forward. */
+export const LAB_NPC_ACCOUNT = "sandwich-man.lab";
+/** How many times a day he looks at the market: after each of this many slices of the bots. */
+const NPC_TURNS_PER_DAY = 8;
+
+/** Sandwich Man at the end of a day. */
+export interface NpcDay {
+  bits: number;
+  /** Items he owns, his own listings included. */
+  units: number;
+  status: NpcStatus;
+  /** He closed shop at some point that day (he may have reopened by the end of it). */
+  closed: boolean;
+  /** What he did that day, oldest first. */
+  events: NpcEvent[];
+  /** Actions the market refused (his rules check first, so this stays 0). */
+  refused: number;
 }
 
 export interface DaySnapshot {
@@ -43,11 +70,14 @@ export interface DaySnapshot {
   supply: number;
   /** All Bits burned so far: the gas fee and crafting. */
   burned: number;
+  /** Bits earned on patrol so far, plus Sandwich Man's one-off seed. */
   minted: number;
   crafted: number;
   trades: number;
   fills: number;
   listings: number;
+  /** Null when the run has no NPC. */
+  npc: NpcDay | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -85,13 +115,51 @@ export class Economy {
   private craftBurned = 0;
   private crafted = 0;
   private averages = new Map<string, number>();
+  private npcBooks: NpcBooks | null = null;
+  private npcEvents: NpcEvent[] = [];
+  private npcRefused = 0;
+  private npcClosed = false;
 
   constructor(readonly config: EconomyConfig) {
     this.rand = rng(config.seed);
     this.book = newBook({ ...DEFAULT_PARAMS, ...config.params }, seededPools());
     const kinds: BotKind[] = ["crafter", "crafter", "dumper", "flipper", "crafter", "dumper", "hoarder", "flipper"];
     this.bots = Array.from({ length: config.bots }, (_, i) => ({ id: `bot-${i}`, kind: kinds[i % kinds.length]!, target: null }));
-    this.history.push(this.snapshot(0, 0, 0));
+    if (config.npc !== false) {
+      this.npcBooks = newBooks();
+      this.ledger.credit(LAB_NPC_ACCOUNT, BITS_TOKEN, NPC_RULES.seedBits);
+      this.minted += NPC_RULES.seedBits;
+    }
+    this.history.push(this.snapshot(0, 0, 0, (EPOCH_DAY + 0) * DAY_MS));
+  }
+
+  /** Sandwich Man looks at the market once: at most one action, by his own rules. */
+  private npcLooks(now: number, count: { trades: number; fills: number }) {
+    if (!this.npcBooks) return;
+    const turn = npcTurn(this.book, this.ledger, LAB_NPC_ACCOUNT, this.npcBooks, now);
+    this.npcBooks = turn.books;
+    this.npcEvents.push(...turn.events);
+    if (turn.books.closed) this.npcClosed = true;
+    if (turn.refused) this.npcRefused += 1;
+    else if (turn.action?.kind === "fill") count.fills += 1;
+    else if (turn.action?.kind === "buy" || turn.action?.kind === "sell") count.trades += 1;
+  }
+
+  private npcDay(now: number): NpcDay | null {
+    if (!this.npcBooks) return null;
+    const wallet = walletOnBook(this.book, this.ledger, LAB_NPC_ACCOUNT, this.npcBooks, now);
+    const day: NpcDay = {
+      bits: wallet.bits,
+      units: Object.values(wallet.items).reduce((n, v) => n + v, 0) + this.book.listings.filter((l) => l.seller === LAB_NPC_ACCOUNT).reduce((n, l) => n + l.amount, 0),
+      status: npcStatus(this.book, wallet, now),
+      closed: this.npcClosed || this.npcBooks.closed,
+      events: this.npcEvents,
+      refused: this.npcRefused,
+    };
+    this.npcEvents = [];
+    this.npcRefused = 0;
+    this.npcClosed = false;
+    return day;
   }
 
   get day(): number {
@@ -220,7 +288,7 @@ export class Economy {
     }
   }
 
-  private snapshot(day: number, trades: number, fills: number): DaySnapshot {
+  private snapshot(day: number, trades: number, fills: number, now: number): DaySnapshot {
     const prices: Record<string, number> = {};
     const stock: Record<string, number> = {};
     const tills: Record<string, number> = {};
@@ -230,7 +298,7 @@ export class Economy {
       tills[p.item] = p.bits;
     }
     const till = this.book.pools.reduce((s, p) => s + p.bits, 0);
-    const held = this.bots.reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0);
+    const held = this.bots.reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0) + this.ledger.balance(LAB_NPC_ACCOUNT, BITS_TOKEN);
     return {
       day,
       prices,
@@ -244,6 +312,7 @@ export class Economy {
       trades,
       fills,
       listings: this.book.listings.length,
+      npc: this.npcDay(now),
     };
   }
 
@@ -258,12 +327,18 @@ export class Economy {
     }
     for (const bot of order) this.patrol(bot);
     const count = { trades: 0, fills: 0 };
-    order.forEach((bot, i) => this.act(bot, (EPOCH_DAY + day) * DAY_MS + i * 1_000, count));
+    const every = Math.max(1, Math.ceil(order.length / NPC_TURNS_PER_DAY));
+    order.forEach((bot, i) => {
+      const now = (EPOCH_DAY + day) * DAY_MS + i * 1_000;
+      this.act(bot, now, count);
+      // Real activity just landed: Sandwich Man gets a look, as he does after a player's trade.
+      if ((i + 1) % every === 0 || i === order.length - 1) this.npcLooks(now + 500, count);
+    });
     for (const p of this.book.pools) {
       const prev = this.averages.get(p.item) ?? spotMilli(p);
       this.averages.set(p.item, prev * 0.6 + spotMilli(p) * 0.4);
     }
-    const snap = this.snapshot(day, count.trades, count.fills);
+    const snap = this.snapshot(day, count.trades, count.fills, (EPOCH_DAY + day) * DAY_MS + order.length * 1_000);
     this.history.push(snap);
     return snap;
   }
