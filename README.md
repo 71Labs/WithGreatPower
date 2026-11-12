@@ -45,7 +45,7 @@ Every check is read-only: no sign-in, no wallet, no transaction. Commands A–E 
 | 6 | Ranked scores are reproducible | Run command F | One `OK` line per run, then `5/5 runs reproduced from https://www.wgponnear.fun.` |
 | 7 | Prices move without a patch | Open https://www.wgponnear.fun/lab/economy, choose **Instant** and press **Run 21 days** | **Day 21 / 21**, the counters (Bits in play, Gwei's till, Bits burned, suits crafted, trades), a price chart per item and Gwei's reasoning for each price |
 | 8 | The simulation is deterministic | Open https://www.wgponnear.fun/lab/determinism | **✓ All 4 replays match Node**: your browser replays four recorded nights and gets the same state hashes as Node |
-| 9 | The numbers in this README are real | Run command G, or open https://www.wgponnear.fun/stats | The live counts from the game's database, plus an independent tally of the contract's transactions from NearBlocks |
+| 9 | The numbers in this README are real | Run command G (about a minute), or open https://www.wgponnear.fun/stats | The live counts from the game's database, then the contract's calls counted by method from NearBlocks |
 
 ```bash
 # A. The contract's market (NEAR JSON-RPC, read-only)
@@ -77,7 +77,7 @@ pnpm install --frozen-lockfile
 pnpm verify
 
 # G. The live numbers, and the contract's transactions counted from NearBlocks
-pnpm stats            # or: curl -s https://www.wgponnear.fun/api/stats | jq
+pnpm stats            # site only: curl -s https://www.wgponnear.fun/api/stats | jq   ·   chain only: pnpm stats --chain-only
 ```
 
 Command F printed this from a fresh clone on Nov 12:
@@ -101,12 +101,12 @@ Real players, counted two ways. Neither needs trust in us: the first is the publ
 
 | | |
 |---|---|
-| Transactions to `game.wgpnear.near` | 215 |
-| Player accounts that have transacted | 17 |
-| `mint_rewards` (verified nights' loot, Bits and badges) | 150 |
-| `register_hero` | 17 |
+| Calls to `game.wgpnear.near` | 215 (2 of them failed) |
+| Player accounts that called a game method themselves | 17 |
+| `mint_rewards` (verified nights' loot, Bits and badges) | 157 |
+| `register_hero` | 18 |
 | `craft_suit` / `equip_suit` | 16 / 7 |
-| Market: `market_buy`, `market_sell`, `list_item`, `buy_listing` | 1, 1, 4, 4 |
+| Market: `market_buy`, `market_sell`, `list_item`, `buy_listing` | 2, 1, 4, 4 |
 
 **In the game** (<!-- STATS-DATE -->Nov 9, 17:04 UTC<!-- /STATS-DATE -->; live at [`/api/stats`](https://www.wgponnear.fun/api/stats)):
 
@@ -296,7 +296,7 @@ flowchart LR
 | Deploy and `new` (code hash `68F7NhEjUtKweyLU7WNvT183apacLQegfB1DXUoQ2hjJ`, owner `wgpnear.near`, operator `operator.wgpnear.near`) | [`8nyXGMNu…`](https://nearblocks.io/txns/8nyXGMNuFmQkvwJyC9PZv1JVM54Go45QZ69HXXppC1JR) |
 | `set_market_params`: opens the market and mints Gwei's stock and till | [`FdQxVNyz…`](https://nearblocks.io/txns/FdQxVNyziV7ioNWPAfL9yAWJ8u2wDN3kRKpEX4JSVcCR) |
 | The factory creates a Google player's account with their Privy key and a session key | [`CY6esX2A…`](https://nearblocks.io/txns/CY6esX2ALc9qoDqSVBkuHP29ovDSZpH32C7cLaYL48iT) |
-| `mint_rewards` from the operator (one of 150) | [`CsnUWQDW…`](https://nearblocks.io/txns/CsnUWQDWSXGwNaapB9iFGH3idEqzQWGbWmrH7pbJegZh) |
+| `mint_rewards` from the operator (one of 157) | [`CsnUWQDW…`](https://nearblocks.io/txns/CsnUWQDWSXGwNaapB9iFGH3idEqzQWGbWmrH7pbJegZh) |
 | A player's `register_hero` | [`7dnP8eU7…`](https://nearblocks.io/txns/7dnP8eU7W8b9LdQeZztnttzai5uUc7gHAea4hEeoXnnq) |
 | A player's `craft_suit`, burning the recipe's loot | [`AfRNvujJ…`](https://nearblocks.io/txns/AfRNvujJ43dmk9Rj9LzzCZUxWqU4UnkvozaqWqtN2eq2) |
 | A player's `equip_suit` | [`C2WwQsHy…`](https://nearblocks.io/txns/C2WwQsHyHNBZLrkN1JaVDGZuuf9aYaBJGqvyMSLvRvRp) |
