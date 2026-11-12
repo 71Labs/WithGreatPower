@@ -208,12 +208,13 @@ try {
   const cards = await evaluate(`[...document.querySelectorAll("li")].filter((li) => li.querySelector("h3") && /Why this price/.test(li.textContent)).map((li) => {
     const text = li.innerText.replace(/\\s+/g, " ");
     const spark = li.querySelector('[role=img]');
-    return { name: li.querySelector("h3").textContent, stock: Number(/Stock ([\\d,]+)/.exec(text)?.[1].replace(/,/g, "")), trades: /(\\d+ trades? in 24 h)/.exec(text)?.[1] ?? null, chips: [...li.querySelectorAll("p > span.rounded-full")].map((s) => s.textContent.trim()), path: spark?.querySelector("path:last-of-type")?.getAttribute("d") ?? null, quiet: /No trades in 24 h|No price history yet/.test(spark?.textContent ?? ""), label: spark?.getAttribute("aria-label") };
+    return { name: li.querySelector("h3").textContent, stock: Number(/Stock ([\\d,]+)/.exec(text)?.[1].replace(/,/g, "")), trades: /(\\d+ trades? in 24 h)/.exec(text)?.[1] ?? null, wallet: /You have [\\d,]+/.test(text), chips: [...li.querySelectorAll("p > span.rounded-full")].map((s) => s.textContent.trim()), path: spark?.querySelector("path:last-of-type")?.getAttribute("d") ?? null, quiet: /No trades in 24 h|No price history yet/.test(spark?.textContent ?? ""), label: spark?.getAttribute("aria-label") };
   })`);
   check(cards.length === 8, "the market shows its eight cards", cards.map((c) => `${c.name} ${c.stock}`).join(", "));
-  check(cards.every((c) => c.trades && !/^1 trades/.test(c.trades)) && !/\b1 trades\b/.test(await evaluate("document.body.innerText")), "2 · no card says “1 trades”", cards.map((c) => c.trades).join(" | "));
+  // A guest's market is the practice market now, where a card shows their practice wallet ("You have N") in that line's place.
+  check(cards.every((c) => (c.trades ? !/^1 trades/.test(c.trades) : c.wallet)) && !/\b1 trades\b/.test(await evaluate("document.body.innerText")), "2 · no card says “1 trades”", cards.map((c) => c.trades ?? (c.wallet ? "wallet line" : "nothing")).join(" | "));
   const drawn = cards.filter((c) => c.path);
-  check(cards.some((c) => c.quiet) && cards.filter((c) => c.quiet).every((c) => /0 trades/.test(c.trades)), "3 · a card with no trades says “No trades in 24 h” instead of drawing a shape", `${cards.filter((c) => c.quiet).length} quiet`);
+  check(cards.some((c) => c.quiet) && cards.filter((c) => c.quiet).every((c) => !c.trades || /0 trades/.test(c.trades)), "3 · a card with no trades says “No trades in 24 h” instead of drawing a shape", `${cards.filter((c) => c.quiet).length} quiet`);
   check(drawn.length > 0 && drawn.every((c) => !/[LCQ]/.test(c.path) && /H/.test(c.path)), "3 · every drawn sparkline is a step line (horizontal and vertical moves only)", `${drawn.length} drawn`);
   check(new Set(drawn.map((c) => c.path)).size === drawn.length, "3 · no two sparklines are the same shape", drawn.map((c) => c.path).join("  "));
   // Each card's reasoning: open the popover and hold its words to the card's own stock.
@@ -278,10 +279,17 @@ try {
   const unhook = chrome.on("Fetch.requestPaused", (p) => {
     send("Fetch.fulfillRequest", { requestId: p.requestId, responseCode: 200, responseHeaders: [{ name: "content-type", value: "application/json" }], body: Buffer.from(offBody).toString("base64") }).catch(() => {});
   });
+  // A guest's market is the practice market, where he does trade. His "off" notice is on the real market, which a signed-in player sees.
+  const signedIn = await evaluate(`fetch("/api/auth/dev", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ handle: "judge-off" }) }).then((r) => r.status)`);
+  check(signedIn === 200 || signedIn === 201, "5 · signed in as a dev player to see the real market", signedIn);
+  // The offer to bring the guest's hero along would sit over the strip: this run isn't about it.
+  await evaluate(`fetch("/api/me").then((r) => r.json()).then((me) => localStorage.setItem("wgp:migrate-declined:" + me.player.id, "1"))`);
   await viewport("desktop");
   await go("/play/market", `[...document.querySelectorAll("h2")].some((h) => /Other traders/.test(h.textContent))`);
   await evaluate(`[...document.querySelectorAll("h2")].find((h) => /Other traders/.test(h.textContent)).scrollIntoView({ block: "center" })`);
   await sleep(500);
+  const practiceHref = await evaluate(`[...document.querySelectorAll("section")].find((s) => /Other traders/.test(s.textContent))?.querySelector('a[href^="/play/market"]')?.getAttribute("href") ?? null`);
+  check(practiceHref === "/play/market?practice=1", "5 · off: it also links to the practice market, where he does trade", practiceHref);
   const off = await evaluate(`(() => { const s = [...document.querySelectorAll("section")].find((s) => /Other traders/.test(s.textContent)); return { text: s.innerText.replace(/\\s+/g, " "), href: s.querySelector('a[href^="/lab/economy"]')?.getAttribute("href") ?? null }; })()`);
   check(/Practice only/.test(off.text) && /his NEAR account isn’t funded/.test(off.text) && off.href === "/lab/economy#lab-npc", "5 · off: “Practice only”, why, and a link to his run in the economy lab", off.text.slice(0, 220));
   check(!/own wallet|\bOff\b|His latest moves|Wallet/.test(off.text), "5 · off: no wallet claimed, no “Off” chip, no empty “latest moves”");
@@ -296,6 +304,9 @@ try {
   check((await overflow()) <= 0, "5 · off: no sideways overflow at 375px");
   unhook();
   await send("Fetch.disable");
+  // Back to a guest for the rest.
+  await send("Network.clearBrowserCookies");
+  await evaluate(`localStorage.removeItem("wgp:signed-in:v1")`);
 
   /* ---------------------------------------------------------------- 8: power cards */
   await viewport("desktop");

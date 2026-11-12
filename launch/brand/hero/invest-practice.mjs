@@ -207,7 +207,18 @@ async function pass(vp) {
     step = `${tag} invest`;
     const priceBefore = await ev(`T(card(${JSON.stringify(name)})).match(/([\\d.,]+) Bits/)?.[1]`);
     const bitsBefore = await bitsOf();
-    await click(`cardButton(${JSON.stringify(name)}, /^Invest in Gwei/)`, "Invest in Gwei");
+    if (vp.mobile) {
+      await click(`cardButton(${JSON.stringify(name)}, /^Invest in Gwei/)`, "Invest in Gwei");
+    } else {
+      // The other way in: the trade sheet's sell side says she can't pay, and offers to invest instead.
+      await click(`cardButton(${JSON.stringify(name)}, /^Buy/)`, `Buy on ${name}`);
+      await waitFor(`sheet() && /Buy ${name}/.test(T(sheet()))`, "the trade sheet");
+      await click(`sheetButton(/^Sell to Gwei$/)`, "Sell to Gwei");
+      const shortcut = await waitFor(`sheetButton(/^Invest in Gwei instead$/) && T(sheet())`, "the invest shortcut", 8_000).catch(() => null);
+      check(/can’t pay for one/.test(shortcut ?? "") && /Invest in Gwei instead/.test(shortcut ?? ""), "the sell sheet on a broke item offers “Invest in Gwei instead”", shortcut?.slice(-200));
+      await shot(`${tag}-1b-sell-sheet-invest-instead`, `sheetButton(/^Invest in Gwei instead$/)`);
+      await click(`sheetButton(/^Invest in Gwei instead$/)`, "Invest in Gwei instead");
+    }
     await waitFor(`sheet() && /Invest in Gwei: ${name}/.test(T(sheet()))`, "the invest sheet");
     await sleep(400);
     const sheetText = await ev(`T(sheet())`);
@@ -333,6 +344,10 @@ async function pass(vp) {
     const banner = await ev(`T(section(/^Practice market$/))`);
     check(banner.includes(LABEL), "the banner says it, word for word", banner.slice(0, 80));
     check(/Your practice Bits/.test(await ev(`pageText()`)), "the wallet is labelled practice Bits");
+    const stall = await ev(`(() => { const v = document.querySelector('section[aria-labelledby="vendor-name"]'); return { text: T(v), buttons: [...v.querySelectorAll("button")].map(T) }; })()`);
+    check(/Buy, sell and invest below with practice Bits\. Nothing here is on NEAR\./.test(stall.text) && stall.buttons.includes("Sign in to trade for real") && !stall.buttons.includes("Sign in to trade"), "the vendor panel leads with practice trading; signing in is the second offer", stall.buttons);
+    const lines = await ev(`[...document.querySelectorAll("li")].filter((li) => li.querySelector("h3")).map((li) => { const g = li.querySelector('[role=img]'); return { quiet: /No trades in 24 h|No price history yet/.test(g?.textContent ?? ""), path: g?.querySelector("path:last-of-type")?.getAttribute("d") ?? null }; })`);
+    check(lines.length === 8 && lines.every((l) => l.quiet || (l.path && !/[LCQ]/.test(l.path))) && lines.some((l) => l.path), "practice cards draw real step lines (the live market's last day), or say nothing traded", `${lines.filter((l) => l.path).length} drawn, ${lines.filter((l) => l.quiet).length} quiet`);
     check(await ev(`!/Simulated until the contract/.test(pageText()) && !/On NEAR (mainnet|testnet)/.test(pageText())`), "nothing on the page claims to be the real market");
     const seeded = await ev(`practice() && { from: practice().seededFrom, pools: practice().book.pools.length, lock: practice().book.params.invest.lockMs }`);
     notes.practice = seeded;
