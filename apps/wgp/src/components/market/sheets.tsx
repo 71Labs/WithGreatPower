@@ -139,6 +139,7 @@ export function TradeSheet({
   view,
   me,
   initialAmount = 1,
+  eyebrow = "Mempool Market",
   gate = null,
   onSide,
   onClose,
@@ -148,6 +149,8 @@ export function TradeSheet({
   side: Side;
   view: MarketView;
   me: MarketMe | null;
+  /** The small line over the title; the practice market says so here. */
+  eyebrow?: string;
   /** The amount the sheet opens on (a prompt's prefill). Remount with a new `key` to apply it. */
   initialAmount?: number;
   gate?: TradeGate | null;
@@ -227,7 +230,7 @@ export function TradeSheet({
         setProblem(null);
         onClose();
       }}
-      eyebrow="Mempool Market"
+      eyebrow={eyebrow}
       title={`${verb} ${item.name}`}
       footer={
         gate ? (
@@ -325,12 +328,14 @@ export function ListSheet({
   view,
   me,
   initialItem = null,
+  eyebrow = "Mempool Market",
   onClose,
   onTrade,
 }: {
   open: boolean;
   view: MarketView;
   me: MarketMe | null;
+  eyebrow?: string;
   /** The item the sheet opens on (a "List your spares" link). Remount with a new `key` to apply it. */
   initialItem?: ItemId | null;
   onClose(): void;
@@ -383,7 +388,7 @@ export function ListSheet({
     <GameSheet
       open={open}
       onClose={close}
-      eyebrow="Mempool Market"
+      eyebrow={eyebrow}
       title="List an item"
       description="Your items wait in escrow until someone buys them or you take them down."
       footer={

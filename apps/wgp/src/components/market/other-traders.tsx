@@ -76,6 +76,12 @@ function Chips({ npc }: { npc: NpcTraderView }) {
   return (
     <p className="flex flex-wrap gap-1.5">
       <span className={`${chip} bg-game-paper-2 pl-2`}>NPC</span>
+      {npc.mode === "practice" ? (
+        <span className={`${chip} bg-game-gold`}>
+          <CircleAlert aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+          Practice
+        </span>
+      ) : null}
       {npc.mode === "simulated" ? (
         <span className={`${chip} bg-game-gold`}>
           <CircleAlert aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
@@ -245,7 +251,6 @@ function Moves({ npc }: { npc: NpcTraderView }) {
  */
 export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?: number; onMove?(): void }) {
   const npc = useNpcTrader(stamp, bump);
-  const headingId = useId();
   const newest = npc ? (npc.log[0] ? `${npc.log[0].at}-${npc.log[0].text}` : "") : null;
   const seen = useRef<string | null>(null);
   const moved = useRef(onMove);
@@ -258,6 +263,16 @@ export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?
     seen.current = newest;
   }, [newest]);
   if (!npc) return null;
+  return <TraderStrip npc={npc} />;
+}
+
+/**
+ * The strip for a Sandwich Man someone else already read: the practice market builds its
+ * own (src/lib/market/practice.ts), where he trades in the visitor's browser, labelled
+ * "NPC" and "Practice".
+ */
+export function TraderStrip({ npc }: { npc: NpcTraderView }) {
+  const headingId = useId();
   return (
     <StickerPanel as="section" aria-labelledby={headingId} className="flex flex-col gap-3 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">

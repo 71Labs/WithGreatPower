@@ -3,7 +3,8 @@
 /**
  * The Mempool Market (/play/market). Gwei Stacy runs the stall: every item has a price
  * on a bonding curve that moves with each trade, and players list their own loot to each
- * other. Guests read prices; signed-in players buy, sell and list. On chain, trades are
+ * other. Guests trade in a practice market of their own (src/lib/market/practice.ts: the same
+ * rules in their browser, never on NEAR); signed-in players buy, sell and list. On chain, trades are
  * session-key calls with no popup ("quick play"); until the contract's market is live,
  * the server runs the same rules and everything is flagged as simulated.
  *
@@ -25,24 +26,29 @@ import { showToast, useAccount, useGame } from "@/game/store";
 import { RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
-import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
+import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest, StakeRequest } from "@/lib/market/api";
 import type { MarketParams } from "@/lib/market/config";
+import type { Shop, StakeView } from "@/lib/market/invest";
 import { holdingsOf, MARKET_PATH, nextTrade, parseTradeIntent } from "@/lib/market/prompts";
 import { countsForQuest } from "@/lib/market/quest";
 import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
+import { withShop } from "@/lib/market/reasoning-shop";
+import { INVEST_NOT_LIVE } from "@/lib/market/refusal";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
 import { COACH_RING, CoachCard, coachSteps, markCoachSeen, useCoachSeen } from "./coach";
 import { ITEM_SOURCE, vendorAfter, vendorLine } from "./copy";
-import { OtherTraders } from "./other-traders";
+import { investingOf, InvestSheet, PracticeBanner, ShopLine, shopFor, StakesPanel, type Investing } from "./invest";
+import { OtherTraders, TraderStrip } from "./other-traders";
 import { QuestStrip } from "./quest-strip";
 import { FillSheet, ListSheet, TradeSheet, type Side, type TradeGate } from "./sheets";
 import { ChangePill, formatBits, formatChange, formatPrice, Sparkline } from "./sparkline";
 import { TradePromptCard } from "./trade-prompt";
-import { askToSignIn, trade, useMarketData, useQuickPlay, type QuickPlay } from "./use-market";
+import { askToSignIn, stake as stakeLive, trade, useMarketData, useQuickPlay, type QuickPlay } from "./use-market";
 import { useGuestBits, useMarketQuest } from "./use-market-peek";
+import { setPracticeMode, useClock, usePractice } from "./use-practice";
 import { VendorChips, WhyPrice } from "./why-price";
 
 type Tab = "vendor" | "listings";
@@ -59,7 +65,10 @@ function Vendor({
   line,
   guestBits,
   coached,
+  practice = false,
 }: {
+  /** The practice market: the Bits shown are practice Bits. */
+  practice?: boolean;
   view: MarketView;
   me: MarketMe | null;
   signedIn: boolean;
@@ -91,11 +100,11 @@ function Vendor({
         <div className="flex items-end justify-between gap-4 sm:flex-col sm:items-start sm:gap-1">
           <div className="flex flex-col">
             <p className="flex flex-col">
-              <span className="text-[12px] font-semibold leading-4 text-game-muted">Your Bits</span>
+              <span className="text-[12px] font-semibold leading-4 text-game-muted">{practice ? "Your practice Bits" : "Your Bits"}</span>
               <span className="num text-[30px] font-bold leading-9 tracking-[-0.02em]">{me ? formatBits(me.bits) : "—"}</span>
             </p>
             {/* A guest has no Bits yet: say what their nights would have paid, so the price of entry is clear. */}
-            {!signedIn && guestBits > 0 ? (
+            {!signedIn && !practice && guestBits > 0 ? (
               <p className="num max-w-[24ch] text-[12px] font-semibold leading-4 text-game-muted [text-wrap:pretty]">Your guest nights would have paid about {formatBits(guestBits)}</p>
             ) : null}
             {/* A night's Bits between the results screen and the wallet: say so, never let them look lost. */}
@@ -153,11 +162,21 @@ function Vendor({
 const cardButton =
   "inline-flex h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[12px] border-2 border-game-ink bg-game-paper px-1.5 text-[14px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 motion-safe:ease-out active:translate-y-[2px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 pointer-fine:hover:bg-game-paper-2";
 
-function ItemCard({ item, me, params, coached, onTrade }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; coached: boolean; onTrade(side: Side): void }) {
+/** What an item's card needs to show its shop: open or closed, the player's stake, and where investing stands. */
+interface CardShop {
+  shop: Shop;
+  investing: Investing;
+  stake: StakeView | null;
+  inPractice: boolean;
+  onInvest(tab: "invest" | "withdraw"): void;
+  onPractice(): void;
+}
+
+function ItemCard({ item, me, params, coached, onTrade, stall }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; coached: boolean; onTrade(side: Side): void; stall: CardShop }) {
   const held = me?.items[item.item] ?? 0;
   const first = item.spark[0] ?? item.priceMilli;
-  // Gwei's own account of this price, from the pool the server just read.
-  const why = explainPrice({ pool: item.pool, open: params.open, feeBps: params.feeBps, change24h: item.change24h, trades24h: item.trades24h });
+  // Gwei's own account of this price, from the pool the server just read; a closed shop adds why, and what reopens it.
+  const why = withShop(explainPrice({ pool: item.pool, open: params.open, feeBps: params.feeBps, change24h: item.change24h, trades24h: item.trades24h }), stall.shop, stall.investing);
   const blocked = [why.buyBlocked, why.sellBlocked].filter((t, i, all) => t !== null && all.indexOf(t) === i);
   const blockedId = `${ID}-${item.item}-blocked`;
   return (
@@ -217,6 +236,8 @@ function ItemCard({ item, me, params, coached, onTrade }: { item: MarketItemView
           </p>
         ) : null}
       </div>
+      {/* The shop itself: closed and why, the player's stake, and investing where this market has it. */}
+      {stall.investing === "available" || stall.stake || stall.shop.closed.includes("broke") ? <ShopLine item={item} {...stall} /> : null}
     </li>
   );
 }
@@ -365,9 +386,20 @@ function Header({ view }: { view: MarketView | null }) {
 }
 
 export function MarketScreen() {
-  const { market, listings, me, signedIn, refresh, adopt } = useMarketData();
+  const { market, listings: liveListings, me: liveMe, signedIn, refresh, adopt } = useMarketData();
   const account = useAccount();
-  const view = market.state === "ready" ? market.data : null;
+  const liveView = market.state === "ready" ? market.data : null;
+  const router = useRouter();
+  const query = useSearchParams();
+  /*
+   * The practice market (src/lib/market/practice.ts): a guest's own copy in their browser, the
+   * only market they can trade in; a signed-in player can step into it and back. While it is
+   * on, the screen reads it in place of the live market: same components, same rules.
+   */
+  const practice = usePractice(liveView, market.state === "error", account.status === "loading" ? null : signedIn, query.get("practice") === "1");
+  const view = practice.on ? (practice.screen?.view ?? null) : liveView;
+  const me = practice.on ? (practice.screen?.me ?? null) : liveMe;
+  const listings = practice.on ? (practice.screen?.listings ?? null) : liveListings;
   const quickPlay = useQuickPlay(!!view?.onChain, me?.accountId ?? null);
   const [tab, setTab] = useState<Tab>("vendor");
   // `amount` and `from` come from a prompt: the sheet opens on that amount, remounted per prompt.
@@ -383,15 +415,16 @@ export function MarketScreen() {
   const day = view ? Math.floor(Date.parse(view.updatedAt) / 86_400_000) : 0;
 
   const unclaimed = account.status === "signed-in" && isUnclaimed(account.me.player);
-  const canTrade = signedIn && !!me && (!view?.onChain || (quickPlay === "ready" && !unclaimed));
+  const canTrade = practice.on ? !!me : signedIn && !!me && (!view?.onChain || (quickPlay === "ready" && !unclaimed));
+  // Investing: the item whose sheet is open and the tab it opens on; and a clock for a stake's lock.
+  const [investIn, setInvestIn] = useState<{ item: ItemId; tab: "invest" | "withdraw" } | null>(null);
+  const clock = useClock((me?.investor?.stakes.length ?? 0) > 0);
   const playerId = account.status === "signed-in" ? account.me.player.id : null;
   const { quest, refresh: refreshQuest } = useMarketQuest(playerId);
   const guestBits = useGuestBits();
   const { save } = useGame();
 
   /* A link from the results, the Suit lab or Tonight: open its sheet prefilled, once, then tidy the address. */
-  const router = useRouter();
-  const query = useSearchParams();
   const intentKey = query.toString();
   const intent = view ? parseTradeIntent(query, view.params.maxAmount) : null;
   const [handled, setHandled] = useState<string | null>(null);
@@ -422,7 +455,7 @@ export function MarketScreen() {
     setSheet(null);
     then();
   };
-  const gate: TradeGate | null = !view
+  const gate: TradeGate | null = !view || practice.on
     ? null
     : !signedIn
       ? {
@@ -463,10 +496,29 @@ export function MarketScreen() {
     />
   ) : null;
 
+  /** An investing move on whichever market is on screen: practice in the browser, else the live one (never a v2 contract). */
+  async function runStake(req: StakeRequest) {
+    if (!view) return { ok: false as const, code: "loading", message: "The market is still loading. Try again in a moment.", snapshot: null };
+    const res = practice.on ? practice.stake(req) : await stakeLive(view, req);
+    if (!practice.on) {
+      if (res.snapshot) adopt(res.snapshot);
+      else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
+    }
+    if (res.ok) {
+      const done = req.action === "invest" ? "Invested. Gwei’s till is funded, and your stake starts earning from its fees." : req.action === "withdraw" ? "Withdrawn. The Bits are back with you." : "Claimed. The earnings are yours.";
+      showToast(practice.on ? `Practice: ${done}` : done, "success");
+    } else if (res.code === "quick_play") {
+      askToSignIn();
+    }
+    return res;
+  }
+
   async function run(req: SimTradeRequest) {
-    const res = await trade(!!view?.onChain, req);
+    const res = practice.on ? practice.trade(req) : await trade(!!view?.onChain, req);
     // The answer carries the market right after the trade (or the price that refused it).
-    if (res.snapshot) adopt(res.snapshot);
+    if (practice.on) {
+      // The practice market lives in this browser: it is already up to date.
+    } else if (res.snapshot) adopt(res.snapshot);
     else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     if (res.ok) {
       setTraded((n) => n + 1);
@@ -477,7 +529,7 @@ export function MarketScreen() {
       const q = countsForQuest(req.action) && !quest?.done ? await refreshQuest() : null;
       const done =
         req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Taken down. Your items are back.";
-      showToast(q?.done ? `${done} Market quest done: +${q.xp} XP.` : done, "success");
+      showToast(practice.on ? `Practice: ${done}` : q?.done ? `${done} Market quest done: +${q.xp} XP.` : done, "success");
     } else if (res.code === "quick_play") {
       askToSignIn();
     }
@@ -502,15 +554,34 @@ export function MarketScreen() {
 
   return (
     <div className="wgp-rise mx-auto flex w-full max-w-[1080px] flex-col gap-4 px-4 sm:px-6">
-      <Header view={view} />
-      {market.state === "loading" ? (
+      <Header view={practice.on ? null : view} />
+      {practice.on ? (
+        <PracticeBanner
+          seededFrom={practice.seededFrom}
+          signedIn={signedIn}
+          drainName={practice.drainItem ? (view?.items.find((i) => i.item === practice.drainItem)?.name ?? null) : null}
+          onDrain={() => {
+            const item = practice.drainItem;
+            const name = view?.items.find((i) => i.item === item)?.name ?? "that item";
+            const sold = item ? practice.drain(item) : 0;
+            if (sold > 0) showToast(`Practice: a crowd sold Gwei ${formatBits(sold)} ${name}. Her till for it is empty, so she is closed for buying it.`, "info");
+          }}
+          onReset={() => {
+            practice.reset();
+            setAfter(null);
+            showToast("Practice: started over from the live prices.", "info");
+          }}
+          onLeave={() => setPracticeMode(false)}
+        />
+      ) : null}
+      {market.state === "loading" && !view ? (
         <StickerPanel className="p-6">
           <p role="status" className="text-[15px] font-semibold">
             Opening the stall…
           </p>
         </StickerPanel>
       ) : null}
-      {market.state === "error" ? (
+      {market.state === "error" && !view ? (
         <StickerPanel className="flex flex-col items-start gap-3 p-5">
           <p className="flex items-center gap-2 text-[15px] leading-6">
             <CircleAlert aria-hidden className="size-5 shrink-0 text-game-hero" strokeWidth={2} />
@@ -524,9 +595,15 @@ export function MarketScreen() {
       {view ? (
         <>
           {coachTarget === "bits" ? coach : null}
-          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day, view.params.feeBps)} guestBits={guestBits} coached={coachTarget === "bits"} />
+          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day, view.params.feeBps)} guestBits={guestBits} coached={coachTarget === "bits"} practice={practice.on} />
+          <StakesPanel view={view} me={me} now={clock || Date.parse(view.updatedAt)} onManage={(item) => setInvestIn({ item, tab: "withdraw" })} />
           <div className={`grid gap-3 ${prompt ? "lg:grid-cols-2" : ""}`}>
-            <QuestStrip quest={quest} signedIn={signedIn} now={Date.parse(view.updatedAt)} />
+            <QuestStrip
+              quest={practice.on ? null : quest}
+              signedIn={signedIn}
+              now={Date.parse(view.updatedAt)}
+              note={practice.on ? (signedIn ? "Practice trades earn no XP. One trade on the real market does it." : "Practice trades earn no XP. Sign in, and one real trade a day does it.") : undefined}
+            />
             {prompt ? (
               <TradePromptCard
                 prompt={prompt}
@@ -554,6 +631,14 @@ export function MarketScreen() {
                     params={view.params}
                     coached={i === 0 && (coachTarget === "price" || coachTarget === "trade")}
                     onTrade={(side) => setSheet({ item, side })}
+                    stall={{
+                      shop: shopFor(view, item),
+                      investing: investingOf(view),
+                      stake: me?.investor?.stakes.find((s) => s.item === item.item) ?? null,
+                      inPractice: practice.on,
+                      onInvest: (tab) => setInvestIn({ item: item.item, tab }),
+                      onPractice: () => setPracticeMode(true),
+                    }}
                   />
                 ))}
               </ul>
@@ -561,6 +646,21 @@ export function MarketScreen() {
                 <Coins aria-hidden className="size-4 shrink-0" strokeWidth={2} />
                 Prices include the {feeText(view.params.feeBps)} gas fee. You can make {me ? me.tradesLeft : view.params.dailyTrades} more trades with Gwei today.
               </p>
+              {/* A signed-in player's way into practice; on contract v2 (mainnet today) it is also where investing can be tried. */}
+              {!practice.on ? (
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-4 text-game-paper/75 [text-wrap:pretty]">
+                  <span className="max-w-[64ch]">
+                    {investingOf(view) === "not-live" ? `When one of Gwei’s tills runs dry, she closes for buying that item. ${INVEST_NOT_LIVE}` : "The practice market is your own copy of this one: same rules, practice Bits, nothing on NEAR."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPracticeMode(true)}
+                    className="inline-flex min-h-8 items-center rounded-[8px] font-semibold text-game-paper underline decoration-game-paper/50 underline-offset-[3px] [text-decoration-skip-ink:auto] focus-visible:outline-offset-2 pointer-coarse:min-h-11 pointer-fine:hover:decoration-game-paper"
+                  >
+                    Open the practice market
+                  </button>
+                </p>
+              ) : null}
             </section>
           ) : (
             <StickerPanel {...tabPanelProps(ID, "listings")} className="p-2 focus-visible:outline-offset-4">
@@ -576,8 +676,22 @@ export function MarketScreen() {
               />
             </StickerPanel>
           )}
-          <OtherTraders stamp={view.updatedAt} bump={traded} onMove={() => void refresh()} />
+          {/* Sandwich Man: in practice he trades in this browser by the same rules, labelled NPC and Practice. */}
+          {practice.on ? practice.screen ? <TraderStrip npc={practice.screen.npc} /> : null : <OtherTraders stamp={view.updatedAt} bump={traded} onMove={() => void refresh()} />}
+          <InvestSheet
+            key={`invest:${investIn?.item ?? "none"}:${investIn?.tab ?? ""}`}
+            item={investIn ? (view.items.find((i) => i.item === investIn.item) ?? null) : null}
+            initialTab={investIn?.tab}
+            view={view}
+            me={me}
+            now={clock || Date.parse(view.updatedAt)}
+            inPractice={practice.on}
+            gate={canTrade ? null : gate}
+            onClose={() => setInvestIn(null)}
+            onStake={runStake}
+          />
           <TradeSheet
+            eyebrow={practice.on ? "Practice market · not on NEAR" : undefined}
             key={`${sheet?.item.item ?? "none"}:${sheet?.from ?? ""}`}
             initialAmount={sheet?.amount}
             gate={canTrade ? null : gate}
@@ -589,7 +703,7 @@ export function MarketScreen() {
             onClose={() => setSheet(null)}
             onTrade={run}
           />
-          <ListSheet key={listItem ?? "any"} open={listing} view={view} me={me} initialItem={listItem} onClose={() => setListing(false)} onTrade={run} />
+          <ListSheet key={listItem ?? "any"} open={listing} view={view} me={me} initialItem={listItem} onClose={() => setListing(false)} onTrade={run} eyebrow={practice.on ? "Practice market · not on NEAR" : undefined} />
           <FillSheet key={filling?.id ?? 0} listing={filling} me={me} onClose={() => setFilling(null)} onTrade={run} />
         </>
       ) : null}
