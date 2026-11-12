@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import { StickerButton, StickerLink } from "@/components/game/kit";
 import { BadgeCheck, CircleAlert, Coins, Medal } from "@/components/icons";
 import { CopyRaceLink } from "@/components/compete/race-link";
+import { GuestNightNext } from "@/components/first-minute/guest-night-next";
 import { TradePromptCard, useTradePrompt } from "@/components/market/trade-prompt";
 import { recordGuestNight } from "@/components/market/use-market-peek";
 import { ShareOnX } from "@/components/social/share-on-x";
@@ -194,13 +195,10 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
       return (
         <Panel>
           <Score label="Unranked score" value={o.score} />
-          <p className="text-[14px] leading-5 text-pretty">
-            Guest nights are saved in this browser and stay off the boards. Sign in and the server checks every night you play, and a ranked night gets a link you can share on X.
-          </p>
+          {/* --- first-minute slot: a guest's ways on (sign in, the next night, tomorrow). Its logic lives in components/first-minute/guest-night-next.tsx. --- */}
+          <GuestNightNext hero={o.save.hero} items={Object.values(o.save.inventory).reduce((sum, n) => sum + (n ?? 0), 0)} night={o.save.night} />
+          {/* --- end first-minute slot --- */}
           <GuestTrade score={o.score} save={o.save as HeroSave} />
-          <StickerButton variant="ink" size="md" onClick={() => window.dispatchEvent(new CustomEvent("wgp:sign-in"))} className="w-full sm:w-auto sm:self-start">
-            Sign in to rank and share
-          </StickerButton>
         </Panel>
       );
     case "unranked":

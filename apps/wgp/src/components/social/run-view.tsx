@@ -1,7 +1,8 @@
 /**
  * A verified run's public page body (src/app/r/[runId]): who played it, the score the
- * server replayed, the night, and the replay anyone can check, with one red action: play.
- * Server-safe.
+ * server replayed, the night, and the replay anyone can check, with one red action: race it.
+ * A visitor from a share link has no hero and no account, and needs neither: the race runs
+ * as a guest on the run's own night (a duel), today's Daily or its course. Server-safe.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -10,6 +11,7 @@ import { RaceGhostLink } from "@/components/compete/race-link";
 import { StickerLink, StickerPanel } from "@/components/game/kit";
 import { HeroTile } from "@/components/game/ui";
 import { ArrowRight, BadgeCheck, ExternalLink } from "@/components/icons";
+import { START_URL } from "@/lib/site";
 import type { PublicRun } from "@/server/social/runs";
 
 const points = new Intl.NumberFormat("en-US");
@@ -26,7 +28,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function RunView({ run }: { run: PublicRun }) {
+export function RunView({ run, raceable = true }: { run: PublicRun; /** The run can be raced as a ghost (not a case file or an old ruleset's night). */ raceable?: boolean }) {
   return (
     <main id="main" data-wgp-night="" className="flex min-h-dvh flex-col items-center bg-game-night px-4 pb-16 pt-10 text-game-paper [--vs-focus:var(--game-gold)] sm:pt-16">
       <div className="flex w-full max-w-[640px] flex-col gap-5">
@@ -74,13 +76,19 @@ export function RunView({ run }: { run: PublicRun }) {
           <p className="max-w-[60ch] text-[14px] leading-6 text-game-ink">
             Our server replayed every input of this night before it counted. The seed, the starting save and the input log are public, so anyone can replay it and check the score.
           </p>
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
-            <StickerLink href="/play" variant="hero" size="lg" className="w-full sm:w-auto">
-              Play tonight
+          <div className="flex flex-col gap-2">
+            <p className="text-[15px] font-semibold leading-[22px] text-game-ink [text-wrap:balance]">
+              {raceable ? `Think you can beat ${points.format(run.score)}? Race this run’s ghost right now.` : `Think you can beat ${points.format(run.score)}? Swing out and bank your own night.`}
+            </p>
+            <p className="text-[13px] leading-5 text-game-muted">Free, in your browser, no wallet or sign-in needed.</p>
+          </div>
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
+            {/* Every verified run is a ghost: race this one (its night again, or today’s Daily beside it). No hero needed. */}
+            {raceable ? <RaceGhostLink runId={run.runId} variant="hero" size="lg" label="Race this run" className="w-full sm:w-auto" /> : null}
+            <StickerLink href={START_URL} variant={raceable ? "paper" : "hero"} size="lg" className="w-full sm:w-auto">
+              Play your own night
               <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
             </StickerLink>
-            {/* Every verified run is a ghost: race this one (its night again, or today’s Daily beside it). */}
-            <RaceGhostLink runId={run.runId} size="lg" label={`Race ${run.handle}’s ghost`} className="w-full sm:w-auto" />
             <a
               href={`/api/runs/${run.runId}/replay`}
               target="_blank"

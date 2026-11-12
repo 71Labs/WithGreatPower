@@ -1,6 +1,13 @@
 /** Where "Play now" goes. */
 export const PLAY_URL = process.env.NEXT_PUBLIC_PLAY_URL ?? "/play";
 
+/**
+ * Where the landing's "Play now" goes: the quick start, which puts a new visitor straight into
+ * their first night and sends a returning player to Tonight (src/app/play/start). A custom
+ * NEXT_PUBLIC_PLAY_URL is used as it is.
+ */
+export const START_URL = PLAY_URL === "/play" ? "/play/start" : PLAY_URL;
+
 /** The public repository, linked from the footer and the closing call to action. */
 export const REPO_URL = process.env.NEXT_PUBLIC_REPO_URL ?? "https://github.com/71Labs/WithGreatPower";
 

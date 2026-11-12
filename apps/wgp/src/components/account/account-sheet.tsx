@@ -29,7 +29,7 @@ import { InviteRow } from "@/components/referrals/invite-tile";
 
 import { googleProblem, walletProblem, type SignInProblem } from "./errors";
 import { HandleField, handleProblem } from "./handle-field";
-import { closeAccountSheet, openAccountSheet, useAccountSheetOpen } from "./sheet-state";
+import { closeAccountSheet, openAccountSheet, takeAccountSheetIntent, useAccountSheetIntent, useAccountSheetOpen } from "./sheet-state";
 import { XHandleSection } from "./x-handle";
 
 const WalletSignIn = lazy(() => import("./wallet-sign-in"));
@@ -145,6 +145,7 @@ export function AccountSheet() {
   const { save } = useGame();
   const ids = useId();
   const returning = usePrivyReturning();
+  const intent = useAccountSheetIntent();
   const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<"options" | "handle">("options");
   const [busy, setBusy] = useState<Busy>(null);
@@ -320,6 +321,26 @@ export function AccountSheet() {
       googleFailed(error);
     }
   }
+
+  // Asked to start Google at once ("Sign in with Google" on a guest's results): do what the
+  // sheet's own button does, as soon as Google can start. Privy only: its sign-in is a
+  // redirect, while NEAR Auth's popup has to open from the player's own tap on the button here.
+  const googleReady = google.state === "ready";
+  useEffect(() => {
+    if (!open || intent !== "google" || !guest) return;
+    if (GOOGLE_SIGN_IN !== "privy") {
+      takeAccountSheetIntent();
+      return;
+    }
+    if (!googleReady || busy !== null) return;
+    // On the next frame, once the sheet has opened; a re-run effect cancels and asks again.
+    const frame = requestAnimationFrame(() => {
+      if (takeAccountSheetIntent() === "google") void continueWithGoogle();
+    });
+    return () => cancelAnimationFrame(frame);
+    // continueWithGoogle only reads setters, module constants and the state listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, intent, guest, googleReady, busy]);
 
   async function createAccount(e: FormEvent) {
     e.preventDefault();

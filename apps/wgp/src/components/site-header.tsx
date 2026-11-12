@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { Menu, X } from "@/components/icons";
 
-import { NAV, PLAY_URL } from "@/lib/site";
+import { NAV, START_URL } from "@/lib/site";
 import { COLUMN } from "./frame";
 import { StickerLink } from "./game/kit";
 
@@ -110,7 +110,7 @@ function MobileMenu() {
       >
         <nav aria-label="Main" className="flex max-h-[calc(100dvh-4rem)] flex-col gap-8 overflow-y-auto px-4 pb-6 pt-2">
           <NavLinks variant="sheet" onNavigate={close} firstRef={firstLinkRef} />
-          <StickerLink href={PLAY_URL} variant="hero" size="md" className="w-full" onClick={close}>
+          <StickerLink href={START_URL} variant="hero" size="md" className="w-full" onClick={close}>
             Play now
           </StickerLink>
         </nav>
@@ -140,11 +140,17 @@ export function SiteHeader() {
             <NavLinks variant="bar" />
           </nav>
           <div className="hidden justify-self-end md:block">
-            <StickerLink href={PLAY_URL} variant="paper" size="sm">
+            <StickerLink href={START_URL} variant="paper" size="sm">
               Play now
             </StickerLink>
           </div>
-          <MobileMenu />
+          {/* Phones: the way in stays in reach while the page scrolls. */}
+          <div className="flex items-center gap-2 md:hidden">
+            <StickerLink href={START_URL} variant="paper" size="sm">
+              Play now
+            </StickerLink>
+            <MobileMenu />
+          </div>
         </div>
       </div>
     </header>

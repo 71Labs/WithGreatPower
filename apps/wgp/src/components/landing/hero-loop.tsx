@@ -22,6 +22,13 @@ const stillInBrowser = () =>
 const stillOnServer = () => true;
 
 /**
+ * A phone-width frame gets the 640px encode (about 0.6 MB, a quarter of the full clip): the
+ * frame is under 400 CSS px wide there, and the clip is the page's heaviest download.
+ */
+const SMALL = "(max-width: 640px)";
+const clipSize = () => (window.matchMedia(SMALL).matches ? "-640" : "");
+
+/**
  * The hero's gameplay clip in a die-cut sticker frame. The poster is the LCP image; the
  * clip loads after hydration, once the frame is near the viewport, plays muted and looped
  * only while on screen, and fades in over the poster on its first frame. With reduced
@@ -34,6 +41,8 @@ export function HeroLoop() {
   const [near, setNear] = useState(false);
   const [shown, setShown] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** Chosen once, when the clip mounts: swapping sources mid-play would restart it. */
+  const [size] = useState(() => (typeof window === "undefined" ? "" : clipSize()));
   const pausedRef = useRef(false);
 
   // Load the clip when the frame comes near; play it only while it's on screen.
@@ -92,8 +101,8 @@ export function HeroLoop() {
               onPlaying={() => setShown(true)}
               className={`absolute inset-0 size-full object-cover motion-safe:transition-opacity motion-safe:duration-300 motion-safe:ease-out ${shown ? "opacity-100" : "opacity-0"}`}
             >
-              <source src={assetUrl("/media/hero-loop.webm")} type='video/webm; codecs="vp9"' />
-              <source src={assetUrl("/media/hero-loop.mp4")} type="video/mp4" />
+              <source src={assetUrl(`/media/hero-loop${size}.webm`)} type='video/webm; codecs="vp9"' />
+              <source src={assetUrl(`/media/hero-loop${size}.mp4`)} type="video/mp4" />
             </video>
           ) : null}
         </div>
