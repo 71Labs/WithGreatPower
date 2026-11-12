@@ -35,6 +35,8 @@ export interface DaySnapshot {
   /** Spot × 1000 per item. */
   prices: Record<string, number>;
   stock: Record<string, number>;
+  /** Bits in the till per item. */
+  tills: Record<string, number>;
   /** Bits in the vendor's till across every pool. */
   till: number;
   /** Bits held by players plus the till. */
@@ -221,9 +223,11 @@ export class Economy {
   private snapshot(day: number, trades: number, fills: number): DaySnapshot {
     const prices: Record<string, number> = {};
     const stock: Record<string, number> = {};
+    const tills: Record<string, number> = {};
     for (const p of this.book.pools) {
       prices[p.item] = spotMilli(p);
       stock[p.item] = p.stock;
+      tills[p.item] = p.bits;
     }
     const till = this.book.pools.reduce((s, p) => s + p.bits, 0);
     const held = this.bots.reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0);
@@ -231,6 +235,7 @@ export class Economy {
       day,
       prices,
       stock,
+      tills,
       till,
       supply: held + till,
       burned: this.book.burned + this.craftBurned,

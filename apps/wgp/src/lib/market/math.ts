@@ -1,14 +1,58 @@
 /**
- * The Mempool Market's curve, mirroring contracts/wgp/src/market.rs line for line: the
- * same integers, the same rounding. The contract is the truth on chain; this runs the
- * simulated market before the contract is live, the price previews in the UI and the
- * /lab/economy fast-forward. `math.test.ts` checks both against market-vectors.json.
+ * GWEI STACY'S PRICING RULES: the one file to read.
  *
- * A pool is a virtual-reserve constant product:
- *   x = virtualItems + stock, y = virtualBits + bits, spot = y / x Bits per item
- *   buy n:  ceil(y·n / (x − n))   (only from stock)
- *   sell n: floor(y·n / (x + n))  (only from the till)
- * The gas fee is ceil(bits · feeBps / 10000), burned.
+ * Gwei Stacy is the Mempool Market's merchant, an NPC. Nobody types her prices in: each
+ * item's price is worked out from two things she really holds for that item, her stock
+ * and the Bits in her till. This file is every rule she prices by. It mirrors the
+ * contract (contracts/wgp/src/market.rs) line for line, with the same integers and the
+ * same rounding, and `math.test.ts` runs both against the same cases
+ * (contracts/wgp/market-vectors.json).
+ *
+ * THE RULES, IN PLAIN ENGLISH
+ *
+ * 1. One pool per item. A pool is her stock of the item, her till for it (Bits), and two
+ *    fixed "virtual" amounts that give the curve its depth:
+ *      x = virtualItems + stock      items on the curve
+ *      y = virtualBits  + bits       Bits on the curve
+ *
+ * 2. The price follows stock and demand. The spot price is y / x Bits per item
+ *    (`spotMilli`). Buying takes stock out and puts Bits in, so x falls, y rises and the
+ *    price goes up. Selling to her does the opposite and the price goes down. That is
+ *    all "demand" is here: the trades players actually made.
+ *      buying n costs    ceil(y·n / (x − n)) Bits    `buyCost`
+ *      selling n pays    floor(y·n / (x + n)) Bits   `sellPayout`
+ *    A buy rounds up and a sell rounds down, so buying and selling straight back never
+ *    makes a profit.
+ *
+ * 3. She sells only what she holds. With fewer than n in stock there is no price for n
+ *    (`buyCost` is null); at stock 0 she is sold out and can't sell at all.
+ *
+ * 4. She pays only from her till. If selling n would pay more than the Bits in that
+ *    item's till, she can't buy them (`sellQuote` is null). When the till can't cover
+ *    even one, she is broke for that item until someone buys from her and refills it.
+ *
+ * 5. The gas fee. Every trade burns ceil(bits · feeBps / 10000) Bits (`feeOf`); the fee
+ *    is 2% (feeBps 200). A buyer pays the cost plus the fee; a seller gets the payout
+ *    less the fee. Nobody receives the fee: it leaves the supply.
+ *
+ * 6. Player listings stay near her price. A listing of n items must ask between 50% and
+ *    400% of her spot price × n (floorBps 5000, ceilingBps 40000) and never less than
+ *    1 Bit (`listingBounds`).
+ *
+ * 7. Closed means closed. While the market is switched off (`open: false`) she neither
+ *    buys nor sells; open listings can still be taken down.
+ *
+ * WHERE THE NUMBERS COME FROM
+ *
+ * The fee, the listing bounds, the caps (20 items a trade, 40 trades with her a day) and
+ * each item's starting curve are settings, in ./config.ts, the same values the contract
+ * holds (`MarketParams::default()` in market.rs). Starting prices follow rarity: commons
+ * open at 12 Bits with 40 in stock, uncommons at 40 with 20, rares at 150 with 8; half
+ * of each curve's Bits is real (her till) and half is virtual. `rules.test.ts` fails if
+ * a number in this comment drifts from those settings.
+ *
+ * Her own explanation of a price ("Running low: 7 left of 8…") is ./reasoning.ts, which
+ * only reads a pool through the functions below.
  *
  * Amounts are plain numbers (JSON-friendly); the arithmetic runs in BigInt, so it is
  * exact like the contract's u128.

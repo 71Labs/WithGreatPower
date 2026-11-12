@@ -18,6 +18,8 @@ import { showToast, useAccount } from "@/game/store";
 import { RARITY_LABEL } from "@wgp/game-core/data";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
+import type { MarketParams } from "@/lib/market/config";
+import { explainPrice } from "@/lib/market/reasoning";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
@@ -25,6 +27,7 @@ import { ITEM_SOURCE, VENDOR_AFTER, vendorLine } from "./copy";
 import { FillSheet, ListSheet, TradeSheet, type Side } from "./sheets";
 import { ChangePill, formatBits, formatChange, formatPrice, Sparkline } from "./sparkline";
 import { askToSignIn, trade, useMarketData, useQuickPlay, type QuickPlay } from "./use-market";
+import { VendorChips, WhyPrice } from "./why-price";
 
 type Tab = "vendor" | "listings";
 const ID = "market";
@@ -107,11 +110,15 @@ function Vendor({ view, me, signedIn, unclaimed, quickPlay, line }: { view: Mark
 const cardButton =
   "inline-flex h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[12px] border-2 border-game-ink bg-game-paper px-1.5 text-[14px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 motion-safe:ease-out active:translate-y-[2px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 pointer-fine:hover:bg-game-paper-2";
 
-function ItemCard({ item, me, canTrade, onTrade }: { item: MarketItemView; me: MarketMe | null; canTrade: boolean; onTrade(side: Side): void }) {
+function ItemCard({ item, me, params, canTrade, onTrade }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; canTrade: boolean; onTrade(side: Side): void }) {
   const held = me?.items[item.item] ?? 0;
   const first = item.spark[0] ?? item.priceMilli;
+  // Gwei's own account of this price, from the pool the server just read.
+  const why = explainPrice({ pool: item.pool, open: params.open, feeBps: params.feeBps, change24h: item.change24h, trades24h: item.trades24h });
+  const blocked = [why.buyBlocked, why.sellBlocked].filter((t, i, all) => t !== null && all.indexOf(t) === i);
+  const blockedId = `${ID}-${item.item}-blocked`;
   return (
-    <li className="flex min-w-0 flex-col gap-2 rounded-[20px] border-2 border-game-ink bg-game-paper p-2.5 text-game-ink shadow-[var(--game-shadow-sm)] sm:gap-3 sm:p-3">
+    <li className="group/card flex min-w-0 flex-col gap-2 rounded-[20px] border-2 border-game-ink bg-game-paper p-2.5 text-game-ink shadow-[var(--game-shadow-sm)] sm:gap-3 sm:p-3">
       <div className="flex items-center gap-2 sm:gap-2.5">
         <MiniAvatar id={ITEM_SOURCE[item.item]} className="size-8 rounded-[9px] sm:size-10 sm:rounded-[11px]" />
         <span className="flex min-w-0 flex-1 flex-col">
@@ -126,6 +133,7 @@ function ItemCard({ item, me, canTrade, onTrade }: { item: MarketItemView; me: M
         </p>
         <ChangePill change={item.change24h} />
       </div>
+      <VendorChips reasoning={why} />
       <Sparkline
         points={item.spark}
         className="h-8 w-full sm:h-10"
@@ -135,27 +143,36 @@ function ItemCard({ item, me, canTrade, onTrade }: { item: MarketItemView; me: M
         <span>Stock {formatBits(item.pool.stock)}</span>
         {me ? <span>You have {formatBits(held)}</span> : <span>{formatBits(item.trades24h)} trades today</span>}
       </p>
+      {/* The popover spreads from the card's own edge: the right-hand column opens leftwards, so it stays on a phone's screen. */}
+      <WhyPrice name={`for ${item.name}`} reasoning={why} popoverClassName="start-0 group-even/card:start-auto group-even/card:end-0" />
       {canTrade ? (
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-          <button type="button" className={cardButton} onClick={() => onTrade("buy")} disabled={item.buyOne === null}>
-            {item.buyOne === null ? (
-              "Sold out"
-            ) : (
-              <>
-                Buy<span className="num font-normal">· {formatBits(item.buyOne)}</span>
-                <span className="sr-only"> Bits for one</span>
-              </>
-            )}
-          </button>
-          <button type="button" className={cardButton} onClick={() => onTrade("sell")}>
-            Sell
-            {item.sellOne !== null ? (
-              <>
-                <span className="num font-normal">· {formatBits(item.sellOne)}</span>
-                <span className="sr-only"> Bits for one</span>
-              </>
-            ) : null}
-          </button>
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+            <button type="button" className={cardButton} onClick={() => onTrade("buy")} disabled={why.buyBlocked !== null || item.buyOne === null} aria-describedby={why.buyBlocked ? blockedId : undefined}>
+              Buy
+              {why.buyBlocked === null && item.buyOne !== null ? (
+                <>
+                  <span className="num font-normal">· {formatBits(item.buyOne)}</span>
+                  <span className="sr-only"> Bits for one</span>
+                </>
+              ) : null}
+            </button>
+            <button type="button" className={cardButton} onClick={() => onTrade("sell")} disabled={why.sellBlocked !== null} aria-describedby={why.sellBlocked ? blockedId : undefined}>
+              Sell
+              {why.sellBlocked === null && item.sellOne !== null ? (
+                <>
+                  <span className="num font-normal">· {formatBits(item.sellOne)}</span>
+                  <span className="sr-only"> Bits for one</span>
+                </>
+              ) : null}
+            </button>
+          </div>
+          {/* A disabled button can't explain itself in a tooltip, so the reason is printed under it. */}
+          {blocked.length > 0 ? (
+            <p id={blockedId} className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">
+              {blocked.join(" ")}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </li>
@@ -384,7 +401,7 @@ export function MarketScreen() {
             <section {...tabPanelProps(ID, "vendor")} aria-label="Gwei’s prices" className="focus-visible:outline-offset-4">
               <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 {view.items.map((item) => (
-                  <ItemCard key={item.item} item={item} me={me} canTrade={canTrade} onTrade={(side) => setSheet({ item, side })} />
+                  <ItemCard key={item.item} item={item} me={me} params={view.params} canTrade={canTrade} onTrade={(side) => setSheet({ item, side })} />
                 ))}
               </ul>
               <p className="mt-3 flex items-center gap-2 text-[12px] leading-4 text-game-paper/75">

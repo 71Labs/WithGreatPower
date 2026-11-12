@@ -160,8 +160,11 @@ describe("the market view", () => {
 
 describe("the answer to a trade", () => {
   it("carries the market and wallet as they stand right after it (past the view's cache)", async () => {
-    const listed = await simAct(db, { playerId: alice.id, accountId: alice.account, act: { action: "list", item: "crumbs", amount: 1, price: 12 }, now: NOW });
-    await simAct(db, { playerId: alice.id, accountId: alice.account, act: { action: "buy", item: "crumbs", amount: 2, maxBits: 40 }, now: NOW });
+    // The snapshot reads the real clock for its 24-hour window, so these trades happen now (a
+    // fixed date here made the test fail a day later).
+    const now = new Date();
+    const listed = await simAct(db, { playerId: alice.id, accountId: alice.account, act: { action: "list", item: "crumbs", amount: 1, price: 12 }, now });
+    await simAct(db, { playerId: alice.id, accountId: alice.account, act: { action: "buy", item: "crumbs", amount: 2, maxBits: 40 }, now });
     const snap = await marketSnapshot({ playerId: alice.id, accountId: alice.account });
     const crumbs = snap.view.items.find((i) => i.item === "crumbs")!;
     expect(crumbs.pool.stock).toBe(38);
