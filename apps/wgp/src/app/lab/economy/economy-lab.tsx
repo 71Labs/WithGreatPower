@@ -15,11 +15,13 @@ import { ArrowRight, ChartLine, Pause, Play, RotateCcw } from "@/components/icon
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ITEM_SOURCE } from "@/components/market/copy";
 import { ChangePill, formatBits, formatPrice } from "@/components/market/sparkline";
+import { Reasoning } from "@/components/market/why-price";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
 import { Economy, type DaySnapshot } from "@/lib/market/bots";
-import { DEFAULT_PARAMS } from "@/lib/market/config";
+import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { explainPrice } from "@/lib/market/reasoning";
 
 const SPEEDS = [
   { id: "1x", label: "1×", ms: 450 },
@@ -32,6 +34,8 @@ type Speed = (typeof SPEEDS)[number]["id"];
 const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 const CRAFT_BITS = 25;
 const noop = () => () => {};
+/** Each item's curve as seeded; a day's stock and till go on top to rebuild that day's pool. */
+const SEEDED = new Map(seededPools().map((p) => [p.item, p]));
 
 /* ------------------------------------------------------------------ chart */
 
@@ -65,6 +69,13 @@ function ItemChart({
   const maxStock = Math.max(1, ...stock);
   const at = hover !== null && hover < n ? hover : n - 1;
   const change = prices[0] ? (prices[at]! - prices[0]) / prices[0] : 0;
+  // Gwei's reasoning for the day the card reads, from that day's own stock and till.
+  const why = explainPrice({
+    pool: { ...SEEDED.get(item)!, stock: stock[at]!, bits: history[at]!.tills[item] ?? 0 },
+    open: true,
+    feeBps: DEFAULT_PARAMS.feeBps,
+    change24h: at > 0 && prices[at - 1] ? (prices[at]! - prices[at - 1]!) / prices[at - 1]! : null,
+  });
 
   function pick(e: PointerEvent<HTMLDivElement>) {
     const r = ref.current!.getBoundingClientRect();
@@ -138,6 +149,7 @@ function ItemChart({
           ))}
         </svg>
       </div>
+      <Reasoning reasoning={why} className="border-t-2 border-dashed border-game-ink/20 pt-2.5" />
     </li>
   );
 }
@@ -326,7 +338,7 @@ export function EconomyLab() {
 
         <section aria-labelledby={`${ids}-prices`} className="flex flex-col gap-3">
           <h2 id={`${ids}-prices`} className="text-[13px] font-bold uppercase leading-4 tracking-[0.08em] text-game-paper/85">
-            Price and Gwei’s stock, by day
+            Price, Gwei’s stock and her reasoning, by day
           </h2>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ITEM_IDS.map((item) => (
@@ -383,7 +395,8 @@ export function EconomyLab() {
         </details>
         <p className="text-[12px] leading-4 text-game-paper/70">
           Starting curves and rules: {DEFAULT_PARAMS.feeBps / 100}% gas fee, listings between {DEFAULT_PARAMS.floorBps / 100}% and {DEFAULT_PARAMS.ceilingBps / 100}% of Gwei’s price,{" "}
-          {DEFAULT_PARAMS.dailyTrades} vendor trades per hero a day. Runs are deterministic for a seed.
+          {DEFAULT_PARAMS.dailyTrades} vendor trades per hero a day. Runs are deterministic for a seed. Gwei’s pricing rules are one file, <code className="font-mono">apps/wgp/src/lib/market/math.ts</code>,
+          and every line she says here is worked out from that day’s stock and till.
         </p>
       </div>
     </main>
