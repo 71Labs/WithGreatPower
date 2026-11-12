@@ -35,6 +35,7 @@ import { isUnclaimed } from "@/lib/near/policy";
 
 import { COACH_RING, CoachCard, coachSteps, markCoachSeen, useCoachSeen } from "./coach";
 import { ITEM_SOURCE, VENDOR_AFTER, vendorLine } from "./copy";
+import { OtherTraders } from "./other-traders";
 import { QuestStrip } from "./quest-strip";
 import { FillSheet, ListSheet, TradeSheet, type Side, type TradeGate } from "./sheets";
 import { ChangePill, formatBits, formatChange, formatPrice, Sparkline } from "./sparkline";
@@ -375,6 +376,8 @@ export function MarketScreen() {
   const [filling, setFilling] = useState<ListingView | null>(null);
   const [after, setAfter] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<number | null>(null);
+  // Counts the player's trades: Sandwich Man (the NPC) may answer one, so his strip looks again.
+  const [traded, setTraded] = useState(0);
   // Gwei's line changes daily; the day comes from the server's answer, not the render.
   const day = view ? Math.floor(Date.parse(view.updatedAt) / 86_400_000) : 0;
 
@@ -465,6 +468,7 @@ export function MarketScreen() {
     if (res.snapshot) adopt(res.snapshot);
     else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     if (res.ok) {
+      setTraded((n) => n + 1);
       setAfter(VENDOR_AFTER[req.action]);
       // A player who has traded doesn't need the tour.
       markCoachSeen();
@@ -571,6 +575,7 @@ export function MarketScreen() {
               />
             </StickerPanel>
           )}
+          <OtherTraders stamp={view.updatedAt} bump={traded} onMove={() => void refresh()} />
           <TradeSheet
             key={`${sheet?.item.item ?? "none"}:${sheet?.from ?? ""}`}
             initialAmount={sheet?.amount}

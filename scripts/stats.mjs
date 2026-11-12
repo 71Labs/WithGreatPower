@@ -25,6 +25,11 @@ const DEFAULT_CONTRACT = "game.wgpnear.near";
 const NEARBLOCKS_API = "https://api.nearblocks.io/v1";
 /** The game's own senders: the operator mints rewards, the relayer pays gas for players' trades. */
 const OWN_ACCOUNTS = ["operator.wgpnear.near", "relayer.wgpnear.near"];
+/**
+ * Sandwich Man, the NPC trader (docs/npc-trader.md). His calls are real market calls, but he
+ * is never a player: they are counted on their own line and he is left out of the accounts.
+ */
+const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];
 /** The methods players call from their own accounts (signed by their session key, relayed). */
 const PLAYER_METHODS = ["register_hero", "craft_suit", "equip_suit", "market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
 const PER_PAGE = 25;
@@ -154,6 +159,7 @@ async function tallyChain(contract, onPage = () => {}, onWait = () => {}) {
   const seen = new Set();
   let calls = 0;
   let failed = 0;
+  let npcCalls = 0;
   let pages = 0;
   const snapshot = (complete) => ({
     contract,
@@ -163,6 +169,7 @@ async function tallyChain(contract, onPage = () => {}, onWait = () => {}) {
     failed,
     byMethod: Object.fromEntries([...methods].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))),
     playerAccounts: senders.size,
+    npcCalls,
   });
   for (let page = 1; page <= MAX_PAGES; page++) {
     if (page > 1) await sleep(PAGE_GAP_MS);
@@ -191,7 +198,8 @@ async function tallyChain(contract, onPage = () => {}, onWait = () => {}) {
       // transfer, which the owner and the setup payer send.
       const sender = txn.predecessor_account_id;
       const played = (txn.actions ?? []).some((a) => PLAYER_METHODS.includes(a.method));
-      if (played && sender && sender !== contract && !OWN_ACCOUNTS.includes(sender)) senders.add(sender);
+      if (NPC_ACCOUNTS.includes(sender)) npcCalls += 1;
+      else if (played && sender && sender !== contract && !OWN_ACCOUNTS.includes(sender)) senders.add(sender);
     }
     onPage(page, calls);
   }
@@ -205,6 +213,7 @@ function printChain(t) {
   const rows = Object.entries(t.byMethod);
   if (rows.length) console.log(table("Actions by method", rows));
   console.log(table(`Player accounts that called a game method themselves`, [["accounts", t.playerAccounts]]));
+  if (t.npcCalls > 0) console.log(table("Calls by the NPC trader (not a player; included in the methods above)", [["calls", t.npcCalls]]));
 }
 
 /* ------------------------------------------------------------------ main */
