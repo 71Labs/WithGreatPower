@@ -26,6 +26,7 @@ import { recordTrade } from "./history";
 import { settleMarketQuest } from "./quest";
 import { assertNoRunInFlight } from "./sim";
 import { marketView, refreshMarket } from "./view";
+import { npcTraderSoon } from "../background";
 
 export const isMarketMethod = (method: string): method is MarketMethod => (MARKET_METHODS as readonly string[]).includes(method);
 
@@ -116,6 +117,8 @@ export async function afterMarketRelay(db: Db, call: RelayedMarketCall, now = ne
       const quest = await settleMarketQuest(db, { playerId: call.playerId, now });
       if (quest?.state === "completed") mirrored = true;
     }
+    // Real activity just landed: Sandwich Man, the NPC trader, takes one look after the response.
+    npcTraderSoon("activity");
     return mirrored;
   } catch (error) {
     console.error(`[market] couldn't record ${call.method} ${call.txHash}: ${(error as Error).message}`);

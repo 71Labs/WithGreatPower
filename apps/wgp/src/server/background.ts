@@ -23,6 +23,10 @@
  *   invite code is claimed, the player's referrer (or the named referrer) is counted again and
  *   granted the "Invite 3 friends" reward once they reach it. Per player, so every trigger
  *   runs (no window); the grant is idempotent by its table's primary key.
+ * - Sandwich Man, the market's NPC trader (src/server/npc/runner.ts): takes one look at the
+ *   market after a player's trade or listing lands, and when the market is read, at most
+ *   once every 5 minutes. A look is at most one action; his own lock keeps looks at least
+ *   20 seconds apart and never overlapping.
  *
  * Every job is idempotent, and the windows are rows in budget_counters, so they hold
  * across serverless instances. The /api/cron/* routes stay as manual triggers, guarded by
@@ -39,6 +43,7 @@ import { recordSnapshots } from "@/server/market/history";
 import { marketSource, poolsOf } from "@/server/market/view";
 import { chainEnv, operatorEnv } from "@/server/near/env";
 import { drainRewards } from "@/server/near/mint-worker";
+import { runNpcTrader } from "@/server/npc/runner";
 import { sendSeasonRecords } from "@/server/near/season-record";
 import { reserveBudget } from "@/server/rate-limit";
 import { syncDrafts } from "@/server/social/queue";
@@ -50,6 +55,7 @@ export const WINDOWS = {
   seasons: 60_000,
   social: 2 * 60_000,
   dailies: 10 * 60_000,
+  npcTrader: 5 * 60_000,
 } as const;
 
 export type BackgroundJob = keyof typeof WINDOWS;
@@ -166,6 +172,17 @@ export function checkReferralsSoon(input: { friend?: string; referrer?: string }
     const granted = await evaluateReferrals(db, input);
     if (granted && canMint()) await drainRewards(db, { maxBatches: 1 });
   });
+}
+
+/**
+ * Lets Sandwich Man take one look at the market after this request (at most one action).
+ * "activity": a player's trade or listing just landed, so he looks now. "read": someone
+ * opened the market, so he looks if he hasn't in five minutes. Off on chain unless his
+ * account is configured; the runner's own lock makes extra calls harmless.
+ */
+export function npcTraderSoon(trigger: "activity" | "read"): void {
+  if (trigger === "read") whenDue("npcTrader", (db) => runNpcTrader(db));
+  else afterResponse("npcTrader", (db) => runNpcTrader(db));
 }
 
 /** Seasons are dated weeks ahead; with nothing due, an instance looks again after this long at most. */

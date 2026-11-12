@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { Economy } from "./bots";
+import { Economy, LAB_BROKE_SEED } from "./bots";
 import { seededPools } from "./config";
 
 const seededTill = seededPools().reduce((s, p) => s + p.bits, 0);
@@ -27,6 +27,18 @@ describe("the economy fast-forward", () => {
     expect(last.crafted).toBeGreaterThan(0);
     expect(last.burned).toBeGreaterThan(0);
     // Every Bit is somewhere: held, in Gwei's till, or burned.
+    for (const d of e.history) expect(d.supply + d.burned).toBe(seededTill + d.minted);
+  });
+
+  it("has Sandwich Man go broke and recover in the lab's showcase seed", () => {
+    const e = new Economy({ days: 21, bots: 60, seed: LAB_BROKE_SEED, params: { craftBits: 25 } });
+    while (!e.done) e.step();
+    const npc = e.history.map((d) => d.npc!);
+    expect(npc.filter((d) => d.closed).length).toBeGreaterThanOrEqual(1);
+    expect(npc.flatMap((d) => d.events).some((x) => x.reason.includes("Clearance"))).toBe(true);
+    // Back in business by the end, and every Bit he has is still counted.
+    expect(npc.at(-1)).toMatchObject({ status: "open", closed: false });
+    expect(npc.at(-1)!.bits).toBeGreaterThan(120);
     for (const d of e.history) expect(d.supply + d.burned).toBe(seededTill + d.minted);
   });
 });
