@@ -23,6 +23,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical: "/stats" },
   openGraph: { type: "website", siteName: "With Great Power", url: "/stats", title: "With Great Power, by the numbers", description },
+  twitter: { card: "summary_large_image", site: "@wgponnear", title: "With Great Power, by the numbers", description },
 };
 
 export default async function StatsPage() {
