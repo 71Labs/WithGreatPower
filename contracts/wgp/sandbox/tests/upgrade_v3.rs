@@ -888,3 +888,111 @@ async fn upgrade_from_the_live_v2_wasm_keeps_everything_and_adds_v3() -> anyhow:
     );
     Ok(())
 }
+
+/// v3 is about 107 KB larger than v2, so the contract account must hold about 1.08 NEAR
+/// more for storage. An account that can't cover it (mainnet's had 0.75 NEAR free on
+/// Nov 12) loses nothing: the upgrade fails whole and v2 carries on. Topped up, it works.
+#[tokio::test]
+async fn an_upgrade_the_account_cant_pay_storage_for_fails_whole() -> anyhow::Result<()> {
+    let v2_path = std::env::var("WGP_V2_WASM").unwrap_or_else(|_| V2_WASM.to_string());
+    let Ok(v2) = std::fs::read(&v2_path) else {
+        println!("No v2 wasm at {v2_path}; skipping");
+        return Ok(());
+    };
+    let v3 = std::fs::read(V3_WASM)?;
+    let worker = near_workspaces::sandbox().await?;
+    let root = worker.root_account()?;
+    let owner = root
+        .create_subaccount("owner")
+        .initial_balance(NearToken::from_near(20))
+        .transact()
+        .await?
+        .into_result()?;
+    // 4.4 NEAR: enough for v2 (about 3.65 NEAR of storage), 0.75 NEAR to spare, like mainnet.
+    let game = root
+        .create_subaccount("game")
+        .initial_balance(NearToken::from_millinear(4_400))
+        .transact()
+        .await?
+        .into_result()?;
+    let game = game.deploy(&v2).await?.into_result()?;
+    game.call("new")
+        .args_json(json!({
+            "owner_id": owner.id(), "operators": [owner.id()], "items": ITEMS,
+            "suits": [{"id": "classic", "starter": true, "min_level": 1, "recipe": []}],
+            "starter_unlock_level": 2
+        }))
+        .transact()
+        .await?
+        .into_result()?;
+    owner
+        .call(game.id(), "mint_rewards")
+        .args_json(
+            json!({"batch": [{"account_id": "alice.test.near", "nonce": 1, "digest": DIGEST,
+            "items": [{"item": "crumbs", "amount": 3}]}]}),
+        )
+        .transact()
+        .await?
+        .into_result()?;
+    let account = game.view_account().await?;
+    let free = account.balance.as_yoctonear() as f64 / 1e24 - account.storage_usage as f64 / 1e5;
+    println!(
+        "before: {} bytes, {:.3} NEAR free",
+        account.storage_usage, free
+    );
+    assert!(free < 1.0);
+
+    let short = owner
+        .call(game.id(), "upgrade")
+        .args(v3.clone())
+        .deposit(NearToken::from_yoctonear(1))
+        .max_gas()
+        .transact()
+        .await?;
+    let why = refused(short);
+    println!(
+        "upgrade without the storage balance: {}",
+        &why[..why.len().min(400)]
+    );
+    // Still v2, with its state.
+    assert!(game.view("get_version").await.is_err());
+    assert_eq!(
+        view(
+            &game,
+            "mt_balance_of",
+            json!({"account_id": "alice.test.near", "token_id": "item:crumbs"})
+        )
+        .await?,
+        "3"
+    );
+    assert_eq!(
+        game.view_account().await?.storage_usage,
+        account.storage_usage
+    );
+
+    // Anyone can top the account up; then the same call goes through.
+    root.transfer_near(game.id(), NearToken::from_near(2))
+        .await?
+        .into_result()?;
+    pass(
+        "upgrade after topping up 2 NEAR",
+        owner
+            .call(game.id(), "upgrade")
+            .args(v3)
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?,
+    );
+    assert_eq!(view(&game, "get_version", json!({})).await?["state"], 3);
+    assert_eq!(
+        view(
+            &game,
+            "mt_balance_of",
+            json!({"account_id": "alice.test.near", "token_id": "item:crumbs"})
+        )
+        .await?,
+        "3"
+    );
+    Ok(())
+}

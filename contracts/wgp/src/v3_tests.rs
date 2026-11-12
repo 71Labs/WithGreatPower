@@ -941,7 +941,7 @@ fn a_sold_out_or_stopped_stall_says_why() {
     assert!(s.buying && !s.selling);
 
     as_(owner(), 1);
-    c.set_market_params(
+    c.set_market(
         MarketParams {
             open: false,
             ..loose()
@@ -1182,7 +1182,7 @@ fn investing_needs_bits_a_pool_and_an_open_market() {
 
     // New investments can be switched off on their own; stakes still come out.
     as_(owner(), 1);
-    c.set_market_params(
+    c.set_market(
         MarketParams {
             invest_open: false,
             ..Default::default()
@@ -1199,7 +1199,7 @@ fn investing_needs_bits_a_pool_and_an_open_market() {
 
     // A closed market takes no investments and still pays stakes back.
     as_(owner(), 1);
-    c.set_market_params(
+    c.set_market(
         MarketParams {
             open: false,
             ..Default::default()
@@ -1509,7 +1509,7 @@ fn retuning_a_pool_keeps_investors_bits_in_the_till() {
     c.market_invest("crumbs".into(), U128(300));
     // The owner doubles the curve's virtual Bits: 960 on the books, 300 of them funded.
     as_(owner(), 1);
-    c.set_market_params(loose(), vec![pool_cfg("crumbs", 960, 40, 0, 0)]);
+    c.set_market(loose(), vec![pool_cfg("crumbs", 960, 40, 0, 0)]);
     let p = pool(&c, "crumbs");
     assert_eq!((p.virtual_bits.0, p.invested.0, p.bits.0), (660, 300, 780));
     as_(alice(), 0);
@@ -1521,7 +1521,7 @@ fn retuning_a_pool_keeps_investors_bits_in_the_till() {
     c.market_invest("crumbs".into(), U128(300));
     as_(owner(), 1);
     assert!(
-        panics(|| c.set_market_params(loose(), vec![pool_cfg("crumbs", 300, 40, 0, 0)]))
+        panics(|| c.set_market(loose(), vec![pool_cfg("crumbs", 300, 40, 0, 0)]))
             .contains("crumbs: virtual_bits must stay above the 300 Bits invested")
     );
 }
@@ -1561,27 +1561,67 @@ fn the_invest_rules_are_validated() {
     ];
     for (params, why) in bad {
         as_(owner(), 1);
-        assert!(panics(|| c.set_market_params(params, vec![])).contains(why));
+        assert!(panics(|| c.set_market(params, vec![])).contains(why));
     }
 }
 
 #[test]
-fn v2_market_arguments_still_parse() {
+fn v2_market_arguments_still_work_and_leave_investing_alone() {
     // What scripts/near/market-args.ts sends today: no investing fields.
-    let params: MarketParams = serde_json::from_value(json!({
-        "open": true, "fee_bps": 200, "floor_bps": 5000, "ceiling_bps": 40000,
+    let v2_args = json!({
+        "open": true, "fee_bps": 150, "floor_bps": 5000, "ceiling_bps": 40000,
         "max_amount": 20, "max_open_listings": 3, "max_listings": 300,
         "daily_trades": 40, "daily_listings": 10, "daily_fills": 10,
         "daily_fill_bits": "3000", "craft_bits": "0"
-    }))
-    .unwrap();
-    assert_eq!(
-        params,
+    });
+    let mut m = market();
+    // The owner has set investing up their own way...
+    as_(owner(), 1);
+    m.set_market(
         MarketParams {
+            invest_open: false,
+            invest_fee_bps: 2_500,
+            invest_lock_ms: 60_000,
+            ..Default::default()
+        },
+        vec![],
+    );
+    // ...and the old arguments change the old rules and nothing else.
+    as_(owner(), 1);
+    m.set_market_params(serde_json::from_value(v2_args.clone()).unwrap(), vec![]);
+    assert_eq!(
+        m.market_state().params,
+        MarketParams {
+            fee_bps: 150,
             craft_bits: U128(0),
+            invest_open: false,
+            invest_fee_bps: 2_500,
+            invest_lock_ms: 60_000,
             ..Default::default()
         }
     );
+    // One investing rule on its own; and what market_state answers can be sent back whole.
+    let mut open = v2_args;
+    open["invest_open"] = json!(true);
+    as_(owner(), 1);
+    m.set_market_params(serde_json::from_value(open).unwrap(), vec![]);
+    let p = m.market_state().params;
+    assert!(p.invest_open);
+    assert_eq!((p.invest_fee_bps, p.invest_lock_ms), (2_500, 60_000));
+    let mut whole = serde_json::to_value(&p).unwrap();
+    whole["max_invest"] = json!("250");
+    as_(owner(), 1);
+    m.set_market_params(serde_json::from_value(whole).unwrap(), vec![]);
+    assert_eq!(
+        m.market_state().params,
+        MarketParams {
+            max_invest: U128(250),
+            ..p
+        }
+    );
+    // A v2 rule left out is still an error, as it was.
+    assert!(serde_json::from_value::<crate::MarketRules>(json!({"open": true})).is_err());
+
     // And a v2 reader finds every field it knew in what v3 answers.
     let c = market();
     let state = serde_json::to_value(c.market_state()).unwrap();
@@ -1680,7 +1720,7 @@ fn owner_actions_are_logged() {
     c.set_rules(items, suits, 2);
     assert!(last().contains(r#""action":"set_rules""#));
     as_(owner(), 1);
-    c.set_market_params(MarketParams::default(), vec![]);
+    c.set_market(MarketParams::default(), vec![]);
     assert!(last().contains(r#""action":"set_market_params""#));
     as_(owner(), 1);
     c.set_owner(alice());
@@ -1718,7 +1758,7 @@ fn open_investing(c: &mut Wgp) {
         ..c.market_state().params
     };
     on_day(owner(), 1, 20_000);
-    c.set_market_params(params, vec![]);
+    c.set_market(params, vec![]);
 }
 
 /// The root of `c` rewritten in the v2 layout; collection entries stay where they are.

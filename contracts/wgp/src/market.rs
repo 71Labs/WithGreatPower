@@ -52,7 +52,6 @@ const MAX_RESERVE: u128 = 1_000_000_000_000_000;
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Debug, PartialEq)]
-#[serde(default)]
 pub struct MarketParams {
     /// Off: no trades or new listings (open listings can still be cancelled).
     pub open: bool,
@@ -76,7 +75,7 @@ pub struct MarketParams {
     pub daily_fill_bits: U128,
     /// Bits burned by each crafted suit with a recipe. 0 turns the sink off.
     pub craft_bits: U128,
-    // ---- v3: investing in the vendor (invest.rs). Left out of the JSON: the defaults. ----
+    // ---- v3: investing in the vendor (invest.rs) ----
     /// Off: no new investments (stakes can still be withdrawn and earnings claimed).
     pub invest_open: bool,
     /// The investors' share of a vendor trade's gas fee, in basis points of the fee
@@ -114,6 +113,67 @@ impl Default for MarketParams {
             daily_invests: 6,
             daily_invest_bits: U128(1_000),
             invest_lock_ms: 3_600_000,
+        }
+    }
+}
+
+/// The rules as `set_market_params` takes them: the v2 rules, then the investing rules,
+/// each of which may be left out to keep what is set. So the arguments v2 took still work
+/// and change nothing about investing.
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct MarketRules {
+    pub open: bool,
+    pub fee_bps: u32,
+    pub floor_bps: u32,
+    pub ceiling_bps: u32,
+    pub max_amount: u32,
+    pub max_open_listings: u32,
+    pub max_listings: u32,
+    pub daily_trades: u32,
+    pub daily_listings: u32,
+    pub daily_fills: u32,
+    pub daily_fill_bits: U128,
+    pub craft_bits: U128,
+    #[serde(default)]
+    pub invest_open: Option<bool>,
+    #[serde(default)]
+    pub invest_fee_bps: Option<u32>,
+    #[serde(default)]
+    pub min_invest: Option<U128>,
+    #[serde(default)]
+    pub max_invest: Option<U128>,
+    #[serde(default)]
+    pub daily_invests: Option<u32>,
+    #[serde(default)]
+    pub daily_invest_bits: Option<U128>,
+    #[serde(default)]
+    pub invest_lock_ms: Option<u64>,
+}
+
+impl MarketRules {
+    /// These rules, with `current`'s value for each investing rule left out.
+    pub fn over(self, current: &MarketParams) -> MarketParams {
+        MarketParams {
+            open: self.open,
+            fee_bps: self.fee_bps,
+            floor_bps: self.floor_bps,
+            ceiling_bps: self.ceiling_bps,
+            max_amount: self.max_amount,
+            max_open_listings: self.max_open_listings,
+            max_listings: self.max_listings,
+            daily_trades: self.daily_trades,
+            daily_listings: self.daily_listings,
+            daily_fills: self.daily_fills,
+            daily_fill_bits: self.daily_fill_bits,
+            craft_bits: self.craft_bits,
+            invest_open: self.invest_open.unwrap_or(current.invest_open),
+            invest_fee_bps: self.invest_fee_bps.unwrap_or(current.invest_fee_bps),
+            min_invest: self.min_invest.unwrap_or(current.min_invest),
+            max_invest: self.max_invest.unwrap_or(current.max_invest),
+            daily_invests: self.daily_invests.unwrap_or(current.daily_invests),
+            daily_invest_bits: self.daily_invest_bits.unwrap_or(current.daily_invest_bits),
+            invest_lock_ms: self.invest_lock_ms.unwrap_or(current.invest_lock_ms),
         }
     }
 }
@@ -612,9 +672,15 @@ impl Wgp {
     // ---------- Owner ----------
 
     /// Set the market's rules and pools. A new pool's seeds are minted to the vendor;
-    /// an existing pool keeps its holdings and takes the new virtual reserves.
+    /// an existing pool keeps its holdings and takes the new virtual reserves. Investing
+    /// rules left out of `params` stay as they are.
     #[payable]
-    pub fn set_market_params(&mut self, params: MarketParams, pools: Vec<PoolConfig>) {
+    pub fn set_market_params(&mut self, params: MarketRules, pools: Vec<PoolConfig>) {
+        let params = params.over(&self.market.params);
+        self.set_market(params, pools);
+    }
+
+    pub(crate) fn set_market(&mut self, params: MarketParams, pools: Vec<PoolConfig>) {
         self.assert_owner();
         require!(params.fee_bps <= 1_000, "fee_bps is at most 1000 (10%)");
         require!(

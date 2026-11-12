@@ -53,7 +53,7 @@ pub(crate) fn default_pools() -> Vec<PoolConfig> {
 pub(crate) fn open_market(params: MarketParams) -> Wgp {
     let mut c = setup();
     as_(owner(), 1);
-    c.set_market_params(params, default_pools());
+    c.set_market(params, default_pools());
     c
 }
 
@@ -366,7 +366,7 @@ fn seeding_a_pool_mints_to_the_vendor() {
 fn updating_a_pool_keeps_its_holdings() {
     let mut c = market();
     as_(owner(), 1);
-    c.set_market_params(
+    c.set_market(
         MarketParams::default(),
         vec![pool_cfg("crumbs", 960, 40, 9_999, 9_999)],
     );
@@ -388,7 +388,7 @@ fn market_params_need_the_owner_and_one_yocto() {
     for (who, deposit) in [(alice(), 1), (owner(), 0)] {
         let mut c = setup();
         as_(who, deposit);
-        panics(|| c.set_market_params(MarketParams::default(), default_pools()));
+        panics(|| c.set_market(MarketParams::default(), default_pools()));
         assert!(c.market_state().pools.is_empty());
     }
     let bad: Vec<(MarketParams, Vec<PoolConfig>)> = vec![
@@ -430,7 +430,7 @@ fn market_params_need_the_owner_and_one_yocto() {
     for (params, pools) in bad {
         let mut c = setup();
         as_(owner(), 1);
-        panics(|| c.set_market_params(params, pools));
+        panics(|| c.set_market(params, pools));
     }
 }
 
@@ -842,7 +842,7 @@ fn cancelling_works_while_trading_is_closed() {
     as_(alice(), 0);
     let l = c.list_item("crumbs".into(), 3, U128(30));
     as_(owner(), 1);
-    c.set_market_params(
+    c.set_market(
         MarketParams {
             open: false,
             ..Default::default()
