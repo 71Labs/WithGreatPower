@@ -12,6 +12,7 @@ import { ArrowRight } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { FLAT_MARKET, ITEM_SOURCE, moverHeadline } from "@/components/market/copy";
 import { ChangePill, formatPrice, Sparkline } from "@/components/market/sparkline";
+import { plural } from "@/lib/plural";
 import { getMarket, type MarketItemView } from "@/lib/market/api";
 
 import { SectionHead } from "./shared";
@@ -67,11 +68,11 @@ export function MarketMovers() {
                   <MiniAvatar id={ITEM_SOURCE[m.item]} className="size-8 rounded-[9px]" />
                   <p className="num flex min-w-0 flex-1 flex-col text-[13px] leading-[18px]">
                     <span className="font-semibold">{formatPrice(m.priceMilli)} Bits</span>
-                    <span className="text-game-muted">{m.trades24h} trades today</span>
+                    <span className="text-game-muted">{plural(m.trades24h, "trade")} in 24 h</span>
                   </p>
                   <ChangePill change={m.change24h} />
                 </div>
-                <Sparkline points={m.spark} className="h-8 w-full" label={`${m.name} over 24 hours`} />
+                <Sparkline points={m.spark} steps={m.sparkSteps} className="h-8 w-full" label={`${m.name} over 24 hours`} />
                 <p className="text-[12px] leading-4 text-game-muted">{h.footnote}</p>
               </li>
             );

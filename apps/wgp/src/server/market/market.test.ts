@@ -145,6 +145,11 @@ describe("the market view", () => {
     ];
     const s = priceStats([crumbs], rows, new Map())!.get("crumbs")!;
     expect(s.spark).toEqual([10_000, 10_000, 11_000, 12_000]);
+    // The sparkline's steps: only real price changes, the fill left out, ending on the price now.
+    expect(s.steps.map((step) => step[1])).toEqual([10_000, 11_000, 12_000]);
+    // A known price and no rows is one flat step ("No trades in 24 h"); no price at all is no history.
+    expect(priceStats([crumbs], [], new Map([["crumbs", 12_000]])).get("crumbs")!.steps).toEqual([[0, 12_000]]);
+    expect(priceStats([crumbs], [], new Map()).get("crumbs")!.steps).toEqual([]);
     expect(s.change24h).toBeCloseTo(0.2);
     expect(s.trades24h).toBe(2);
     expect(thin([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 4)).toEqual([1, 4, 7, 10]);

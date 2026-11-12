@@ -31,6 +31,8 @@ import { holdingsOf, MARKET_PATH, nextTrade, parseTradeIntent } from "@/lib/mark
 import { countsForQuest } from "@/lib/market/quest";
 import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
+import { sparkQuiet } from "@/lib/market/spark";
+import { plural } from "@/lib/plural";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
@@ -155,7 +157,8 @@ const cardButton =
 
 function ItemCard({ item, me, params, coached, onTrade }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; coached: boolean; onTrade(side: Side): void }) {
   const held = me?.items[item.item] ?? 0;
-  const first = item.spark[0] ?? item.priceMilli;
+  const first = item.sparkSteps?.[0]?.[1] ?? item.spark[0] ?? item.priceMilli;
+  const quiet = item.sparkSteps !== undefined && (item.sparkSteps.length === 0 || sparkQuiet(item.sparkSteps));
   // Gwei's own account of this price, from the pool the server just read.
   const why = explainPrice({ pool: item.pool, open: params.open, feeBps: params.feeBps, change24h: item.change24h, trades24h: item.trades24h });
   const blocked = [why.buyBlocked, why.sellBlocked].filter((t, i, all) => t !== null && all.indexOf(t) === i);
@@ -179,12 +182,17 @@ function ItemCard({ item, me, params, coached, onTrade }: { item: MarketItemView
       <VendorChips reasoning={why} />
       <Sparkline
         points={item.spark}
+        steps={item.sparkSteps}
         className="h-8 w-full sm:h-10"
-        label={`${item.name} over 24 hours: from ${formatPrice(first)} to ${formatPrice(item.priceMilli)} Bits${item.change24h !== null ? `, ${formatChange(item.change24h)}` : ""}`}
+        label={
+          quiet
+            ? `${item.name}: no trades in the last 24 hours, holding at ${formatPrice(item.priceMilli)} Bits`
+            : `${item.name} over 24 hours: from ${formatPrice(first)} to ${formatPrice(item.priceMilli)} Bits${item.change24h !== null ? `, ${formatChange(item.change24h)}` : ""}`
+        }
       />
       <p className="num flex flex-wrap justify-between gap-x-3 text-[12px] leading-4 text-game-muted">
         <span>Stock {formatBits(item.pool.stock)}</span>
-        {me ? <span>You have {formatBits(held)}</span> : <span>{formatBits(item.trades24h)} trades today</span>}
+        {me ? <span>You have {formatBits(held)}</span> : <span>{plural(item.trades24h, "trade")} in 24 h</span>}
       </p>
       {/* The popover spreads from the card's own edge: the right-hand column opens leftwards, so it stays on a phone's screen. */}
       <WhyPrice name={`for ${item.name}`} reasoning={why} popoverClassName="start-0 group-even/card:start-auto group-even/card:end-0" />
