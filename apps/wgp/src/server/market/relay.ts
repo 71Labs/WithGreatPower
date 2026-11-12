@@ -25,6 +25,7 @@ import { rawListing, toListing, toPool } from "./chain";
 import { recordTrade } from "./history";
 import { assertNoRunInFlight } from "./sim";
 import { marketView, refreshMarket } from "./view";
+import { npcTraderSoon } from "../background";
 
 export const isMarketMethod = (method: string): method is MarketMethod => (MARKET_METHODS as readonly string[]).includes(method);
 
@@ -110,6 +111,8 @@ export async function afterMarketRelay(db: Db, call: RelayedMarketCall, now = ne
       }
     }
     refreshMarket();
+    // Real activity just landed: Sandwich Man, the NPC trader, takes one look after the response.
+    npcTraderSoon("activity");
     return mirrored;
   } catch (error) {
     console.error(`[market] couldn't record ${call.method} ${call.txHash}: ${(error as Error).message}`);

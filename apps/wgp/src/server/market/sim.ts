@@ -34,6 +34,8 @@ export interface SimState {
   book: MarketBook;
   /** Net Bits each account gained or spent in simulated trades. */
   wallets: Record<string, number>;
+  /** Sandwich Man's items (src/server/npc/sim.ts): he has no save to keep them in. */
+  npc?: { items: Record<string, number> };
 }
 
 export const seedSim = (): SimState => ({ book: newBook(DEFAULT_PARAMS, seededPools()), wallets: {} });
@@ -63,7 +65,7 @@ export function renameSimAccount(state: SimState, from: string, to: string): Sim
     delete accounts[from];
   }
   const listings = state.book.listings.map((l) => (l.seller === from ? { ...l, seller: to } : l));
-  return { book: { ...state.book, accounts, listings }, wallets };
+  return { ...state, book: { ...state.book, accounts, listings }, wallets };
 }
 
 /** Moves `from`'s place in the simulated market to `to`, inside the caller's transaction. */
@@ -230,7 +232,7 @@ export async function simAct(db: Db, input: { playerId: string; accountId: strin
     }
     await tx
       .update(marketSim)
-      .set({ state: { book, wallets } satisfies SimState, rev: sql`${marketSim.rev} + 1`, updatedAt: now })
+      .set({ state: { ...state, book, wallets } satisfies SimState, rev: sql`${marketSim.rev} + 1`, updatedAt: now })
       .where(eq(marketSim.id, SIM_ID));
 
     if (receipt.kind === "trade") {

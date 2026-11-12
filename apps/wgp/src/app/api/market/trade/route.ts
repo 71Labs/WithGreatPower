@@ -27,6 +27,7 @@ import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
 import { simAct } from "@/server/market/sim";
 import { marketSnapshot, marketView, refreshMarket } from "@/server/market/view";
 import { rateLimiter } from "@/server/rate-limit";
+import { npcTraderSoon } from "@/server/background";
 
 const item = z.enum(Object.keys(ITEMS) as [ItemId, ...ItemId[]]);
 const amount = z.number().int().min(1).max(1_000);
@@ -50,6 +51,8 @@ export const POST = handle("market/trade", (request: Request) =>
     const player = { playerId: session.playerId, accountId: session.player.nearAccountId };
     const result = await simAct(await getDb(), { ...player, act });
     refreshMarket();
+    // Real activity just landed: Sandwich Man, the NPC trader, takes one look after the response.
+    npcTraderSoon("activity");
     // The cached view can still be the one from before the trade: answer with the market as it is now.
     const market = await marketSnapshot(player).catch(() => null);
     return json({ ...result, ...(market ? { market } : {}) });
