@@ -17,8 +17,26 @@ import { eq, sql } from "drizzle-orm";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId, Save } from "@wgp/game-core/types";
 
-import { BITS_TOKEN, DEFAULT_PARAMS, seededPools, type MarketParams } from "@/lib/market/config";
-import { accountToday, buyListing, cancelListing, listItem, marketBuy, marketSell, newBook, type Fill, type Ledger, type Listing, type MarketBook, type Trade } from "@/lib/market/engine";
+import { BITS_TOKEN, DEFAULT_PARAMS, seededPools, type InvestRules, type MarketParams } from "@/lib/market/config";
+import {
+  accountToday,
+  buyListing,
+  cancelListing,
+  listItem,
+  marketBuy,
+  marketClaim,
+  marketInvest,
+  marketSell,
+  marketWithdraw,
+  newBook,
+  type Fill,
+  type Ledger,
+  type Listing,
+  type MarketBook,
+  type StakeReceipt,
+  type Trade,
+} from "@/lib/market/engine";
+import { DEFAULT_INVEST_RULES, investorView, type InvestorView } from "@/lib/market/invest";
 
 import { conflict } from "../http";
 import type { Db } from "../db/client";
@@ -26,7 +44,7 @@ import { queryRows } from "../db/client";
 import { MINT_KINDS } from "../db/outbox";
 import { ensureSave, writeSave } from "../db/players";
 import { marketSim, runs } from "../db/schema";
-import { recordTrade } from "./history";
+import { recordStake, recordTrade } from "./history";
 
 export const SIM_ID = "main";
 
@@ -46,6 +64,8 @@ export interface SimState {
  *
  *   SIM_MARKET_CRAFT_BITS=250   Bits a crafted suit burns (`craft_bits`)
  *   SIM_MARKET_FEE_BPS=500      the gas fee (`fee_bps`, at most 1000 as on chain)
+ *   SIM_MARKET_INVEST_LOCK_MS=5000   how long a stake is locked after a top-up
+ *                                    (`invest_lock_ms`, at most 30 days as on chain)
  *
  * Dev only: ignored when NODE_ENV is production, and they never touch the contract's
  * market, which reads its own params from the chain.
@@ -65,12 +85,24 @@ export function simParamOverrides(env: Record<string, string | undefined> = proc
   return out;
 }
 
-/** A stored sim with the local overrides applied (a no-op without them). */
+/**
+ * The simulated market's investing rules: contract v3's defaults (src/lib/market/invest.ts),
+ * so "invest in a merchant" works here before v3 is live on chain. A sim stored before
+ * investing existed has none and gets them here. The lock can be shortened locally (see
+ * `simParamOverrides`); production ignores that.
+ */
+export function simInvestRules(stored: InvestRules | undefined, env: Record<string, string | undefined> = process.env): InvestRules {
+  const rules = stored ?? DEFAULT_INVEST_RULES;
+  const raw = env.NODE_ENV === "production" ? undefined : env.SIM_MARKET_INVEST_LOCK_MS?.trim();
+  if (raw === undefined || !/^\d{1,10}$/.test(raw) || Number(raw) > 30 * 86_400_000) return rules;
+  return { ...rules, lockMs: Number(raw) };
+}
+
+/** A stored sim with its investing rules and the local overrides applied. */
 export function simStateOf(stored: unknown, env: Record<string, string | undefined> = process.env): SimState {
   const state = stored as SimState;
   const over = simParamOverrides(env);
-  if (Object.keys(over).length === 0) return state;
-  return { ...state, book: { ...state.book, params: { ...state.book.params, ...over } } };
+  return { ...state, book: { ...state.book, params: { ...state.book.params, ...over, invest: simInvestRules(state.book.params.invest, env) } } };
 }
 
 export const seedSim = (): SimState => simStateOf({ book: newBook(DEFAULT_PARAMS, seededPools()), wallets: {} } satisfies SimState);
@@ -100,7 +132,13 @@ export function renameSimAccount(state: SimState, from: string, to: string): Sim
     delete accounts[from];
   }
   const listings = state.book.listings.map((l) => (l.seller === from ? { ...l, seller: to } : l));
-  return { ...state, book: { ...state.book, accounts, listings }, wallets };
+  // Stakes follow the player too. (A claimed name is new, so `to` has none of its own.)
+  let investors = state.book.investors;
+  if (investors?.[from]) {
+    const { [from]: moving, ...rest } = investors;
+    investors = { ...rest, [to]: rest[to] ? { ...rest[to], stakes: [...rest[to].stakes, ...moving.stakes.filter((s) => !rest[to]!.stakes.some((t) => t.item === s.item))] } : moving };
+  }
+  return { ...state, book: { ...state.book, accounts, listings, ...(investors ? { investors } : {}) }, wallets };
 }
 
 /** Moves `from`'s place in the simulated market to `to`, inside the caller's transaction. */
@@ -283,6 +321,51 @@ export async function simAct(db: Db, input: { playerId: string; accountId: strin
   });
 }
 
+/* ------------------------------------------------------------------ investing in Gwei (contract v3's rules) */
+
+export type SimStakeAction = { action: "invest"; item: ItemId; bits: number } | { action: "withdraw"; item: ItemId; bits: number } | { action: "claim"; item: ItemId };
+
+export interface SimStakeResult {
+  action: SimStakeAction["action"];
+  receipt: StakeReceipt;
+  /** The player's Bits after it. */
+  bits: number;
+}
+
+/**
+ * One investing move for `player` in the simulated market: put Bits into one of Gwei's
+ * tills, take a stake back out, or claim its fee earnings. Server-authoritative: the Bits
+ * are the player's minted Bits plus their simulated trades, the rules are contract v3's
+ * (src/lib/market/invest.ts), and the book changes under the same row lock as a trade.
+ * No save is written: a stake is a ledger entry in the book, never an item.
+ * Throws MarketError when the rules refuse, or an HttpError (run in flight).
+ */
+export async function simStake(db: Db, input: { playerId: string; accountId: string; act: SimStakeAction; now?: Date }): Promise<SimStakeResult> {
+  const now = input.now ?? new Date();
+  const { playerId, accountId: me, act } = input;
+  // The same rule as a trade, and as the relayer applies on chain.
+  await assertNoRunInFlight(db, playerId, now);
+
+  return db.transaction(async (tx) => {
+    await tx.insert(marketSim).values({ id: SIM_ID, state: seedSim(), rev: 0, updatedAt: now }).onConflictDoNothing({ target: marketSim.id });
+    const [row] = await tx.select().from(marketSim).where(eq(marketSim.id, SIM_ID)).for("update");
+    const state = simStateOf(row!.state);
+    const book = state.book;
+    const wallets = { ...state.wallets };
+    const minted = await mintedBits(tx, playerId);
+    const ledger = simLedger(me, minted, {}, wallets);
+    const t = now.getTime();
+    const receipt =
+      act.action === "invest" ? marketInvest(book, ledger, me, act.item, act.bits, t) : act.action === "withdraw" ? marketWithdraw(book, ledger, me, act.item, act.bits, t) : marketClaim(book, ledger, me, act.item, t);
+    await tx
+      .update(marketSim)
+      .set({ state: { ...state, book, wallets } satisfies SimState, rev: sql`${marketSim.rev} + 1`, updatedAt: now })
+      .where(eq(marketSim.id, SIM_ID));
+    await recordStake(tx, { item: receipt.item, onChain: false, pool: receipt.pool, side: act.action, bits: receipt.bits, earned: receipt.earned, accountId: me }, now);
+    return { action: act.action, receipt, bits: minted + (wallets[me] ?? 0) };
+  });
+}
+
 export interface SimWallet {
   bits: number;
   items: Partial<Record<ItemId, number>>;
@@ -291,6 +374,8 @@ export interface SimWallet {
   fillsLeft: number;
   fillBitsLeft: number;
   open: number[];
+  /** The player's stakes in Gwei's tills, and what they may still invest today. */
+  investor: InvestorView;
 }
 
 /** A player's Bits, items and today's allowance in the simulated market. */
@@ -307,5 +392,6 @@ export async function simWallet(db: Db, input: { playerId: string; accountId: st
     fillsLeft: Math.max(0, p.dailyFills - a.fills),
     fillBitsLeft: Math.max(0, p.dailyFillBits - a.fillBits),
     open: a.open,
+    investor: investorView(p.invest ?? DEFAULT_INVEST_RULES, state.book.pools, state.book.investors?.[input.accountId], now.getTime()),
   };
 }

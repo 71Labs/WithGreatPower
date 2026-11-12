@@ -17,6 +17,7 @@ import type { ItemId } from "@wgp/game-core/types";
 import type { ListingView, MarketItemView, MarketSnapshot, MarketView } from "@/lib/market/api";
 import type { MarketParams } from "@/lib/market/config";
 import type { Listing } from "@/lib/market/engine";
+import { shopsOf } from "@/lib/market/invest";
 import { buyQuote, sellQuote, spotMilli, type Pool } from "@/lib/market/math";
 
 import { getDb } from "../db/client";
@@ -79,6 +80,9 @@ async function buildView(source: MarketSource): Promise<MarketView> {
     params,
     items,
     listings: source.onChain ? source.chain.listings : source.sim.book.listings.length,
+    // Each stall, open or closed and why: the contract's own answer on v3, else worked out from the pools.
+    shops: (source.onChain ? source.chain.shops : undefined) ?? shopsOf(pools, params.open),
+    contract: source.onChain ? { state: source.chain.contract?.state ?? 2, version: source.chain.contract?.version ?? null } : null,
     till: pools.reduce((sum, p) => sum + p.bits, 0),
     updatedAt: new Date().toISOString(),
   };

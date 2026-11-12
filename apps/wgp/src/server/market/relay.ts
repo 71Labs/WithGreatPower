@@ -17,12 +17,13 @@ import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
 import { feeOf } from "@/lib/market/math";
-import { MARKET_METHODS, type MarketMethod } from "@/lib/near/policy";
+import { INVEST_METHODS, MARKET_METHODS, type InvestMethod, type MarketMethod } from "@/lib/near/policy";
 
 import type { Db } from "../db/client";
 import { ensureSave, writeSave } from "../db/players";
-import { rawListing, toListing, toPool } from "./chain";
-import { recordTrade } from "./history";
+import { HttpError } from "../http";
+import { investingLive, rawListing, rawStakeReceipt, toListing, toPool, toStakeReceipt, type ChainReader } from "./chain";
+import { recordStake, recordTrade } from "./history";
 import { settleMarketQuest } from "./quest";
 import { assertNoRunInFlight } from "./sim";
 import { marketView, refreshMarket } from "./view";
@@ -42,6 +43,46 @@ const rawTrade = z.object({
 /** Refuses a market call while the player has a ranked run in flight. */
 export async function beforeMarketRelay(db: Db, playerId: string): Promise<void> {
   await assertNoRunInFlight(db, playerId);
+}
+
+/* ------------------------------------------------------------------ investing (contract v3 only) */
+
+export const isInvestMethod = (method: string): method is InvestMethod => (INVEST_METHODS as readonly string[]).includes(method);
+
+/**
+ * Before an investing call is relayed: the live contract must be v3. Mainnet runs v2, which
+ * has no such method, so the call would only burn the relayer's gas and fail; it is refused
+ * here instead, before anything is sent (409 invest_unsupported). Also the market's own
+ * rule: nothing while a ranked run is in flight. `reader` is for tests.
+ */
+export async function beforeInvestRelay(db: Db, playerId: string, reader?: ChainReader): Promise<void> {
+  if (!(await investingLive(reader))) {
+    throw new HttpError(409, "invest_unsupported", "Investing in a merchant is built into contract v3, which isn't live yet");
+  }
+  await assertNoRunInFlight(db, playerId);
+}
+
+export interface RelayedInvestCall {
+  playerId: string;
+  accountId: string;
+  method: InvestMethod;
+  /** The contract's JSON return value (a StakeReceipt). */
+  result: unknown;
+  txHash: string;
+}
+
+/** After an investing call succeeded on chain: one history row and a fresh market. Never throws. */
+export async function afterInvestRelay(db: Db, call: RelayedInvestCall, now = new Date()): Promise<boolean> {
+  try {
+    const r = toStakeReceipt(rawStakeReceipt.parse(call.result));
+    const side = call.method === "market_invest" ? "invest" : call.method === "market_withdraw" ? "withdraw" : "claim";
+    await recordStake(db, { item: r.item, onChain: true, pool: r.pool, side, bits: r.bits, earned: r.earned, accountId: call.accountId, txHash: call.txHash }, now);
+    refreshMarket();
+    return true;
+  } catch (error) {
+    console.error(`[market] couldn't record ${call.method} ${call.txHash}: ${(error as Error).message}`);
+    return false;
+  }
 }
 
 /** Adds `delta` of `item` to the save's inventory (never below zero), retrying a raced revision. */

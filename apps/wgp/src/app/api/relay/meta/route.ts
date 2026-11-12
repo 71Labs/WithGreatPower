@@ -4,7 +4,8 @@
  * Body: { kind?: "game" | "add-key", signedDelegate: base64(borsh SignedDelegateAction), newKey?: "ed25519:…" }
  *   game     a session-key call to an allowlisted game method (register_hero, craft_suit,
  *            equip_suit, and the Mempool Market's market_buy, market_sell, list_item,
- *            buy_listing, cancel_listing; see src/server/market/relay.ts for what the
+ *            buy_listing, cancel_listing and, on contract v3 only, market_invest,
+ *            market_withdraw, market_claim; see src/server/market/relay.ts for what the
  *            server records around a market call)
  *   add-key  a returning player's NEAR Auth-signed AddKey of this device's game session key
  *
@@ -16,6 +17,8 @@
  *                                              has a hero, or the price moved past the trade's limit)
  * 400/401/403 { error: <code>, message }       refused before spending gas (see server/near/relay.ts)
  * 409 run_active                               craft or equip while a ranked run is in flight
+ * 409 invest_unsupported                       an investing call while the live contract is older than v3
+ *                                              (mainnet today): refused before anything is sent
  * 422 craft_bits_short "Needs bits xN"         a craft the contract would refuse for Bits (its `craft_bits`),
  *                                              refused before spending gas (server/market/craft.ts)
  * 429 rate limited · 503 relayer not configured, out of funds or out of budget
@@ -32,7 +35,7 @@ import { TGAS } from "@/lib/near/policy";
 import { requireSession } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { HttpError, clientIp, handle, json, readJson } from "@/server/http";
-import { afterMarketRelay, beforeMarketRelay, isMarketMethod } from "@/server/market/relay";
+import { afterInvestRelay, afterMarketRelay, beforeInvestRelay, beforeMarketRelay, isInvestMethod, isMarketMethod } from "@/server/market/relay";
 import { marketSnapshot } from "@/server/market/view";
 import type { MarketSnapshot } from "@/lib/market/api";
 import { rateLimiter } from "@/server/rate-limit";
@@ -98,6 +101,8 @@ export const POST = handle("relay/meta", (request: Request) =>
       }
       // Market trades are mirrored into the save, so none while a ranked run replays from it.
       if (isMarketMethod(method)) await beforeMarketRelay(db, session.playerId);
+      // Investing exists only in contract v3: on anything older this refuses (409) before a thing is sent.
+      if (isInvestMethod(method)) await beforeInvestRelay(db, session.playerId);
     } else {
       if (!input.newKey) throw new HttpError(400, "bad_request", "newKey is required for add-key");
       const access = await rpc
@@ -141,8 +146,9 @@ export const POST = handle("relay/meta", (request: Request) =>
         console.error(`[relay/meta] mirror ${method} for ${session.playerId}: ${error instanceof Error ? error.message : String(error)}`);
         return null;
       });
-      if (isMarketMethod(method)) {
-        if (result.ok) await afterMarketRelay(db, { playerId: session.playerId, accountId, method, result: result.result, txHash: result.txHash });
+      if (isMarketMethod(method) || isInvestMethod(method)) {
+        if (result.ok && isMarketMethod(method)) await afterMarketRelay(db, { playerId: session.playerId, accountId, method, result: result.result, txHash: result.txHash });
+        if (result.ok && isInvestMethod(method)) await afterInvestRelay(db, { playerId: session.playerId, accountId, method, result: result.result, txHash: result.txHash });
         // Win or lose, the trader sees the market as it is now: their trade, or the price that refused it.
         market = await marketSnapshot({ playerId: session.playerId, accountId }).catch((error: unknown) => {
           console.error(`[relay/meta] market snapshot for ${session.playerId}: ${error instanceof Error ? error.message : String(error)}`);

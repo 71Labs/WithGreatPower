@@ -12,6 +12,7 @@ import type { Save } from "@wgp/game-core/types";
 import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
 import { CRAFT_BITS_SHORT, CRAFT_NEEDS_CHAIN } from "@/lib/market/craft";
 import { newBook } from "@/lib/market/engine";
+import { DEFAULT_INVEST_RULES } from "@/lib/market/invest";
 
 import type { Db } from "../db/client";
 import { enqueueRewardMint } from "../db/outbox";
@@ -225,7 +226,10 @@ describe("the simulated market's local overrides", () => {
     expect(simParamOverrides({ SIM_MARKET_CRAFT_BITS: "-5", SIM_MARKET_FEE_BPS: "1001" })).toEqual({});
     expect(simParamOverrides({ SIM_MARKET_CRAFT_BITS: "2.5", SIM_MARKET_FEE_BPS: "abc" })).toEqual({});
     const base: SimState = { book: newBook(DEFAULT_PARAMS, seededPools()), wallets: {} };
-    expect(simStateOf(base, {})).toBe(base);
+    // Nothing overridden: the same market, with the investing rules a sim stored before them lacks.
+    expect(simStateOf(base, {})).toEqual({ ...base, book: { ...base.book, params: { ...DEFAULT_PARAMS, invest: DEFAULT_INVEST_RULES } } });
+    expect(simStateOf(base, { SIM_MARKET_INVEST_LOCK_MS: "5000" }).book.params.invest).toEqual({ ...DEFAULT_INVEST_RULES, lockMs: 5_000 });
+    expect(simStateOf(base, { NODE_ENV: "production", SIM_MARKET_INVEST_LOCK_MS: "5000" }).book.params.invest).toEqual(DEFAULT_INVEST_RULES);
     expect(simStateOf(base, { SIM_MARKET_CRAFT_BITS: "250" }).book.params).toMatchObject({ craftBits: 250, feeBps: DEFAULT_PARAMS.feeBps });
   });
 

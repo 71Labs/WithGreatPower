@@ -13,8 +13,19 @@ export const TGAS = 1_000_000_000_000n;
 export const MARKET_METHODS = ["market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"] as const;
 export type MarketMethod = (typeof MARKET_METHODS)[number];
 
+/**
+ * Investing in a merchant (contracts/wgp/src/invest.rs on contract v3; mainnet runs v2, which
+ * has none of these). Allow-listed so the relayer can carry them once v3 is live; the relayer
+ * also asks the contract its version first and refuses them on anything older
+ * (src/server/market/relay.ts `beforeInvestRelay`), so none is ever sent to a v2 contract.
+ * None takes a deposit; per-call and daily caps and a lock bound what a leaked key could do,
+ * and all it could do is park the player's Bits in a stake the player still owns.
+ */
+export const INVEST_METHODS = ["market_invest", "market_withdraw", "market_claim"] as const;
+export type InvestMethod = (typeof INVEST_METHODS)[number];
+
 /** Game methods a session key may call through `/api/relay/meta`. */
-export const RELAY_METHODS = ["register_hero", "craft_suit", "equip_suit", ...MARKET_METHODS] as const;
+export const RELAY_METHODS = ["register_hero", "craft_suit", "equip_suit", ...MARKET_METHODS, ...INVEST_METHODS] as const;
 export type RelayMethod = (typeof RELAY_METHODS)[number];
 
 /** Gas a relayed game call may attach. Game and market calls burn about 2.5 to 3.5 Tgas. */

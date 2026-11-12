@@ -51,6 +51,45 @@ export async function recordTrade(db: Db, row: TradeRow, now = new Date()): Prom
   });
 }
 
+export interface StakeRow {
+  item: string;
+  onChain: boolean;
+  /** The pool after the move. */
+  pool: Pool;
+  side: "invest" | "withdraw" | "claim";
+  /** Bits invested or withdrawn (0 for a claim). */
+  bits: number;
+  /** Fee earnings paid to the investor by the move. */
+  earned: number;
+  accountId: string;
+  txHash?: string | null;
+}
+
+/**
+ * An investment, withdrawal or claim (contract v3's `market_invest`, `market_withdraw`,
+ * `market_claim`, or the simulated market's). Kind "stake": it moves no price, so it never
+ * counts as a trade (the daily quest and the 24-hour trade count read "trade" and "fill"
+ * only), but the row's `till` is how a chart shows a till being funded. `fee` carries the
+ * fee earnings paid out.
+ */
+export async function recordStake(db: Db, row: StakeRow, now = new Date()): Promise<void> {
+  await db.insert(marketPrices).values({
+    item: row.item,
+    at: now,
+    kind: "stake",
+    onChain: row.onChain,
+    priceMilli: spotMilli(row.pool),
+    stock: row.pool.stock,
+    till: row.pool.bits,
+    side: row.side,
+    amount: 0,
+    bits: row.bits,
+    fee: row.earned,
+    accountId: row.accountId,
+    txHash: row.txHash ?? null,
+  });
+}
+
 /** Writes a snapshot row for each pool whose price moved or whose last row is old. Returns how many. */
 export async function recordSnapshots(db: Db, onChain: boolean, pools: Pool[], now = new Date()): Promise<number> {
   let written = 0;
@@ -105,7 +144,8 @@ export function priceStats(
     out.set(pool.item, {
       spark: points.length > 1 ? points : [now, now],
       change24h: open !== undefined && open > 0 ? (now - open) / open : null,
-      trades24h: mine.filter((r) => r.kind !== "snapshot").length,
+      // Trades and fills only: a snapshot or an investment moves no price.
+      trades24h: mine.filter((r) => r.kind === "trade" || r.kind === "fill").length,
     });
   }
   return out;

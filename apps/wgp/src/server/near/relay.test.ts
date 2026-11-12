@@ -183,6 +183,20 @@ describe("validateGameDelegate: Mempool Market calls", () => {
     }
   });
 
+  it("accepts contract v3's investing calls as relayable, with no deposit (the version gate is the route's: server/market/relay.ts)", async () => {
+    const invest: [string, Record<string, unknown>][] = [
+      ["market_invest", { item: "crumbs", bits: "120" }],
+      ["market_withdraw", { item: "crumbs", bits: "40" }],
+      ["market_claim", { item: "crumbs" }],
+    ];
+    for (const [method, args] of invest) {
+      expect(await verdict({ actions: market(method, args) })).toEqual({ ok: true, senderId: ALICE, methodName: method, gas: 30n * TGAS });
+      expect(await verdict({ actions: market(method, args, 1n) })).toMatchObject({ ok: false, code: "deposit" });
+    }
+    // The owner's refund is not a player's call.
+    expect(await verdict({ actions: market("market_refund", { item: "crumbs", account_ids: [ALICE] }) })).toMatchObject({ ok: false, code: "method" });
+  });
+
   it("refuses oversized market args", async () => {
     expect(await verdict({ actions: market("market_buy", { item: "x".repeat(1100), amount: 1, max_bits: "1" }) })).toMatchObject({ code: "args" });
   });
