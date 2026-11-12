@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { FontPreload } from "@/app/font-preload";
@@ -39,6 +40,11 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
                     </a>
                   </li>
                 ))}
+                <li>
+                  <Link href="/stats" className={footerLink}>
+                    By the numbers
+                  </Link>
+                </li>
                 <li>
                   <a href={REPO_URL} className={footerLink}>
                     <Github aria-hidden className="size-4" />

@@ -201,6 +201,13 @@ function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
         {signedIn ? "Your hero is saved to your account." : "Your hero is saved in this browser."} Swing out from Tonight; everything else is one tap away in the
         dock.
       </p>
+      <Link
+        href="/stats"
+        className="mt-1 inline-flex min-h-11 items-center gap-1 rounded-full text-[14px] font-semibold text-game-ink underline decoration-game-ink/40 underline-offset-4 pointer-fine:hover:decoration-game-ink"
+      >
+        See the game by the numbers
+        <ArrowUpRight aria-hidden className="size-4" strokeWidth={2.25} />
+      </Link>
     </GameSheet>
   );
 }
