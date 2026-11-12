@@ -1706,10 +1706,25 @@ fn the_version_and_storage_views_answer() {
 /// The state of `c` as the v2 code wrote it: the v2 root layout, every collection entry
 /// where v2 left it, no token index.
 fn as_v2_state(mut c: Wgp) -> Vec<u8> {
-    use crate::migrate::{MarketParamsV2, MarketV2, PoolV2, WgpV2};
-    use near_sdk::store::{IterableMap, IterableSet, LookupMap};
     c.tokens.clear();
     c.tokens.flush();
+    to_v2_layout(c)
+}
+
+/// The owner turns investing on with the rules as they stand, as after an upgrade.
+fn open_investing(c: &mut Wgp) {
+    let params = MarketParams {
+        invest_open: true,
+        ..c.market_state().params
+    };
+    on_day(owner(), 1, 20_000);
+    c.set_market_params(params, vec![]);
+}
+
+/// The root of `c` rewritten in the v2 layout; collection entries stay where they are.
+fn to_v2_layout(mut c: Wgp) -> Vec<u8> {
+    use crate::migrate::{MarketParamsV2, MarketV2, PoolV2, WgpV2};
+    use near_sdk::store::{IterableMap, IterableSet, LookupMap};
     let p = c.market.params.clone();
     let old = WgpV2 {
         owner_id: c.owner_id.clone(),
@@ -1890,10 +1905,19 @@ fn a_v2_state_migrates_to_v3_with_everything_in_place() {
     on_day(alice(), 0, 20_000);
     assert_eq!(snapshot(&c), before);
 
-    // What's new starts empty or at its default.
-    let d = MarketParams::default();
+    // What's new starts empty or at its default, and investing starts switched off:
+    // nothing a player can do changes until the owner opens it.
+    let d = MarketParams {
+        invest_open: false,
+        ..Default::default()
+    };
     let p = c.market_state().params;
     assert_eq!(p.craft_bits.0, 0, "the live crafting cost carries over");
+    on_day(alice(), 0, 20_000);
+    assert!(panics(|| {
+        c.market_invest("crumbs".into(), U128(100));
+    })
+    .contains("The vendor isn't taking investors right now"));
     assert_eq!(
         (
             p.invest_open,
@@ -1946,6 +1970,7 @@ fn a_v2_state_migrates_to_v3_with_everything_in_place() {
     assert_eq!(c.list_item("fee-bomb".into(), 1, U128(14)).id, 4);
     on_day(carol(), 0, 20_000);
     c.buy_listing(1);
+    open_investing(&mut c);
     on_day(alice(), 0, 20_000);
     c.market_invest("crumbs".into(), U128(100));
     on_day(bob(), 0, 20_000);
@@ -1982,6 +2007,7 @@ fn migrate_runs_from_stored_state_and_twice_is_harmless() {
     assert_eq!(snapshot(&again), before);
 
     // Also with v3 state in it: stakes, the index and a metadata row survive a re-run.
+    open_investing(&mut again);
     on_day(alice(), 0, 20_000);
     again.market_invest("crumbs".into(), U128(100));
     on_day(operator(), 0, 20_000);
@@ -2045,6 +2071,118 @@ fn a_v1_state_migrates_straight_to_v3() {
     assert!(c.market_state().pools.is_empty());
     assert_eq!(c.market_state().params, MarketParams::default());
     assert_eq!(c.get_version().state, 3);
+}
+
+#[test]
+fn upgrading_again_after_a_rollback_brings_the_index_and_metadata_back() {
+    use crate::migrate::{upgrade_state, V3_TAIL_KEY};
+    // A v3 contract with an index and a metadata row...
+    let mut c = busy_v2();
+    on_day(owner(), 1, 20_000);
+    c.set_token_metadata(
+        Some("WGP".into()),
+        None,
+        vec![(
+            "bits".into(),
+            Some(TokenMeta {
+                title: Some("Bits!".into()),
+                ..Default::default()
+            }),
+        )],
+    );
+    let tokens = c.mt_tokens(None, None);
+    assert!(tokens.len() > 8);
+    on_day(alice(), 0, 20_000);
+    let before = snapshot(&c);
+    // ...rolled back as contracts/wgp/rollback does it: the root in the v2 layout, the
+    // index and metadata roots set aside under V3TAIL, their entries left in storage.
+    c.tokens.flush();
+    c.meta.table.flush();
+    let mut tail = near_sdk::borsh::to_vec(&c.tokens).unwrap();
+    tail.extend(near_sdk::borsh::to_vec(&c.meta).unwrap());
+    let v2 = to_v2_layout(c);
+    on_day(contract(), 0, 20_000);
+    near_sdk::env::storage_write(V3_TAIL_KEY, &tail);
+
+    let again = upgrade_state(&v2);
+    assert!(!near_sdk::env::storage_has_key(V3_TAIL_KEY));
+    assert_eq!(again.mt_tokens(None, None), tokens);
+    assert_eq!(again.mt_metadata_contract().name, "WGP");
+    assert_eq!(
+        again.mt_metadata_token_by_token_id(vec!["item:bits".into()])[0]
+            .as_ref()
+            .unwrap()
+            .title
+            .as_deref(),
+        Some("Bits!")
+    );
+    on_day(alice(), 0, 20_000);
+    assert_eq!(snapshot(&again), before);
+
+    // Rubbish left there stops the upgrade instead of being guessed at.
+    let v2 = as_v2_state(again);
+    on_day(contract(), 0, 20_000);
+    near_sdk::env::storage_write(V3_TAIL_KEY, &[1, 2, 3]);
+    assert!(panics(|| {
+        upgrade_state(&v2);
+    })
+    .contains("set aside doesn't parse"));
+}
+
+#[test]
+fn the_owner_can_send_stakes_home() {
+    let mut c = market();
+    fund(&mut c, alice(), 300, vec![]);
+    fund(&mut c, bob(), 300, vec![]);
+    fund(&mut c, carol(), 0, vec![("crumbs", 20)]);
+    at(alice(), 1_000);
+    c.market_invest("crumbs".into(), U128(200));
+    at(bob(), 1_000);
+    c.market_invest("crumbs".into(), U128(100));
+    at(carol(), 1_000);
+    c.market_sell("crumbs".into(), 20, U128(0));
+    let owed = earned_of(&c, alice(), "crumbs");
+
+    at(alice(), 1_000);
+    assert!(panics(|| {
+        c.market_refund("crumbs".into(), vec![alice()]);
+    })
+    .contains("yoctoNEAR"));
+    as_(alice(), 1);
+    assert!(panics(|| {
+        c.market_refund("crumbs".into(), vec![alice()]);
+    })
+    .contains("Only the owner"));
+    as_(owner(), 1);
+    assert!(panics(|| {
+        c.market_refund("crumbs".into(), vec![]);
+    })
+    .contains("1 to 20"));
+
+    // Still inside the lock: the owner's refund goes through anyway, to the investors.
+    let mut b = VMContextBuilder::new();
+    b.current_account_id(contract())
+        .predecessor_account_id(owner())
+        .attached_deposit(NearToken::from_yoctonear(1))
+        .block_timestamp(2_000 * 1_000_000)
+        .prepaid_gas(Gas::from_tgas(300));
+    testing_env!(b.build());
+    let out = c.market_refund("crumbs".into(), vec![alice(), carol(), bob()]);
+    assert_eq!(out.len(), 2, "carol has no stake and is skipped");
+    assert_eq!(
+        (out[0].bits.0, out[0].earned.0, out[0].stake.0),
+        (200, owed, 0)
+    );
+    assert_eq!(bal(&c, alice(), BITS_TOKEN), 300 + owed);
+    assert!(bal(&c, bob(), BITS_TOKEN) >= 300);
+    assert_eq!(bal(&c, owner(), BITS_TOKEN), 0);
+    let p = pool(&c, "crumbs");
+    assert_eq!((p.invested.0, p.rewards.0, p.virtual_bits.0), (0, 0, 480));
+    assert!(events()
+        .last()
+        .unwrap()
+        .contains(r#""action":"market_refund""#));
+    assert_books(&c, &[alice(), bob(), carol()]);
 }
 
 #[test]

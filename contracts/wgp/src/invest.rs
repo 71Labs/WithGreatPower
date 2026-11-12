@@ -38,6 +38,8 @@ use crate::{MtEvent, StakeData, Wgp, WgpEvent, WgpExt};
 
 /// Scale of `Pool::fee_acc` (earnings per invested Bit).
 pub(crate) const ACC: u128 = 1_000_000_000_000;
+/// Investors per `market_refund` call.
+pub const MAX_REFUNDS: usize = 20;
 const ERR_DAILY: &str = "Daily market limit reached; it resets at midnight UTC";
 
 /// One account's stake in one pool.
@@ -231,75 +233,7 @@ impl Wgp {
     pub fn market_withdraw(&mut self, item: String, bits: U128) -> StakeReceipt {
         self.assert_live();
         let i = self.pool_index(&item);
-        let account = env::predecessor_account_id();
-        let mut investor = self
-            .market
-            .investors
-            .get(&account)
-            .cloned()
-            .unwrap_or_default();
-        let s = investor
-            .stakes
-            .iter()
-            .position(|s| s.item == item)
-            .unwrap_or_else(|| env::panic_str(&format!("You have no stake in {item}")));
-        let amount = bits.0;
-        let lock_ms = self.market.params.invest_lock_ms;
-        let before = closed_reasons(&self.market.pools[i]);
-        let pool = &mut self.market.pools[i];
-        let stake = &mut investor.stakes[s];
-        require!(
-            amount >= 1 && amount <= stake.bits,
-            format!("You have {} Bits staked in {item}", stake.bits)
-        );
-        let unlocks = stake.since_ms.saturating_add(lock_ms);
-        let now = env::block_timestamp_ms();
-        require!(
-            now >= unlocks,
-            format!(
-                "Your stake unlocks in about {} minutes",
-                unlocks.saturating_sub(now).div_ceil(60_000)
-            )
-        );
-        require!(
-            amount <= pool.bits.0,
-            format!(
-                "The till can pay back only {} Bits right now; it refills as players buy {item}",
-                pool.bits.0
-            )
-        );
-        let paid = earned(stake, pool);
-        pool.rewards.0 -= paid;
-        // Real Bits out, the same number of virtual Bits back: `y` doesn't move.
-        pool.bits.0 -= amount;
-        pool.virtual_bits.0 += amount;
-        pool.invested.0 -= amount;
-        stake.bits -= amount;
-        stake.debt = share(stake.bits, pool.fee_acc.0, true);
-        // With the last investor gone, what rounding left behind is burned like any fee.
-        let dust = if pool.invested.0 == 0 {
-            pool.fee_carry = 0;
-            std::mem::take(&mut pool.rewards.0)
-        } else {
-            0
-        };
-        let receipt = self.receipt(i, stake, amount, paid);
-        if stake.bits == 0 {
-            investor.stakes.remove(s);
-        }
-
-        let mut player = self.players.get(&account).cloned().unwrap_or_default();
-        player.credit(BITS_TOKEN, amount + paid, false);
-        self.players.insert(account.clone(), player);
-        self.market.investors.insert(account.clone(), investor);
-        if dust > 0 {
-            self.sub_supply(BITS_TOKEN, dust);
-            burn_fee(&env::current_account_id(), dust).emit();
-        }
-
-        self.stake_events(&account, &receipt, "withdraw");
-        self.shop_changed(i, &before, "withdraw");
-        receipt
+        self.take_out(&env::predecessor_account_id(), i, Some(bits.0), true)
     }
 
     /// Pay the caller the fee earnings of their stake in `item`. The stake stays.
@@ -332,6 +266,38 @@ impl Wgp {
         self.market.investors.insert(account.clone(), investor);
         self.stake_events(&account, &receipt, "claim");
         receipt
+    }
+
+    // ---------- Owner ----------
+
+    /// Send these investors' whole stakes in `item` home, with their earnings, lock or no
+    /// lock: to wind a pool down, or before rolling the contract back to a version without
+    /// investors. Accounts with no stake there are skipped. The till must hold the Bits.
+    #[payable]
+    pub fn market_refund(
+        &mut self,
+        item: String,
+        account_ids: Vec<AccountId>,
+    ) -> Vec<StakeReceipt> {
+        self.assert_owner();
+        require!(
+            !account_ids.is_empty() && account_ids.len() <= MAX_REFUNDS,
+            "Refund 1 to 20 investors at a time"
+        );
+        let i = self.pool_index(&item);
+        let mut out = Vec::new();
+        for account in account_ids {
+            let staked = self
+                .market
+                .investors
+                .get(&account)
+                .is_some_and(|inv| inv.stakes.iter().any(|s| s.item == item));
+            if staked {
+                out.push(self.take_out(&account, i, None, false));
+            }
+        }
+        self.admin("market_refund", None);
+        out
     }
 
     // ---------- Views ----------
@@ -403,6 +369,86 @@ impl Wgp {
 }
 
 impl Wgp {
+    /// Moves `amount` of `account`'s stake in pool `i` (all of it when None) back to the
+    /// account, with its earnings. `locked` enforces the lock after the last top-up.
+    fn take_out(
+        &mut self,
+        account: &AccountId,
+        i: usize,
+        amount: Option<u128>,
+        locked: bool,
+    ) -> StakeReceipt {
+        let item = self.market.pools[i].item.clone();
+        let mut investor = self
+            .market
+            .investors
+            .get(account)
+            .cloned()
+            .unwrap_or_default();
+        let s = investor
+            .stakes
+            .iter()
+            .position(|s| s.item == item)
+            .unwrap_or_else(|| env::panic_str(&format!("You have no stake in {item}")));
+        let lock_ms = self.market.params.invest_lock_ms;
+        let before = closed_reasons(&self.market.pools[i]);
+        let pool = &mut self.market.pools[i];
+        let stake = &mut investor.stakes[s];
+        let amount = amount.unwrap_or(stake.bits);
+        require!(
+            amount >= 1 && amount <= stake.bits,
+            format!("You have {} Bits staked in {item}", stake.bits)
+        );
+        let unlocks = stake.since_ms.saturating_add(lock_ms);
+        let now = env::block_timestamp_ms();
+        require!(
+            !locked || now >= unlocks,
+            format!(
+                "Your stake unlocks in about {} minutes",
+                unlocks.saturating_sub(now).div_ceil(60_000)
+            )
+        );
+        require!(
+            amount <= pool.bits.0,
+            format!(
+                "The till can pay back only {} Bits right now; it refills as players buy {item}",
+                pool.bits.0
+            )
+        );
+        let paid = earned(stake, pool);
+        pool.rewards.0 -= paid;
+        // Real Bits out, the same number of virtual Bits back: `y` doesn't move.
+        pool.bits.0 -= amount;
+        pool.virtual_bits.0 += amount;
+        pool.invested.0 -= amount;
+        stake.bits -= amount;
+        stake.debt = share(stake.bits, pool.fee_acc.0, true);
+        // With the last investor gone, what rounding left behind is burned like any fee.
+        let dust = if pool.invested.0 == 0 {
+            pool.fee_carry = 0;
+            std::mem::take(&mut pool.rewards.0)
+        } else {
+            0
+        };
+        let receipt = self.receipt(i, stake, amount, paid);
+        if stake.bits == 0 {
+            investor.stakes.remove(s);
+        }
+
+        let mut player = self.players.get(account).cloned().unwrap_or_default();
+        player.credit(BITS_TOKEN, amount + paid, false);
+        self.players.insert(account.clone(), player);
+        self.market.investors.insert(account.clone(), investor);
+        if dust > 0 {
+            self.sub_supply(BITS_TOKEN, dust);
+            burn_fee(&env::current_account_id(), dust).emit();
+        }
+
+        self.stake_events(account, &receipt, "withdraw");
+        self.shop_changed(i, &before, "withdraw");
+        receipt
+    }
+
     fn investor_today(&self, account: &AccountId) -> Investor {
         let mut investor = self
             .market

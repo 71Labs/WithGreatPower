@@ -9,6 +9,11 @@
 //! Collections keep their storage prefixes and the new ones get new prefixes, so nothing
 //! but the root entry is rewritten: no player, listing or season entry is touched.
 //!
+//! Rolling back: the v2 wasm refuses a v3 state, so `contracts/wgp/rollback` builds the v2
+//! code with a `migrate` that also reads v3 (while no Bits are invested). It leaves the
+//! root entries of the v3-only collections under `V3_TAIL_KEY`; upgrading to v3 again
+//! picks them up there, so the token index and metadata table come back as they were.
+//!
 //! Which layout is it? A v3 state starts with `LAYOUT_V3`; v1 and v2 start with the owner
 //! id's length, which is at most 64, so the first four bytes settle it. Between v1 and v2
 //! Borsh refuses trailing or missing bytes, so each parses only as itself.
@@ -90,8 +95,30 @@ pub(crate) struct WgpV2 {
     pub market: MarketV2,
 }
 
+/// Where a rollback to v2 leaves the token index and the metadata root (see above).
+pub(crate) const V3_TAIL_KEY: &[u8] = b"V3TAIL";
+
+/// The token index and metadata a rollback set aside, or new empty ones.
+fn index_and_meta() -> (IterableSet<TokenId>, Meta) {
+    if let Some(tail) = env::storage_read(V3_TAIL_KEY) {
+        let mut rest = tail.as_slice();
+        let parsed = IterableSet::<TokenId>::deserialize(&mut rest)
+            .and_then(|tokens| Meta::deserialize(&mut rest).map(|meta| (tokens, meta)));
+        match parsed {
+            Ok(found) if rest.is_empty() => {
+                env::storage_remove(V3_TAIL_KEY);
+                return found;
+            }
+            _ => env::panic_str("The v3 data a rollback set aside doesn't parse"),
+        }
+    }
+    (IterableSet::new(StorageKey::Tokens), Meta::new())
+}
+
 /// The live rules carry over exactly, `craft_bits` included: an upgrade changes no price
-/// and no cost. The investing rules are new and start at their defaults.
+/// and no cost. The investing rules are new: they start at their defaults but switched
+/// off, so nothing a player can do changes until the owner opens investing
+/// (`set_market_params`).
 fn params_v3(p: MarketParamsV2) -> MarketParams {
     MarketParams {
         open: p.open,
@@ -106,6 +133,7 @@ fn params_v3(p: MarketParamsV2) -> MarketParams {
         daily_fills: p.daily_fills,
         daily_fill_bits: p.daily_fill_bits,
         craft_bits: p.craft_bits,
+        invest_open: false,
         ..MarketParams::default()
     }
 }
@@ -162,6 +190,7 @@ pub(crate) fn upgrade_state(bytes: &[u8]) -> Wgp {
             .unwrap_or_else(|_| env::panic_str("The contract state is in no known layout"));
         (v1, Market::new())
     };
+    let (tokens, meta) = index_and_meta();
     Wgp {
         layout: LAYOUT_V3,
         owner_id: v1.owner_id,
@@ -174,7 +203,7 @@ pub(crate) fn upgrade_state(bytes: &[u8]) -> Wgp {
         supply: v1.supply,
         seasons: v1.seasons,
         market,
-        tokens: IterableSet::new(StorageKey::Tokens),
-        meta: Meta::new(),
+        tokens,
+        meta,
     }
 }
