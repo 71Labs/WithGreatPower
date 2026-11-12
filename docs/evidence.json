@@ -557,12 +557,12 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/reasoning.test.ts",
-          "name": "every number she says is in the pool, its opening or its quotes; two or three reasons, sentence case, curly quotes"
+          "name": "every number she says is in the pool, its opening or its quotes; two to four reasons, sentence case, curly quotes"
         },
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/reasoning.test.ts",
-          "name": "above: one rare bought, so she's running low and asks more"
+          "name": "above: one rare bought, so she asks more, without calling seven of eight “running low”"
         },
         {
           "pkg": "app",
