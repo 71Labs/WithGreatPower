@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useChain } from "@/game/chain";
 import { adoptServerSave, refreshAccount, useAccount } from "@/game/store";
 import { getListings, getMarket, getMarketMe, postSimTrade, type ListingView, type MarketMe, type MarketSnapshot, type MarketView, type SimTradeRequest } from "@/lib/market/api";
 import { chainCall } from "@/lib/market/chain-calls";
@@ -127,7 +128,10 @@ export type QuickPlay = "checking" | "ready" | "needed";
  */
 export function useQuickPlay(onChain: boolean, accountId: string | null): QuickPlay {
   const [state, setState] = useState<{ key: string; value: QuickPlay } | null>(null);
-  const key = `${onChain}:${accountId}`;
+  // Quick play turned on in the account sheet changes this: look for the key again, so the
+  // stall unlocks without a reload.
+  const chainState = useChain().quickPlay.state;
+  const key = `${onChain}:${accountId}:${chainState}`;
   useEffect(() => {
     if (!onChain || !accountId) return;
     let live = true;
