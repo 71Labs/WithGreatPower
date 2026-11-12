@@ -13,9 +13,9 @@
  * when the dock (or the bottom of the screen) is in the way, slides sideways off a screen
  * edge, and scrolls inside itself where neither side has the room. `placeWhy` decides.
  */
-import { useEffect, useId, useLayoutEffect, useReducer, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useReducer, useRef, type FocusEvent as ReactFocusEvent, type PointerEvent as ReactPointerEvent } from "react";
 
-import { CircleSlash, HelpCircle, Lock, WalletMinimal } from "@/components/icons";
+import { CircleAlert, CircleSlash, HelpCircle, Lock, WalletMinimal } from "@/components/icons";
 import type { PriceReasoning } from "@/lib/market/reasoning";
 
 export interface WhyState {
@@ -109,24 +109,17 @@ export function Reasoning({ reasoning, className = "" }: { reasoning: PriceReaso
 }
 
 /**
- * The "Why this price?" button and its popover. Put it in a `relative` box as wide as
- * the popover may spread from; `popoverClassName` places it (`start-0` by default).
+ * A popover hung from a button: how it opens and closes (`whyReduce`) and where it goes
+ * (`placeWhy`), for "Why this price?" and every other popover in the game ("How he trades").
+ *
+ * Spread `boxProps` on a `relative` box around the button and the popover, `buttonProps` on
+ * the button (the box's first <button>), and give the popover `ref={pop}`, `id={id}`, the
+ * classes in `POPOVER_SHELL` and one child: the panel, which takes `overflow-y-auto` so it
+ * can scroll inside itself when neither side has the room.
  */
-export function WhyPrice({
-  name,
-  reasoning,
-  defaultOpen = false,
-  className = "",
-  popoverClassName = "start-0",
-}: {
-  /** The item's name, for the button's accessible name. */
-  name: string;
-  reasoning: PriceReasoning;
-  /** Starts pinned open. */
-  defaultOpen?: boolean;
-  className?: string;
-  popoverClassName?: string;
-}) {
+export const POPOVER_SHELL = "invisible absolute top-full z-30 pt-1";
+
+export function usePopover(defaultOpen = false) {
   const id = useId();
   const box = useRef<HTMLDivElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -187,23 +180,56 @@ export function WhyPrice({
     };
   }, [open]);
 
+  const boxProps = {
+    ref: box,
+    onPointerEnter: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "mouse") send("enter");
+    },
+    onPointerLeave: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "mouse") send("leave");
+    },
+    onBlur: (e: ReactFocusEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) send("blur");
+    },
+  };
+  const buttonProps = {
+    type: "button" as const,
+    "aria-expanded": open,
+    "aria-controls": open ? id : undefined,
+    onClick: () => send("press"),
+    onFocus: (e: ReactFocusEvent<HTMLButtonElement>) => {
+      if (e.currentTarget.matches(":focus-visible")) send("focus");
+    },
+  };
+  return { id, open, pop, boxProps, buttonProps };
+}
+
+/**
+ * The "Why this price?" button and its popover. Put it in a `relative` box as wide as
+ * the popover may spread from; `popoverClassName` places it (`start-0` by default).
+ */
+export function WhyPrice({
+  name,
+  reasoning,
+  defaultOpen = false,
+  className = "",
+  popoverClassName = "start-0",
+}: {
+  /** The item's name, for the button's accessible name. */
+  name: string;
+  reasoning: PriceReasoning;
+  /** Starts pinned open. */
+  defaultOpen?: boolean;
+  className?: string;
+  popoverClassName?: string;
+}) {
+  const { id, open, pop, boxProps, buttonProps } = usePopover(defaultOpen);
+
   return (
-    <div
-      ref={box}
-      className={`relative ${className}`}
-      onPointerEnter={(e) => e.pointerType === "mouse" && send("enter")}
-      onPointerLeave={(e) => e.pointerType === "mouse" && send("leave")}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) send("blur");
-      }}
-    >
+    <div {...boxProps} className={`relative ${className}`}>
       <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={open ? id : undefined}
+        {...buttonProps}
         aria-describedby={open ? id : undefined}
-        onClick={() => send("press")}
-        onFocus={(e) => e.currentTarget.matches(":focus-visible") && send("focus")}
         className="inline-flex min-h-8 items-center gap-1 rounded-[8px] text-start text-[12px] font-semibold leading-4 text-game-ink underline decoration-game-ink/40 underline-offset-[3px] [text-decoration-skip-ink:auto] focus-visible:outline-offset-2 pointer-coarse:min-h-11 pointer-fine:hover:decoration-game-ink"
       >
         <HelpCircle aria-hidden className="size-4 shrink-0" strokeWidth={2} />
@@ -213,7 +239,7 @@ export function WhyPrice({
       {open ? (
         // The padding bridges the gap to the button, so a mouse can cross into the popover.
         // Hidden until the layout effect has placed it, so it never flashes under the dock.
-        <div ref={pop} id={id} role="tooltip" className={`invisible absolute top-full z-30 w-[min(300px,calc(100vw-32px))] pt-1 ${popoverClassName}`}>
+        <div ref={pop} id={id} role="tooltip" className={`${POPOVER_SHELL} w-[min(300px,calc(100vw-32px))] ${popoverClassName}`}>
           <Reasoning
             reasoning={reasoning}
             className="overflow-y-auto overscroll-contain rounded-[16px] border-2 border-game-ink bg-game-paper p-3 text-game-ink shadow-[var(--game-shadow-sm)]"
@@ -226,9 +252,15 @@ export function WhyPrice({
 
 const chip = "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink pl-1 pr-2 text-[12px] font-bold leading-none text-game-ink";
 
-/** What Gwei can't do with an item right now, as labelled chips; nothing when she can trade it both ways. */
+/**
+ * Where Gwei stands on an item right now, as labelled chips (an icon and words, never colour
+ * alone): closed, sold out, a till that can't pay, and the levels her reasoning names (nearly
+ * out, running low, a till nearly empty or running low). Nothing while she's comfortably stocked.
+ */
 export function VendorChips({ reasoning, className = "" }: { reasoning: PriceReasoning; className?: string }) {
-  if (!reasoning.closed && !reasoning.soldOut && !reasoning.cantPay) return null;
+  const stock = reasoning.stock === "nearly-out" ? "Nearly out" : reasoning.stock === "low" ? "Running low" : null;
+  const till = reasoning.cantPay ? null : reasoning.till === "nearly-empty" ? "Till nearly empty" : reasoning.till === "low" ? "Till running low" : null;
+  if (!reasoning.closed && !reasoning.soldOut && !reasoning.cantPay && !stock && !till) return null;
   return (
     <p className={`flex flex-wrap gap-1.5 ${className}`}>
       {reasoning.closed ? (
@@ -243,11 +275,21 @@ export function VendorChips({ reasoning, className = "" }: { reasoning: PriceRea
               <CircleSlash aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
               Sold out
             </span>
+          ) : stock ? (
+            <span className={`${chip} ${reasoning.stock === "nearly-out" ? "bg-game-gold" : "bg-game-paper-2"}`}>
+              <CircleAlert aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+              {stock}
+            </span>
           ) : null}
           {reasoning.cantPay ? (
             <span className={`${chip} bg-game-gold`}>
               <WalletMinimal aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
               Gwei can’t pay
+            </span>
+          ) : till ? (
+            <span className={`${chip} ${reasoning.till === "nearly-empty" ? "bg-game-gold" : "bg-game-paper-2"}`}>
+              <WalletMinimal aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+              {till}
             </span>
           ) : null}
         </>

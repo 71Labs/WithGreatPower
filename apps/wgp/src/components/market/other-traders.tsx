@@ -7,10 +7,10 @@
  * a popover that links to the one file they live in (src/lib/market/npc-rules.ts).
  * Everything here is labelled as his: he is never shown as a player.
  *
- * The popover opens like "Why this price?" (hover, keyboard focus, or a press that pins
- * it; Escape or a press elsewhere closes it), on the same reducer.
+ * The popover is "Why this price?"'s own (`usePopover`): it opens on hover, keyboard focus or
+ * a press that pins it, closes on Escape or a press elsewhere, and stays clear of the dock.
  */
-import { createElement, useEffect, useId, useReducer, useRef, useState } from "react";
+import { createElement, useEffect, useId, useRef, useState } from "react";
 
 import { StickerFrame, StickerPanel } from "@/components/game/kit";
 import { AVATARS } from "@/components/cast";
@@ -18,7 +18,7 @@ import { CircleAlert, CircleSlash, ExternalLink, HelpCircle, Lock, Moon, Store }
 import { getNpcTrader, type NpcTraderView } from "@/lib/market/npc-api";
 
 import { formatBits } from "./sparkline";
-import { WHY_CLOSED, whyOpen, whyReduce } from "./why-price";
+import { POPOVER_SHELL, usePopover } from "./why-price";
 
 /** He acts after the response to a trade, so the strip looks again a little later. */
 const AFTER_TRADE_MS = [3_000, 12_000] as const;
@@ -109,52 +109,18 @@ function Chips({ npc }: { npc: NpcTraderView }) {
 
 /** The "How he trades" button and its popover: his rules, his seed, and the file they live in. */
 function Rules({ npc }: { npc: NpcTraderView }) {
-  const id = useId();
-  const box = useRef<HTMLDivElement>(null);
-  const [state, send] = useReducer(whyReduce, WHY_CLOSED);
-  const open = whyOpen(state);
-
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: PointerEvent) => {
-      if (!box.current?.contains(e.target as Node)) send("dismiss");
-    };
-    const escape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") send("dismiss");
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
+  const { id, open, pop, boxProps, buttonProps } = usePopover();
 
   return (
-    <div
-      ref={box}
-      className="relative shrink-0"
-      onPointerEnter={(e) => e.pointerType === "mouse" && send("enter")}
-      onPointerLeave={(e) => e.pointerType === "mouse" && send("leave")}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) send("blur");
-      }}
-    >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={open ? id : undefined}
-        onClick={() => send("press")}
-        onFocus={(e) => e.currentTarget.matches(":focus-visible") && send("focus")}
-        className={`inline-flex min-h-8 items-center gap-1 text-start text-[12px] leading-4 pointer-coarse:min-h-11 ${link}`}
-      >
+    <div {...boxProps} className="relative shrink-0">
+      <button {...buttonProps} className={`inline-flex min-h-8 items-center gap-1 text-start text-[12px] leading-4 pointer-coarse:min-h-11 ${link}`}>
         <HelpCircle aria-hidden className="size-4 shrink-0" strokeWidth={2} />
         How he trades
       </button>
       {open ? (
-        // The padding bridges the gap to the button, so a mouse can cross into the popover.
-        <div id={id} role="group" aria-label={`${npc.name}’s rules`} className="absolute end-0 top-full z-30 w-[min(340px,calc(100vw-56px))] pt-1">
-          <div className="flex flex-col gap-2 rounded-[16px] border-2 border-game-ink bg-game-paper p-3 text-game-ink shadow-[var(--game-shadow-sm)]">
+        // Placed like "Why this price?": it flips above the button when the dock is in the way, and scrolls inside itself.
+        <div ref={pop} id={id} role="group" aria-label={`${npc.name}’s rules`} className={`${POPOVER_SHELL} end-0 w-[min(340px,calc(100vw-56px))]`}>
+          <div className="flex flex-col gap-2 overflow-y-auto overscroll-contain rounded-[16px] border-2 border-game-ink bg-game-paper p-3 text-game-ink shadow-[var(--game-shadow-sm)]">
             <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.08em] text-game-muted">His rules</p>
             <ul className="num flex list-disc flex-col gap-1.5 ps-4 text-[13px] leading-[18px] marker:text-game-muted [text-wrap:pretty]">
               {npc.rules.map((r) => (
