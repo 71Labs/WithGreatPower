@@ -2335,3 +2335,21 @@ fn the_shipped_metadata_table_applies() {
         Some("https://www.wgponnear.fun/tokens/trophy/1.png")
     );
 }
+
+#[test]
+fn the_token_index_costs_little_storage() {
+    let mut c = setup();
+    c.tokens.flush();
+    let before = near_sdk::env::storage_usage();
+    // 20 heroes with the longest account ids there are.
+    for i in 0..20 {
+        let who: AccountId = format!("{}{i:02}.wgp.testnet", "h".repeat(50))
+            .parse()
+            .unwrap();
+        c.tokens.insert(crate::hero_token(&who));
+    }
+    c.tokens.flush();
+    let per_token = (near_sdk::env::storage_usage() - before) / 20;
+    println!("TOKEN_INDEX_STORAGE_BYTES_PER_HERO={per_token}");
+    assert!(per_token < 260, "{per_token} bytes per token");
+}
