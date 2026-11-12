@@ -109,7 +109,8 @@ async function main() {
     c.on("Network.responseReceived", (p) => {
       if (p.response.status >= 400) failed.push(`${p.response.status} ${p.response.url.replace(base, "")}`);
     });
-    const json = readFileSync(join(LAUNCH, "out", "saves", `${saveName}.json`), "utf8");
+    // `--save none` starts with no hero (onboarding, the invite landing).
+    const json = saveName === "none" ? "" : readFileSync(join(LAUNCH, "out", "saves", `${saveName}.json`), "utf8");
     if (saveName !== "none") await c.send("Page.addScriptToEvaluateOnNewDocument", { source: `try { if (!localStorage.getItem("wgp:save:v1")) localStorage.setItem("wgp:save:v1", ${JSON.stringify(json)}); } catch {}` });
     await c.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `document.addEventListener("DOMContentLoaded", () => { const st = document.createElement("style"); st.textContent = ${JSON.stringify(HIDE)}; document.head.appendChild(st); });`,
