@@ -272,7 +272,7 @@ try {
       await sleep(1200);
     } else {
       blocked = { suit: suit.name, bits: w.bits, button, text };
-      check(/Needs Bits/i.test(suit.chip), `${suit.name}: the tile says “Needs Bits”`, suit.chip);
+      check(/Needs Bits/i.test(suit.chip) && /^Needs Bits/i.test(text), `${suit.name}: the tile and the sheet say “Needs Bits”`, suit.chip);
       check(button?.disabled === true && button.describedBy === "craft-blocked", `${suit.name}: Craft is off`, button);
       const reason = await ev(`T(sheet().querySelector("#craft-blocked"))`);
       check(reason === `Crafting burns ${COST} Bits and you have ${w.bits.toLocaleString("en-US")} ${w.bits === 1 ? "Bit" : "Bits"}. Sell spare loot to Gwei or finish a ranked night for the other ${(COST - w.bits).toLocaleString("en-US")}.`, "the reason is printed next to it, with the shortfall", reason);
@@ -331,9 +331,9 @@ try {
   const panelText = await ev(`T(${panel})`);
   notes.labNpc = { run: broke, panel: panelText.slice(0, 420) };
   check(/Sets seed 270/.test(panelText) && /three times/.test(panelText), "the showcase is seed 270 and says three times", panelText.slice(-220));
-  const closed = await ev(`(() => { const t = T(${panel}); const m = /closed shop on (\\d+) (?:of|day)/i.exec(t) ?? /(\\d+) days? closed/i.exec(t); return m ? Number(m[1]) : null; })()`);
+  const closed = await ev(`(() => { const t = T(${panel}); const m = /shaded on the (\\d+) days? he closed shop/i.exec(t); return m ? Number(m[1]) : null; })()`);
   notes.labNpc.closedDays = closed;
-  check(closed === null || closed === 3, "his panel counts three days closed", closed);
+  check(closed === 3, "his panel shades the three days he closed shop", closed);
   await shot("14-lab-sandwich-man", panel);
 } catch (error) {
   failures.push(`[${step}] driver: ${error.message}`);

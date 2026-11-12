@@ -402,7 +402,7 @@ export function SuitSheet({
     <GameSheet
       open={open}
       onClose={onClose}
-      eyebrow={status ? STATUS[status].label : undefined}
+      eyebrow={status ? ((status === "craftable" && craft.gate ? BLOCKED[craft.gate.code] : null) ?? STATUS[status]).label : undefined}
       title={suit?.name ?? ""}
       description={suit?.blurb}
       art={

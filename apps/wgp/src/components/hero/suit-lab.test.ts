@@ -80,6 +80,8 @@ describe("with craft_bits 250", () => {
     expect(craftButton(out)).toContain('aria-describedby="craft-blocked"');
     expect(out).toContain('id="craft-blocked"');
     expect(out).toContain('data-craft-gate="bits"');
+    // The sheet's own label agrees with the tile: not "Ready".
+    expect(text(out)).toMatch(/^Needs Bits Stealth/);
     expect(text(out)).toContain("Crafting burns 250 Bits and you have 120 Bits. Sell spare loot to Gwei or finish a ranked night for the other 130.");
     // The market loop's offer: crumbs aren't in any recipe this hero still needs nine of.
     expect(text(out)).toContain("Spare loot:");
@@ -89,6 +91,7 @@ describe("with craft_bits 250", () => {
   it("leaves Craft on, with the price on the button, when the player can pay", () => {
     const out = sheet(ready, bitsFor(250, known(300)));
     expect(craftButton(out)).not.toMatch(/\sdisabled=""/);
+    expect(text(out)).toMatch(/^Ready Stealth/);
     expect(text(out)).toContain("Craft Stealth · 250 Bits");
     expect(text(out)).toContain("Crafting uses the loot up, burns 250 Bits and puts the suit on.");
     expect(out).not.toContain("craft-blocked");
