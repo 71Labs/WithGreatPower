@@ -372,6 +372,7 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 - **Trust:** the operator key mints rewards and the server decides which runs verify. Anyone can re-run a run's replay, but the mint itself trusts our server. The contract's owner can upgrade it.
 - **Scale:** 26 heroes so far. The relayer and operator are single accounts with daily budgets.
 - **Market depth:** most on-chain activity is rewards and crafting; trades are still few.
+- **The plan:** costs, who players have to trust today and how that shrinks are in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md).
 - **Next:** ranked nights get the City's movement (sprint, climbing) after Season 1, since ranked rules are frozen while a season runs; Season 2; NEAR Auth as a second sign-in.
 
 ## Built during the hackathon
