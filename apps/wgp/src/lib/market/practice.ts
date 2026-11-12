@@ -132,7 +132,11 @@ export function seedPractice(live: Pick<MarketView, "onChain" | "params" | "item
   const spark: Record<string, number[]> = {};
   const marks: NonNullable<PracticeState["marks"]> = {};
   for (const p of pools) {
-    marks[p.item] = [[nowMs, spotMilli(p)]];
+    // Its history starts as the live market's own last day (each step at its real time), ending on the price it opened here with.
+    const liveSteps = live?.items.find((i) => i.item === p.item)?.sparkSteps ?? [];
+    const rows = liveSteps.map(([t, price]): [number, number] => [Math.round(nowMs - DAY_MS + t * DAY_MS), price]);
+    if (rows.at(-1)?.[1] !== spotMilli(p)) rows.push([nowMs, spotMilli(p)]);
+    marks[p.item] = rows;
     const liveSpark = live?.items.find((i) => i.item === p.item)?.spark;
     spark[p.item] = liveSpark && liveSpark.length > 1 ? liveSpark.slice(-SPARK_POINTS) : [spotMilli(p), spotMilli(p)];
   }

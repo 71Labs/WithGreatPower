@@ -369,6 +369,23 @@ describe("the practice cards' step lines", () => {
     expect(later.trades24h).toBe(0);
   });
 
+  it("start from the live market's own last day, so a fresh practice card shows the real line", () => {
+    const live = liveView();
+    const fee = live.items.find((i) => i.item === "fee-bomb")!;
+    // The live card's steps: opened the window at 13, fell to 12.5 a quarter in, to 12 three quarters in.
+    fee.sparkSteps = [
+      [0, 13_000],
+      [0.25, 12_500],
+      [0.75, 12_000],
+    ];
+    const s = seedPractice(live, T0);
+    const card = practiceScreen(s, base(), T0).view.items.find((i) => i.item === "fee-bomb")!;
+    expect(card.sparkSteps).toEqual(fee.sparkSteps);
+    expect(card.change24h).toBeCloseTo((12_000 - 13_000) / 13_000, 10);
+    // An item the live market has no steps for opens on one: where it stands.
+    expect(practiceScreen(s, base(), T0).view.items.find((i) => i.item === "crumbs")!.sparkSteps).toEqual([[1, 12_000]]);
+  });
+
   it("survive storage, and a market stored before they were kept still draws", () => {
     const s = practiceTrade(seedPractice(liveView(), T0), base(), { action: "buy", item: "crumbs", amount: 1, maxBits: 1e9 }, T0 + MIN).state;
     expect(parsePractice(storePractice(s))!.marks).toEqual(s.marks);
