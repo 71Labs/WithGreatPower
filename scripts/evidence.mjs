@@ -167,15 +167,18 @@ function runVitest(pkg, files) {
     if (!existsSync(outFile)) return { error: `vitest wrote no report (exit ${res.status}): ${(res.stderr || res.stdout || "").trim().split("\n").slice(-5).join(" / ")}` };
     const report = JSON.parse(readFileSync(outFile, "utf8"));
     const results = new Map();
+    const failures = [];
     for (const file of report.testResults) {
       const rel = path.relative(ROOT, file.name).split(path.sep).join("/");
       for (const a of file.assertionResults) {
         const key = `${rel}::${a.title}`;
+        const message = (a.failureMessages ?? []).join("\n").split("\n")[0] ?? "";
         if (!results.has(key)) results.set(key, []);
-        results.get(key).push({ status: a.status, message: (a.failureMessages ?? []).join("\n").split("\n")[0] ?? "" });
+        results.get(key).push({ status: a.status, message });
+        if (a.status === "failed") failures.push(`${rel}: “${a.title}”${message ? `: ${message}` : ""}`);
       }
     }
-    return { results, passed: report.numPassedTests, failed: report.numFailedTests, whole: files === null };
+    return { results, failures, passed: report.numPassedTests, failed: report.numFailedTests, whole: files === null };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -187,16 +190,20 @@ function runCargo() {
   const res = run("cargo", ["test", "--locked"], dir, 30 * 60_000);
   const text = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
   const results = new Map();
+  const failures = [];
   let passed = 0;
   let failed = 0;
   for (const m of text.matchAll(/^test (\w+)::(\w+)(?: - should panic)? \.\.\. (ok|FAILED|ignored)/gm)) {
     const key = `contracts/wgp/src/${m[1]}.rs::${m[2]}`;
     results.set(key, [{ status: m[3] === "ok" ? "passed" : m[3] === "FAILED" ? "failed" : "skipped", message: "" }]);
     if (m[3] === "ok") passed++;
-    if (m[3] === "FAILED") failed++;
+    if (m[3] === "FAILED") {
+      failed++;
+      failures.push(`contracts/wgp/src/${m[1]}.rs: ${m[2]}`);
+    }
   }
   if (!results.size) return { error: `cargo test printed no results (exit ${res.status}): ${text.trim().split("\n").slice(-4).join(" / ")}` };
-  return { results, passed, failed, whole: true };
+  return { results, failures, passed, failed, whole: true };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -596,7 +603,7 @@ async function main() {
         for (const { claim } of [...cited, ...counted]) verdict.get(claim.id).fails.push(`${PACKAGES[pkg].label}: ${outcome.error}`);
         continue;
       }
-      totals[pkg] = { passed: outcome.passed, failed: outcome.failed, whole: outcome.whole };
+      totals[pkg] = { passed: outcome.passed, failed: outcome.failed, whole: outcome.whole, failures: outcome.failures };
       for (const { claim, t } of cited) {
         const hits = outcome.results.get(`${t.file}::${t.name}`);
         const v = verdict.get(claim.id);
@@ -612,7 +619,7 @@ async function main() {
         const m = new RegExp(n.pattern).exec(read(claim.source));
         const quoted = m ? Number(m[1].replace(/,/g, "")) : NaN;
         if (quoted !== outcome.passed) v.fails.push(`${claim.source} says ${m ? m[1] : "nothing"} ${PACKAGES[pkg].label} tests pass; ${outcome.passed} passed just now`);
-        if (outcome.failed) v.fails.push(`${outcome.failed} ${PACKAGES[pkg].label} test${outcome.failed === 1 ? "" : "s"} failed`);
+        for (const f of outcome.failures) v.fails.push(`failed: ${f}`);
       }
     }
 
@@ -683,7 +690,10 @@ async function main() {
   }
   log("");
   for (const n of notices) log(n);
-  for (const [pkg, t] of Object.entries(totals)) log(`${PACKAGES[pkg].label}: ${t.passed} passed, ${t.failed} failed${t.whole ? "" : " (cited files only)"}`);
+  for (const [pkg, t] of Object.entries(totals)) {
+    log(`${PACKAGES[pkg].label}: ${t.passed} passed, ${t.failed} failed${t.whole ? "" : " (cited files only)"}`);
+    for (const f of t.failures) log(`  failed: ${f}`);
+  }
   if (markdownStale) log(`FAIL  ${EVIDENCE_MD} is out of date with ${EVIDENCE_JSON}: run pnpm evidence --write and commit it.`);
   log(`${rows.length} claims: ${tally.PASS} PASS, ${tally.FAIL} FAIL, ${tally.SKIP} SKIP${opts.check ? " (pointers only; tests not run)" : ""}.`);
   if (unrun.size) log(`${unrun.size} of the PASS lines also have a chain or site check that wasn't run: add --chain.`);
