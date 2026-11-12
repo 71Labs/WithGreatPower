@@ -79,9 +79,9 @@ export function ComeBackTile({ nightDone, className = "" }: { nightDone: boolean
     >
       <Link
         href="/play/compete"
-        className="flex min-h-11 min-w-0 items-center gap-3 rounded-[12px] pr-0.5 focus-visible:outline-offset-2 pointer-fine:hover:bg-game-paper-2"
+        className="flex min-h-11 min-w-0 items-center gap-3 rounded-[10px] pr-0.5 focus-visible:outline-offset-2 pointer-fine:hover:bg-game-paper-2"
       >
-        <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-[12px] border-2 border-game-ink bg-game-paper-2">
+        <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-[10px] border-2 border-game-ink bg-game-paper-2">
           <CalendarClock className="size-5" strokeWidth={2.25} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">

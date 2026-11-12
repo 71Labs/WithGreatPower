@@ -61,8 +61,20 @@ describe("the run page", () => {
     expect(html).toContain("12,340");
     expect(html).toContain("ana");
     expect(html).toContain(`/api/runs/${verified}/replay`);
-    expect(html).toContain('href="/play"');
+    // The way in for a visitor with no hero: the quick start, one tap into a night.
+    expect(html).toContain('href="/play/start"');
     expect(html).toContain("Replay-verified");
+  });
+
+  it("offers the race only for a run that can be raced", async () => {
+    const { RunView } = await import("@/components/social/run-view");
+    const run = (await publicRun(db, verified))!;
+    const raceable = renderToStaticMarkup(RunView({ run, raceable: true }));
+    expect(raceable).toContain(`href="/play/compete/race/${verified}"`);
+    expect(raceable).toContain("Race this run");
+    const not = renderToStaticMarkup(RunView({ run, raceable: false }));
+    expect(not).not.toContain("/play/compete/race/");
+    expect(not).toContain('href="/play/start"');
   });
 
   it("answers 404 for unverified and unknown runs", async () => {
