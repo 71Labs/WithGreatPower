@@ -6,7 +6,8 @@
  *   with his feet IK-planted on the deck, winds up a throw, dives, guards, and goes limp
  *   when stunned.
  * - Sandwich Man runs the roofs on a distance-driven gait, jumps ballistically (tucked on
- *   the way up, reaching down on the way down), crouches to wind up and dives to tackle.
+ *   the way up, reaching down on the way down), crouches to wind up and dives to tackle. In
+ *   free roam's race he climbs a facade hand over hand ("climb": anim/cast-climb.ts).
  * - Doc Octochain hovers, legs dangling on springs, swaying; he winds up with his arms
  *   raised, leans into an attack and slumps, panting, when his chains retract (his chain
  *   arms themselves are chains.ts).
@@ -25,6 +26,7 @@ import { Quaternion, Vector3, type Group } from "three";
 import { Spring } from "../physics/spring";
 import type { Rig } from "../rig";
 import { ActorAnimator } from "./actor";
+import { CastClimb } from "./cast-climb";
 import type { AnimContext as Ctx } from "./types";
 import { angleTo, bodyPoint, clamp, frameQuat, Plant, smoothstep, UP, yawQuat } from "./common";
 import type { Pose } from "./pose";
@@ -32,6 +34,17 @@ import type { AnimContext } from "./types";
 
 const X = new Vector3(1, 0, 0);
 const Z = new Vector3(0, 0, 1);
+/** Sandwich Man's body centre stands this far off a facade he climbs (the sim's body radius). */
+const CLIMB_OFF = 26;
+/** Seconds for his climb to blend in from the run, and out into the hop over the top. */
+const CLIMB_BLEND = 0.16;
+/** The four ways a facade can face: buildings are boxes square to the axes. */
+const FACES = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 /** Seconds of Sandwich Man's fall before he lies webbed on the roof. */
 const SANDWICH_FALL = 1.7;
 const _q = new Quaternion();
@@ -174,21 +187,63 @@ export class SandwichAnimator extends ActorAnimator {
   /** Clips: the run cycle's phase, seconds airborne. */
   private runPhase = 0;
   private airT = 0;
+  /** The climb (state "climb"): its pose, how much of it shows, the face he's on and this frame's time. */
+  private readonly climb: CastClimb;
+  private climbT = 0;
+  private climbW = 0;
+  private readonly climbN = new Vector3(-1, 0, 0);
+  private climbTop = 0;
+  private climbFace = CLIMB_OFF;
+  private frameDt = 0;
 
   constructor(rig: Rig, group: Group) {
     super(rig, group, 7);
+    this.climb = new CastClimb(rig);
+  }
+
+  /** Which limbs hold the wall while he climbs (the headless checks). */
+  climbing(): [boolean, boolean, boolean, boolean] | null {
+    return this.climbW >= 1 ? this.climb.planted() : null;
   }
 
   protected beforeSteps(dt: number, ctx: AnimContext): void {
     const P = this.P;
     this.ground = ctx.ground(P.x, P.z, P.y + 2);
-    this.grounded = Math.abs(this.vel.y) < 90 && P.y - this.ground < 50 && this.state !== "attack";
+    this.frameDt = dt;
+    const onWall = this.state === "climb";
+    if (onWall) {
+      // The face he's on, found once as he takes hold: the nearest wall square to the axes, the
+      // one he faces most when two are as near (the race points him the way on over the top, a
+      // little askew of the wall). Then where it is (a ray into it) and the roof at its top.
+      if (this.climbT <= 0) {
+        const fx = Math.sin(this.turn.value);
+        const fz = Math.cos(this.turn.value);
+        let best = -Infinity;
+        for (const [x, z] of FACES) {
+          const d = ctx.ray(P, _b.set(x, 0, z), CLIMB_OFF + 30);
+          const score = (d === null ? -1000 : -d) + 12 * (fx * x + fz * z);
+          if (score > best) {
+            best = score;
+            this.climbN.set(-x, 0, -z);
+          }
+        }
+      }
+      const n = this.climbN;
+      const d = ctx.ray(P, _b.copy(n).negate(), CLIMB_OFF + 30);
+      this.climbFace = d !== null && d > CLIMB_OFF - 8 && d < CLIMB_OFF + 14 ? d : CLIMB_OFF;
+      this.climbTop = ctx.ground(P.x - n.x * (this.climbFace + 8), P.z - n.z * (this.climbFace + 8), 1e6);
+    }
+    // In over the run's last stride, out into the hop: a straight ramp, eased, so it is all there (or all gone) in time.
+    this.climbT = clamp(this.climbT + (onWall ? dt : -dt) / CLIMB_BLEND, 0, 1);
+    this.climbW = smoothstep(0, 1, this.climbT);
+    if (!onWall && this.climbT <= 0) this.climb.release();
+    this.grounded = Math.abs(this.vel.y) < 90 && P.y - this.ground < 50 && this.state !== "attack" && !onWall;
     if (this.grounded && !this.wasGrounded) {
       this.squash.impulse(-clamp(Math.abs(this.V.y) * 0.18, 30, 220));
       this.clips?.play("land", { t: 0.1, rate: 1.6, weight: 0.7 });
       for (let i = 0; i < 2; i++) this.plants[i].plantAt(_a.set(P.x + (i === 0 ? 6 : -6), this.ground + this.rig.spec.ankle, P.z));
     }
-    if (!this.grounded && this.wasGrounded && this.vel.y > 150) this.clips?.play("jump-start", { t: 0.45, rate: 1.8, weight: 0.6 });
+    if (!this.grounded && this.wasGrounded && this.vel.y > 150 && !onWall) this.clips?.play("jump-start", { t: 0.45, rate: 1.8, weight: 0.6 });
     this.wasGrounded = this.grounded;
     const hs = Math.hypot(this.V.x, this.V.z);
     // Steps come with distance, and with turning on the spot (squaring up to the hero in his
@@ -263,8 +318,11 @@ export class SandwichAnimator extends ActorAnimator {
       this.lookAfterClips(0.15 * (1 - runW));
       this.plantLegs(1 - runW);
     } else {
-      c.loops([["jump-loop", this.airT, 1]], st === "attack" ? 0.3 : 0.85, c.full, 0);
-      c.over(1);
+      // On a wall the climb's own pose stands: the jump clip only shows through its blend in and out.
+      const air = 1 - this.climbW;
+      if (air < 0.02) return;
+      c.loops([["jump-loop", this.airT, 1]], (st === "attack" ? 0.3 : 0.85) * air, c.full, 0);
+      c.over(air);
     }
   }
 
@@ -328,6 +386,18 @@ export class SandwichAnimator extends ActorAnimator {
 
   protected finish(pose: Pose, alpha: number, ctx: AnimContext): void {
     if (this.lying && this.state === "webbed" && !this.falling) return;
+    this.plantFeet(pose, alpha, ctx);
+    // The climb goes on last, over whatever the ground had of his feet.
+    if (this.climbW > 0.001) {
+      const n = this.climbN;
+      const foot = ctx.ground(this.P.x, this.P.z, this.P.y + 2);
+      this.climb.apply(pose, this.P, n.x, n.z, this.climbFace, this.climbTop, foot, this.frameDt, this.climbW, ctx.reducedMotion);
+      this.frameDt = 0;
+    }
+  }
+
+  /** His feet on the roof he runs on, by how grounded he is. */
+  private plantFeet(pose: Pose, alpha: number, ctx: AnimContext): void {
     const w = this.gw.lerp(alpha);
     if (w < 0.001) return;
     const hs = Math.hypot(this.V.x, this.V.z);

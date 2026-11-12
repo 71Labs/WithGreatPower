@@ -388,8 +388,9 @@ export function raceRival(frame: RenderFrame3D): SceneVillain | null {
   rival.vel!.z = race.rivalVel.z;
   rival.facing!.x = Math.sin(race.rivalYaw);
   rival.facing!.z = Math.cos(race.rivalYaw);
-  // A beat of guard when the hero beats him to it; otherwise his run is his velocity.
-  const state = race.rivalMove === "beaten" ? "guard" : "idle";
+  // A beat of guard when the hero beats him to it, hand over hand up the facade (the cast's
+  // climb: anim/cast-climb.ts); otherwise his run and his leaps are his velocity.
+  const state = race.rivalMove === "beaten" ? "guard" : race.rivalMove === "climb" ? "climb" : "idle";
   if (state !== rival.state) rival.stateTicks = 0;
   else rival.stateTicks = (rival.stateTicks ?? 0) + 1;
   rival.state = state;
