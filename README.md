@@ -355,7 +355,7 @@ pnpm dev                                         # http://localhost:3000/play  (
 
 | Command | What it does | Expect |
 |---|---|---|
-| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite. | game-core 284 passed, app 1,537 passed |
+| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite. | game-core 284 passed, app 1,538 passed |
 | `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | Exit 0, no errors |
 | `pnpm build` | The production build of the app; needs no environment variables | The route list |
 | `pnpm verify` | Replays the live All-time top 5 | `5/5 runs reproduced` |
