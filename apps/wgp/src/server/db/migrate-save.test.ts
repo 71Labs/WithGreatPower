@@ -4,11 +4,13 @@ import { XP_TO_NEXT } from "@wgp/game-core/data";
 import { newSave, reduce } from "@wgp/game-core/engine";
 import type { Save } from "@wgp/game-core/types";
 
+import { PRACTICE_KEY, practiceBase, practiceStake, seedPractice } from "@/lib/market/practice";
 import { HttpError } from "@/server/http";
+import { simWallet } from "@/server/market/sim";
 
 import { setDb, type Db } from "./client";
 import { DAY_ONE_TROPHY, IMPORT_CAPS, importLocalSave, sanitizeLocalSave } from "./migrate-save";
-import { ensureSave } from "./players";
+import { ensureSave, getPlayer } from "./players";
 import { chainOps } from "./schema";
 import { freshDb, givePlayerHero, heroSave, makePlayer } from "./test-helpers";
 
@@ -126,6 +128,56 @@ describe("importLocalSave", () => {
 
     const again = await importLocalSave(db, { playerId, local: forged() }).catch((e: unknown) => e);
     expect(again).toMatchObject({ status: 409, code: "already_migrated" });
+  });
+
+  /*
+   * The practice market (src/lib/market/practice.ts) lives in the browser under its own key
+   * and never writes the save. Even so: suppose a guest pasted all of it INTO the save they
+   * import (practice Bits, practice loot, a stake in Gwei). None of it may become real.
+   */
+  it("imports nothing from a practice market: no Bits, no stake, and loot only within the usual caps", async () => {
+    const base = heroSave("Guest");
+    const practice = seedPractice(null, Date.parse("2026-11-12T12:00:00Z"));
+    const rich = practiceStake(
+      { ...practice, bits: 50_000, items: { crumbs: 900, "goblin-glider": 400 } },
+      practiceBase(0, {}),
+      { action: "invest", item: "crumbs", bits: 400 },
+      Date.parse("2026-11-12T12:00:00Z"),
+    ).state;
+    const local = {
+      ...base,
+      // Practice winnings written where the importer looks, and where it doesn't.
+      inventory: { crumbs: 900, "goblin-glider": 400, bits: 50_000, "item:bits": 50_000 },
+      bits: 50_000,
+      wallet: { bits: 50_000 },
+      practice: rich,
+      [PRACTICE_KEY]: rich,
+      market: { investors: rich.book.investors, wallets: { me: 50_000 } },
+    };
+
+    const out = await importLocalSave(db, { playerId, local });
+    // The save the server keeps is rebuilt field by field: nothing of the practice market is in it.
+    const kept = (await ensureSave(db, playerId)).save as unknown as Record<string, unknown>;
+    for (const key of ["practice", PRACTICE_KEY, "bits", "wallet", "market"]) expect(kept).not.toHaveProperty(key);
+    expect(kept.inventory).toEqual({ crumbs: IMPORT_CAPS.perItem, "goblin-glider": IMPORT_CAPS.perItem });
+    expect(JSON.stringify(kept)).not.toContain("50000");
+
+    // The one mint it queues: the capped loot and the trophy. No Bits token, nothing over the caps.
+    const ops = await db.select().from(chainOps);
+    expect(ops).toHaveLength(1);
+    const items = (ops[0]!.payload as { items: { tokenId: string; amount: number }[] }).items;
+    expect(items).toEqual(out.items);
+    expect(items.map((i) => i.tokenId).sort()).toEqual(["item:crumbs", "item:goblin-glider"]);
+    expect(items.every((i) => i.amount <= IMPORT_CAPS.perItem)).toBe(true);
+    expect(items.reduce((n, i) => n + i.amount, 0)).toBeLessThanOrEqual(IMPORT_CAPS.totalItems);
+    expect(items.some((i) => /bits/i.test(i.tokenId))).toBe(false);
+
+    // And the market the player now trades in knows nothing of it: no Bits, no stake.
+    const account = (await getPlayer(db, playerId))!.nearAccountId;
+    const wallet = await simWallet(db, { playerId, accountId: account });
+    expect(wallet.bits).toBe(0);
+    expect(wallet.investor.stakes).toEqual([]);
+    expect(wallet.items).toEqual({ crumbs: IMPORT_CAPS.perItem, "goblin-glider": IMPORT_CAPS.perItem });
   });
 
   it("won't overwrite a hero the server already has, and refuses an empty save", async () => {

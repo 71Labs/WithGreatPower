@@ -51,8 +51,8 @@
  * of each curve's Bits is real (her till) and half is virtual. `rules.test.ts` fails if
  * a number in this comment drifts from those settings.
  *
- * Her own explanation of a price ("Running low: 7 left of 8…") is ./reasoning.ts, which
- * only reads a pool through the functions below.
+ * Her own explanation of a price ("Running low: 4 left of the 8 I opened with…") is
+ * ./reasoning.ts, which only reads a pool through the functions below.
  *
  * Amounts are plain numbers (JSON-friendly); the arithmetic runs in BigInt, so it is
  * exact like the contract's u128.
@@ -68,6 +68,17 @@ export interface Pool {
   stock: number;
   /** Items escrowed in open listings. */
   escrow: number;
+  /**
+   * Contract v3's investing fields (./invest.ts reads and writes them; nothing in this
+   * file does). Absent on a pool nobody has invested in. `invested` Bits sit in `bits`
+   * and came off `virtualBits`, so y never moved; `rewards` are fee earnings held for the
+   * investors, apart from the till; `feeAcc` is earnings per invested Bit × 10^12, as a
+   * decimal string; `feeCarry` is their share of fees not yet a whole Bit, in 1/10000 Bits.
+   */
+  invested?: number;
+  rewards?: number;
+  feeAcc?: string;
+  feeCarry?: number;
 }
 
 const BPS = 10_000n;

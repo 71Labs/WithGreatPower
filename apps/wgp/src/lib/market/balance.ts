@@ -11,7 +11,7 @@
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId, Rarity } from "@wgp/game-core/types";
 
-import { Economy, type BotKind, type DaySnapshot, type EconomyConfig } from "./bots";
+import { Economy, LAB_INVESTORS, type BotKind, type DaySnapshot, type EconomyConfig } from "./bots";
 import { BITS_TOKEN, CURVES, DEFAULT_PARAMS, defaultPoolConfigs, type MarketParams, type PoolConfig } from "./config";
 import { sellQuote, type Pool } from "./math";
 import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, taperedNightBits, type Taper } from "./rewards";
@@ -74,13 +74,21 @@ export interface RunSpec {
    * "with Sandwich Man" row turns this on).
    */
   npc?: boolean;
+  /**
+   * Investor bots fund Gwei's tills when they run dry (contract v3's investing, ./invest.ts).
+   * Off by default: mainnet runs v2, which has no investing, and every table in
+   * docs/ECONOMY.md is measured without them.
+   */
+  invest?: boolean;
 }
 
 /** The fast-forward's config for a setting, with the contract's one-suit rule on. */
 export function economyConfig(setting: Setting, run: RunSpec & { mix?: BotKind[] }, holdings: Pool[] | null = null): EconomyConfig {
   const taper = setting.taper;
+  const { invest, ...rest } = run;
   return {
-    ...run,
+    ...rest,
+    ...(invest ? { investors: LAB_INVESTORS } : {}),
     npc: run.npc ?? false,
     params: paramsFor(setting),
     pools: poolConfigsFor(setting, holdings),
@@ -152,7 +160,9 @@ const RARITIES: Rarity[] = ["common", "uncommon", "rare"];
 /** Whether the pool as it stood at the end of `day` could still buy one item from a player. */
 function brokeOn(e: Economy, day: DaySnapshot, item: string): boolean {
   const base = e.book.pools.find((p) => p.item === item)!;
-  return sellQuote({ ...base, stock: day.stock[item]!, bits: day.tills[item]! }, 1, e.book.params.feeBps) === null;
+  // Investors' Bits stand in for virtual ones: the curve that day had what was invested that day off its virtual reserve.
+  const virtualBits = base.virtualBits + (base.invested ?? 0) - (day.invested[item] ?? 0);
+  return sellQuote({ ...base, virtualBits, stock: day.stock[item]!, bits: day.tills[item]! }, 1, e.book.params.feeBps) === null;
 }
 
 export function measure(setting: Setting, run: RunSpec): Measure {
@@ -291,6 +301,48 @@ export const RECOMMENDED_WITH_TAPER: Setting = { ...RECOMMENDED, id: "recommende
  * tills for the rest run dry. Both happen for every seed tried (balance.test.ts).
  */
 export const DRAIN: { days: number; bots: number; mix: BotKind[] } = { days: 30, bots: 60, mix: ["hoarder", "hoarder", "hoarder", "dumper"] };
+
+/**
+ * "Gwei goes broke, an investor reopens her": the Drain Gwei run with investor bots
+ * (bots.ts `LAB_INVESTORS`) on contract v3's investing rules. Dumpers sell her tills dry;
+ * the next morning an investor funds the broke till and she buys again at the same price;
+ * the investors earn half the gas fee on those pools; and their stakes wait in tills that
+ * sellers keep emptying, which is the risk the market's invest sheet states. Deterministic
+ * for a seed; balance.test.ts checks the closed days, the reopenings and the books.
+ */
+export const INVEST_SHOWCASE: { days: number; bots: number; seed: number; mix: BotKind[]; invest: true } = { ...DRAIN, seed: 2026, invest: true };
+
+/** A day-by-day reading of the showcase: which shops ended each day closed, and what the investors did. */
+export interface InvestStory {
+  /** Item-days that ended with a broke till. */
+  brokeDays: number;
+  /** Times an investment landed in a till that had ended the day before broke. */
+  reopenings: number;
+  invested: number;
+  withdrawn: number;
+  /** Fee earnings paid to investors. */
+  earned: number;
+  /** Bits still staked at the end: waiting in Gwei's tills. */
+  staked: number;
+}
+
+export function investStory(e: Economy): InvestStory {
+  const h = e.history;
+  const events = h.flatMap((d) => d.investors?.events ?? []);
+  let reopenings = 0;
+  h.forEach((d, i) => {
+    for (const ev of d.investors?.events ?? []) if (ev.kind === "invest" && i > 0 && h[i - 1]!.broke[ev.item]) reopenings += 1;
+  });
+  const last = h[h.length - 1]!;
+  return {
+    brokeDays: sum(h.slice(1).map((d) => Object.values(d.broke).filter(Boolean).length)),
+    reopenings,
+    invested: sum(events.filter((x) => x.kind === "invest").map((x) => x.bits)),
+    withdrawn: sum(events.filter((x) => x.kind === "withdraw").map((x) => x.bits)),
+    earned: last.investors?.earned ?? 0,
+    staked: last.investors?.staked ?? 0,
+  };
+}
 
 /** The two runners-up: a gentler step that keeps the 2% fee, and a steeper one. */
 export const ALTERNATIVES: Setting[] = [

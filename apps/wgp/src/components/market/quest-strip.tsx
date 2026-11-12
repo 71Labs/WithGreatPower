@@ -13,7 +13,7 @@ export function resetsIn(quest: Pick<MarketQuestView, "resetsAt">, now: number):
   return `A new one starts at midnight UTC, in ${hours} ${hours === 1 ? "hour" : "hours"}.`;
 }
 
-export function QuestStrip({ quest, signedIn, now, className = "" }: { quest: MarketQuestView | null; signedIn: boolean; now: number; className?: string }) {
+export function QuestStrip({ quest, signedIn, now, note, className = "" }: { quest: MarketQuestView | null; signedIn: boolean; now: number; /** Said in place of the usual line: the practice market earns no XP. */ note?: string; className?: string }) {
   const done = !!quest?.done;
   const xp = quest?.xp ?? MARKET_QUEST_XP;
   return (
@@ -28,7 +28,7 @@ export function QuestStrip({ quest, signedIn, now, className = "" }: { quest: Ma
         <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.08em]">Today’s market quest{done ? " · done" : ""}</p>
         <p className="text-[14px] font-semibold leading-5 [text-wrap:pretty]">{MARKET_QUEST_TEXT}</p>
         <p role="status" className="num text-[12px] font-medium leading-4 [text-wrap:pretty]">
-          {done ? `You got +${xp} XP. ${resetsIn(quest!, now)}` : signedIn ? "One trade today does it. Once a day." : "Sign in to take it. One trade a day does it."}
+          {note ?? (done ? `You got +${xp} XP. ${resetsIn(quest!, now)}` : signedIn ? "One trade today does it. Once a day." : "Sign in to take it. One trade a day does it.")}
         </p>
       </div>
       <span className={`num inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full border-2 border-game-ink px-2.5 text-[13px] font-bold ${done ? "bg-game-paper-2" : "bg-game-paper"}`}>

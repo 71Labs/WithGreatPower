@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { chainCall } from "./chain-calls";
-import { marketProblem, panicText, refusalText } from "./refusal";
+import { INVEST_NOT_LIVE, marketProblem, panicText, refusalText } from "./refusal";
 
 const relayed = (said: string) => JSON.stringify({ ActionError: { index: 0, kind: { FunctionCallError: { ExecutionError: `Smart contract panicked: ${said}` } } } });
 
@@ -48,6 +48,43 @@ describe("market refusals", () => {
     expect(texts[0]).toBe("The price moved before your trade went through: that’s 14 Bits now. Nothing was spent. Check the new price and try again.");
     expect(texts[3]).toBe("You don’t have that many Crumbs yet. Loot from a night arrives within a minute or two.");
     expect(texts[11]).toBe("Someone bought that lot first, or it was taken down.");
+  });
+
+  it("rephrases every refusal contract v3 has for investing, with no chain words left", () => {
+    // contracts/wgp/src/invest.rs on review/contract-v3; invest-vectors.json holds each as the Rust printed it.
+    const said = [
+      "The vendor isn't taking investors right now",
+      "Invest 10 to 500 Bits at a time",
+      "The vendor can take only 329 more Bits for crumbs",
+      "The vendor can take only 0 more Bits for crumbs",
+      "You have no stake in sybil-goo",
+      "You have 120 Bits staked in crumbs",
+      "Your stake unlocks in about 42 minutes",
+      "Your stake unlocks in about 1 minutes",
+      "The till can pay back only 37 Bits right now; it refills as players buy crumbs",
+      "The till can pay back only 0 Bits right now; it refills as players buy crumbs",
+      "Nothing earned yet",
+    ];
+    const texts = said.map((s) => marketProblem(422, "call_failed", relayed(s)).text);
+    for (const [i, text] of texts.entries()) {
+      expect(text, said[i]).not.toMatch(RAW_WORDS);
+      expect(text, said[i]).not.toMatch(/vendor/i);
+      expect(text, said[i]).not.toBe("The market couldn’t do that, and nothing was spent. Try again.");
+      // The simulated and practice markets answer a plain 422 with the same words.
+      expect(marketProblem(422, "locked", said[i]).text).toBe(text);
+    }
+    expect(texts[2]).toBe("Gwei’s till for Crumbs can take only 329 Bits more. Try less.");
+    expect(texts[3]).toBe("Gwei’s till for Crumbs is fully funded. It can’t take more.");
+    expect(texts[7]).toMatch(/about 1 more minute\./);
+    expect(texts[8]).toBe("Gwei’s till for Crumbs holds only 37 Bits right now, so that’s the most you can withdraw. It refills as players buy Crumbs from her.");
+    expect(texts[9]).toMatch(/is empty right now, so your stake has to wait/);
+  });
+
+  it("says investing isn't live where the contract is older than v3, and points at the practice market", () => {
+    expect(INVEST_NOT_LIVE).toBe("Investing in a merchant is built into contract v3, which isn’t live yet. Try it in the practice market.");
+    // The relayer's gate (409) and the engine's own refusal (422) say the same sentence.
+    expect(marketProblem(409, "invest_unsupported", "Investing in a merchant is built into contract v3, which isn't live yet").text).toBe(INVEST_NOT_LIVE);
+    expect(marketProblem(422, "invest_unsupported", "This market doesn't take investors yet").text).toBe(INVEST_NOT_LIVE);
   });
 
   it("phrases the simulated market's refusals the same way (same words, plain 422)", () => {

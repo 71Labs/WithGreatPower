@@ -30,6 +30,27 @@ export interface MarketParams {
   dailyFillBits: number;
   /** Bits burned per crafted suit with a recipe; 0 is off. */
   craftBits: number;
+  /**
+   * Contract v3's investing rules (./invest.ts). Absent on a market that can't take
+   * investors: contract v2, which is what mainnet runs today.
+   */
+  invest?: InvestRules;
+}
+
+/** The rules for investing in a merchant's till (contract v3; ./invest.ts explains them). */
+export interface InvestRules {
+  /** Off: no new investments; withdrawals and claims still work. */
+  open: boolean;
+  /** The investors' share of a vendor trade's gas fee, in basis points of the fee (5000 = half). The rest is burned. */
+  feeBps: number;
+  /** Bits per investment, at least and at most. */
+  min: number;
+  max: number;
+  /** Per account, per UTC day: investments, and the Bits they may add. */
+  dailyInvests: number;
+  dailyBits: number;
+  /** A stake can be withdrawn this long after its last top-up. */
+  lockMs: number;
 }
 
 /** contracts/wgp/src/market.rs `MarketParams::default()`. */

@@ -19,12 +19,17 @@ import { Reasoning } from "@/components/market/why-price";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
-import { DRAIN, MAINNET, RECOMMENDED, economyConfig, type Setting } from "@/lib/market/balance";
+import { DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, economyConfig, type Setting } from "@/lib/market/balance";
 import { Economy, LAB_BROKE_SEED, type DaySnapshot } from "@/lib/market/bots";
 import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { shopOf } from "@/lib/market/invest";
 import { explainPrice } from "@/lib/market/reasoning";
+import { withShop } from "@/lib/market/reasoning-shop";
+
+import { plural } from "@/lib/plural";
 
 import { FlowPanel } from "./flow-panel";
+import { InvestPanel } from "./invest-panel";
 import { NpcPanel } from "./npc-panel";
 
 const SPEEDS = [
@@ -74,13 +79,24 @@ function ItemChart({
   const maxStock = Math.max(1, ...stock);
   const at = hover !== null && hover < n ? hover : n - 1;
   const change = prices[0] ? (prices[at]! - prices[0]) / prices[0] : 0;
-  // Gwei's reasoning for the day the card reads, from that day's own stock and till.
-  const why = explainPrice({
-    pool: { ...SEEDED.get(item)!, stock: stock[at]!, bits: history[at]!.tills[item] ?? 0 },
-    open: true,
-    feeBps,
-    change24h: at > 0 && prices[at - 1] ? (prices[at]! - prices[at - 1]!) / prices[at - 1]! : null,
-  });
+  // Her shop for this item, day by day: the days it ended closed for buying, and the days an investor funded its till.
+  const closed = history.map((d) => !!d.broke[item]);
+  const funded = history.map((d) => (d.investors?.events ?? []).some((e) => e.kind === "invest" && e.item === item));
+  const invested = history[at]!.invested[item] ?? 0;
+  const investing = history[at]!.investors !== null;
+  // That day's pool: investors' Bits sit in the till and came off the virtual reserve, so the curve is the same.
+  const pool = { ...SEEDED.get(item)!, virtualBits: SEEDED.get(item)!.virtualBits - invested, stock: stock[at]!, bits: history[at]!.tills[item] ?? 0, ...(invested ? { invested } : {}) };
+  // Gwei's reasoning for the day the card reads, from that day's own stock and till; a closed shop says why, and what reopens it.
+  const why = withShop(
+    explainPrice({
+      pool,
+      open: true,
+      feeBps,
+      change24h: at > 0 && prices[at - 1] ? (prices[at]! - prices[at - 1]!) / prices[at - 1]! : null,
+    }),
+    shopOf(pool, true),
+    investing ? "available" : "not-live",
+  );
 
   function pick(e: PointerEvent<HTMLDivElement>) {
     const r = ref.current!.getBoundingClientRect();
@@ -114,6 +130,12 @@ function ItemChart({
         <span className="num text-[22px] font-bold leading-6 tracking-[-0.02em]">{formatPrice(prices[at]!)}</span>
         <span className="text-[12px] font-semibold text-game-muted">Bits</span>
         <span className="num ml-auto text-[12px] text-game-muted">stock {formatBits(stock[at]!)}</span>
+      </p>
+      {/* The shop on the day being read, in words: never the marks below alone. */}
+      <p className="num text-[12px] font-semibold leading-4" data-shop={closed[at] ? "closed" : "open"}>
+        {closed[at] ? "Shop closed for buying: till empty" : "Shop open"}
+        {funded[at] ? " · an investor funded the till" : ""}
+        {invested > 0 ? ` · ${formatBits(invested)} Bits invested` : ""}
       </p>
       <div
         tabIndex={0}
@@ -152,6 +174,15 @@ function ItemChart({
           {stock.map((v, i) => (
             <rect key={i} x={i * 10 + 1} width={8} y={20 - (v / maxStock) * 20} height={(v / maxStock) * 20} rx={1} className={i === at && hover !== null ? "fill-game-hero" : "fill-game-gold"} />
           ))}
+        </svg>
+        <span aria-hidden className="self-center text-right text-[10px] leading-3 text-game-muted">
+          shop
+        </span>
+        {/* Her shop, day by day: an ink block for a day it ended closed for buying, a triangle for a day an investor funded the till. */}
+        <svg aria-hidden data-shop-row="" viewBox={`0 0 ${n * 10} 10`} preserveAspectRatio="none" className="h-2.5 w-full">
+          <line x1={0} x2={n * 10} y1={9.5} y2={9.5} className="stroke-game-ink/15" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {closed.map((c, i) => (c ? <rect key={`c${i}`} data-closed-day={history[i]!.day} x={i * 10 + 1} width={8} y={2} height={7} rx={1} className="fill-game-ink" /> : null))}
+          {funded.map((f, i) => (f ? <path key={`f${i}`} data-funded-day={history[i]!.day} d={`M${i * 10 + 1} 9 L${i * 10 + 5} 1 L${i * 10 + 9} 9 Z`} className="fill-game-mint stroke-game-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" /> : null))}
         </svg>
       </div>
       <Reasoning reasoning={why} className="border-t-2 border-dashed border-game-ink/20 pt-2.5" />
@@ -201,21 +232,26 @@ interface Setup {
   recommended: boolean;
   /** The stress mix of heroes that runs Gwei out of stock and Bits. */
   drain: boolean;
+  /**
+   * The same stress mix, with investor bots on contract v3's investing rules: a till runs
+   * dry, an investor funds it the next morning and Gwei buys again (balance.ts `INVEST_SHOWCASE`).
+   */
+  invest: boolean;
 }
 
 const settingOf = (s: Setup): Setting => (s.recommended ? RECOMMENDED : MAINNET);
-/** Mainnet's rules and curves unless `recommended`; heroes craft each suit once, as the contract requires. */
-const build = (s: Setup) => new Economy(economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain ? DRAIN.mix : undefined }));
+/** Mainnet's rules and curves unless `recommended`; heroes craft each suit once, as the contract requires. Investors only when asked for. */
+const build = (s: Setup) => new Economy(economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain || s.invest ? DRAIN.mix : undefined, invest: s.invest }));
 
 export function EconomyLab() {
   const ids = useId();
-  const [setup, setSetup] = useState<Setup>({ days: 21, bots: 60, seed: 2026, recommended: false, drain: false });
+  const [setup, setSetup] = useState<Setup>({ days: 21, bots: 60, seed: 2026, recommended: false, drain: false, invest: false });
   const [speed, setSpeed] = useState<Speed>("4x");
   const [running, setRunning] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   const [econ, setEcon] = useState(() => build(setup));
   const [history, setHistory] = useState<DaySnapshot[]>(() => econ.history.slice());
-  const { days, bots, seed, recommended, drain } = setup;
+  const { days, bots, seed, recommended, drain, invest } = setup;
   const setting = settingOf(setup);
 
   /** A fresh run, for `next` setup (any change to the setup starts over). */
@@ -297,7 +333,7 @@ export function EconomyLab() {
                   type="button"
                   aria-pressed={speed === s.id}
                   onClick={() => setSpeed(s.id)}
-                  className={`num h-9 min-w-11 rounded-full px-2.5 text-[13px] font-semibold focus-visible:outline-offset-2 pointer-coarse:h-11 ${speed === s.id ? "bg-game-ink text-game-paper" : "pointer-fine:hover:bg-game-paper-2"}`}
+                  className={`num h-9 min-w-11 rounded-full px-2.5 text-[13px] font-semibold focus-visible:outline-offset-2 max-sm:h-11 pointer-coarse:h-11 ${speed === s.id ? "bg-game-ink text-game-paper" : "pointer-fine:hover:bg-game-paper-2"}`}
                 >
                   {s.label}
                 </button>
@@ -313,8 +349,17 @@ export function EconomyLab() {
               </span>
             </span>
           </label>
-          <StickerButton size="sm" aria-pressed={drain} onClick={() => (drain ? change({ drain: false }) : change({ days: DRAIN.days, bots: DRAIN.bots, recommended: false, drain: true }))} className="h-11">
+          <StickerButton size="sm" aria-pressed={drain} onClick={() => (drain ? change({ drain: false }) : change({ days: DRAIN.days, bots: DRAIN.bots, recommended: false, drain: true, invest: false }))} className="h-11">
             {drain ? "Stop draining Gwei" : "Drain Gwei"}
+          </StickerButton>
+          {/* The showcase next to it: the same drain, with investors who fund a till the morning after it runs dry. */}
+          <StickerButton
+            size="sm"
+            aria-pressed={invest}
+            onClick={() => (invest ? change({ invest: false }) : change({ days: INVEST_SHOWCASE.days, bots: INVEST_SHOWCASE.bots, seed: INVEST_SHOWCASE.seed, recommended: false, drain: false, invest: true }))}
+            className="h-11"
+          >
+            {invest ? "Send the investors home" : "Drain Gwei, then invest in her"}
           </StickerButton>
           <div className="flex items-end gap-2">
             <div className="flex flex-col gap-1">
@@ -338,7 +383,7 @@ export function EconomyLab() {
           <div className="ml-auto flex gap-2 max-sm:w-full">
             <StickerButton variant="hero" onClick={toggle} className="max-sm:flex-1">
               {running ? <Pause aria-hidden className="size-5" strokeWidth={2.25} /> : <Play aria-hidden className="size-5" strokeWidth={2.25} />}
-              {running ? "Pause" : done ? `Run ${days} days again` : last.day > 0 ? "Resume" : `Run ${days} days`}
+              {running ? "Pause" : done ? `Run ${plural(days, "day")} again` : last.day > 0 ? "Resume" : `Run ${plural(days, "day")}`}
             </StickerButton>
             <StickerButton onClick={() => fresh()} disabled={last.day === 0}>
               Reset
@@ -349,7 +394,7 @@ export function EconomyLab() {
         <dl aria-live="off" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Day" value={`${last.day} / ${days}`} />
           <Stat label="Bits in play" value={formatBits(last.supply)} hint="Held by heroes, plus Gwei’s till" />
-          <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The vendor’s own wallet" />
+          <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The Bits she buys with" />
           <Stat label="Bits burned" value={formatBits(last.burned)} hint={`Gas fee${setting.craftBits ? " and crafting" : ""}, of ${formatBits(last.minted)} earned`} />
           <Stat label="Suits crafted" value={formatBits(last.crafted)} />
           <Stat label="Trades" value={formatBits(totals.trades + totals.fills)} hint={`${formatBits(totals.fills)} player-to-player · ${last.listings} listed now`} />
@@ -361,6 +406,18 @@ export function EconomyLab() {
           <h2 id={`${ids}-prices`} className="text-[13px] font-bold uppercase leading-4 tracking-[0.08em] text-game-paper/85">
             Price, Gwei’s stock and her reasoning, by day
           </h2>
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] leading-4 text-game-paper/80">
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="inline-block h-2.5 w-2 rounded-[1px] bg-game-ink ring-1 ring-game-paper" />
+              In each chart’s “shop” row, a block is a day her shop for that item ended closed for buying: its till couldn’t pay for one.
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <svg aria-hidden viewBox="0 0 10 10" className="size-2.5">
+                <path d="M1 9 L5 1 L9 9 Z" className="fill-game-mint stroke-game-paper" strokeWidth={1} />
+              </svg>
+              A triangle is a day an investor funded that till.
+            </span>
+          </p>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ITEM_IDS.map((item) => (
               <ItemChart key={item} item={item} history={history} hover={hover} onHover={setHover} feeBps={setting.feeBps} />
@@ -368,7 +425,9 @@ export function EconomyLab() {
           </ul>
         </section>
 
-        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, recommended: false, drain: false })} />
+        <InvestPanel history={history} hover={hover} headingId={`${ids}-invest`} />
+
+        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, recommended: false, drain: false, invest: false })} />
 
         <details className="rounded-[20px] border-2 border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)]">
           <summary className="flex min-h-12 cursor-pointer items-center px-4 text-[14px] font-semibold focus-visible:outline-offset-2">See the numbers</summary>

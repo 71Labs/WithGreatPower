@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { ALTERNATIVES, BAND, DRAIN, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, SIXTY, economyConfig, gini, measure, measureEconomy, measured, median, play, poolConfigsFor, verdict, type Setting } from "./balance";
+import { ALTERNATIVES, BAND, DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, SIXTY, economyConfig, gini, investStory, measure, measureEconomy, measured, median, play, poolConfigsFor, verdict, type Setting } from "./balance";
+import { LAB_INVESTORS } from "./bots";
 import { defaultPoolConfigs, seededPools } from "./config";
 import { spotMilli } from "./math";
 
@@ -146,5 +147,100 @@ describe("Sandwich Man in the measurements", () => {
     expect(Math.abs(season.burnShare - without.burnShare)).toBeLessThan(0.01);
     expect(season.burned.craft).toBe(without.burned.craft);
     expect(verdict(season, sixty).ok).toBe(true);
+  });
+});
+
+describe("investor bots in the measurements", () => {
+  it("are off unless asked for: no investing rules, no investors, and the run is the one that was documented", () => {
+    const config = economyConfig(RECOMMENDED, { ...SEASON, seed: 1 });
+    expect(config.investors).toBeUndefined();
+    const e = play(config);
+    expect(e.book.params.invest).toBeUndefined();
+    expect(e.book.investors).toBeUndefined();
+    expect(e.investorIds).toEqual([]);
+    expect(e.history.every((d) => d.investors === null && Object.values(d.invested).every((n) => n === 0))).toBe(true);
+    // No pool ever carried an investing field, so every fee was burned whole, as on contract v2.
+    expect(e.book.pools.every((p) => p.invested === undefined && p.rewards === undefined)).toBe(true);
+    // Asking for them is the only thing that turns them on.
+    expect(economyConfig(RECOMMENDED, { ...SEASON, seed: 1, invest: true }).investors).toEqual(LAB_INVESTORS);
+  });
+});
+
+describe("the showcase: Gwei goes broke, an investor reopens her", () => {
+  // Exactly the run the lab's button builds.
+  const showcase = () => play(economyConfig(MAINNET, { ...INVEST_SHOWCASE, npc: true }));
+
+  it("is the same run every time", () => {
+    const read = (e: ReturnType<typeof showcase>) => e.history.map((d) => [d.prices, d.tills, d.broke, d.invested, d.investors]);
+    expect(read(showcase())).toEqual(read(showcase()));
+    expect(INVEST_SHOWCASE).toMatchObject({ days: DRAIN.days, bots: DRAIN.bots, mix: DRAIN.mix, seed: 2026, invest: true });
+  });
+
+  it("has a till run dry, an investor fund it the next morning, and the shop buy again", () => {
+    const e = showcase();
+    const h = e.history;
+    // The first day a shop ends closed...
+    const day = h.findIndex((d) => Object.values(d.broke).some(Boolean));
+    expect(day).toBeGreaterThan(0);
+    const item = Object.keys(h[day]!.broke).find((i) => h[day]!.broke[i])!;
+    // ...the next morning an investor puts Bits into exactly that till...
+    const next = h[day + 1]!;
+    const invest = next.investors!.events.find((x) => x.kind === "invest");
+    expect(invest).toMatchObject({ item, kind: "invest", bits: LAB_INVESTORS.lot, earned: 0 });
+    expect(next.invested[item]).toBe(LAB_INVESTORS.lot);
+    // ...and that day it ends open: she bought from the heroes again.
+    expect(next.broke[item]).toBe(false);
+    // Investing moved no price by itself: the pool's curve total is what the owner set, with the stake standing in for virtual Bits.
+    const pool = e.book.pools.find((p) => p.item === item)!;
+    const seeded = seededPools().find((p) => p.item === item)!;
+    expect(pool.virtualBits + (pool.invested ?? 0)).toBe(seeded.virtualBits);
+  });
+
+  it("only ever funds a till that ended the day before broke, and keeps her buying far more of the time", () => {
+    const e = showcase();
+    const story = investStory(e);
+    const invests = e.history.flatMap((d) => (d.investors?.events ?? []).filter((x) => x.kind === "invest")).length;
+    expect(invests).toBeGreaterThanOrEqual(8);
+    expect(story.reopenings).toBe(invests);
+    // The same heroes with no investors: her shops end many more days closed.
+    const without = investStory(play(economyConfig(MAINNET, { ...DRAIN, seed: INVEST_SHOWCASE.seed, npc: true })));
+    expect(without.reopenings).toBe(0);
+    expect(without.brokeDays).toBeGreaterThan(50);
+    expect(story.brokeDays).toBeLessThan(without.brokeDays / 3);
+    expect(measureEconomy("showcase", e).broke).toBeLessThan(0.1);
+  });
+
+  it("pays the investors a share of the fees, and shows what they risk: most of their Bits are still in her tills", () => {
+    const e = showcase();
+    const story = investStory(e);
+    const last = e.history.at(-1)!.investors!;
+    expect(story.earned).toBeGreaterThan(50);
+    // Sellers took the Bits the investors put in; the stakes wait for someone to buy that stock.
+    expect(story.staked).toBeGreaterThan(story.invested * 0.8);
+    expect(story.invested - story.withdrawn).toBe(story.staked);
+    // Never principal: what they hold, plus what they have staked, is what they started with plus fees earned.
+    expect(last.wallet + last.staked).toBe(LAB_INVESTORS.count * LAB_INVESTORS.bits + story.earned);
+  });
+
+  it("gives the numbers docs/INVESTING.md quotes for seed 2026", () => {
+    const story = investStory(showcase());
+    const without = investStory(play(economyConfig(MAINNET, { ...DRAIN, seed: INVEST_SHOWCASE.seed, npc: true })));
+    expect({ closedWith: story.brokeDays, closedWithout: without.brokeDays, invested: story.invested, earned: story.earned, staked: story.staked }).toEqual({
+      closedWith: 11,
+      closedWithout: 70,
+      invested: 1_195,
+      earned: 133,
+      staked: 1_130,
+    });
+  });
+
+  it("balances to the Bit every day, the investors' wallets, stakes and unclaimed earnings included, for several seeds", () => {
+    for (const seed of [INVEST_SHOWCASE.seed, 1, 7]) {
+      const e = play(economyConfig(MAINNET, { ...INVEST_SHOWCASE, seed, npc: true }));
+      const till = e.history[0]!.till;
+      for (const d of e.history) expect(d.supply, `seed ${seed} day ${d.day}`).toBe(till + d.minted - d.burned);
+      // Their starting Bits are counted as minted once, like Sandwich Man's seed.
+      expect(e.history[0]!.minted).toBe(LAB_INVESTORS.count * LAB_INVESTORS.bits + 300);
+    }
   });
 });

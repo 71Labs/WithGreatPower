@@ -23,6 +23,8 @@ import { utcDay } from "@/server/rate-limit";
 import type { Db } from "../db/client";
 import { ALLTIME_PERIOD, countEntries, topEntries, type BoardRow } from "../db/leaderboard";
 import { TROPHY_PLACES, recordSeasonKey, type SeasonStanding } from "../db/season-close";
+import { plural } from "@/lib/plural";
+
 import { chainOps, marketPrices, runs, saves, seasons, socialDrafts, type Board } from "../db/schema";
 import type { Tagger } from "./compose";
 import { nameables, type Nameable } from "./players";
@@ -151,7 +153,7 @@ export async function newLeaders({ db, now }: GenContext): Promise<DraftPlan[]> 
     const group = groups.get(`${top.playerId}:${top.runId}`) ?? { top, score: run.score, night: run.night, keys: [], names: [], sources: [] };
     group.keys.push(key);
     group.names.push(b.name);
-    group.sources.push({ label: `#1 on ${b.name}`, value: `${b.period}, of ${fmt(total)} heroes${b.board === "season" ? `, season total ${fmt(top.score)}` : ""}`, href: null });
+    group.sources.push({ label: `#1 on ${b.name}`, value: `${b.period}, of ${plural(total, "hero", "heroes")}${b.board === "season" ? `, season total ${fmt(top.score)}` : ""}`, href: null });
     groups.set(`${top.playerId}:${top.runId}`, group);
   }
   const plans: DraftPlan[] = [];
@@ -197,7 +199,7 @@ export async function seasonPosts({ db, now }: GenContext): Promise<DraftPlan[]>
         expiresAt: s.startsAt,
         near: true,
         compose: () =>
-          `${s.name} starts tomorrow, ${shortDate(s.startsAt)} at 00:00 UTC. ${nights} nights; every night you finish adds to your total. ${trophies}\n${SITE_HOST}`,
+          `${s.name} starts tomorrow, ${shortDate(s.startsAt)} at 00:00 UTC. ${plural(nights, "night")}; every night you finish adds to your total. ${trophies}\n${SITE_HOST}`,
       });
     }
 
@@ -211,7 +213,7 @@ export async function seasonPosts({ db, now }: GenContext): Promise<DraftPlan[]>
           kind: "season_standings",
           sourceEvent: `season_standings:${s.id}:mid`,
           mediaUrl: `/api/social/card/leaderboard?board=season&period=${s.id}`,
-          sources: [{ label: "Board", value: `${s.name}, ${fmt(total)} heroes, ends ${s.endsAt.toISOString()}`, href: null }, ...rowSources(rows, (r) => `#${r.rank}`)],
+          sources: [{ label: "Board", value: `${s.name}, ${plural(total, "hero", "heroes")}, ends ${s.endsAt.toISOString()}`, href: null }, ...rowSources(rows, (r) => `#${r.rank}`)],
           expiresAt: s.endsAt,
           compose: (tg) => {
             const lines = rows.map((r) => `${r.rank}. ${tg.name(fallback(people, r))}: ${fmt(r.score)}`);

@@ -108,7 +108,12 @@ function VerifiedTrade({ bits, save }: { bits: number; save: HeroSave }) {
   );
 }
 
-/** A guest's night earns no Bits; say what a verified one like it pays, and show the trade it would open. */
+/**
+ * A guest's night earns no Bits; say what a verified one like it pays, and open the market
+ * to them anyway: the practice market (src/lib/market/practice.ts), their own copy with
+ * practice Bits, where the trade this night suggests (or any other) can be made now. It is
+ * labelled as practice here and on the market itself; nothing in it is on NEAR.
+ */
 function GuestTrade({ score, save }: { score: number; save: HeroSave }) {
   const wouldPay = nightBits({ score, levelledUp: false });
   const night = save.patrol?.night ?? save.night;
@@ -118,13 +123,21 @@ function GuestTrade({ score, save }: { score: number; save: HeroSave }) {
   }, [night, wouldPay]);
   return (
     <>
-      <p className="flex items-start gap-2 rounded-[12px] border-2 border-game-ink bg-game-gold px-3 py-2.5 text-[14px] font-medium leading-5">
-        <Coins aria-hidden className="mt-px size-5 shrink-0" strokeWidth={2.25} />
-        <span className="[text-wrap:pretty]">
-          Signed in, a night like this pays about <span className="num font-bold">{fmt(wouldPay)}</span> Bits to spend at the Mempool Market.
-        </span>
-      </p>
-      {prompt ? <TradePromptCard prompt={prompt} /> : null}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border-2 border-game-ink bg-game-gold px-3 py-2.5">
+        <p className="flex min-w-0 flex-1 basis-[240px] items-start gap-2 text-[14px] font-medium leading-5">
+          <Coins aria-hidden className="mt-px size-5 shrink-0" strokeWidth={2.25} />
+          <span className="[text-wrap:pretty]">
+            Signed in, a night like this pays about <span className="num font-bold">{fmt(wouldPay)}</span> Bits to spend at the Mempool Market. As a guest you can trade in the practice market now: same rules, practice Bits, not on NEAR.
+          </span>
+        </p>
+        {/* With a trade to offer, that prompt is the one next step; otherwise point at the practice market. */}
+        {prompt ? null : (
+          <StickerLink href="/play/market" size="sm" className="max-sm:w-full">
+            Try the practice market
+          </StickerLink>
+        )}
+      </div>
+      {prompt ? <TradePromptCard prompt={prompt} eyebrow="Try it in the practice market" /> : null}
     </>
   );
 }

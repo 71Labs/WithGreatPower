@@ -2,7 +2,7 @@
 
 The build plan for the 3D game, its leaderboard, NEAR contracts and Google sign-in. Milestone PRs implement it in order; when code and this document disagree, fix one of them in the same PR.
 
-**Status (Nov 12, 2026):** everything below is built and live on NEAR mainnet (`game.wgpnear.near`), and players use it: the README lists the transactions and how to check them. Since the first milestones the game has grown new modes, each with its own ruleset tag so its logs never replay as another mode's: three case files ([chapters/](chapters/)), the Daily Run, time trials and duels ([compete.md](compete.md)), the free-roam City, and referrals ([referrals.md](referrals.md)). The player's loop is in [GAME-LOOP.md](GAME-LOOP.md). Google sign-in goes through Privy while NEAR Auth waits for its mainnet client (§5). §7 keeps the original plan and dates.
+**Status (Nov 12, 2026):** everything below is built, and the contract is live on NEAR mainnet (`game.wgpnear.near`) with players using it: the README lists the transactions and how to check them. Three things here are built and not yet on mainnet: `record_season` and its trophies first run when Season 1 closes, the NPC trader's account is not created, and NEAR Auth waits for its mainnet client. The deployed contract has NEP-245's core without the metadata extension or `mt_tokens` enumeration (those are in v3, not deployed). [EVIDENCE.md](EVIDENCE.md) pairs each claim with its proof. Since the first milestones the game has grown new modes, each with its own ruleset tag so its logs never replay as another mode's: three case files ([chapters/](chapters/)), the Daily Run, time trials and duels ([compete.md](compete.md)), the free-roam City, and referrals ([referrals.md](referrals.md)). The player's loop is in [GAME-LOOP.md](GAME-LOOP.md). Google sign-in goes through Privy while NEAR Auth waits for its mainnet client (§5). §7 keeps the original plan and dates.
 
 ## Architecture
 A pnpm workspace at the repo root. Only the deterministic core becomes a package.
@@ -148,7 +148,7 @@ docs/                 ARCHITECTURE.md, spikes/, screenshots/
   - After that the server is authoritative. `useGame()` keeps its API (optimistic reduce, then reconcile with the server).
 
 ## 4. NEAR contract (`contracts/wgp`, near-sdk 5.30, cargo-near 0.22, Rust 1.95)
-- **Our own NEP-245 multi-token core** (there is no usable crate). It mirrors the `defuse_nep245` signatures and the event JSON so NEAR Intents can read it.
+- **Our own NEP-245 multi-token core** (there is no usable crate). It mirrors the `defuse_nep245` core signatures and the event JSON. The deployed contract (v2) has the core transfers, the balance and supply views and `mt_tokens_for_owner`; it has no metadata extension, no global `mt_tokens` enumeration and no approvals, so a reader that needs those can't use it until v3 (built, not deployed).
   - **Token ids:** `item:*`, `suit:*`, `trophy:*`, `hero:<account>`.
   - **Transfers require 1 yocto,** so a session key can never move assets.
   - Heroes and trophies are soulbound.

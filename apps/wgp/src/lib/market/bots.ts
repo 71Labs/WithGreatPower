@@ -19,9 +19,10 @@
 import { ITEMS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import type { ItemId, SuitId } from "@wgp/game-core/types";
 
-import { BITS_TOKEN, DEFAULT_PARAMS, itemToken, seededPools, type MarketParams, type PoolConfig } from "./config";
-import { buyListing, cancelListing, listItem, marketBuy, marketSell, MarketError, memoryLedger, newBook, type MarketBook } from "./engine";
-import { buyQuote, spotMilli } from "./math";
+import { BITS_TOKEN, DEFAULT_PARAMS, itemToken, seededPools, type InvestRules, type MarketParams, type PoolConfig } from "./config";
+import { buyListing, cancelListing, listItem, marketBuy, marketClaim, marketInvest, marketSell, marketWithdraw, MarketError, memoryLedger, newBook, type MarketBook } from "./engine";
+import { DEFAULT_INVEST_RULES, earned, investRoom, tillShort } from "./invest";
+import { buyQuote, sellPayout, spotMilli } from "./math";
 import { newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
 import { NPC_RULES, npcStatus, type NpcStatus } from "./npc-rules";
 import { npcTurn, walletOnBook } from "./npc-turn";
@@ -57,6 +58,51 @@ export interface EconomyConfig {
    * Bits all heroes held that morning (`circulating`, across `heroes`).
    */
   reward?: (night: { score: number; levelledUp: boolean; held: number; circulating: number; heroes: number }) => number;
+  /**
+   * Investor bots (contract v3's "invest in a merchant", ./invest.ts). Off by default: with
+   * none, the market takes no investors and the run is exactly what it was before investing
+   * existed, which is what docs/ECONOMY.md's tables and balance.test.ts measure.
+   */
+  investors?: InvestorBots;
+}
+
+/** How many investor bots a run has, what each starts with and how they invest. */
+export interface InvestorBots {
+  count: number;
+  /** Bits each starts with: their only Bits apart from fee earnings. */
+  bits: number;
+  /** Bits one puts into a broke till at a time (within the rules' per-call range, the pool's room and their wallet). */
+  lot: number;
+  /** The investing rules the run's market uses (default: contract v3's). */
+  rules?: InvestRules;
+}
+
+/** The lab's investor bots: three of them, 600 Bits each, 150 Bits a time, on contract v3's default rules. */
+export const LAB_INVESTORS: InvestorBots = { count: 3, bits: 600, lot: 150 };
+
+/** An investor bot claims a stake's fee earnings once they reach this many Bits (a withdrawal pays them out anyway). */
+const CLAIM_AT = 10;
+
+/** One thing an investor bot did. */
+export interface InvestEvent {
+  account: string;
+  kind: "invest" | "withdraw" | "claim";
+  item: string;
+  /** Bits invested or withdrawn (0 for a claim). */
+  bits: number;
+  /** Fee earnings paid out by it. */
+  earned: number;
+}
+
+/** The investor bots at the end of a day. */
+export interface InvestDay {
+  /** What they did that morning, in order. */
+  events: InvestEvent[];
+  /** Bits they hold in their wallets, and in Gwei's tills. */
+  wallet: number;
+  staked: number;
+  /** Fee earnings paid to them so far. */
+  earned: number;
 }
 
 /** Sandwich Man's account in the fast-forward. */
@@ -114,6 +160,12 @@ export interface DaySnapshot {
   listings: number;
   /** Null when the run has no NPC. */
   npc: NpcDay | null;
+  /** Per item: at the end of the day Gwei's till couldn't pay for one, so her shop was closed for buying it. */
+  broke: Record<string, boolean>;
+  /** Per item: investors' Bits in the till (0 everywhere in a run without investors). */
+  invested: Record<string, number>;
+  /** Null when the run has no investor bots. */
+  investors: InvestDay | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -165,10 +217,23 @@ export class Economy {
   private npcEvents: NpcEvent[] = [];
   private npcRefused = 0;
   private npcClosed = false;
+  /** Investor bots' accounts (empty without `config.investors`), what they did this morning and their earnings so far. */
+  readonly investorIds: string[] = [];
+  private investEvents: InvestEvent[] = [];
+  private investEarned = 0;
 
   constructor(readonly config: EconomyConfig) {
     this.rand = rng(config.seed);
-    this.book = newBook({ ...DEFAULT_PARAMS, ...config.params }, seededPools(config.pools));
+    const inv = config.investors;
+    this.book = newBook({ ...DEFAULT_PARAMS, ...config.params, ...(inv ? { invest: inv.rules ?? DEFAULT_INVEST_RULES } : {}) }, seededPools(config.pools));
+    if (inv) {
+      for (let i = 0; i < inv.count; i++) {
+        const id = `investor-${i}`;
+        this.investorIds.push(id);
+        this.ledger.credit(id, BITS_TOKEN, inv.bits);
+        this.minted += inv.bits;
+      }
+    }
     const kinds: BotKind[] = config.mix?.length ? config.mix : ["crafter", "crafter", "dumper", "flipper", "crafter", "dumper", "hoarder", "flipper"];
     const span = config.lifespan ?? 0;
     this.bots = Array.from({ length: config.bots }, (_, i) => ({ id: `bot-${i}`, kind: kinds[i % kinds.length]!, target: null, suits: [], firstSuitNight: null, nights: 0, quitAfter: span ? span - (i % span) : Infinity }));
@@ -206,6 +271,63 @@ export class Economy {
     this.npcEvents = [];
     this.npcRefused = 0;
     this.npcClosed = false;
+    return day;
+  }
+
+  /**
+   * The investor bots' morning, before the heroes trade. Each, in turn:
+   * 1. takes home a stake that has unlocked from a till that can spare it (after the
+   *    withdrawal she could still pay for a full lot of the item), and otherwise claims
+   *    whatever fees it has earned;
+   * 2. puts `lot` Bits into the first till that is broke (it can't pay for one item), within
+   *    the rules' per-call range and daily caps, the pool's room and its own wallet.
+   * No randomness: the same market gives the same moves. Refusals are part of the rules.
+   */
+  private investorsAct(now: number) {
+    const inv = this.config.investors;
+    const rules = this.book.params.invest;
+    if (!inv || !rules) return;
+    const b = this.book;
+    for (const id of this.investorIds) {
+      for (const stake of [...(b.investors?.[id]?.stakes ?? [])]) {
+        const pool = b.pools.find((p) => p.item === stake.item)!;
+        // Withdrawing moves no price, so a full lot costs her the same before and after.
+        const spare = pool.bits - stake.bits >= sellPayout(pool, b.params.maxAmount);
+        if (now >= stake.sinceMs + rules.lockMs && spare) {
+          this.try(() => {
+            const r = marketWithdraw(b, this.ledger, id, stake.item, stake.bits, now);
+            this.investEarned += r.earned;
+            this.investEvents.push({ account: id, kind: "withdraw", item: stake.item, bits: r.bits, earned: r.earned });
+          });
+        } else if (earned(stake, pool) >= CLAIM_AT) {
+          this.try(() => {
+            const r = marketClaim(b, this.ledger, id, stake.item, now);
+            this.investEarned += r.earned;
+            this.investEvents.push({ account: id, kind: "claim", item: stake.item, bits: 0, earned: r.earned });
+          });
+        }
+      }
+      const broke = b.pools.find((p) => tillShort(p) > 0 && investRoom(p) >= rules.min);
+      if (!broke) continue;
+      const amount = Math.min(rules.max, investRoom(broke), this.ledger.balance(id, BITS_TOKEN), Math.max(rules.min, inv.lot));
+      if (amount < rules.min) continue;
+      this.try(() => {
+        const r = marketInvest(b, this.ledger, id, broke.item, amount, now);
+        this.investEarned += r.earned;
+        this.investEvents.push({ account: id, kind: "invest", item: broke.item, bits: r.bits, earned: r.earned });
+      });
+    }
+  }
+
+  private investDay(): InvestDay | null {
+    if (!this.config.investors) return null;
+    const day: InvestDay = {
+      events: this.investEvents,
+      wallet: this.investorIds.reduce((s, id) => s + this.ledger.balance(id, BITS_TOKEN), 0),
+      staked: this.book.pools.reduce((s, p) => s + (p.invested ?? 0), 0),
+      earned: this.investEarned,
+    };
+    this.investEvents = [];
     return day;
   }
 
@@ -349,20 +471,32 @@ export class Economy {
     const prices: Record<string, number> = {};
     const stock: Record<string, number> = {};
     const tills: Record<string, number> = {};
+    const broke: Record<string, boolean> = {};
+    const invested: Record<string, number> = {};
     for (const p of this.book.pools) {
       prices[p.item] = spotMilli(p);
       stock[p.item] = p.stock;
       tills[p.item] = p.bits;
+      broke[p.item] = tillShort(p) > 0;
+      invested[p.item] = p.invested ?? 0;
     }
     const till = this.book.pools.reduce((s, p) => s + p.bits, 0);
-    const held = [...this.bots, ...this.retired].reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0) + this.ledger.balance(LAB_NPC_ACCOUNT, BITS_TOKEN);
+    // Fee earnings held for investors are Bits too (0 in a run without investors).
+    const owed = this.book.pools.reduce((s, p) => s + (p.rewards ?? 0), 0);
+    const held =
+      [...this.bots, ...this.retired].reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0) +
+      this.ledger.balance(LAB_NPC_ACCOUNT, BITS_TOKEN) +
+      this.investorIds.reduce((s, id) => s + this.ledger.balance(id, BITS_TOKEN), 0);
     return {
       day,
       prices,
       stock,
       tills,
+      broke,
+      invested,
+      investors: this.investDay(),
       till,
-      supply: held + till,
+      supply: held + till + owed,
       burned: this.book.burned + this.craftBurned,
       minted: this.minted,
       crafted: this.crafted,
@@ -393,6 +527,8 @@ export class Economy {
     const circulating = this.config.reward ? this.bots.reduce((n, bot) => n + this.has(bot, BITS_TOKEN), 0) : 0;
     for (const bot of order) this.patrol(bot, circulating);
     const count = { trades: 0, fills: 0 };
+    // Investors look at the stalls first thing: a till that ended yesterday broke is funded before the heroes arrive.
+    this.investorsAct((EPOCH_DAY + day) * DAY_MS - 1_000);
     const every = Math.max(1, Math.ceil(order.length / NPC_TURNS_PER_DAY));
     order.forEach((bot, i) => {
       const now = (EPOCH_DAY + day) * DAY_MS + i * 1_000;

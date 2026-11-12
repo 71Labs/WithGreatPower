@@ -17,9 +17,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useChain } from "@/game/chain";
 import { adoptServerSave, refreshAccount, useAccount } from "@/game/store";
-import { getListings, getMarket, getMarketMe, postSimTrade, type ListingView, type MarketMe, type MarketSnapshot, type MarketView, type SimTradeRequest } from "@/lib/market/api";
-import { chainCall } from "@/lib/market/chain-calls";
-import { marketProblem } from "@/lib/market/refusal";
+import { getListings, getMarket, getMarketMe, postSimStake, postSimTrade, type ListingView, type MarketMe, type MarketSnapshot, type MarketView, type SimTradeRequest, type StakeRequest } from "@/lib/market/api";
+import { chainCall, stakeCall } from "@/lib/market/chain-calls";
+import { INVEST_NOT_LIVE, marketProblem } from "@/lib/market/refusal";
 import { isUnclaimed } from "@/lib/near/policy";
 import type { RelayResponse } from "@/lib/near/session-key";
 
@@ -210,4 +210,42 @@ async function tradeOnChain(req: SimTradeRequest): Promise<TradeOutcome> {
   if (res.ok || res.status === 0) void refreshAccount();
   if (!res.ok) return failed(res.status, res.error ?? `http_${res.status}`, res.message, snapshot);
   return { ok: true, snapshot };
+}
+
+/* ------------------------------------------------------------------ investing in Gwei */
+
+/**
+ * One investing move (invest, withdraw, claim) on whichever market is live. Never throws.
+ *
+ * It is only ever sent to a market that says it takes investors: `view.params.invest`,
+ * which the server sets for the simulated market and for contract v3, and never for v2
+ * (mainnet today). Without it this answers at once and sends nothing; the relayer checks
+ * the contract's version again on its side.
+ */
+export async function stake(view: Pick<MarketView, "onChain" | "params">, req: StakeRequest): Promise<TradeOutcome> {
+  if (!view.params.invest) return { ok: false, code: "invest_unsupported", message: INVEST_NOT_LIVE, snapshot: null };
+  if (trading) return { ok: false, code: "busy", message: "Your last move is still going through. Give it a moment.", snapshot: null };
+  trading = true;
+  try {
+    if (!view.onChain) {
+      const res = await postSimStake(req);
+      if (!res.ok) return failed(res.status, res.error, res.message);
+      return { ok: true, snapshot: res.data.market ?? null };
+    }
+    let res: RelayResponse & { market?: unknown };
+    try {
+      const { callGame } = await import("@/lib/near/session-key");
+      const { method, args } = stakeCall(req);
+      res = await callGame(method, args);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      if (/session key/i.test(text)) return failed(403, "unknown_key", text);
+      return { ok: false, code: "network", message: "Couldn’t reach NEAR, so nothing was sent. Check your connection and try again.", snapshot: null };
+    }
+    const snapshot = isSnapshot(res.market) ? res.market : null;
+    if (!res.ok) return failed(res.status, res.error ?? `http_${res.status}`, res.message, snapshot);
+    return { ok: true, snapshot };
+  } finally {
+    trading = false;
+  }
 }

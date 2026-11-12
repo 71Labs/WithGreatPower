@@ -19,6 +19,8 @@ import { beatGhost, type RaceEnding, type RaceResult, type RaceSession } from "@
 import { dayLabel, formatScore, MEDAL_FILL, medalLabel, nextMedal, raceClock, raceGap } from "@/lib/compete/format";
 import { raceShareText } from "@/lib/compete/share";
 
+import { noun } from "@/lib/plural";
+
 import { CopyRaceLink } from "./race-link";
 
 const REASONS: Record<string, string> = {
@@ -67,7 +69,7 @@ function Versus({ kind, mine, ghost, won }: { kind: RaceSession["race"]["kind"];
   const secs = (ticks: number) => raceGap(Math.abs(ticks)).slice(1);
   const dt = mine.ticks - ghost.ticks;
   const ds = mine.score - ghost.score;
-  const margin = trial || ds === 0 ? secs(dt) : `${formatScore(Math.abs(ds))} points`;
+  const margin = trial || ds === 0 ? secs(dt) : `${formatScore(Math.abs(ds))} ${noun(Math.abs(ds), "point")}`;
   let verdict: string;
   if (trial && !mine.finished) verdict = ghost.finished ? `${ghost.handle} finished; you didn’t` : "Neither of you finished";
   else if (!won && dt === 0 && ds === 0) verdict = `Dead level with ${ghost.handle}`;

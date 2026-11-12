@@ -6,8 +6,10 @@
 import type { ItemId, Rarity, Save } from "@wgp/game-core/types";
 
 import type { MarketParams } from "./config";
-import type { Fill, Listing, Trade } from "./engine";
+import type { Fill, Listing, StakeReceipt, Trade } from "./engine";
+import type { InvestorView, Shop } from "./invest";
 import type { Pool } from "./math";
+import type { SparkStep } from "./spark";
 
 export interface MarketItemView {
   item: ItemId;
@@ -21,6 +23,11 @@ export interface MarketItemView {
   sellOne: number | null;
   /** Spot × 1000 over the last day, oldest first. */
   spark: number[];
+  /**
+   * The last day as steps at their real times, from recorded price history only (./spark.ts).
+   * One step: nothing traded. None: no history yet. Absent from a source that keeps no times.
+   */
+  sparkSteps?: SparkStep[];
   /** Fractional change over 24 hours, or null with no history yet. */
   change24h: number | null;
   trades24h: number;
@@ -38,6 +45,17 @@ export interface MarketView {
   params: MarketParams;
   items: MarketItemView[];
   listings: number;
+  /**
+   * Each stall, open or closed and why (contract v3's `market_shops`, or the same worked out
+   * from the pools). Absent from an older server; `shopOf` on an item's pool gives the same.
+   */
+  shops?: Shop[];
+  /**
+   * On chain: the contract's version (`get_version`). `state` 2 is today's mainnet, which has
+   * no investing; 3 has it. Null when simulated. Investing is offered only when
+   * `params.invest` is set, which the server does for the simulated market and for v3.
+   */
+  contract?: { state: number; version: string | null } | null;
   /** Bits in the vendor's till across every item. */
   till: number;
   updatedAt: string;
@@ -64,6 +82,8 @@ export interface MarketMe {
   open: number[];
   /** On chain: Bits from verified nights that the operator hasn't landed yet. */
   pendingBits: number;
+  /** The player's stakes in Gwei's tills and what they may still invest today; absent where the market takes no investors. */
+  investor?: InvestorView;
 }
 
 /** The market and the trader's wallet right after a trade, read past the cache. */
@@ -88,6 +108,18 @@ export interface SimTradeResponse {
   rev: number;
   bits: number;
   /** The market after the trade; absent if it couldn't be read. */
+  market?: MarketSnapshot;
+}
+
+/** Investing in one of Gwei's tills (contract v3's `market_invest`, `market_withdraw`, `market_claim`). */
+export type StakeRequest = { action: "invest"; item: ItemId; bits: number } | { action: "withdraw"; item: ItemId; bits: number } | { action: "claim"; item: ItemId };
+
+export interface StakeResponse {
+  action: StakeRequest["action"];
+  receipt: StakeReceipt;
+  /** The player's Bits after it. */
+  bits: number;
+  /** The market after it; absent if it couldn't be read. */
   market?: MarketSnapshot;
 }
 
@@ -123,3 +155,6 @@ export const getMarketMe = (signal?: AbortSignal) => call<MarketMe>("/api/market
 
 /** The simulated market only; 409 on_chain once the contract's market is live. */
 export const postSimTrade = (body: SimTradeRequest) => call<SimTradeResponse>("/api/market/trade", { method: "POST", json: body });
+
+/** The simulated market only; 409 on_chain once the contract's market is live (then it's a session-key call, on v3). */
+export const postSimStake = (body: StakeRequest) => call<StakeResponse>("/api/market/invest", { method: "POST", json: body });

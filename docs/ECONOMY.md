@@ -168,7 +168,7 @@ A changes no quote and is the smallest step. B burns the most a season, and trad
 
 ## The owner's command
 
-**Send this only once the cost-aware Suit lab is live in production** (branch `feat/economy-in-loop`; it is in the build when `/play/suits` shows a recipe's cost in a local run with `SIM_MARKET_CRAFT_BITS=250`). The production build before that crafts in the player's save first and neither shows nor checks `craft_bits`: with the cost on, a player holding under 250 Bits would see the suit in the game and a refused call on chain.
+**Send this only once the cost-aware Suit lab is live in production** (merged to `main` in PR #58; production is deployed by hand, so check the live build first: it is in the build when `/play/suits` shows a recipe's cost in a local run with `SIM_MARKET_CRAFT_BITS=250`). The production build before that crafts in the player's save first and neither shows nor checks `craft_bits`: with the cost on, a player holding under 250 Bits would see the suit in the game and a refused call on chain.
 
 What the app does with the cost, read live from `market_state` (nothing is hard-coded, so no deploy is needed when the value changes):
 

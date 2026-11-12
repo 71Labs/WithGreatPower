@@ -16,6 +16,9 @@ export const MARKET_LIMITS = {
   mePerPlayer: { limit: 60, windowMs: 60_000 },
   tradePerPlayer: { limit: 30, windowMs: 60_000 },
   tradePerIp: { limit: 60, windowMs: 60_000 },
+  /** POST /api/market/invest: the rules cap a day at a handful of investments anyway. */
+  investPerPlayer: { limit: 20, windowMs: 60_000 },
+  investPerIp: { limit: 40, windowMs: 60_000 },
   snapshotPerIp: { limit: 10, windowMs: 60_000 },
 } satisfies Record<string, RateLimit>;
 

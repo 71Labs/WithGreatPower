@@ -18,6 +18,8 @@ import { useNewCase } from "@/lib/cases/local";
 import type { Hero, Save } from "@wgp/game-core/types";
 
 import { GameBackdrop, type BackdropVariant } from "./backdrop";
+import { plural } from "@/lib/plural";
+
 import { KitStyles, ON_PAPER, StickerBadge, StickerButton, StickerIconButton, StickerLink } from "./kit";
 import { GameSheet, HeroTile } from "./ui";
 
@@ -42,7 +44,6 @@ export const GAME_NAV = [
 const isActive = (pathname: string | null, href: string) =>
   !!pathname && (href === "/play" ? pathname === "/play" : pathname.startsWith(href) || (href === "/play/compete" && pathname.startsWith("/play/leaderboard")));
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0");
 
 /* ------------------------------------------------------------------ the Rug's read marker */
@@ -124,28 +125,41 @@ function XpRing({ value, children }: { value: number; children: ReactNode }) {
 const chip =
   "pointer-events-auto flex h-12 items-center rounded-full border-2 border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 motion-safe:transition-[translate,box-shadow] motion-safe:duration-100 motion-safe:ease-out active:translate-y-[2px] active:shadow-none pointer-fine:hover:bg-game-paper-2";
 
+/** The most characters of "93/160" a phone's chip has room for, next to the level. */
+export const CHIP_XP_CHARS = 7;
+
+/**
+ * The hero chip. On a phone it shares the top bar with three buttons, so everything in it
+ * must fit whole or not be there: the name may shorten (its full text is the link's title
+ * and one tap away on the Hero screen), the XP count shows only while it fits ("93/160";
+ * the ring round the tile always shows it), and the "+1" for powers to pick sits on the
+ * chip's corner, never over the text.
+ */
 function HeroChip({ hero }: { hero: Hero }) {
   const need = XP_TO_NEXT(hero.level);
+  const xp = `${hero.xp}/${need}`;
+  // A long count would be cut off on a phone: there the level stands alone and the ring carries the XP.
+  const phone = xp.length <= CHIP_XP_CHARS ? "max-[359px]:sr-only" : "max-sm:sr-only";
   return (
-    <Link href="/play/hero" className={`${chip} min-w-0 gap-2 pl-0.5 pr-4`}>
+    <Link href="/play/hero" title={`${hero.name}, level ${hero.level}, ${xp} XP`} className={`${chip} relative min-w-0 gap-1.5 pl-0.5 pr-3 sm:gap-2 sm:pr-4`}>
       <XpRing value={hero.xp / need}>
         <HeroTile suit={hero.suit} className="size-[30px] rounded-full ring-0" />
       </XpRing>
       <span className="flex min-w-0 flex-col">
-        <span title={hero.name} className="max-w-[9.5rem] truncate text-[14px] font-semibold leading-4 max-[359px]:sr-only sm:max-w-[14rem]">{hero.name}</span>
+        <span className="max-w-[9.5rem] truncate text-[13px] font-semibold leading-4 max-[359px]:sr-only sm:max-w-[14rem] sm:text-[14px]">{hero.name}</span>
         <span className="num whitespace-nowrap text-[12px] font-medium leading-4 text-game-muted max-[359px]:text-[13px] max-[359px]:font-semibold max-[359px]:text-game-ink">
           Lv {hero.level}
-          {/* A 320px phone has room for the level only: the name is on the Hero screen, and the ring round the tile shows the XP. */}
-          <span className="max-[359px]:sr-only">
+          <span className={phone}>
             <span aria-hidden> · </span>
             <span className="sr-only">, </span>
-            {hero.xp}/{need} XP
+            {xp}
           </span>
+          <span className="max-sm:sr-only"> XP</span>
         </span>
       </span>
       {hero.pendingPicks > 0 ? (
         <>
-          <StickerBadge className="-mr-1 ml-0.5">+{hero.pendingPicks}</StickerBadge>
+          <StickerBadge className="absolute -right-2.5 -top-3.5">+{hero.pendingPicks}</StickerBadge>
           <span className="sr-only">, {plural(hero.pendingPicks, "new power")} to pick</span>
         </>
       ) : null}

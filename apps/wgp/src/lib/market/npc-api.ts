@@ -8,8 +8,8 @@ import type { NpcStatus } from "./npc-rules";
 export interface NpcTraderView {
   id: "sandwich-man";
   name: string;
-  /** "on-chain": his own NEAR account. "simulated": the simulated market, no tokens move. "off": not configured. */
-  mode: "on-chain" | "simulated" | "off";
+  /** "on-chain": his own NEAR account. "simulated": the simulated market, no tokens move. "practice": a guest's practice market in their browser. "off": not configured. */
+  mode: "on-chain" | "simulated" | "practice" | "off";
   accountId: string | null;
   /** His account on NearBlocks, when on chain. */
   explorerUrl: string | null;

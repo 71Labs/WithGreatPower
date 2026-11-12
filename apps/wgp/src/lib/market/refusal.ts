@@ -10,6 +10,7 @@
  * unclear whether the trade landed (the connection dropped after it was sent, a server
  * error) says so, so nobody pays twice by trying again blind.
  */
+import { noun, plural } from "@/lib/plural";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
@@ -26,6 +27,13 @@ export function panicText(message: string | undefined): string | null {
   const m = /panicked: ([^"\\]+)/.exec(message ?? "");
   return m ? m[1]!.trim() : null;
 }
+
+/**
+ * What the market says where investing can't happen yet: the live contract is v2 (mainnet
+ * today). The same sentence wherever it is shown, and exactly true: v3 is built, reviewed
+ * and not deployed.
+ */
+export const INVEST_NOT_LIVE = "Investing in a merchant is built into contract v3, which isn’t live yet. Try it in the practice market.";
 
 const itemName = (id: string) => (id in ITEMS ? ITEMS[id as ItemId].name : "that item");
 const bits = (n: string) => `${Number(n).toLocaleString("en-US")} Bits`;
@@ -51,7 +59,7 @@ export function refusalText(said: string): string {
   if ((m = /Price it between (\d+) and (\d+) Bits/i.exec(said))) {
     return `Gwei’s price moved: price this lot between ${Number(m[1]).toLocaleString("en-US")} and ${bits(m[2]!)}.`;
   }
-  if ((m = /You can have (\d+) listings open/i.exec(said))) return `You can have ${m[1]} listings up at once. Take one down first.`;
+  if ((m = /You can have (\d+) listings open/i.exec(said))) return `You can have ${plural(Number(m[1]), "listing")} up at once. Take one down first.`;
   if (/Daily market limit/i.test(said)) return "That’s today’s market limit. It resets at midnight UTC.";
   if (/That listing is gone/i.test(said)) return "Someone bought that lot first, or it was taken down.";
   if (/your own listing/i.test(said)) return "That’s your own listing. Take it down from the Listings tab instead.";
@@ -62,6 +70,24 @@ export function refusalText(said: string): string {
   if ((m = /Trade 1 to (\d+) at a time/i.exec(said))) return `You can trade 1 to ${m[1]} at a time.`;
   if (/maximum number of token kinds/i.test(said)) return "Your pockets are full: you hold every kind of thing an account can. Sell or use something first.";
   if (/doesn't trade/i.test(said)) return "Gwei doesn’t trade that item.";
+  // Investing in a merchant (contract v3's words, contracts/wgp/src/invest.rs; the simulated and practice markets say the same).
+  if (/isn't taking investors/i.test(said)) return "Gwei isn’t taking new investors right now. Stakes can still be withdrawn and earnings claimed.";
+  if ((m = /Invest (\d+) to (\d+) Bits at a time/i.exec(said))) return `You can invest ${Number(m[1]).toLocaleString("en-US")} to ${bits(m[2]!)} at a time.`;
+  if ((m = /The vendor can take only (\d+) more Bits for ([a-z0-9-]+)/i.exec(said))) {
+    return Number(m[1]) === 0 ? `Gwei’s till for ${itemName(m[2]!)} is fully funded. It can’t take more.` : `Gwei’s till for ${itemName(m[2]!)} can take only ${bits(m[1]!)} more. Try less.`;
+  }
+  if ((m = /You have no stake in ([a-z0-9-]+)/i.exec(said))) return `You have no stake in Gwei’s till for ${itemName(m[1]!)}.`;
+  if ((m = /You have (\d+) Bits staked in ([a-z0-9-]+)/i.exec(said))) return `You have ${bits(m[1]!)} staked in Gwei’s till for ${itemName(m[2]!)}. Withdraw that many or fewer.`;
+  if ((m = /Your stake unlocks in about (\d+) minutes?/i.exec(said))) {
+    return `Your stake is still locked: about ${Number(m[1]).toLocaleString("en-US")} more ${noun(Number(m[1]), "minute")}. A stake unlocks a set time after its last top-up. Nothing was moved.`;
+  }
+  if ((m = /The till can pay back only (\d+) Bits right now; it refills as players buy ([a-z0-9-]+)/i.exec(said))) {
+    return Number(m[1]) === 0
+      ? `Gwei’s till for ${itemName(m[2]!)} is empty right now, so your stake has to wait. It refills as players buy ${itemName(m[2]!)} from her.`
+      : `Gwei’s till for ${itemName(m[2]!)} holds only ${bits(m[1]!)} right now, so that’s the most you can withdraw. It refills as players buy ${itemName(m[2]!)} from her.`;
+  }
+  if (/Nothing earned yet/i.test(said)) return "No fee earnings to claim yet. They build as players trade this item with Gwei.";
+  if (/doesn't take investors yet/i.test(said)) return INVEST_NOT_LIVE;
   return "The market couldn’t do that, and nothing was spent. Try again.";
 }
 
@@ -71,6 +97,8 @@ export function marketProblem(status: number, code: string, message?: string): M
   if (code === "run_active") return { code, text: "Finish or abandon your patrol first, then trade." };
   // The simulated market answering after the contract's market opened.
   if (code === "on_chain") return { code, text: "The market just moved to NEAR. The page is reloading the new prices; try again in a moment." };
+  // An investing call the server (or the relayer) refused because the live contract is older than v3. Nothing was sent.
+  if (code === "invest_unsupported") return { code, text: INVEST_NOT_LIVE };
   if (code === "unknown_key" || code === "revoked_key" || code === "wrong_account" || code === "unknown_sender" || code === "bad_signature") {
     return { code: "quick_play", text: "Quick play needs turning on again on this device before you can trade." };
   }
