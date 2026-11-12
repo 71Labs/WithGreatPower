@@ -4,7 +4,7 @@ The next version of the game contract (`contracts/wgp`), built and tested on the
 
 Read this first if you are deciding whether to upgrade:
 
-- **The contract account needs more NEAR before the upgrade can work.** v3's wasm is 109,594 bytes larger than v2's, which locks about **1.10 NEAR** more for storage. On Nov 12 `game.wgpnear.near` held 4.49 NEAR with 3.74 locked, so 0.75 NEAR free. Without a top-up the upgrade fails (safely: v2 carries on). Send it 2 NEAR first.
+- **The contract account needs more NEAR before the upgrade can work.** v3's wasm is 109,618 bytes larger than v2's, which locks about **1.10 NEAR** more for storage. On Nov 12 `game.wgpnear.near` held 4.49 NEAR with 3.74 locked, so 0.75 NEAR free. Without a top-up the upgrade fails (safely: v2 carries on). Send it 2 NEAR first, and keep what is left over: the contract pays for every player's storage, and a call it can't pay for fails (see [Independent review](#independent-review-nov-12)).
 - **Nothing a player can do changes at the moment of the upgrade.** Every v2 method, view and event keeps its name, arguments and behaviour. Investing arrives switched off and the crafting cost stays what it is on chain today (0). The owner turns each on with one call.
 - **There is a tested way back**, as long as no Bits are invested: a rollback build of the v2 code ([Rolling back](#rolling-back)).
 
@@ -94,13 +94,13 @@ Rules (in `market_state().params`, set with `set_market_params`):
 
 | Rule | Default | Meaning |
 |---|---|---|
-| `invest_open` | true on a fresh deploy, **false after an upgrade** | off: no new investments; withdrawals and claims still work |
+| `invest_open` | true on a fresh deploy, **false after an upgrade** (from v2 or v1) | off: no new investments; withdrawals and claims still work |
 | `invest_fee_bps` | 5000 | investors' share of a vendor trade's fee, in basis points of the fee; the rest is burned |
 | `min_invest`, `max_invest` | 10, 500 | Bits per `market_invest` call |
 | `daily_invests` | 6 | `market_invest` calls per account per UTC day |
 | `daily_invest_bits` | 1000 | Bits an account may invest per UTC day |
 | `invest_lock_ms` | 3,600,000 (1 hour) | a stake can be withdrawn this long after its last top-up |
-| `craft_bits` | 50 on a fresh deploy; unchanged by an upgrade | Bits burned per crafted suit with a recipe |
+| `craft_bits` | 50 on a fresh deploy; unchanged by an upgrade (0 from a v1 state, which had none) | Bits burned per crafted suit with a recipe |
 
 What the contract says when it refuses (the app's `refusal.ts` should learn the new ones):
 
@@ -151,7 +151,7 @@ Each pool prices on a constant-product curve over `x = virtual_items + stock` an
 
 - A pool takes at most `virtual_bits - 1` Bits. A fully funded curve can pay for any sale (the total it can ever pay out approaches `y`), so there is nothing left to fund. With the live curves that is 479 Bits for a common item, 799 for an uncommon, 1,199 for a rare.
 - A stake is a claim on **its own principal**, 1 Bit for 1 Bit, not a share of the till.
-- Investors earn `invest_fee_bps` of the 2% fee on that pool's vendor trades, split by stake, instead of that part being burned. Earnings are kept apart from the till (`Pool.rewards`) and can always be claimed. Fractions of a Bit carry to the next trade. Listings still burn their whole fee, and a pool with no investors burns the whole fee as in v2.
+- Investors earn `invest_fee_bps` of the 2% fee on that pool's vendor trades, split by stake, instead of that part being burned. Earnings are kept apart from the till (`Pool.rewards`) and can always be claimed. Fractions of a Bit of the pool's cut carry to the next trade. A stake's own earnings round down: each top-up or withdrawal can cost its owner up to two Bits of earnings (never principal), which burn when the pool's last investor leaves; a claim rounds nothing away. Listings still burn their whole fee, and a pool with no investors burns the whole fee as in v2.
 - The stake is a ledger entry, not a token. It can't be transferred.
 
 ### The safety argument
@@ -203,8 +203,11 @@ Storage is 1 NEAR per 100,000 bytes (0.00001 NEAR per byte), paid by the contrac
 | | Bytes | NEAR locked |
 |---|---|---|
 | v2 wasm (live) | 361,935 | |
-| v3 wasm | 471,529 | |
-| **The upgrade** (code, plus about 300 bytes of root state), measured in the sandbox | **+109,901** | **1.099** |
+| v3 wasm | 471,553 | |
+| **The upgrade** (code, plus about 300 bytes of root state), measured in the sandbox | **+109,925** | **1.099** |
+| A new hero (`register_hero`, which anyone can call): v2 143 bytes, v3 about 290 (the first also indexes its suit) | 290 | 0.003 |
+| `record_season`, 10 players | 2,800 to 3,800 | 0.04 |
+| The first `mint_rewards` batch of 20 after the upgrade (heroes and items joining the index) | 3,400 | 0.034 |
 | The metadata table (26 rows, `token-metadata-args.json`) | 5,468 | 0.055 |
 | The token index, per token (a hero with a 64-character account id; shorter ids cost less) | up to 195 | 0.002 |
 | An investor with four stakes | 194 | 0.002 |
@@ -221,8 +224,9 @@ Gas, measured in the sandbox against the built wasm (`cargo test -- --nocapture`
 | `market_buy` / `market_sell` in a pool with an investor | 3.0 |
 | `market_buy`, `market_sell`, `list_item`, `cancel_listing`, `buy_listing` (v2 calls on v3) | 2.9 to 4.1 |
 | `register_hero` / `craft_suit` | 3.0 / 3.2 |
-| `mint_rewards`, 20 rewards × 3 items | 10.3 (v2: about 9) |
-| `record_season`, 10 players | 9.1 |
+| `mint_rewards`, 20 rewards × 3 items, players without heroes | 10.3 |
+| `mint_rewards`, 20 rewards × 3 items, players with heroes (v2: 10.7) | 15.5; 17.1 for the first batch after the upgrade |
+| `record_season`, 10 players (v2: 6.8) | 9.1 to 9.8 |
 | `index_tokens`, 12 ids | 5.9 |
 | `set_token_metadata`, 2 rows | 2.5 |
 | `market_refund`, 1 investor | 2.8 |
@@ -257,8 +261,8 @@ near tokens wgpnear.near send-near game.wgpnear.near '2 NEAR' network-config mai
 
 ```sh
 cd contracts/wgp
-cargo test --locked                                   # 113 passed
-cargo near build non-reproducible-wasm --locked       # target/near/wgp.wasm, 471,529 bytes
+cargo test --locked                                   # 117 passed
+cargo near build non-reproducible-wasm --locked       # target/near/wgp.wasm, 471,553 bytes
 node ../../scripts/near/check-wasm-imports.mjs target/near/wgp.wasm
 node ../../scripts/near/fetch-deployed-wasm.mjs game.wgpnear.near target/near/wgp-v2.wasm \
   68F7NhEjUtKweyLU7WNvT183apacLQegfB1DXUoQ2hjJ      # the live code, hash checked
@@ -365,12 +369,12 @@ Three levels, mildest first.
 Two days before the deadline, honestly:
 
 - **It is a state migration on a live contract with real players' assets.** The migration rewrites one storage entry (the root) and touches no player, listing or season entry, and a failed migration undoes the deploy. It was rehearsed on Nov 12 on a sandbox copy of mainnet's contract and state (63 storage entries): after the upgrade the 62 entries other than the root were byte-identical, every v2 view answered the same, a real seller's copy cancelled a listing and traded, and v2 → v3 → rollback gave back the original state byte for byte. That is strong evidence, not proof: mainnet's state will have moved by the time you upgrade (rerun the rehearsal), and a sandbox is not mainnet's protocol version to the letter, which is what the import guard is for.
-- **No independent review.** About 1,600 new lines of contract code, written and tested by one author in one day. The investing maths is small and its invariants are tested, but nobody else has tried to break it. Keeping `invest_open` false after the upgrade means the new money-moving code can't run until you choose.
+- **One independent review, in one day** ([below](#independent-review-nov-12)). About 1,600 new lines of contract code, written and tested by one author in one day, then read and attacked by one reviewer. The investing maths is small and its invariants are tested; that is not an audit. Keeping `invest_open` false after the upgrade means the new money-moving code can't run until you choose.
 - **The app doesn't use any of it yet.** Metadata and enumeration help a screener or a wallet immediately. Investing has no UI, the relayer doesn't allow its methods, and the refusal texts don't know its messages. Opened on chain without the app, only someone calling the contract directly can invest, with nothing explaining the risk of waiting.
 - **Turning on the crafting cost before the app shows it** would make crafts fail with no explanation. It stays 0 until you set it.
 - **The rollback has a condition.** It works only while no Bits are invested (or after refunding them, which needs solvent tills). Once investing is open and used, the realistic way back is switching it off and fixing forward.
 - **Costs are small but real**: 2 NEAR to the contract account, of which 1.10 is locked.
-- **Season 1 ends on the 14th** and `record_season` is the call that must not fail. It is unchanged, tested on v3 (unit and sandbox, 9.1 Tgas), and its only new work is adding ten trophy ids to the index.
+- **Season 1 ends on the 14th** and `record_season` is the call that must not fail. It is unchanged, tested on v3 (unit and sandbox, under 10 Tgas of the 100 the server attaches, also on a copy of mainnet right after the upgrade), and its only new work is adding ten trophy ids to the index. It needs about 0.04 NEAR of free balance for storage and fails whole without it: check `get_storage` before the call.
 
 A reasonable middle path: upgrade, verify, set the metadata and index the tokens (the two screener findings that are pure reads), and leave investing and the crafting cost off until the app catches up. That gets the metadata and enumeration points with the least new behaviour live.
 
@@ -391,7 +395,7 @@ The market UI is untouched on this branch.
 
 | What | Where | Result |
 |---|---|---|
-| Unit tests (113: 68 from v2, 45 new) | `cd contracts/wgp && cargo test --locked` | pass |
+| Unit tests (117: 68 from v2, 45 new, 4 from the review) | `cd contracts/wgp && cargo test --locked` | pass |
 | Clippy on the contract | `cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings` | clean |
 | Mainnet import guard | `node scripts/near/check-wasm-imports.mjs contracts/wgp/target/near/wgp.wasm` | 26 host functions, none newer than mainnet |
 | Sandbox: v2's own tests on the v3 wasm | `contracts/wgp/sandbox/tests/sandbox.rs` | pass |
@@ -399,4 +403,26 @@ The market UI is untouched on this branch.
 | Sandbox: an upgrade the account can't pay storage for | same file | fails whole, v2 intact; passes after a top-up |
 | Sandbox: the upgrade, v3 views, a trade and the rollback on a copy of mainnet's code and state | `contracts/wgp/sandbox/tests/mainnet_rehearsal.rs` (`WGP_MAINNET_REHEARSAL=1`; skipped otherwise) | pass on Nov 12: 63 entries, only the root changed; 65.2 Tgas |
 
+| Sandbox: after the upgrade, a full reward batch for 20 heroes and a season, at the server's 100 Tgas; an upgrade short of gas; a season the account can't store | `contracts/wgp/sandbox/tests/review_v3.rs` | pass |
+| Sandbox: the same on a copy of mainnet holding its real balance: refused without the top-up, then the upgrade, a season and a batch of 20 | same file (`WGP_MAINNET_REHEARSAL=1`) | pass on Nov 12 |
+
 The sandbox tests need cargo-near 0.22 and the three wasms from step 1 of the upgrade.
+
+## Independent review (Nov 12)
+
+A second pass by someone who didn't write the code, on the branch `review/contract-v3`: every new line read, the tests rerun, new ones written (`src/v3_tests/review.rs`, `sandbox/tests/review_v3.rs`). No way was found to lose, mint or move a player's tokens, with investing off or on.
+
+What it changed:
+
+- **A v1 state now arrives like a v2 one**: investing off, crafting free (`migrate.rs`). Before, a v1 contract upgraded straight to v3 got the fresh-deploy rules: investing open and a 50-Bit crafting cost nobody had Bits for. Mainnet is v2 and was never affected.
+- The gas and storage figures above for players who have heroes, which the first measurements didn't cover.
+
+What the owner should know that the rest of this page understates:
+
+- **Free balance is a precondition of every operator call, not just of the upgrade.** The contract pays for storage. `record_season` needs about 0.04 NEAR free and a full reward batch up to 0.035; with less, the call fails whole (and works once the account is topped up, which anyone can do). After a 2 NEAR top-up about 1.65 NEAR is free. `register_hero` is open to any account and costs the contract about 0.003 NEAR each on v3 (0.0014 on v2), so free balance can be run down from outside: look at `get_storage` before Nov 14's call.
+- **Deploy only through `upgrade`.** A plain `deploy` of the v3 wasm skips `migrate`, and every call then fails until `migrate` is called with the contract account's own key.
+- **Investing, once open, is exit liquidity for whoever holds items.** Investors' Bits let the vendor buy what it otherwise couldn't; whoever sells into a funded till is paid from it, and the investors get their Bits back only if players later buy that stock. With loot minted every night, that may be never. "Waiting" above is the polite word for it. The contract keeps the books exactly; whether it is a fair offer to players is a product decision.
+- **A session key can invest.** Session keys may call any method on the contract (`SESSION_KEY_METHODS` is empty), so once investing is open a leaked key can park up to `daily_invest_bits` a day without going through the relayer.
+- `media` in token metadata is an absolute URL while `base_uri` is also set; a client that always joins the two would build a wrong URL. Wallets that check for `https://` first are fine.
+
+Not covered by the review: the app, the relayer, the scripts under `scripts/near` beyond reading them, `index_tokens` at its 100-id limit (measured at 12), and anything on mainnet itself beyond read-only views.
