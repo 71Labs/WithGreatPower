@@ -44,6 +44,10 @@ jobs:
 
       - run: pnpm -r lint
 
+      # Every claim in the README and docs still points at real code and real tests, and
+      # docs/EVIDENCE.md is up to date with docs/evidence.json. No tests run here (seconds).
+      - run: pnpm evidence --check
+
       - run: pnpm -r test
 
       - run: pnpm --filter wgp build
@@ -68,3 +72,35 @@ jobs:
           workspaces: contracts/wgp -> target
 
       - run: cargo test --locked
+
+  # Runs every claim's proof: the three test suites once each, mapped back to the claims in
+  # docs/evidence.json, and the test counts the README quotes. No network and no secrets.
+  evidence:
+    name: Evidence for every claim
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The "plan before code" claim reads commit order, so it needs the history.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Installs the toolchain contracts/wgp/rust-toolchain.toml pins (1.95.0).
+      - run: rustup toolchain install
+        working-directory: contracts/wgp
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: contracts/wgp -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm evidence
