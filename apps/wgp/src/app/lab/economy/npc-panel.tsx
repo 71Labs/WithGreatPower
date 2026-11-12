@@ -142,7 +142,7 @@ export function NpcPanel({ history, hover, onShowBroke }: { history: DaySnapshot
           Load a run where he goes broke
         </StickerButton>
         <p className="min-w-0 flex-1 basis-[240px] text-[12px] leading-4 text-game-muted [text-wrap:pretty]">
-          Sets seed {LAB_BROKE_SEED} with 21 days and 60 heroes: he runs out of Bits twice, clears stock to Gwei at a loss and reopens. Press Run to watch it.
+          Sets seed {LAB_BROKE_SEED} with 21 days and 60 heroes: he runs out of Bits three times, clears stock to Gwei at a loss and reopens. Press Run to watch it.
         </p>
       </div>
     </StickerPanel>

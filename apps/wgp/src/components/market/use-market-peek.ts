@@ -6,7 +6,7 @@
  * per visit and per player, never polled; a screen that can't reach the market simply shows
  * no prompt. Also this browser's tally of a guest's would-be Bits (per-browser, best effort).
  */
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useAccount } from "@/game/store";
 import { getMarket, getMarketMe, type MarketMe, type MarketView } from "@/lib/market/api";
@@ -29,7 +29,68 @@ interface Loaded {
   quest: MarketQuestView | null;
 }
 
-export function useMarketPeek(): MarketPeek {
+/* ------------------------------------------------------------------ coming back to a screen */
+
+/** The parts of `window` and `document` a revisit is read from; tests pass fakes. */
+export interface RevisitSource {
+  win: Pick<EventTarget, "addEventListener" | "removeEventListener">;
+  doc: Pick<EventTarget, "addEventListener" | "removeEventListener"> & { visibilityState: string };
+  now(): number;
+}
+
+/** No second re-read within this long: focus and visibility often fire together. */
+export const REVISIT_GAP_MS = 3_000;
+
+/**
+ * Calls `onRevisit` when the player comes back to a page that stayed open: the tab becomes
+ * visible again, the window regains focus, or the page is restored from the back-forward
+ * cache. Throttled to one call per `gapMs`. Returns the function that stops watching.
+ */
+export function watchRevisits(onRevisit: () => void, source: RevisitSource, gapMs = REVISIT_GAP_MS): () => void {
+  let last = Number.NEGATIVE_INFINITY;
+  const fire = () => {
+    if (source.doc.visibilityState !== "visible") return;
+    const t = source.now();
+    if (t - last < gapMs) return;
+    last = t;
+    onRevisit();
+  };
+  const restored = (e: Event) => {
+    if ((e as PageTransitionEvent).persisted) fire();
+  };
+  source.doc.addEventListener("visibilitychange", fire);
+  source.win.addEventListener("focus", fire);
+  source.win.addEventListener("pageshow", restored);
+  return () => {
+    source.doc.removeEventListener("visibilitychange", fire);
+    source.win.removeEventListener("focus", fire);
+    source.win.removeEventListener("pageshow", restored);
+  };
+}
+
+/**
+ * A number that goes up each time the player comes back to this screen: the tab or window
+ * is shown again (`watchRevisits`), or Next shows a page it kept alive (its effects run
+ * again). A screen that printed a wallet passes it to `useMarketPeek` so the Bits are
+ * re-read: they may have been earned or spent elsewhere in the meantime.
+ */
+export function useRevisits(): number {
+  const [visits, setVisits] = useState(0);
+  const shownBefore = useRef(false);
+  useEffect(() => {
+    // The first run is the first visit; a later run is the kept-alive page being shown again.
+    if (shownBefore.current) setVisits((n) => n + 1);
+    shownBefore.current = true;
+    return watchRevisits(() => setVisits((n) => n + 1), { win: window, doc: document, now: Date.now });
+  }, []);
+  return visits;
+}
+
+/**
+ * `stamp`: change it to look again. The Suit lab passes the save's revision and its revisit
+ * count: a craft may have burned Bits, and a trade elsewhere may have earned some.
+ */
+export function useMarketPeek(stamp: number | string = 0): MarketPeek {
   const account = useAccount();
   const key = account.status === "signed-in" ? account.me.player.id : account.status;
   const signedIn = account.status === "signed-in";
@@ -44,7 +105,7 @@ export function useMarketPeek(): MarketPeek {
       () => {},
     );
     return () => ctrl.abort();
-  }, [key, signedIn]);
+  }, [key, signedIn, stamp]);
   const now = loaded?.key === key ? loaded : null;
   return { view: now?.view ?? null, me: now?.me ?? null, quest: now?.quest ?? null, signedIn, settled: !!now };
 }

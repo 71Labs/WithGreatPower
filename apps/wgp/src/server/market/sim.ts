@@ -17,7 +17,7 @@ import { eq, sql } from "drizzle-orm";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId, Save } from "@wgp/game-core/types";
 
-import { BITS_TOKEN, DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { BITS_TOKEN, DEFAULT_PARAMS, seededPools, type MarketParams } from "@/lib/market/config";
 import { accountToday, buyListing, cancelListing, listItem, marketBuy, marketSell, newBook, type Fill, type Ledger, type Listing, type MarketBook, type Trade } from "@/lib/market/engine";
 
 import { conflict } from "../http";
@@ -36,14 +36,49 @@ export interface SimState {
   wallets: Record<string, number>;
   /** Sandwich Man's items (src/server/npc/sim.ts): he has no save to keep them in. */
   npc?: { items: Record<string, number> };
+  /** Bits burned by crafting suits (./craft.ts), as `craft_suit` burns them on chain. */
+  craftBurned?: number;
 }
 
-export const seedSim = (): SimState => ({ book: newBook(DEFAULT_PARAMS, seededPools()), wallets: {} });
+/**
+ * Local overrides for the simulated market's settings, so a developer can play with the
+ * values the owner may set on chain (docs/ECONOMY.md) before they are set:
+ *
+ *   SIM_MARKET_CRAFT_BITS=250   Bits a crafted suit burns (`craft_bits`)
+ *   SIM_MARKET_FEE_BPS=500      the gas fee (`fee_bps`, at most 1000 as on chain)
+ *
+ * Dev only: ignored when NODE_ENV is production, and they never touch the contract's
+ * market, which reads its own params from the chain.
+ */
+export function simParamOverrides(env: Record<string, string | undefined> = process.env): Partial<MarketParams> {
+  if (env.NODE_ENV === "production") return {};
+  const whole = (raw: string | undefined, max: number) => {
+    if (raw === undefined || !/^\d{1,9}$/.test(raw.trim())) return null;
+    const n = Number(raw.trim());
+    return n <= max ? n : null;
+  };
+  const out: Partial<MarketParams> = {};
+  const craftBits = whole(env.SIM_MARKET_CRAFT_BITS, 1_000_000);
+  if (craftBits !== null) out.craftBits = craftBits;
+  const feeBps = whole(env.SIM_MARKET_FEE_BPS, 1_000);
+  if (feeBps !== null) out.feeBps = feeBps;
+  return out;
+}
+
+/** A stored sim with the local overrides applied (a no-op without them). */
+export function simStateOf(stored: unknown, env: Record<string, string | undefined> = process.env): SimState {
+  const state = stored as SimState;
+  const over = simParamOverrides(env);
+  if (Object.keys(over).length === 0) return state;
+  return { ...state, book: { ...state.book, params: { ...state.book.params, ...over } } };
+}
+
+export const seedSim = (): SimState => simStateOf({ book: newBook(DEFAULT_PARAMS, seededPools()), wallets: {} } satisfies SimState);
 
 /** The sim's state, or a fresh seed (not stored until the first trade). */
 export async function readSim(db: Db): Promise<SimState> {
   const [row] = await db.select({ state: marketSim.state }).from(marketSim).where(eq(marketSim.id, SIM_ID)).limit(1);
-  return row ? (row.state as SimState) : seedSim();
+  return row ? simStateOf(row.state) : seedSim();
 }
 
 /**
@@ -192,7 +227,7 @@ export async function simAct(db: Db, input: { playerId: string; accountId: strin
   return db.transaction(async (tx) => {
     await tx.insert(marketSim).values({ id: SIM_ID, state: seedSim(), rev: 0, updatedAt: now }).onConflictDoNothing({ target: marketSim.id });
     const [row] = await tx.select().from(marketSim).where(eq(marketSim.id, SIM_ID)).for("update");
-    const state = row!.state as SimState;
+    const state = simStateOf(row!.state);
     const book = state.book;
     const wallets = { ...state.wallets };
     const { save, rev } = await ensureSave(tx, playerId);

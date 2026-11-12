@@ -29,12 +29,13 @@ import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest
 import type { MarketParams } from "@/lib/market/config";
 import { holdingsOf, MARKET_PATH, nextTrade, parseTradeIntent } from "@/lib/market/prompts";
 import { countsForQuest } from "@/lib/market/quest";
+import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
 import { COACH_RING, CoachCard, coachSteps, markCoachSeen, useCoachSeen } from "./coach";
-import { ITEM_SOURCE, VENDOR_AFTER, vendorLine } from "./copy";
+import { ITEM_SOURCE, vendorAfter, vendorLine } from "./copy";
 import { OtherTraders } from "./other-traders";
 import { QuestStrip } from "./quest-strip";
 import { FillSheet, ListSheet, TradeSheet, type Side, type TradeGate } from "./sheets";
@@ -112,7 +113,7 @@ function Vendor({
           <p className="num text-right text-[12px] leading-4 text-game-muted sm:text-left">
             Gwei’s till: {formatBits(view.till)} Bits
             <br />
-            Gas fee {view.params.feeBps / 100}%, burned
+            Gas fee {feeText(view.params.feeBps)}, burned
           </p>
         </div>
         {!signedIn ? (
@@ -320,7 +321,7 @@ function Listings({
         </ul>
       )}
       <p className="px-2 pb-1 text-[12px] leading-4 text-game-muted sm:px-3">
-        {view.listings} open · at most {view.params.maxOpenListings} each · gas fee {view.params.feeBps / 100}% from the seller’s proceeds
+        {view.listings} open · at most {view.params.maxOpenListings} each · gas fee {feeText(view.params.feeBps)} from the seller’s proceeds
       </p>
     </div>
   );
@@ -469,7 +470,7 @@ export function MarketScreen() {
     else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     if (res.ok) {
       setTraded((n) => n + 1);
-      setAfter(VENDOR_AFTER[req.action]);
+      setAfter(vendorAfter(req.action, view?.params.feeBps ?? res.snapshot?.view.params.feeBps ?? 0));
       // A player who has traded doesn't need the tour.
       markCoachSeen();
       // The server completes today's quest when a trade lands; look, and say so in the same breath.
@@ -523,7 +524,7 @@ export function MarketScreen() {
       {view ? (
         <>
           {coachTarget === "bits" ? coach : null}
-          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day)} guestBits={guestBits} coached={coachTarget === "bits"} />
+          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day, view.params.feeBps)} guestBits={guestBits} coached={coachTarget === "bits"} />
           <div className={`grid gap-3 ${prompt ? "lg:grid-cols-2" : ""}`}>
             <QuestStrip quest={quest} signedIn={signedIn} now={Date.parse(view.updatedAt)} />
             {prompt ? (
@@ -558,7 +559,7 @@ export function MarketScreen() {
               </ul>
               <p className="mt-3 flex items-center gap-2 text-[12px] leading-4 text-game-paper/75">
                 <Coins aria-hidden className="size-4 shrink-0" strokeWidth={2} />
-                Prices include the {view.params.feeBps / 100}% gas fee. You can make {me ? me.tradesLeft : view.params.dailyTrades} more trades with Gwei today.
+                Prices include the {feeText(view.params.feeBps)} gas fee. You can make {me ? me.tradesLeft : view.params.dailyTrades} more trades with Gwei today.
               </p>
             </section>
           ) : (

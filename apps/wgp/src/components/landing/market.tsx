@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Chip, InlineTwoTone, Section } from "@/components/frame";
 import { StickerLink } from "@/components/game/kit";
 import { ArrowRight, ChartLine, Coins, Flame, KeyRound, Tag } from "@/components/icons";
-import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { seededPools } from "@/lib/market/config";
 import { afterBuy, buyCost, spot } from "@/lib/market/math";
 import { BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_PICKUP_BITS } from "@/lib/market/rewards";
 import { ITEMS } from "@wgp/game-core/data";
@@ -24,8 +24,6 @@ function buyOut(): CurvePoint[] {
   return points;
 }
 
-const fee = `${DEFAULT_PARAMS.feeBps / 100}%`;
-
 const features: { icon: ReactNode; text: ReactNode }[] = [
   {
     icon: <Coins strokeWidth={2} />,
@@ -37,7 +35,7 @@ const features: { icon: ReactNode; text: ReactNode }[] = [
   },
   { icon: <ChartLine strokeWidth={2} />, text: "Gwei Stacy’s prices ride a bonding curve. Buy and they climb; sell and they fall." },
   { icon: <Tag strokeWidth={2} />, text: "List your loot for other players at a price you set, between half and four times Gwei’s." },
-  { icon: <Flame strokeWidth={2} />, text: `A ${fee} fee on every trade is burned, so Bits don’t pile up forever.` },
+  { icon: <Flame strokeWidth={2} />, text: "A gas fee on every trade is burned, so Bits don’t pile up forever. The market shows today’s rate." },
   { icon: <KeyRound strokeWidth={2} />, text: "Trades sign with a session key and our relayer pays the gas. No pop-ups." },
 ];
 

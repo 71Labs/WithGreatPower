@@ -22,12 +22,12 @@ The track's prompt (["Games With Real Economies"](https://github.com/nearai/near
 | Bonus if players never notice the chain | Google sign-in, a game-only session key, a relayer that pays gas. No popup after sign-in. | [Try it](#try-it-do-x-see-y), steps 2, 3 and 5 |
 | Items are NEP-245 multi tokens, one contract for every item type | Heroes, suits, loot, Bits, badges and trophies are all token ids in `game.wgpnear.near` | Check 4 (command B) |
 | Social or email login, no seed phrases, popups or gas prompts in the loop | Google through Privy; NEAR wallets also work with one signed message | Step 2 |
-| NPCs with wallets | Gwei Stacy, the vendor: her stock and her till are NEP-245 balances on chain. Her wallet is the contract's own account, not a separate one, and her reasoning is rule-based, not an AI agent. | Check 3 (command A) shows each pool's `stock` and `bits` |
-| Agent NPCs | Sandwich Man, the arbitrageur: an NPC with his own account (`sandwich.wgpnear.near`) who uses only the market calls players use. He flips cheap listings, buys dips and undercuts Gwei by rules in one file, [`apps/wgp/src/lib/market/npc-rules.ts`](apps/wgp/src/lib/market/npc-rules.ts), and closes shop when he's broke. He trades in the simulated market and in `/lab/economy`; on mainnet he is off until the owner funds his account. Disclosed: he starts from a one-off seed of 300 Bits, is always labelled NPC and is never counted as a player. | [docs/npc-trader.md](docs/npc-trader.md); `/lab/economy`, **Load a run where he goes broke** |
+| NPCs with wallets | Two, of different kinds. **Live on mainnet:** Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain; her wallet is the contract's own account, not a separate one. **Built, off on mainnet until funded:** Sandwich Man, a trader with an account of his own (next row). Both are rule-based, not AI agents. | Gwei: check 3 (command A) shows each pool's `stock` and `bits`. Sandwich Man: [docs/npc-trader.md](docs/npc-trader.md) |
+| Agent NPCs | Sandwich Man, the arbitrageur: an NPC with his own account (`sandwich.wgpnear.near`) who uses only the market calls players use. He flips cheap listings, buys dips and undercuts Gwei by rules in one file, [`apps/wgp/src/lib/market/npc-rules.ts`](apps/wgp/src/lib/market/npc-rules.ts), and closes shop when he's broke. He trades in the simulated market (a local checkout) and in `/lab/economy`. **On mainnet he is off** until the owner funds his account and sets his key (`pnpm stats` counts his calls apart from players'; docs/npc-trader.md has the steps). Disclosed: he starts from a one-off seed of 300 Bits, is always labelled NPC, is never counted as a player and his trades complete nobody's market quest. | [docs/npc-trader.md](docs/npc-trader.md); `/lab/economy`, **Load a run where he goes broke** (seed 270: he closes shop three times and reopens) |
 | Merchant sets prices from stock and demand | A constant-product curve per item: buying raises the price, selling lowers it | [`contracts/wgp/src/market.rs`](contracts/wgp/src/market.rs) |
 | Pricing rules in one readable file | [`apps/wgp/src/lib/market/math.ts`](apps/wgp/src/lib/market/math.ts) mirrors the contract's maths line for line; both test against the same vectors | Read the file's first 15 lines |
 | A merchant's reasoning appears in a tooltip | **Why this price?** on every item in the market: Gwei explains the price from her real stock and till | `/play/market`, press **Why this price?** |
-| A merchant that goes broke stops trading | Gwei sells only what she holds and pays only from her till; sold out or broke, she says so and the button explains why. There's no invest-to-reopen: she's back in business when someone trades the other way. | The rules: `contracts/wgp/src/market.rs` (`buy_cost`, `sell_payout`); her words: `apps/wgp/src/lib/market/reasoning.ts` |
+| A merchant that goes broke stops trading | Gwei sells only what she holds and pays only from her till; sold out or broke, she says so and the button explains why. There's no invest-to-reopen: she's back in business when someone trades the other way. Sandwich Man closes shop under 60 Bits and reopens at 120 by selling what he holds. | The rules: `contracts/wgp/src/market.rs` (`buy_cost`, `sell_payout`); her words: `apps/wgp/src/lib/market/reasoning.ts`. Watch it: `/lab/economy`, **Drain Gwei**, run 30 days: the page counts the item-days she ended sold out and unable to buy. For him, **Load a run where he goes broke** |
 | Player-owned markets | Players list items for each other; the contract holds them in escrow | `list_item` and `buy_listing` transactions (command D) |
 | Economies that evolve without a dev patch | Prices are contract state and move with every trade. No deploy, no cron job. | Command A: prices have moved off their starting values |
 | A fast-forward mode | `/lab/economy` runs 60 bot players for 21 days on the same pricing code | Check 7 |
@@ -153,13 +153,13 @@ The full design is in [docs/GAME-LOOP.md](docs/GAME-LOOP.md). In short:
 |---|---|---|
 | **30 seconds** | Swings, lands, climbs, dodges, punches, fires a power | Gold Bits tokens and boost rings on the route |
 | **5 minutes** | Finishes a night of four stops; the server replays and ranks it | Loot and Bits are minted to their NEAR account in the background |
-| **Session** | Trades with Gwei, lists items, crafts a suit, climbs the boards | Prices move with each trade, 2% of each trade is burned, recipes burn loot |
+| **Session** | Trades with Gwei, lists items, crafts a suit, climbs the boards | Prices move with each trade, a gas fee on each trade is burned (2% today), recipes burn loot |
 
 ## The economy loop
 
 1. **Earn.** Each verified night mints loot from the villains you caught, plus Bits: `floor(score / 100) + 5`, +25 on a level-up, +1 for each gold Bits token you swing through (up to 25), and at most 1,000 a night.
 2. **Trade.** Gwei Stacy, an NPC vendor whose stock and till the contract holds, prices each item on a constant-product curve. Buying raises her price and selling lowers it. Players can also list items for each other, at 50–400% of her price.
-3. **Burn.** A 2% "gas fee" on every trade is burned. Crafting a suit (`/play/suits`) burns the loot in its recipe.
+3. **Burn.** A "gas fee" on every trade is burned: the contract's `fee_bps`, 2% today. Crafting a suit (`/play/suits`) burns the loot in its recipe, and the contract's `craft_bits` on top (0 today). The app reads both live: when the owner changes them, the market's quotes and the Suit lab's "Costs N Bits" follow without a deploy.
 4. **Nobody sets prices.** A price is wherever supply and demand leave the curve. Gwei explains each one (**Why this price?**), sells only what she holds and pays only from her till.
 
 The curve, in [`apps/wgp/src/lib/market/math.ts`](apps/wgp/src/lib/market/math.ts) and [`contracts/wgp/src/market.rs`](contracts/wgp/src/market.rs):
@@ -232,8 +232,9 @@ All steps work on the live site, with no install.
    - **Is it on chain?** `GET /api/market` says `onChain: true` when the contract's market is live, as it is in production. Without NEAR settings (a local checkout), the same engine runs in simulation and says `onChain: false`.
 6. **Watch the economy move.**
    - **Do:** open https://www.wgponnear.fun/lab/economy, choose a speed (1×, 4×, 16× or Instant) and press **Run 21 days**.
-   - **See:** 60 bot players patrol, buy, sell, list and craft for 21 days on the same pricing code. The page shows each item's price and Gwei's stock by day, her reasoning, and the Bits in play, burned and crafted. The same seed always gives the same run.
-   - **One difference from mainnet:** the lab's **Crafting burns 25 Bits** option is on by default to show that sink. On mainnet, crafting burns only the recipe's items (`craft_bits` is `"0"` in `market_state`).
+   - **See:** 60 bot players patrol, buy, sell, list and craft for 21 days on the same pricing code, with mainnet's settings (2% gas fee, crafting burns no Bits) and the contract's rule that a hero crafts each suit once. The page shows Bits earned against Bits burned, each item's price and Gwei's stock by day, her reasoning, and the Bits in play, burned and crafted. The same seed always gives the same run.
+   - **The inflation, and the fix:** with mainnet's settings about 3% of the Bits earned are burned. Tick **Recommended settings** (crafting burns 250 Bits, 5% gas fee) and run again: about 29%. Those settings are not on mainnet yet; [docs/ECONOMY.md](docs/ECONOMY.md) has the measurements, the owner's command and what stays unfixed.
+   - **Gwei's limits:** press **Drain Gwei** and run 30 days. A crowd of hoarders and dumpers leaves her sold out of rares and unable to buy the rest, and the page counts the item-days.
 7. **Roam the City.**
    - **Do:** open https://www.wgponnear.fun/play/city. Shift sprints, F webs while held, Q zips, E talks or interacts, M opens the map.
    - **See:** a free-roam city where walls are climbable, barriers and cars are solid (a car at speed knocks you down), and six people have tasks, such as racing Sandwich Man over the roofs with Gwei's order, or unplugging Doc Octochain's relays from the city's highest points.
@@ -335,7 +336,7 @@ pnpm dev                                         # http://localhost:3000/play  (
 
 | Command | What it does | Expect |
 |---|---|---|
-| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite. | game-core 283 passed, app 1,048 passed |
+| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite. | game-core 283 passed, app 1,229 passed |
 | `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | Exit 0, no errors |
 | `pnpm build` | The production build of the app; needs no environment variables | The route list |
 | `pnpm verify` | Replays the live All-time top 5 | `5/5 runs reproduced` |
@@ -371,7 +372,7 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 ## Limits and what's next
 
 - **Bots:** a replay proves a score is reproducible, not that a person played it. The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player, but a patient bot can still play.
-- **Currency:** more Bits are earned than burned (in the lab's default run, 98,255 earned and 10,021 burned). The sinks are the 2% trade fee and crafting; a Bits cost for crafting exists in the contract (`craft_bits`) and is off on mainnet.
+- **Currency:** more Bits are earned than burned (in the lab's default run, on mainnet's settings, 99,022 earned and 2,847 burned). The sinks are the trade fee (2% today) and crafting. A Bits cost for crafting exists in the contract (`craft_bits`) and is off on mainnet; the Suit lab shows and checks it once it's on, and [docs/ECONOMY.md](docs/ECONOMY.md) measures what turning it on would do (about 29% of a season's Bits burned, still not parity).
 - **Trust:** the operator key mints rewards and the server decides which runs verify. Anyone can re-run a run's replay, but the mint itself trusts our server. The contract's owner can upgrade it.
 - **Scale:** 26 heroes so far. The relayer and operator are single accounts with daily budgets.
 - **Market depth:** most on-chain activity is rewards and crafting; trades are still few.

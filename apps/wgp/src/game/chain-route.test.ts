@@ -50,6 +50,12 @@ describe("routing rules", () => {
   it("says why the contract refused", () => {
     expect(refusalText("Smart contract panicked: Needs sybil-goo x2")).toMatch(/enough loot/);
     expect(refusalText("Smart contract panicked: Reach level 3 to craft this suit")).toMatch(/below level 3/);
+    // The market's craft_bits: the Bits are named, with how many are missing.
+    expect(refusalText("Smart contract panicked: Needs bits x130")).toBe("You’re 130 Bits short of what crafting burns, so nothing was spent. Sell spare loot to Gwei or finish a ranked night.");
+    expect(refusalText("Needs bits x130")).not.toMatch(/loot for that yet/);
+    expect(refusalText("Smart contract panicked: Needs sybil-goo x1, bits x130")).toMatch(/enough loot.*130 Bits short/);
+    // The relayer's own check answers 422 craft_bits_short in the contract's words, before any gas.
+    expect(classifyRelay({ ok: false, status: 422, error: "craft_bits_short", message: "Needs bits x1" })).toMatchObject({ kind: "refused", text: expect.stringContaining("1 Bit short") });
     expect(refusalText("Smart contract panicked: The game is paused")).toMatch(/paused/);
     expect(refusalText("something else")).toMatch(/nothing was spent/);
   });

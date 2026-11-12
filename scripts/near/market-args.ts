@@ -9,16 +9,18 @@
  *     json-args "$ARGS" prepaid-gas '100.0 Tgas' attached-deposit '1 yoctoNEAR' \
  *     sign-as wgpnear.near network-config mainnet sign-with-legacy-keychain send
  *
- * `--craft-bits N` also turns on the crafting sink (N Bits burned per crafted suit).
+ * `--craft-bits N` also turns on the crafting sink (N Bits burned per crafted suit) and
+ * `--fee-bps N` sets the gas fee (at most 1000). docs/ECONOMY.md recommends both.
  * Calling it again later updates the rules and curves; seeds are only minted to new pools.
  */
 import { DEFAULT_PARAMS, setMarketParamsArgs } from "../../apps/wgp/src/lib/market/config";
 
 const args = process.argv.slice(2);
-const i = args.indexOf("--craft-bits");
-const craftBits = i >= 0 ? Number(args[i + 1]) : DEFAULT_PARAMS.craftBits;
-if (!Number.isInteger(craftBits) || craftBits < 0) {
-  console.error("usage: market-args.ts [--craft-bits N]");
+const option = (name: string, fallback: number) => (args.includes(name) ? Number(args[args.indexOf(name) + 1]) : fallback);
+const craftBits = option("--craft-bits", DEFAULT_PARAMS.craftBits);
+const feeBps = option("--fee-bps", DEFAULT_PARAMS.feeBps);
+if (!Number.isInteger(craftBits) || craftBits < 0 || !Number.isInteger(feeBps) || feeBps < 0 || feeBps > 1_000) {
+  console.error("usage: market-args.ts [--craft-bits N] [--fee-bps 0..1000]");
   process.exit(1);
 }
-console.log(JSON.stringify(setMarketParamsArgs({ ...DEFAULT_PARAMS, craftBits })));
+console.log(JSON.stringify(setMarketParamsArgs({ ...DEFAULT_PARAMS, craftBits, feeBps })));

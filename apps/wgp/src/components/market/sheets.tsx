@@ -18,6 +18,7 @@ import type { ItemId } from "@wgp/game-core/types";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
 import { afterBuy, afterSell, buyQuote, lessSlippage, listingBounds, sellQuote, spotMilli, withSlippage } from "@/lib/market/math";
+import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
 
 import { ITEM_SOURCE } from "./copy";
@@ -453,7 +454,7 @@ export function ListSheet({
             </p>
           </div>
           <dl className="flex flex-col divide-y-2 divide-dashed divide-game-ink/15 rounded-[16px] border-2 border-game-ink bg-game-paper-2 px-4 py-1">
-            <Line label={`Gas fee when it sells (${view.params.feeBps / 100}%)`} hint="Burned from your proceeds." value={`−${bitsText(fee)}`} />
+            <Line label={`Gas fee when it sells (${feeText(view.params.feeBps)})`} hint="Burned from your proceeds." value={`−${bitsText(fee)}`} />
             <Line label="You get when it sells" strong value={`${bitsText(Math.max(0, asking - fee))}`} />
           </dl>
           <Problem id={`${ids}-problem`} text={problem} />

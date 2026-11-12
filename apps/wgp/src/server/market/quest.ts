@@ -10,6 +10,9 @@
  * - Once per player per UTC day: a `budget_counters` row (scope "quest:market", key the
  *   player, period the day) is inserted in the same transaction as the XP, and its primary
  *   key decides who adds it. No new table.
+ * - A player's own trade only: Sandwich Man (the NPC trader, src/server/npc) has no player
+ *   row, his looks never come through here, and a trade booked under his account never
+ *   counts (`tradedToday`). A player whose listing he buys has listed, not traded.
  * - Held back, never lost: with a ranked run in flight (its save mustn't move; the same
  *   rule as referrals.ts) or no hero yet, nothing is written; `marketQuestStatus` sees the
  *   day's trade in `market_prices` and grants it on the next look.
@@ -25,6 +28,7 @@ import { ensureSave } from "../db/players";
 import { addXp } from "../db/referrals";
 import { SUBMIT_GRACE_MS } from "../db/runs";
 import { budgetCounters, marketPrices, runs, saves } from "../db/schema";
+import { isNpcAccount } from "../npc/env";
 import { simAct, type SimResult } from "./sim";
 
 export const QUEST_SCOPE = "quest:market";
@@ -113,6 +117,8 @@ export async function simActWithQuest(db: Db, input: Parameters<typeof simAct>[1
 
 /** Whether this account made a trade that counts (with Gwei, or a listing bought) since midnight UTC. */
 export async function tradedToday(db: Db, accountId: string, now = new Date()): Promise<boolean> {
+  // Sandwich Man's trades are the NPC's, whoever is signed in to his account: they complete nobody's quest.
+  if (isNpcAccount(accountId)) return false;
   const [row] = await db
     .select({ n: sql<number>`count(*)` })
     .from(marketPrices)

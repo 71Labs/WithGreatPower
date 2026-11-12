@@ -27,6 +27,14 @@ export function npcTraderEnv(env: Record<string, string | undefined> = process.e
   return { accountId, privateKey: privateKey as `ed25519:${string}` };
 }
 
+/**
+ * Whether `accountId` is Sandwich Man's (in the simulated market, or his configured account
+ * on chain). His trades are his own: they never count as a player's (the market quest, stats).
+ */
+export function isNpcAccount(accountId: string, env: Record<string, string | undefined> = process.env): boolean {
+  return accountId === NPC_SIM_ACCOUNT || accountId === npcTraderAccount(env);
+}
+
 /** His account id on chain, or null when he's off or misconfigured. Never throws. */
 export function npcTraderAccount(env: Record<string, string | undefined> = process.env): string | null {
   try {

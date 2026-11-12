@@ -4,6 +4,10 @@
  * The suit lab: loot, every suit, and crafting or changing into one. Signed in, each
  * change shows where it landed (src/game/chain.ts): on NEAR with quick play on, or
  * "saved, not yet on chain" without it, next to the offer to turn quick play on.
+ *
+ * Crafting a suit with a recipe burns the market's `craft_bits` (src/lib/market/craft.ts;
+ * 0 on mainnet today, and then nothing below shows). When it is set, every recipe prints
+ * the cost, and Craft is off with the reason in words while the player can't pay it.
  */
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
@@ -11,11 +15,13 @@ import { openAccountSheet } from "@/components/account/sheet-state";
 import { HeroArt } from "@/components/cast";
 import { StickerButton, StickerFrame, StickerLink, StickerPanel, stickerTileClass } from "@/components/game/kit";
 import { GameLoading, GameSheet, useHeroSave, type HeroSave } from "@/components/game/ui";
-import { ArrowRight, Check, CircleDashed, ExternalLink, Hourglass, Lock, Shirt, Sparkles, X, Zap, type Icon } from "@/components/icons";
+import { ArrowRight, Check, CircleDashed, Coins, ExternalLink, Hourglass, Lock, Shirt, Sparkles, X, Zap, type Icon } from "@/components/icons";
 import { SuitShare } from "@/components/first-minute/suit-share";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { PartOffers, SpareOffers } from "@/components/market/trade-prompt";
-import { useMarketPeek } from "@/components/market/use-market-peek";
+import { useMarketPeek, useRevisits } from "@/components/market/use-market-peek";
+import { craftCost, craftGate, type CraftGate, type CraftWallet } from "@/lib/market/craft";
+import { bitsText, formatBits } from "@/lib/market/format";
 import { holdingsOf, suitGaps, type MarketFacts } from "@/lib/market/prompts";
 import type { CastId } from "@wgp/game-core/cast";
 import { ITEMS, RARITY_LABEL, STARTER_UNLOCK_LEVEL, SUITS } from "@wgp/game-core/data";
@@ -43,6 +49,25 @@ const ITEM_SOURCE: Record<ItemId, CastId> = {
 
 type Status = "equipped" | "owned" | "craftable" | "locked";
 
+/** What a suit's craft costs in Bits and why it can't be paid now (null: it can, or it's free). */
+export interface CraftBits {
+  cost: number;
+  gate: CraftGate | null;
+  /** The player's Bits when known. */
+  bits: number | null;
+}
+
+const NO_COST: CraftBits = { cost: 0, gate: null, bits: null };
+
+/** The loot and the level are there, but the Bits (or the way to burn them) aren't. */
+const BLOCKED: Record<CraftGate["code"], { label: string; icon: Icon; className: string } | null> = {
+  bits: { label: "Needs Bits", icon: Coins, className: "bg-game-paper-2 text-game-ink border-dashed" },
+  "sign-in": { label: "Needs Bits", icon: Coins, className: "bg-game-paper-2 text-game-ink border-dashed" },
+  "quick-play": { label: "Needs quick play", icon: Zap, className: "bg-game-paper-2 text-game-ink border-dashed" },
+  // Still reading the wallet: don't flash a warning that may not be true.
+  checking: null,
+};
+
 const STATUS: Record<Status, { label: string; icon: Icon; className: string }> = {
   equipped: { label: "Wearing", icon: Check, className: "bg-game-ink text-game-paper" },
   owned: { label: "Owned", icon: Shirt, className: "bg-game-paper text-game-ink" },
@@ -59,8 +84,8 @@ function suitStatus(save: HeroSave, id: SuitId): Status {
 /** The level a suit needs: starters unlock free at level 2, the rest at their own level. */
 const minLevel = (id: SuitId) => (SUITS[id].starter ? STARTER_UNLOCK_LEVEL : SUITS[id].minLevel);
 
-function StatusChip({ status }: { status: Status }) {
-  const s = STATUS[status];
+function StatusChip({ status, gate = null }: { status: Status; gate?: CraftGate | null }) {
+  const s = (status === "craftable" && gate ? BLOCKED[gate.code] : null) ?? STATUS[status];
   const Icon = s.icon;
   return (
     <span className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink px-2 text-[11px] font-bold uppercase tracking-[0.04em] ${s.className}`}>
@@ -192,7 +217,7 @@ function Notice({ notice }: { notice: { tone: keyof typeof NOTICE_TONE; text: st
 /* ------------------------------------------------------------------ recipe, inline */
 
 /** What a suit still needs, as small counts: item art and have/need, then the level. */
-function RecipeCounts({ save, id }: { save: HeroSave; id: SuitId }) {
+export function RecipeCounts({ save, id, craft }: { save: HeroSave; id: SuitId; craft: CraftBits }) {
   const suit = SUITS[id];
   const rows = Object.entries(suit.recipe) as [ItemId, number][];
   const level = minLevel(id);
@@ -223,6 +248,17 @@ function RecipeCounts({ save, id }: { save: HeroSave; id: SuitId }) {
         {suit.starter ? `Free at Lv ${level}` : `Lv ${level}`}
         <span className="sr-only">{levelOk ? ", reached" : ", not yet"}</span>
       </span>
+      {craft.cost > 0 ? (
+        <span
+          data-craft-cost={craft.cost}
+          className={`num inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full pl-1 pr-1.5 text-[11px] font-semibold ${craft.bits !== null && craft.bits >= craft.cost ? "bg-game-ink text-game-paper" : "bg-game-paper-2 text-game-ink"}`}
+        >
+          <Coins aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+          <span className="sr-only">Costs </span>
+          {bitsText(craft.cost)}
+          <span className="sr-only">{craft.bits === null ? "" : craft.bits >= craft.cost ? ", you have enough" : `, you have ${formatBits(craft.bits)}`}</span>
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -249,7 +285,7 @@ function Row({ ok, children, have, need }: { ok: boolean; children: ReactNode; h
   );
 }
 
-function Recipe({ save, id }: { save: HeroSave; id: SuitId }) {
+export function Recipe({ save, id, craft }: { save: HeroSave; id: SuitId; craft: CraftBits }) {
   const suit = SUITS[id];
   const rows = Object.entries(suit.recipe) as [ItemId, number][];
   const level = minLevel(id);
@@ -276,11 +312,35 @@ function Recipe({ save, id }: { save: HeroSave; id: SuitId }) {
           <span className="text-[12px] leading-4 text-game-muted">{suit.starter ? "Starter suits unlock free" : "Your hero’s level"}</span>
         </span>
       </Row>
+      {craft.cost > 0 ? (
+        <li data-craft-cost={craft.cost} className="flex items-center gap-3 py-2">
+          <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-[11px] bg-game-ink text-game-paper">
+            <Coins className="size-5" strokeWidth={2} />
+          </span>
+          <span className="flex min-w-0 flex-col">
+            <span className="num text-[14px] font-semibold leading-5">Costs {bitsText(craft.cost)}</span>
+            <span className="text-[12px] leading-4 text-game-muted">Burned when you craft, on top of the loot</span>
+          </span>
+          {craft.bits !== null ? (
+            <span className="num ml-auto flex shrink-0 items-center gap-1.5 text-[14px] font-semibold">
+              {formatBits(craft.bits)}
+              <span className="font-normal text-game-muted">/ {formatBits(craft.cost)}</span>
+              <span
+                aria-hidden
+                className={`grid size-5 place-items-center rounded-full border-2 border-game-ink ${craft.bits >= craft.cost ? "bg-game-mint text-game-paper" : "bg-game-paper text-game-ink"}`}
+              >
+                {craft.bits >= craft.cost ? <Check className="size-3" strokeWidth={3} /> : <X className="size-3" strokeWidth={3} />}
+              </span>
+              <span className="sr-only">{craft.bits >= craft.cost ? "enough" : "not enough"}</span>
+            </span>
+          ) : null}
+        </li>
+      ) : null}
     </ul>
   );
 }
 
-function SuitSheet({
+export function SuitSheet({
   save,
   id,
   open,
@@ -290,9 +350,12 @@ function SuitSheet({
   onChainSuits,
   offerQuickPlay,
   market,
+  craft,
 }: {
   save: HeroSave;
   id: SuitId | null;
+  /** The open suit's cost in Bits and what blocks paying it. */
+  craft: CraftBits;
   /** Gwei's prices, for buying a locked suit's missing parts; null until the market answers. */
   market: MarketFacts | null;
   open: boolean;
@@ -319,10 +382,12 @@ function SuitSheet({
       </StickerButton>
     );
   } else if (id && suit && status === "craftable") {
+    // Off while the Bits can't be paid; the reason is printed above it, never only in a tooltip.
     footer = (
-      <StickerButton variant="hero" onClick={() => onCraft(id)} data-autofocus="">
+      <StickerButton variant="hero" onClick={() => onCraft(id)} disabled={!!craft.gate} aria-describedby={craft.gate ? "craft-blocked" : undefined} data-autofocus={craft.gate ? undefined : ""}>
         <Sparkles aria-hidden className="size-5" strokeWidth={2} />
         {suit.starter ? "Unlock" : "Craft"} {suit.name}
+        {craft.cost > 0 ? <span className="num font-medium"> · {bitsText(craft.cost)}</span> : null}
       </StickerButton>
     );
   } else if (status === "locked") {
@@ -338,7 +403,7 @@ function SuitSheet({
     <GameSheet
       open={open}
       onClose={onClose}
-      eyebrow={status ? STATUS[status].label : undefined}
+      eyebrow={status ? ((status === "craftable" && craft.gate ? BLOCKED[craft.gate.code] : null) ?? STATUS[status]).label : undefined}
       title={suit?.name ?? ""}
       description={suit?.blurb}
       art={
@@ -355,20 +420,41 @@ function SuitSheet({
           <p className="text-[12px] font-bold uppercase leading-4 tracking-[0.08em] text-game-muted">
             {suit.starter ? "To unlock" : "Recipe"}
           </p>
-          <Recipe save={save} id={id} />
+          <Recipe save={save} id={id} craft={craft} />
           {shortfall ? (
             <p className="flex items-start gap-2 rounded-[12px] bg-game-paper-2 px-3 py-2 text-[13px] leading-5">
               <Lock aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={2.25} />
               {shortfall}.
             </p>
+          ) : craft.gate ? (
+            <div className="flex flex-col gap-2 rounded-[12px] bg-game-paper-2 px-3 py-2">
+              <p id="craft-blocked" data-craft-gate={craft.gate.code} className="num flex items-start gap-2 text-[13px] leading-5">
+                <Lock aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={2.25} />
+                <span className="[text-wrap:pretty]">{craft.gate.text}</span>
+              </p>
+              {craft.gate.code === "quick-play" ? <EnableQuickPlay onOpen={onClose} /> : null}
+              {craft.gate.code === "sign-in" ? (
+                <StickerButton
+                  size="sm"
+                  className="self-start"
+                  onClick={() => {
+                    onClose();
+                    openAccountSheet();
+                  }}
+                >
+                  Sign in to earn Bits
+                </StickerButton>
+              ) : null}
+            </div>
           ) : (
-            <p className="text-[13px] leading-5 text-game-muted">
-              {suit.starter ? "Unlocking it puts it on." : "Crafting uses the loot up and puts the suit on."}
+            <p className="num text-[13px] leading-5 text-game-muted">
+              {suit.starter ? "Unlocking it puts it on." : craft.cost > 0 ? `Crafting uses the loot up, burns ${bitsText(craft.cost)} and puts the suit on.` : "Crafting uses the loot up and puts the suit on."}
             </p>
           )}
           {/* A locked suit's parts don't have to drop: Gwei sells them, at a price that moves. */}
           {gap && market ? <PartOffers gap={gap} market={market} onNavigate={onClose} /> : null}
-          {status === "locked" ? <SpareOffers holdings={holdings} onNavigate={onClose} className="pt-1" /> : null}
+          {/* Short of loot, or short of the Bits the craft burns: spare loot sells for Bits. */}
+          {status === "locked" || craft.gate?.code === "bits" ? <SpareOffers holdings={holdings} onNavigate={onClose} className="pt-1" /> : null}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -430,7 +516,13 @@ export function SuitLab() {
   const account = useAccount();
   const chain = useChain();
   const activity = useChainActivity();
-  const market = useMarketPeek().view;
+  // One look at the market per visit, and again each time the server confirms a change to the save
+  // (its revision moves): a craft may have burned Bits, and the wallet is read after the burn, not before.
+  // ...and each time the player comes back to this page (another tab, the market and back): Bits earned or
+  // spent elsewhere must not leave Craft wrongly on or off.
+  const revisits = useRevisits();
+  const peek = useMarketPeek(`${account.status === "signed-in" ? account.me.rev : 0}:${revisits}`);
+  const market = peek.view;
   const [openId, setOpenId] = useState<SuitId | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -458,6 +550,20 @@ export function SuitLab() {
 
   const onChainSuits = chainSuits(chain, playerId);
   const offerQuickPlay = onChainSuits !== null && canEnable(chain);
+  // Where the Bits a craft burns would come from: the wallet the market reads for this player.
+  const wallet: CraftWallet =
+    account.status === "guest"
+      ? { kind: "guest" }
+      : account.status === "loading" || !peek.settled
+        ? { kind: "loading" }
+        : peek.me
+          ? { kind: "known", bits: peek.me.bits, onChain: peek.me.onChain, signs: chain.quickPlay.state === "on" }
+          : { kind: "unknown" };
+  const craftOf = (id: SuitId): CraftBits => {
+    const cost = craftCost(id, market?.params);
+    return cost > 0 ? { cost, gate: craftGate(cost, wallet), bits: wallet.kind === "known" ? wallet.bits : null } : NO_COST;
+  };
+  const anyCost = ALL_SUITS.some((id) => craftCost(id, market?.params) > 0);
   const latest = activity && sameAction(activity.action, lastAction) ? activity : null;
   const shown = latest
     ? activityNotice(latest, chain)
@@ -471,10 +577,13 @@ export function SuitLab() {
   }
 
   function craft(id: SuitId) {
+    const { cost, gate } = craftOf(id);
+    // The button is off while the Bits can't be paid; the server refuses too (src/server/market/craft.ts).
+    if (gate) return;
     dispatch({ type: "craft-suit", suit: id });
     setSheetOpen(false);
     setLastAction({ type: "craft-suit", suit: id });
-    setNotice(`${SUITS[id].name} ${SUITS[id].starter ? "unlocked" : "stitched together"}, and you’re wearing it.`);
+    setNotice(`${SUITS[id].name} ${SUITS[id].starter ? "unlocked" : "stitched together"}, and you’re wearing it.${cost > 0 ? ` It burned ${bitsText(cost)}.` : ""}`);
   }
 
   function wear(id: SuitId) {
@@ -493,6 +602,7 @@ export function SuitLab() {
         <p className="num text-[14px] font-medium leading-5 text-game-paper/80">
           {save.suits.length} of {ALL_SUITS.length} owned · wearing {SUITS[save.hero.suit].name}
           {onChainSuits ? ` · ${save.suits.filter((s) => onChainSuits.includes(s)).length} on NEAR` : null}
+          {anyCost && wallet.kind === "known" ? ` · ${bitsText(wallet.bits)}` : null}
         </p>
       </header>
 
@@ -507,12 +617,13 @@ export function SuitLab() {
           const suit = SUITS[id];
           const status = suitStatus(save, id);
           const showRecipe = status === "locked" || status === "craftable";
+          const bits = showRecipe ? craftOf(id) : NO_COST;
           return (
             <li key={id} className="flex">
               <button type="button" onClick={() => open(id)} className={`${stickerTileClass} w-full items-center gap-2 p-1.5 pb-2.5`}>
                 <span className="relative grid w-full place-items-center rounded-[14px] bg-game-paper-2 pb-3 pt-6">
                   <span className="absolute left-1.5 top-1.5">
-                    <StatusChip status={status} />
+                    <StatusChip status={status} gate={bits.gate} />
                   </span>
                   <StickerFrame drop="sm" className={`[--s:84px] sm:[--s:104px] ${status === "locked" ? "opacity-70 grayscale-[0.6]" : ""}`}>
                     <HeroArt {...suit.colors} />
@@ -520,7 +631,7 @@ export function SuitLab() {
                 </span>
                 <span className="px-1 text-center text-[15px] font-semibold leading-5">{suit.name}</span>
                 {showRecipe ? (
-                  <RecipeCounts save={save} id={id} />
+                  <RecipeCounts save={save} id={id} craft={bits} />
                 ) : (
                   <span className="text-[12px] font-medium leading-6 text-game-muted">{status === "equipped" ? "On you now" : "Tap to wear"}</span>
                 )}
@@ -540,6 +651,7 @@ export function SuitLab() {
         onChainSuits={onChainSuits}
         offerQuickPlay={offerQuickPlay}
         market={market}
+        craft={openId ? craftOf(openId) : NO_COST}
       />
     </div>
   );

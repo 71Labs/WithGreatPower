@@ -19,7 +19,7 @@
 import { ITEMS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import type { ItemId, SuitId } from "@wgp/game-core/types";
 
-import { BITS_TOKEN, DEFAULT_PARAMS, itemToken, seededPools, type MarketParams } from "./config";
+import { BITS_TOKEN, DEFAULT_PARAMS, itemToken, seededPools, type MarketParams, type PoolConfig } from "./config";
 import { buyListing, cancelListing, listItem, marketBuy, marketSell, MarketError, memoryLedger, newBook, type MarketBook } from "./engine";
 import { buyQuote, spotMilli } from "./math";
 import { newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
@@ -36,15 +36,37 @@ export interface EconomyConfig {
   params?: Partial<MarketParams>;
   /** Sandwich Man trades too (default true). */
   npc?: boolean;
+  /** The curves and holdings Gwei starts from (default: config.ts's, as seeded on chain). */
+  pools?: PoolConfig[];
+  /**
+   * The contract's rule: a hero crafts each suit once ("You already own this suit"). A
+   * crafter who owns all of them sells drops like a dumper. Off (the default), crafters
+   * re-craft forever, which overstates the crafting sink.
+   */
+  oneSuitEach?: boolean;
+  /**
+   * Nights a hero plays before quitting, when set: a new hero of the same kind takes the
+   * place with nothing, and the quitter keeps what they hold (it stays in the supply).
+   * The first heroes start at staggered ages so they don't all quit on one day.
+   */
+  lifespan?: number;
+  /** The kinds of hero, dealt in turn (default: 3 crafters, 2 dumpers, 2 flippers and a hoarder in 8). */
+  mix?: BotKind[];
+  /**
+   * Bits for a night (default: `nightBits`), given the hero's own Bits (`held`) and the
+   * Bits all heroes held that morning (`circulating`, across `heroes`).
+   */
+  reward?: (night: { score: number; levelledUp: boolean; held: number; circulating: number; heroes: number }) => number;
 }
 
 /** Sandwich Man's account in the fast-forward. */
 export const LAB_NPC_ACCOUNT = "sandwich-man.lab";
 /**
- * A seed in which he runs out of Bits, clears stock and reopens within the lab's default
- * run (21 days, 60 heroes, crafting burns 25 Bits); `bots.test.ts` checks it still does.
+ * A seed in which he runs out of Bits three times, clears stock and reopens each time
+ * within the lab's default run (21 days, 60 heroes, mainnet's settings: balance.ts's
+ * `MAINNET` with him trading); `bots.test.ts` checks it still does.
  */
-export const LAB_BROKE_SEED = 211;
+export const LAB_BROKE_SEED = 270;
 /** How many times a day he looks at the market: after each of this many slices of the bots. */
 const NPC_TURNS_PER_DAY = 8;
 
@@ -60,6 +82,15 @@ export interface NpcDay {
   events: NpcEvent[];
   /** Actions the market refused (his rules check first, so this stays 0). */
   refused: number;
+}
+
+/** What the patrols paid, for splitting the Bits earned by cause. */
+export interface MintTally {
+  nights: number;
+  levelUps: number;
+  /** What `nightBits` would have paid; more than `minted` when a `reward` rule pays less. */
+  untapered: number;
+  minted: number;
 }
 
 export interface DaySnapshot {
@@ -108,6 +139,12 @@ interface Bot {
   id: string;
   kind: BotKind;
   target: SuitId | null;
+  /** Nights patrolled so far, and the night count at which the hero quits (see `lifespan`). */
+  nights: number;
+  quitAfter: number;
+  /** Suits crafted so far, and how many nights in the first one came. */
+  suits: SuitId[];
+  firstSuitNight: number | null;
 }
 
 export class Economy {
@@ -115,7 +152,11 @@ export class Economy {
   readonly ledger = memoryLedger();
   readonly history: DaySnapshot[] = [];
   private readonly rand: () => number;
-  private readonly bots: Bot[];
+  /** The bot heroes, for reading balances and suits; the run owns them. */
+  readonly bots: Bot[];
+  /** Heroes who quit (see `lifespan`); what they hold still counts in the supply. */
+  readonly retired: Bot[] = [];
+  readonly tally: MintTally = { nights: 0, levelUps: 0, untapered: 0, minted: 0 };
   private minted = 0;
   private craftBurned = 0;
   private crafted = 0;
@@ -127,9 +168,10 @@ export class Economy {
 
   constructor(readonly config: EconomyConfig) {
     this.rand = rng(config.seed);
-    this.book = newBook({ ...DEFAULT_PARAMS, ...config.params }, seededPools());
-    const kinds: BotKind[] = ["crafter", "crafter", "dumper", "flipper", "crafter", "dumper", "hoarder", "flipper"];
-    this.bots = Array.from({ length: config.bots }, (_, i) => ({ id: `bot-${i}`, kind: kinds[i % kinds.length]!, target: null }));
+    this.book = newBook({ ...DEFAULT_PARAMS, ...config.params }, seededPools(config.pools));
+    const kinds: BotKind[] = config.mix?.length ? config.mix : ["crafter", "crafter", "dumper", "flipper", "crafter", "dumper", "hoarder", "flipper"];
+    const span = config.lifespan ?? 0;
+    this.bots = Array.from({ length: config.bots }, (_, i) => ({ id: `bot-${i}`, kind: kinds[i % kinds.length]!, target: null, suits: [], firstSuitNight: null, nights: 0, quitAfter: span ? span - (i % span) : Infinity }));
     if (config.npc !== false) {
       this.npcBooks = newBooks();
       this.ledger.credit(LAB_NPC_ACCOUNT, BITS_TOKEN, NPC_RULES.seedBits);
@@ -188,11 +230,17 @@ export class Economy {
   }
 
   /** One patrol's rewards: Bits from a score, and a few drops. */
-  private patrol(bot: Bot) {
+  private patrol(bot: Bot, circulating: number) {
     const score = 2_500 + Math.floor(this.rand() * 9_000);
-    const bits = nightBits({ score, levelledUp: this.rand() < 0.12 });
+    const levelledUp = this.rand() < 0.12;
+    const bits = this.config.reward ? this.config.reward({ score, levelledUp, held: this.has(bot, BITS_TOKEN), circulating, heroes: this.bots.length }) : nightBits({ score, levelledUp });
     this.ledger.credit(bot.id, BITS_TOKEN, bits);
     this.minted += bits;
+    bot.nights += 1;
+    this.tally.nights += 1;
+    this.tally.levelUps += levelledUp ? 1 : 0;
+    this.tally.untapered += nightBits({ score, levelledUp });
+    this.tally.minted += bits;
     const drops = 1 + Math.floor(this.rand() * 3);
     for (let i = 0; i < drops; i++) {
       const v = this.pick(VILLAIN_LIST);
@@ -222,7 +270,9 @@ export class Economy {
     // Stale listings come down after three days.
     for (const l of b.listings.filter((l) => l.seller === bot.id && now - l.listedAtMs > 3 * DAY_MS)) this.try(() => cancelListing(b, this.ledger, bot.id, l.id));
 
-    switch (bot.kind) {
+    // Under the one-suit rule a crafter with every suit has nothing left to build.
+    const kind = bot.kind === "crafter" && this.config.oneSuitEach && bot.suits.length >= CRAFTABLE.length ? "dumper" : bot.kind;
+    switch (kind) {
       case "dumper": {
         for (const item of ITEM_IDS) {
           const n = Math.min(this.has(bot, itemToken(item)), max);
@@ -231,7 +281,7 @@ export class Economy {
         break;
       }
       case "crafter": {
-        bot.target ??= this.pick(CRAFTABLE);
+        bot.target ??= this.pick(this.config.oneSuitEach ? CRAFTABLE.filter((s) => !bot.suits.includes(s)) : CRAFTABLE);
         const recipe = Object.entries(SUITS[bot.target].recipe) as [ItemId, number][];
         let ready = true;
         for (const [item, need] of recipe) {
@@ -252,6 +302,8 @@ export class Economy {
               this.craftBurned += cost;
             }
             this.crafted += 1;
+            bot.suits.push(bot.target);
+            bot.firstSuitNight ??= bot.nights;
             bot.target = null;
           }
         }
@@ -303,7 +355,7 @@ export class Economy {
       tills[p.item] = p.bits;
     }
     const till = this.book.pools.reduce((s, p) => s + p.bits, 0);
-    const held = this.bots.reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0) + this.ledger.balance(LAB_NPC_ACCOUNT, BITS_TOKEN);
+    const held = [...this.bots, ...this.retired].reduce((s, bot) => s + this.ledger.balance(bot.id, BITS_TOKEN), 0) + this.ledger.balance(LAB_NPC_ACCOUNT, BITS_TOKEN);
     return {
       day,
       prices,
@@ -325,12 +377,21 @@ export class Economy {
   step(): DaySnapshot {
     if (this.done) return this.history[this.history.length - 1]!;
     const day = this.day + 1;
+    const span = this.config.lifespan ?? 0;
+    if (span) {
+      this.bots.forEach((bot, i) => {
+        if (bot.nights < bot.quitAfter) return;
+        this.retired.push(bot);
+        this.bots[i] = { id: `bot-${this.bots.length + this.retired.length - 1}`, kind: bot.kind, target: null, suits: [], firstSuitNight: null, nights: 0, quitAfter: span };
+      });
+    }
     const order = [...this.bots];
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(this.rand() * (i + 1));
       [order[i], order[j]] = [order[j]!, order[i]!];
     }
-    for (const bot of order) this.patrol(bot);
+    const circulating = this.config.reward ? this.bots.reduce((n, bot) => n + this.has(bot, BITS_TOKEN), 0) : 0;
+    for (const bot of order) this.patrol(bot, circulating);
     const count = { trades: 0, fills: 0 };
     const every = Math.max(1, Math.ceil(order.length / NPC_TURNS_PER_DAY));
     order.forEach((bot, i) => {

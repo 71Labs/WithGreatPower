@@ -15,9 +15,11 @@ import { MARKET_QUEST_XP } from "@/lib/market/quest";
 import type { Db } from "../db/client";
 import { enqueueRewardMint } from "../db/outbox";
 import { ensureSave, writeSave } from "../db/players";
-import { budgetCounters, chainOps, runs } from "../db/schema";
+import { budgetCounters, chainOps, marketPrices, runs } from "../db/schema";
 import { freshDb, givePlayerHero, makePlayer } from "../db/test-helpers";
 import { completeMarketQuest, marketQuestStatus, QUEST_SCOPE, simActWithQuest, tradedToday, utcDay } from "./quest";
+import { NPC_SIM_ACCOUNT } from "../npc/env";
+import { runNpcTrader } from "../npc/runner";
 import { afterMarketRelay } from "./relay";
 import { mintedBits, simWallet } from "./sim";
 
@@ -199,6 +201,39 @@ describe("the relayer's market hook and the quest", () => {
     expect(await xp(alice.id)).toBe(start);
     expect(await markers()).toHaveLength(0);
     spy.mockRestore();
+  });
+});
+
+describe("Sandwich Man and the quest", () => {
+  it("his trades complete nobody's quest, and he is never a quest player", async () => {
+    const start = await xp(alice.id);
+    // Alice lists cheap (listing doesn't count); Sandwich Man buys it on his next look.
+    const listed = await simActWithQuest(db, { playerId: alice.id, accountId: alice.account, act: { action: "list", item: "crumbs", amount: 2, price: 13 }, now: NOW });
+    expect(listed.questXp).toBe(0);
+    const look = await runNpcTrader(db, { now: new Date(NOW.getTime() + 1_000) });
+    expect(look.event).toMatchObject({ kind: "fill", item: "crumbs", amount: 2 });
+
+    // His fill is in the price history under his own account...
+    const rows = await db.select().from(marketPrices).where(eq(marketPrices.kind, "fill"));
+    expect(rows.map((r) => r.accountId)).toEqual([NPC_SIM_ACCOUNT]);
+    // ...and it did nothing for Alice: no marker, no XP, the quest still open on the next look.
+    expect(await markers()).toHaveLength(0);
+    const status = await marketQuestStatus(db, { playerId: alice.id, accountId: alice.account, now: LATER });
+    expect(status).toMatchObject({ view: { done: false }, completed: null });
+    expect(await xp(alice.id)).toBe(start);
+
+    // A trade booked under his account is nobody's, even for a player signed in to that account.
+    expect(await tradedToday(db, NPC_SIM_ACCOUNT, LATER)).toBe(false);
+    const imposter = await marketQuestStatus(db, { playerId: alice.id, accountId: NPC_SIM_ACCOUNT, now: LATER });
+    expect(imposter.view.done).toBe(false);
+    expect(await markers()).toHaveLength(0);
+
+    // Alice's own trade still completes it, once, and only her row exists.
+    const bought = await buy(alice, LATER);
+    expect(bought.questXp).toBe(MARKET_QUEST_XP);
+    expect((await buy(alice, LATER)).questXp).toBe(0);
+    expect(await xp(alice.id)).toBe(start + MARKET_QUEST_XP);
+    expect((await markers()).map((m) => m.key)).toEqual([alice.id]);
   });
 });
 

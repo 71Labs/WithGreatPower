@@ -14,6 +14,7 @@
 import type { Action } from "@wgp/game-core/engine";
 import type { Save } from "@wgp/game-core/types";
 
+import { craftRefusalText } from "@/lib/market/craft";
 import type { QuickPlay } from "@/lib/near/quick-play";
 
 export type SuitAction = Extract<Action, { type: "craft-suit" | "equip-suit" }>;
@@ -56,6 +57,13 @@ const KEY_GONE = new Set(["unknown_key", "revoked_key", "wrong_account", "unknow
 
 /** Turns the contract's panic into words a player can act on. */
 export function refusalText(raw: string): string {
+  // The market's `craft_bits`: the contract (and the relayer's check before it) answers "Needs bits xN",
+  // after any loot it is also missing ("Needs sybil-goo x1, bits x130").
+  const bits = craftRefusalText(undefined, raw);
+  if (bits) {
+    const lootToo = /Needs (?!bits x)/i.test(raw);
+    return lootToo ? `NEAR doesn’t show enough loot for that yet (rewards from a night land within a minute or two). ${bits}` : bits;
+  }
   if (/Needs /i.test(raw)) return "NEAR doesn’t show enough loot for that yet. Rewards from a night land within a minute or two, so try again shortly.";
   const level = /Reach level (\d+)/i.exec(raw);
   if (level) return `NEAR still has your hero below level ${level[1]}. Your level lands with your next reward, so try again shortly.`;
