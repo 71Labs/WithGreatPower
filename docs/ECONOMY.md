@@ -11,6 +11,7 @@ pnpm --filter wgp exec tsx scripts/economy-balance.ts --search --drain --npc
 - **Code:** `apps/wgp/src/lib/market/balance.ts` (the measurements and the settings), `bots.ts` (the bot heroes), `scripts/economy-balance.ts` (the tables).
 - **Output:** `docs/economy/balance.json`.
 - **Tests:** `balance.test.ts` checks the accounting to the Bit and that the recommendation meets its band.
+- **In the game:** the Suit lab reads `craft_bits` live and shows, checks and (in the simulated market) burns it; every fee the market prints reads `fee_bps`. See "The owner's command".
 - **See it:** `/lab/economy` runs mainnet's settings by default. **Recommended settings** switches to the setting below, and the chart under the counters draws Bits earned against Bits burned.
 
 **Nothing here has been applied.** Mainnet still has `craft_bits: "0"` and `fee_bps: 200`.
@@ -167,7 +168,16 @@ A changes no quote and is the smallest step. B burns the most a season, and trad
 
 ## The owner's command
 
-**Do not send this until the Suit lab checks the Bits cost.** Today the Suit lab crafts in the player's save first and then calls `craft_suit`. It neither shows nor checks `craft_bits`. With the cost on, a player holding under 250 Bits would see the suit in the game and a refused call on chain. `docs/ARCHITECTURE.md` already says `craft_bits` stays 0 "until the Suit lab shows it".
+**Send this only once the cost-aware Suit lab is live in production** (branch `feat/economy-in-loop`; it is in the build when `/play/suits` shows a recipe's cost in a local run with `SIM_MARKET_CRAFT_BITS=250`). The production build before that crafts in the player's save first and neither shows nor checks `craft_bits`: with the cost on, a player holding under 250 Bits would see the suit in the game and a refused call on chain.
+
+What the app does with the cost, read live from `market_state` (nothing is hard-coded, so no deploy is needed when the value changes):
+
+- **Shows it.** Every recipe in the Suit lab prints "Costs 250 Bits" with the player's Bits beside it, and the Craft button carries the price.
+- **Blocks what the contract would refuse.** Short of Bits, Craft is off and the reason is printed with what to do (sell spare loot, play a ranked night). The server checks again: the relayer refuses a `craft_suit` the wallet can't pay before spending gas, and the save-only craft answers the contract's own words, "Needs bits x130".
+- **Never hands out a free suit.** The Bits can only be burned by the player's signed `craft_suit`. So with a cost set, a recipe suit can't be crafted "in the save only" any more: a player without quick play is told to turn it on, and a guest to sign in. Starter suits stay free everywhere. With `craft_bits` at 0 none of this shows and crafting works exactly as it does today.
+- **Local play matches.** The simulated market burns the Bits in the same transaction that writes the save (`src/server/market/craft.ts`). `SIM_MARKET_CRAFT_BITS=250 SIM_MARKET_FEE_BPS=500` runs a local server on the recommended settings (ignored in production).
+
+**Who is affected on the day:** players who craft without quick play (wallet sign-ins who never pressed **Enable quick play**) and guests can no longer craft the four recipe suits until they turn it on or sign in. Suits they already own are untouched.
 
 ```bash
 near contract call-function as-transaction game.wgpnear.near set_market_params json-args '{"params":{"open":true,"fee_bps":500,"floor_bps":5000,"ceiling_bps":40000,"max_amount":20,"max_open_listings":3,"max_listings":300,"daily_trades":40,"daily_listings":10,"daily_fills":10,"daily_fill_bits":"3000","craft_bits":"250"},"pools":[{"item":"fee-bomb","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"goblin-glider","virtual_bits":"1200","virtual_items":"8","seed_bits":"1200","seed_stock":"8"},{"item":"crumbs","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"sesame-seed","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"},{"item":"chain-link","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"spare-arm","virtual_bits":"1200","virtual_items":"8","seed_bits":"1200","seed_stock":"8"},{"item":"sybil-goo","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"},{"item":"press-pass","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"}]}' prepaid-gas '100.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as wgpnear.near network-config mainnet sign-with-legacy-keychain send
@@ -195,7 +205,8 @@ In `/lab/economy`, **Drain Gwei** runs 30 days of 60 heroes on mainnet's setting
 - **The model crafts four times as much as mainnet does.** Its heroes craft 1.5 suits each; mainnet's have crafted 0.35 each with crafting free. If that doesn't change, the real burn share will be well under the model's.
 - **Long-lived heroes run out of sink.** Four suits and they're done. A lasting sink needs more recipes, which `set_rules` can add on chain but which also need suits in the game, or a recurring cost the contract doesn't have.
 - **Items inflate too.** Loot arrives every night and only crafting removes it. In every 180-day run commons fall to about 8% of their starting price and Gwei is unable to buy on about 30% of item-days. Loot is part of the ranked sim, so it was left alone.
-- **The taper isn't live**, and the Suit lab doesn't yet check the Bits cost (above).
+- **The taper isn't live.** It stays a proposal: `runs.ts` still calls `nightBits`.
+- **A guest's imported save keeps its suits.** A guest can't craft a recipe suit while the cost is on (no Bits), but a first sign-in still imports the suits a local save claims, up to level 3, as it always has. Suits are cosmetic, and the import is capped (`src/game/import-caps.ts`), so this was left alone.
 - **The bots are an assumption.** Their mix, one night a day, and a hoarder who never spends are choices, not observations. Mainnet has 23 players and a handful of trades, too few to fit behaviour to.
 - **Vendor limits are read at each day's close.** A sell-out that refills the same day isn't counted.
 - **Sandwich Man is measured separately.** Every table above runs without him, because he is off on mainnet until his account is funded. The next section turns him on.
