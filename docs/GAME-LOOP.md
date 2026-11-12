@@ -44,11 +44,29 @@ Trades are calls from the player's own account, signed by a game-only session ke
 
 **Where to see it:** `/play/market`, `/play/suits`, `/play/leaderboard`, `/play/compete`. Rules: `contracts/wgp/src/market.rs`, mirrored in `apps/wgp/src/lib/market/math.ts`.
 
+### A guest's session: the practice market
+
+A guest has no account, so nothing they do reaches NEAR. They still get the market. Signed out, `/play/market` opens a **practice market**: the guest's own copy, run in their browser on the same pricing and trading code, started from the live market's prices. It is labelled on every screen ("Practice market: not on NEAR. Sign in to trade for real."). They trade with practice Bits and a copy of their loot; Sandwich Man trades in it too, labelled as the NPC. A guest's night ends with a link into it.
+
+Nothing in it is real, in either direction: a practice purchase can't be crafted with, imported or minted, and a practice sale costs the guest none of their saved loot. Practice trades earn no XP. Signing in brings across only what it always did (a hero up to level 3 and ten items).
+
+### When Gwei goes broke: invest in her
+
+When one of Gwei's tills can't pay for an item, her shop for that item is closed for buying, and the market says so on the item's card and in **Why this price?**.
+
+| The player | The economy |
+|---|---|
+| Presses **Invest in Gwei** on a closed shop and reads what they risk | Their Bits go into that till. The same amount comes off the unfunded part of her curve, so the price doesn't move: she can simply buy again. |
+| Keeps trading, or just waits | They earn half the gas fee on every trade of that item with her, split by stake, instead of it being burned |
+| Presses **Withdraw or claim** | Fee earnings can be claimed at any time. The stake comes out once its lock has passed and the till holds the Bits. If sellers emptied the till, the stake waits until someone buys that stock. |
+
+This runs today in the practice market and in the simulated market (a local checkout). **It is not live on mainnet:** the contract there (v2) has no invest call, so on mainnet a broke shop reopens only when someone buys from her, and the market says that investing arrives with contract v3. v3 is built and reviewed on the branch `review/contract-v3`. The whole story, with the maths and the risks, is [INVESTING.md](INVESTING.md).
+
 ## Why the economy is the gameplay
 
 - **Loot has a use.** Suits need specific parts from specific villains, so what you fight decides what you can build, and what you lack decides what you buy.
 - **Prices are other players.** Nobody sets a price. A villain everyone farms floods Gwei with its parts and the price falls; a rare part climbs as it's bought. `/lab/economy` fast-forwards 21 days of this with bot players on the same pricing code.
-- **The vendor has limits.** Gwei sells only what she holds and pays only from her till. Sold out, she can't sell; with an empty till for an item, she can't buy it until someone buys from her.
+- **The vendor has limits.** Gwei sells only what she holds and pays only from her till. Sold out, she can't sell; with an empty till for an item, she can't buy it until someone buys from her (or, where investing runs, until someone invests in that till: see above).
 - **Sources and sinks.** Bits enter only through verified nights and leave through the 2% fee; items enter as loot and leave through crafting. Today more Bits are earned than burned; a Bits cost for crafting is in the contract and off on mainnet.
 - **No patch needed.** The pools, fee and caps are contract state. Prices move with every trade, with no deploy and no cron job.
 

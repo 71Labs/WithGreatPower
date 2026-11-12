@@ -9,7 +9,9 @@
  * across the last 24 hours, with hourly snapshots) and leaves two listings open.
  * `SEED_ME=<handle>` also funds that dev sign-in player (600 Bits and the same loot), and
  * `SEED_ME_LEVEL=<n>` starts their hero at that level, so recipes that need a level can be
- * crafted. Never runs against DATABASE_URL.
+ * crafted. `SEED_ME` takes several handles separated by commas, and `SEED_ME_CRUMBS=<n>`
+ * gives each that many Crumbs: enough loot to sell one of Gwei's tills dry and try
+ * investing in her (docs/INVESTING.md). Never runs against DATABASE_URL.
  */
 import { newSave, reduce } from "@wgp/game-core/engine";
 import type { ItemId, Save } from "@wgp/game-core/types";
@@ -27,12 +29,12 @@ const HOUR = 3_600_000;
 const TRADERS = ["miles", "gwen", "ned", "felicia", "harry", "betty"];
 const LOOT: Partial<Record<ItemId, number>> = { crumbs: 14, "fee-bomb": 12, "chain-link": 10, "sybil-goo": 6, "sesame-seed": 3, "press-pass": 2, "goblin-glider": 1 };
 
-async function trader(db: Db, nearAccountId: string, handle: string, authKind: "near_auth" | "dev", bits: number, level?: number) {
+async function trader(db: Db, nearAccountId: string, handle: string, authKind: "near_auth" | "dev", bits: number, level?: number, crumbs?: number) {
   const p = await findOrCreatePlayer(db, { nearAccountId, authKind, authSub: `${authKind}:${handle}`, handle });
   const { save, rev } = await ensureSave(db, p.id);
   const hero: Save = save.hero ? save : reduce(newSave(), { type: "create-hero", name: handle[0]!.toUpperCase() + handle.slice(1), suit: "classic", powers: ["web-sling", "web-shield", "node-sense"] });
   const levelled: Save = level && hero.hero && level > hero.hero.level ? { ...hero, hero: { ...hero.hero, level } } : hero;
-  await writeSave(db, p.id, { ...levelled, inventory: { ...levelled.inventory, ...LOOT } }, rev);
+  await writeSave(db, p.id, { ...levelled, inventory: { ...levelled.inventory, ...LOOT, ...(crumbs ? { crumbs } : {}) } }, rev);
   await db.transaction((tx) =>
     enqueueRewardMint(tx, {
       kind: "mint_reward",
@@ -53,7 +55,10 @@ async function main() {
   const now = Date.now();
   const traders = [];
   for (const h of TRADERS) traders.push(await trader(db, `${h}.wgp.testnet`, h, "near_auth", 900));
-  if (process.env.SEED_ME) traders.push(await trader(db, `${process.env.SEED_ME}.dev.wgp.testnet`, process.env.SEED_ME, "dev", 600, Number(process.env.SEED_ME_LEVEL) || undefined));
+  // One dev player, or several separated by commas (a playthrough at two screen sizes uses one each).
+  for (const me of (process.env.SEED_ME ?? "").split(",").map((s) => s.trim()).filter(Boolean)) {
+    traders.push(await trader(db, `${me}.dev.wgp.testnet`, me, "dev", 600, Number(process.env.SEED_ME_LEVEL) || undefined, Number(process.env.SEED_ME_CRUMBS) || undefined));
+  }
 
   // A day of trading, one hour at a time. Each item leans one way (the chance a trade is
   // a buy): crafters want gliders and goo, everyone dumps crumbs.
