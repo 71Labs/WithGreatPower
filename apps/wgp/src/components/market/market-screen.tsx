@@ -24,6 +24,7 @@ import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
 import { ITEM_SOURCE, VENDOR_AFTER, vendorLine } from "./copy";
+import { OtherTraders } from "./other-traders";
 import { FillSheet, ListSheet, TradeSheet, type Side } from "./sheets";
 import { ChangePill, formatBits, formatChange, formatPrice, Sparkline } from "./sparkline";
 import { askToSignIn, trade, useMarketData, useQuickPlay, type QuickPlay } from "./use-market";
@@ -333,6 +334,8 @@ export function MarketScreen() {
   const [filling, setFilling] = useState<ListingView | null>(null);
   const [after, setAfter] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<number | null>(null);
+  // Counts the player's trades: Sandwich Man (the NPC) may answer one, so his strip looks again.
+  const [traded, setTraded] = useState(0);
   // Gwei's line changes daily; the day comes from the server's answer, not the render.
   const day = view ? Math.floor(Date.parse(view.updatedAt) / 86_400_000) : 0;
 
@@ -345,6 +348,7 @@ export function MarketScreen() {
     if (res.snapshot) adopt(res.snapshot);
     else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     if (res.ok) {
+      setTraded((n) => n + 1);
       setAfter(VENDOR_AFTER[req.action]);
       showToast(
         req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Taken down. Your items are back.",
@@ -423,6 +427,7 @@ export function MarketScreen() {
               />
             </StickerPanel>
           )}
+          <OtherTraders stamp={view.updatedAt} bump={traded} />
           <TradeSheet
             key={sheet?.item.item ?? "none"}
             item={sheet ? (view.items.find((i) => i.item === sheet.item.item) ?? sheet.item) : null}

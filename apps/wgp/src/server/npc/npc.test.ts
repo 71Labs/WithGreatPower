@@ -167,7 +167,9 @@ function fakeChain(start: { bits: number; listings?: Listing[]; refuse?: string 
       if (action.kind !== "fill") throw new Error("the fake chain only fills");
       listings = listings.filter((l) => l.id !== action.listingId);
       wallet.bits -= action.price;
-      wallet.items = { ...wallet.items, [action.item]: (wallet.items[action.item] ?? 0) + action.amount };
+      const items: Record<string, number> = { ...wallet.items };
+      items[action.item] = (items[action.item] ?? 0) + action.amount;
+      wallet.items = items;
       return { ok: true, outcome: { bits: action.price, fee: 1 }, txHash: "GoodTxHash111" };
     },
   };
