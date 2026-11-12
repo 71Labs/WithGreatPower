@@ -6,7 +6,44 @@ import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
 import { afterBuy, buyCost, type Pool } from "@/lib/market/math";
 import { explainPrice } from "@/lib/market/reasoning";
 
-import { VendorChips, WHY_CLOSED, whyOpen, WhyPrice, whyReduce, type WhyEvent } from "./why-price";
+import { placeWhy, VendorChips, WHY_CLOSED, whyOpen, WhyPrice, whyReduce, type WhyEvent } from "./why-price";
+
+describe("where the popover goes (placeWhy)", () => {
+  // A 1440×900 desktop with the dock's top at 836 and the chips ending at 60.
+  const room = { top: 68, right: 1432, bottom: 828, left: 8 };
+  const natural = { left: 218, width: 300, height: 190 };
+
+  it("opens below when the whole popover fits there", () => {
+    expect(placeWhy({ top: 580, bottom: 602 }, natural, room)).toEqual({ side: "below", dx: 0, dy: 0, maxHeight: null });
+  });
+
+  it("flips above a second-row card whose popover would run under the dock", () => {
+    expect(placeWhy({ top: 780, bottom: 802 }, natural, room)).toEqual({ side: "above", dx: 0, dy: 0, maxHeight: null });
+  });
+
+  it("takes the roomier side and caps the height when neither fits (a phone on its side)", () => {
+    const tight = { top: 68, right: 804, bottom: 307, left: 8 };
+    expect(placeWhy({ top: 150, bottom: 194 }, natural, tight)).toEqual({ side: "below", dx: 0, dy: 0, maxHeight: 113 });
+    expect(placeWhy({ top: 240, bottom: 284 }, natural, tight)).toEqual({ side: "above", dx: 0, dy: 0, maxHeight: 172 });
+  });
+
+  it("never caps below a readable height", () => {
+    expect(placeWhy({ top: 100, bottom: 144 }, natural, { top: 68, right: 804, bottom: 180, left: 8 }).maxHeight).toBe(96);
+  });
+
+  it("slides left off the right edge and right off the left edge", () => {
+    expect(placeWhy({ top: 300, bottom: 322 }, { ...natural, left: 1200 }, room).dx).toBe(-68);
+    expect(placeWhy({ top: 300, bottom: 322 }, { ...natural, left: -40 }, room).dx).toBe(48);
+  });
+
+  it("hangs from the dock's edge when the button itself is under the dock", () => {
+    expect(placeWhy({ top: 860, bottom: 882 }, natural, room)).toEqual({ side: "above", dx: 0, dy: -32, maxHeight: null });
+  });
+
+  it("keeps the left edge on screen when the popover is wider than the room", () => {
+    expect(placeWhy({ top: 300, bottom: 322 }, { left: 20, width: 400, height: 190 }, { top: 0, right: 312, bottom: 600, left: 8 }).dx).toBe(-12);
+  });
+});
 
 const glider = (): Pool => seededPools().find((p) => p.item === "goblin-glider")!;
 function bought(pool: Pool, n: number): Pool {
