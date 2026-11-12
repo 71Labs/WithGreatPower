@@ -4,7 +4,7 @@
  *
  *   node launch/brand/hero/contrast.mjs [--base http://127.0.0.1:4620] [--port 9921]
  *        [--routes /lab/economy,/play/market,/stats,/,/play] [--viewports desktop,phone]
- *        [--save hero] [--out <file.json>] [--eval "<js>"] [--all 1]
+ *        [--schemes dark,light] [--save hero] [--out <file.json>] [--eval "<js>"] [--all 1]
  *
  * For each visible text node it reads the element's computed colour (times every
  * ancestor's opacity) and composites the computed background colours behind it, nearest
@@ -13,6 +13,10 @@
  * the pixels under the element instead, scoring the text against the worst tenth of them.
  * Text needs 4.5:1, or 3:1 at 24px and up (18.66px and up when bold). Disabled controls,
  * hidden and screen-reader-only text are skipped, as WCAG does.
+ *
+ * Every screen is measured under both `prefers-color-scheme` values: the site's own pages
+ * have a dark palette, and the game's paper never changes, so a colour that leaks from one
+ * to the other (a heading in the site's pale ink on cream paper) only shows in one of them.
  *
  * Prints one line per failing pair (and every pair with `--all 1`), a count per screen,
  * and exits 1 when anything fails. `--eval` runs in the page first (open a sheet, run the
@@ -41,6 +45,7 @@ const OUT = opt("out", "");
 const ACT = opt("eval", "");
 const ALL = opt("all", "0") === "1";
 const SETTLE = Number(opt("settle", "2500"));
+const SCHEMES = opt("schemes", "dark,light").split(",");
 
 const SIZES = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
@@ -147,10 +152,11 @@ try {
     const json = readFileSync(join(LAUNCH, "out", "saves", `${SAVE}.json`), "utf8");
     await send("Page.addScriptToEvaluateOnNewDocument", { source: `try { if (!localStorage.getItem("wgp:save:v1")) localStorage.setItem("wgp:save:v1", ${JSON.stringify(json)}); } catch {}` });
   }
-  for (const vp of VIEWPORTS) {
+  for (const [scheme, vp] of SCHEMES.flatMap((s) => VIEWPORTS.map((v) => [s, v]))) {
     const v = SIZES[vp];
     await send("Emulation.setDeviceMetricsOverride", v);
     await send("Emulation.setTouchEmulationEnabled", { enabled: v.mobile, maxTouchPoints: 5 });
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme }] });
     for (const route of ROUTES) {
       await send("Page.navigate", { url: BASE + route });
       await sleep(SETTLE);
@@ -207,8 +213,8 @@ try {
       const rows = [...pairs.values()].sort((a, b) => a.ratio - b.ratio);
       const bad = rows.filter((p) => !p.pass);
       failures += bad.length;
-      report.push({ viewport: vp, route, pairs: rows.length, failing: bad.length, lowest: rows[0]?.ratio ?? null, rows });
-      console.log(`${vp.padEnd(8)} ${route.padEnd(14)} ${String(rows.length).padStart(3)} pairs, ${bad.length} failing, lowest ${rows[0]?.ratio ?? "-"}:1`);
+      report.push({ scheme, viewport: vp, route, pairs: rows.length, failing: bad.length, lowest: rows[0]?.ratio ?? null, rows });
+      console.log(`${scheme.padEnd(5)} ${vp.padEnd(8)} ${route.padEnd(18)} ${String(rows.length).padStart(3)} pairs, ${bad.length} failing, lowest ${rows[0]?.ratio ?? "-"}:1`);
       for (const p of ALL ? rows : bad) console.log(`   ${p.pass ? "ok  " : "FAIL"} ${String(p.ratio).padStart(5)}:1 (needs ${p.need}) ${p.fg} on ${p.bg} ${p.size} ×${p.count} “${p.sample}” [${p.classes}] ${p.where}`);
     }
   }
