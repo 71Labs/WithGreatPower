@@ -1,6 +1,6 @@
 /**
  * Shared bits for showing powers: an icon per power, its numbers at a mastery level
- * (the same rounding the engine uses), and a compact readout of cost, cooldown and
+ * (the same rounding the engine uses), and a compact readout of cost, recharge and
  * effect. Used by onboarding, the hero sheet and the level-up picker. Drawn for paper
  * (the sticker kit's --game-* tokens), so it reads the same in light and dark mode.
  */
@@ -52,13 +52,45 @@ export function powerEffects(power: Power, mastery = 0): Fact[] {
   if (power.heal) out.push({ label: "Heal", value: `+${n(power.heal)}` });
   if (power.fluid) out.push({ label: "Fluid back", value: `+${n(power.fluid)}` });
   if (power.dodge) out.push({ label: "Dodges", value: power.dodge === 1 ? "1 hit" : `${power.dodge} hits` });
-  if (power.stun) out.push({ label: "Webs them", value: power.stun === 1 ? "1 turn" : `${power.stun} turns` });
+  const held = stunSeconds(power, mastery);
+  if (held !== null) out.push({ label: power.id === "web-bomb" ? "Webs them" : "Stuns them", value: secondsLabel(held) });
   if (power.id === "fork") out.push({ label: "Next power", value: "Twice" });
   return out;
 }
 
 export const costLabel = (cost: number) => (cost === 0 ? "Free" : `${cost} fluid`);
-export const cooldownLabel = (turns: number) => (turns === 0 ? "None" : `${turns} turn${turns === 1 ? "" : "s"}`);
+
+/**
+ * A night is played in real time, so a power's `cooldown` (written in turns in the rules
+ * data) is a recharge in seconds: turns × 2 + 1.5, the sim's own `cooldownSeconds`
+ * (packages/game-core/src/sim3d/abilities.ts; powers.test.ts holds the two together).
+ * Every power recharges, the "0-turn" ones in a second and a half.
+ */
+export const rechargeSeconds = (turns: number) => turns * 2 + 1.5;
+
+/** "1.5 s", "3.5 s", "2 s": seconds with at most one decimal and a real space before the unit. */
+export const secondsLabel = (seconds: number) => `${Number(seconds.toFixed(1))} s`;
+
+export const rechargeLabel = (turns: number) => secondsLabel(rechargeSeconds(turns));
+
+/**
+ * How long a hit holds a villain still, in seconds, as the sim applies it (sim3d/abilities.ts):
+ * a web bomb's blast stuns for 2 s × the power's scale, a validator slam's for 0.6 s.
+ * Null for a power that doesn't stun.
+ */
+export function stunSeconds(power: Power, mastery = 0): number | null {
+  if (!power.stun) return null;
+  if (power.id === "web-bomb") return 2 * powerScale(mastery);
+  if (power.id === "validator-slam") return 0.6;
+  return null;
+}
+
+/** A power's one-line description, with the two "for a turn" blurbs said in real time. */
+export function powerBlurb(power: Power): string {
+  if (power.id === "web-bomb") return "Big hit, and they’re webbed for a couple of seconds.";
+  if (power.id === "validator-slam") return "A heavy hit that stuns for a moment.";
+  return power.blurb;
+}
 
 /** Uses per power level, and the cap. Mirrors powerLevel() in data.ts. */
 export const USES_PER_LEVEL = 6;
@@ -73,7 +105,7 @@ export function masteryProgress(mastery: number) {
 }
 
 /**
- * Cost, cooldown and effect numbers, as a grid of small cells or a wrapping row of
+ * Cost, recharge and effect numbers, as a grid of small cells or a wrapping row of
  * pills. A description list, so each number is read with its name; `plain` renders
  * spans instead, for use inside a <label> (which only allows phrasing content).
  */
@@ -98,7 +130,7 @@ export function PowerFacts({
 }) {
   const facts: Fact[] = [
     { label: "Cost", value: costLabel(power.cost) },
-    { label: "Cooldown", value: cooldownLabel(power.cooldown) },
+    { label: "Recharge", value: rechargeLabel(power.cooldown) },
     ...powerEffects(power, mastery),
   ];
   const List = plain ? "span" : "dl";
