@@ -12,6 +12,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "verify": "pnpm --filter wgp exec tsx ../../scripts/verify-run.ts",
-    "stats": "node scripts/stats.mjs"
+    "stats": "node scripts/stats.mjs",
+    "evidence": "node scripts/evidence.mjs"
   }
 }

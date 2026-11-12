@@ -7,7 +7,7 @@ What it costs to run With Great Power, who a player has to trust today, and how 
 | Cost | Today | Who pays |
 |---|---|---|
 | Contract storage | 374 KB of code and state on `game.wgpnear.near`, which NEAR holds 3.74 NEAR against (returned if the state is deleted) | The contract account |
-| Reward mints | One `mint_rewards` call covers up to 20 verified nights. 157 calls so far. | `operator.wgpnear.near` |
+| Reward mints | One `mint_rewards` call covers up to 20 verified nights. 160 calls as of Nov 12, 2026 (re-run `pnpm stats`). | `operator.wgpnear.near` |
 | Player actions | Each relayed call (a trade, a craft, an equip) is one meta-transaction, a fraction of a cent of gas | `relayer.wgpnear.near`, within a daily gas budget |
 | New player accounts | `<name>.wgpnear.near` is created with no balance; with two keys and no contract it fits NEAR's zero-balance allowance | `wgpnear.near` |
 | Hosting | Vercel and Neon Postgres; the game's 3D runs in the player's browser | The team |
@@ -35,7 +35,7 @@ In order:
 2. **Run digests on chain.** Mints already carry each run's digest. Recording a daily Merkle root of verified runs, as seasons do for their final board, lets anyone prove a reward maps to a public replay.
 3. **Independent verifiers.** The replay verifier is a pure function in `packages/game-core`. Anyone can run it; the next step is a second, independently run verifier whose agreement is required before a season is recorded.
 4. **Fees that pay for the game.** Today the 2% trade fee is burned. A split, part burned and part to the contract's storage balance, would let trading pay for the state it creates.
-5. **Seasons as the content loop.** Season 1 ends Nov 14 with its board recorded on chain and soulbound trophies for the top 10. Each new season can ship a ruleset, a case file and a suit set without touching earlier seasons' records, because every mode's rules are versioned and old replays stay verifiable from their git tags.
+5. **Seasons as the content loop.** Season 1 ends Nov 14; at its close the board is recorded on chain with soulbound trophies for the top 10 (built and tested, not run on mainnet yet). Each new season can ship a ruleset, a case file and a suit set without touching earlier seasons' records, because every mode's rules are versioned and old replays stay verifiable from their git tags.
 
 ## What keeps players coming back
 
