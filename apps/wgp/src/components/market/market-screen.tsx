@@ -427,7 +427,7 @@ export function MarketScreen() {
               />
             </StickerPanel>
           )}
-          <OtherTraders stamp={view.updatedAt} bump={traded} />
+          <OtherTraders stamp={view.updatedAt} bump={traded} onMove={() => void refresh()} />
           <TradeSheet
             key={sheet?.item.item ?? "none"}
             item={sheet ? (view.items.find((i) => i.item === sheet.item.item) ?? sheet.item) : null}

@@ -184,7 +184,7 @@ function Wallet({ npc }: { npc: NpcTraderView }) {
       <dt className="text-game-muted">Wallet</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">
         {npc.explorerUrl ? (
-          <a href={npc.explorerUrl} target="_blank" rel="noreferrer" className={link}>
+          <a href={npc.explorerUrl} target="_blank" rel="noreferrer" className={`inline-block py-[3px] ${link}`}>
             {npc.accountId}
             <ExternalLink aria-hidden className="ms-1 inline size-3.5 align-[-2px]" strokeWidth={2} />
             <span className="sr-only"> on NearBlocks (opens in a new tab)</span>
@@ -238,10 +238,25 @@ function Moves({ npc }: { npc: NpcTraderView }) {
   );
 }
 
-/** The strip. Renders nothing until the first answer arrives, so the market never waits on it. */
-export function OtherTraders({ stamp, bump = 0 }: { stamp: string; bump?: number }) {
+/**
+ * The strip. Renders nothing until the first answer arrives, so the market never waits on
+ * it. `onMove` fires when a new move of his shows up after the first load: he may have
+ * bought the viewer's listing, so the screen reloads its listings and wallet.
+ */
+export function OtherTraders({ stamp, bump = 0, onMove }: { stamp: string; bump?: number; onMove?(): void }) {
   const npc = useNpcTrader(stamp, bump);
   const headingId = useId();
+  const newest = npc ? (npc.log[0] ? `${npc.log[0].at}-${npc.log[0].text}` : "") : null;
+  const seen = useRef<string | null>(null);
+  const moved = useRef(onMove);
+  useEffect(() => {
+    moved.current = onMove;
+  }, [onMove]);
+  useEffect(() => {
+    if (newest === null) return;
+    if (seen.current !== null && seen.current !== newest) moved.current?.();
+    seen.current = newest;
+  }, [newest]);
   if (!npc) return null;
   return (
     <StickerPanel as="section" aria-labelledby={headingId} className="flex flex-col gap-3 p-3 sm:p-4">

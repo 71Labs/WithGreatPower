@@ -125,7 +125,7 @@ export function NpcPanel({ history, hover, onShowBroke }: { history: DaySnapshot
           {day.events.length === 0 ? (
             <p className="text-[13px] leading-[18px] [text-wrap:pretty]">{history[at]!.day === 0 ? "Nothing yet. He opens with his seed and waits for the market to move." : "Nothing. No rule fired: no cheap listing, no dip he could afford, nothing worth selling."}</p>
           ) : (
-            <ol className="flex max-h-[232px] flex-col divide-y-2 divide-dashed divide-game-ink/10 overflow-y-auto pe-1">
+            <ol className="flex flex-col divide-y-2 divide-dashed divide-game-ink/10">
               {day.events.map((e, i) => (
                 <li key={i} className="flex flex-col gap-0.5 py-1.5 first:pt-0 last:pb-0">
                   <p className="num text-[13px] font-semibold leading-[18px] [text-wrap:pretty]">{e.text}</p>
