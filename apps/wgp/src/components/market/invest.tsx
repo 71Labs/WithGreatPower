@@ -47,7 +47,7 @@ export const shopFor = (view: Pick<MarketView, "shops" | "params">, item: Market
 
 const lockText = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1_000)} seconds` : ms < 5_400_000 ? `${Math.round(ms / 60_000)} minutes` : `${Math.round(ms / 3_600_000)} hours`);
 
-const chip = "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink pl-1 pr-2 text-[12px] font-bold leading-none text-game-ink";
+const chip = "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink ps-1 pe-2 text-[12px] font-bold leading-none text-game-ink";
 const textButton =
   "inline-flex min-h-8 items-center gap-1 rounded-[8px] text-start text-[12px] font-semibold leading-4 text-game-ink underline decoration-game-ink/40 underline-offset-[3px] [text-decoration-skip-ink:auto] focus-visible:outline-offset-2 pointer-coarse:min-h-11 pointer-fine:hover:decoration-game-ink";
 /** The card's own button face (as its Buy and Sell): narrow enough for two columns on a phone. */
@@ -92,7 +92,7 @@ export function ShopLine({
             </span>
           </p>
           <p className="num text-[12px] leading-4 [text-wrap:pretty]">
-            {closedText("broke")} Her till is {bitsText(shop.needs)} short of one.
+            Broke: her till is {bitsText(shop.needs)} short of buying one.
           </p>
         </>
       ) : null}
@@ -178,7 +178,7 @@ function Row({ label, value, strong = false, hint }: { label: string; value: str
         <span>{label}</span>
         {hint ? <span className="text-[12px] font-normal leading-4 text-game-muted [text-wrap:pretty]">{hint}</span> : null}
       </dt>
-      <dd className="num shrink-0 text-right">{value}</dd>
+      <dd className="num shrink-0 text-end">{value}</dd>
     </div>
   );
 }
@@ -249,7 +249,8 @@ export function InvestSheet({
   const most = Math.max(0, Math.min(rules.max, shop.investRoom, bits, bitsLeft));
   const suggested = Math.min(most, Math.max(rules.min, broke ? shop.needs : Math.min(100, most)));
   const investAmount = typed ?? suggested;
-  const withdrawAmount = typed ?? (stake ? Math.max(0, stake.withdrawable) : 0);
+  // What can come out now; while it is locked or the till is empty, the whole stake (pressing the button then says why not).
+  const withdrawAmount = typed ?? (stake ? (stake.withdrawable > 0 ? stake.withdrawable : stake.bits) : 0);
   const amount = tab === "invest" ? investAmount : withdrawAmount;
 
   function close() {
@@ -330,7 +331,7 @@ export function InvestSheet({
         </span>
 
         <dl aria-label="The shop" className="flex flex-col divide-y-2 divide-dashed divide-game-ink/15 rounded-[16px] border-2 border-game-ink bg-game-paper-2 px-4 py-1">
-          <Row label="Her shop for these" strong value={broke ? "Closed for buying" : shop.closed.includes("sold-out") ? "Sold out" : "Open"} hint={broke ? `Broke: her till is ${bitsText(shop.needs)} short of buying one.` : undefined} />
+          <Row label="Her shop for these" strong value={broke ? "Closed for buying" : shop.closed.includes("sold-out") ? "Sold out" : "Open"} hint={broke ? `${closedText("broke")} It is ${bitsText(shop.needs)} short of one.` : undefined} />
           <Row label="In her till" value={bitsText(shop.till)} />
           <Row label="Invested by players" value={bitsText(shop.invested)} />
           <Row label="Room for more" value={bitsText(shop.investRoom)} />
@@ -388,7 +389,7 @@ export function InvestSheet({
             />
             {tab === "invest" && broke && shop.needs <= most ? (
               <StickerButton size="sm" onClick={() => (setTyped(Math.max(rules.min, shop.needs)), setProblem(null))}>
-                Enough to reopen her
+                Use enough to reopen her
               </StickerButton>
             ) : null}
             {tab === "invest" && most >= rules.min ? (
@@ -424,7 +425,7 @@ export function InvestSheet({
             </ul>
             {/* Said before the button, every time: what an investor risks. */}
             <section aria-labelledby={`${ids}-risk`} className="flex flex-col gap-2 rounded-[16px] border-2 border-game-ink bg-game-gold px-3.5 py-3">
-              <h3 id={`${ids}-risk`} className="flex items-center gap-2 text-[14px] font-bold leading-5">
+              <h3 id={`${ids}-risk`} className="flex items-center gap-2 text-[14px] font-bold leading-5 text-game-ink">
                 <TriangleAlert aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
                 What you risk
               </h3>
@@ -481,7 +482,7 @@ export function PracticeBanner({
 }) {
   const from = seededFrom === "near" ? "the live market on NEAR" : seededFrom === "simulated" ? "the simulated market" : "the market’s opening prices";
   return (
-    <section aria-label="Practice market" className="flex flex-col gap-3 rounded-[18px] border-2 border-game-ink bg-game-gold p-3 text-game-ink shadow-[var(--game-shadow-sm)] sm:p-4">
+    <section aria-label="Practice market" className="flex flex-col gap-3 rounded-[22px] border-2 border-game-ink bg-game-gold p-3 text-game-ink shadow-[var(--game-shadow-sm)]">
       <div className="flex items-start gap-2.5">
         <TestTube aria-hidden className="mt-0.5 size-5 shrink-0" strokeWidth={2.25} />
         <div className="flex min-w-0 flex-col gap-1">

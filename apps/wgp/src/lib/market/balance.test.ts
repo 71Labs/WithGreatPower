@@ -222,6 +222,18 @@ describe("the showcase: Gwei goes broke, an investor reopens her", () => {
     expect(last.wallet + last.staked).toBe(LAB_INVESTORS.count * LAB_INVESTORS.bits + story.earned);
   });
 
+  it("gives the numbers docs/INVESTING.md quotes for seed 2026", () => {
+    const story = investStory(showcase());
+    const without = investStory(play(economyConfig(MAINNET, { ...DRAIN, seed: INVEST_SHOWCASE.seed, npc: true })));
+    expect({ closedWith: story.brokeDays, closedWithout: without.brokeDays, invested: story.invested, earned: story.earned, staked: story.staked }).toEqual({
+      closedWith: 11,
+      closedWithout: 70,
+      invested: 1_195,
+      earned: 133,
+      staked: 1_130,
+    });
+  });
+
   it("balances to the Bit every day, the investors' wallets, stakes and unclaimed earnings included, for several seeds", () => {
     for (const seed of [INVEST_SHOWCASE.seed, 1, 7]) {
       const e = play(economyConfig(MAINNET, { ...INVEST_SHOWCASE, seed, npc: true }));

@@ -406,7 +406,7 @@ export function EconomyLab() {
           </h2>
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] leading-4 text-game-paper/80">
             <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden className="inline-block h-2.5 w-2 rounded-[1px] bg-game-paper" />
+              <span aria-hidden className="inline-block h-2.5 w-2 rounded-[1px] bg-game-ink ring-1 ring-game-paper" />
               In each chart’s “shop” row, a block is a day her shop for that item ended closed for buying: its till couldn’t pay for one.
             </span>
             <span className="inline-flex items-center gap-1.5">

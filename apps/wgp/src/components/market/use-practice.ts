@@ -221,17 +221,22 @@ export function usePractice(live: MarketView | null, liveFailed: boolean, signed
   // Before the clock ticks (or with nothing locked) the stored market's own time is good enough to draw from.
   const screen = on && state ? practiceScreen(state, base, now || state.seededAt) : null;
 
-  function act<T>(fn: (s: PracticeState, at: number) => { state: PracticeState } & T): TradeOutcome {
+  /**
+   * `npcLooks`: Sandwich Man takes one look afterwards. He does after a trade or a listing
+   * lands, as on the real market; not after an investment, which moves no price.
+   */
+  function act<T>(fn: (s: PracticeState, at: number) => { state: PracticeState } & T, npcLooks: boolean): TradeOutcome {
     const s = read();
     if (!s) return { ok: false, code: "practice", message: "The practice market is still opening. Try again in a moment.", snapshot: null };
     try {
       const at = Date.now();
       let next = fn(s, at).state;
-      // Sandwich Man takes one look after a move lands, as he does on the real market.
-      try {
-        next = practiceNpcLooks(next, base, at + 1).state;
-      } catch {
-        // His turn is a courtesy: a trade never fails because of it.
+      if (npcLooks) {
+        try {
+          next = practiceNpcLooks(next, base, at + 1).state;
+        } catch {
+          // His turn is a courtesy: a trade never fails because of it.
+        }
       }
       write(next);
       return { ok: true, snapshot: null };
@@ -245,8 +250,8 @@ export function usePractice(live: MarketView | null, liveFailed: boolean, signed
     screen,
     seededFrom: state?.seededFrom ?? null,
     drainItem: on && state ? stageItem(state) : null,
-    trade: (req) => act((s, at) => practiceTrade(s, base, req, at)),
-    stake: (req) => act((s, at) => practiceStake(s, base, req, at)),
+    trade: (req) => act((s, at) => practiceTrade(s, base, req, at), true),
+    stake: (req) => act((s, at) => practiceStake(s, base, req, at), false),
     drain(item) {
       const s = read();
       if (!s) return 0;

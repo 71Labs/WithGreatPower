@@ -54,7 +54,7 @@ export function InvestPanel({ history, hover, headingId }: { history: DaySnapsho
   return (
     <StickerPanel as="section" aria-labelledby={headingId} className="flex flex-col gap-4 p-4">
       <div className="flex flex-col gap-1.5">
-        <h2 id={headingId} className="flex items-center gap-2 text-[16px] font-semibold leading-5">
+        <h2 id={headingId} className="flex items-center gap-2 text-[16px] font-semibold leading-5 text-game-ink">
           <HandCoins aria-hidden className="size-5 shrink-0" strokeWidth={2} />
           Gwei goes broke, an investor reopens her
         </h2>
