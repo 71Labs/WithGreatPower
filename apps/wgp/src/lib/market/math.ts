@@ -51,8 +51,8 @@
  * of each curve's Bits is real (her till) and half is virtual. `rules.test.ts` fails if
  * a number in this comment drifts from those settings.
  *
- * Her own explanation of a price ("Running low: 7 left of 8…") is ./reasoning.ts, which
- * only reads a pool through the functions below.
+ * Her own explanation of a price ("Running low: 4 left of the 8 I opened with…") is
+ * ./reasoning.ts, which only reads a pool through the functions below.
  *
  * Amounts are plain numbers (JSON-friendly); the arithmetic runs in BigInt, so it is
  * exact like the contract's u128.

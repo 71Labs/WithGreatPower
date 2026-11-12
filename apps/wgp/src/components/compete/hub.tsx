@@ -100,7 +100,7 @@ function DailyPanel({ view, now }: { view: CompeteView | null; now: number | nul
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <StickerEyebrow>{d ? `Daily Run · ${dayLabel(d.day)}` : "Daily Run"}</StickerEyebrow>
-          <h2 id="daily-title" className="font-display text-[26px] font-bold leading-8 tracking-[-0.02em] [text-wrap:balance] sm:text-[32px] sm:leading-9">
+          <h2 id="daily-title" className="font-display text-[26px] font-bold leading-8 tracking-[-0.02em] text-game-ink [text-wrap:balance] sm:text-[32px] sm:leading-9">
             One city. Everyone. <span className="text-game-muted">Today only.</span>
           </h2>
         </div>

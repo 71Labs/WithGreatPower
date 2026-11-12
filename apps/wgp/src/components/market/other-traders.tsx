@@ -145,7 +145,8 @@ function Wallet({ npc }: { npc: NpcTraderView }) {
   const holds = [...npc.items.map((i) => `${formatBits(i.amount)} × ${i.name}`), ...npc.listings.map((l) => `${formatBits(l.amount)} × ${l.name} listed at ${formatBits(l.price)}`)];
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px] leading-[18px]">
-      <dt className="text-game-muted">Wallet</dt>
+      {/* A wallet only where one exists: on chain. In the simulated market it's a name in the sim's books. */}
+      <dt className="text-game-muted">{npc.mode === "on-chain" ? "Wallet" : "Sim account"}</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">
         {npc.explorerUrl ? (
           <a href={npc.explorerUrl} target="_blank" rel="noreferrer" className={`inline-block py-[3px] ${link}`}>

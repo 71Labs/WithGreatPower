@@ -45,6 +45,7 @@ describe("Sandwich Man's strip", () => {
     const html = strip({ ...base, mode: "on-chain", status: "open", accountId: "sandwich.wgpnear.near", explorerUrl: "https://nearblocks.io/address/sandwich.wgpnear.near", bits: 310, statusLine: "In line." });
     expect(html).toContain("He trades by fixed rules from his own NEAR account.");
     expect(html).toContain("sandwich.wgpnear.near");
+    expect(html).toContain(">Wallet<");
     expect(html).toContain("His latest moves");
     expect(html).not.toContain("Practice only");
   });
@@ -53,6 +54,7 @@ describe("Sandwich Man's strip", () => {
     const html = strip({ ...base, mode: "simulated", status: "open", accountId: "sandwich-man.sim", bits: 300, statusLine: "In line." });
     expect(html).toContain("He trades by fixed rules with his own simulated Bits.");
     expect(html).toContain("Simulated");
-    expect(html).not.toContain("own wallet");
+    expect(html).toContain("Sim account");
+    expect(html).not.toMatch(/own wallet|>Wallet</);
   });
 });

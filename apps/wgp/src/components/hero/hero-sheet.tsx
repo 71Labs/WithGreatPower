@@ -258,7 +258,7 @@ function Loadout({ save }: { save: HeroSave }) {
                   </span>
                   <span className={`flex min-w-0 flex-col ${blocked ? "opacity-60" : ""}`}>
                     <span className="text-[14px] font-semibold leading-[18px]">{p.name}</span>
-                    <span id={`loadout-${id}-meta`} className={`num text-[12px] leading-4 ${checked ? "text-game-paper/75" : "text-game-muted"}`}>
+                    <span id={`loadout-${id}-meta`} className={`num text-[12px] leading-4 ${checked ? "text-game-paper/75" : blocked ? "text-game-ink" : "text-game-muted"}`}>
                       {costLabel(p.cost)}
                       {` · ${rechargeLabel(p.cooldown)} recharge`}
                     </span>

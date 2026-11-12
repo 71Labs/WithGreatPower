@@ -351,7 +351,7 @@ export function EconomyLab() {
         <dl aria-live="off" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Day" value={`${last.day} / ${days}`} />
           <Stat label="Bits in play" value={formatBits(last.supply)} hint="Held by heroes, plus Gwei’s till" />
-          <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The vendor’s own wallet" />
+          <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The Bits she buys with" />
           <Stat label="Bits burned" value={formatBits(last.burned)} hint={`Gas fee${setting.craftBits ? " and crafting" : ""}, of ${formatBits(last.minted)} earned`} />
           <Stat label="Suits crafted" value={formatBits(last.crafted)} />
           <Stat label="Trades" value={formatBits(totals.trades + totals.fills)} hint={`${formatBits(totals.fills)} player-to-player · ${last.listings} listed now`} />

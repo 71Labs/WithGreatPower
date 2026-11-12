@@ -9,7 +9,9 @@
  * across the last 24 hours, with hourly snapshots) and leaves two listings open.
  * `SEED_ME=<handle>` also funds that dev sign-in player (600 Bits and the same loot), and
  * `SEED_ME_LEVEL=<n>` starts their hero at that level, so recipes that need a level can be
- * crafted. Never runs against DATABASE_URL.
+ * crafted. `SEED_QUIET=1` seeds a slow day instead (a handful of trades, most items with one
+ * or none), which is what a young market's cards and sparklines really look like. Never runs
+ * against DATABASE_URL.
  */
 import { newSave, reduce } from "@wgp/game-core/engine";
 import type { ItemId, Save } from "@wgp/game-core/types";
@@ -66,12 +68,14 @@ async function main() {
     ["sesame-seed", 0.5],
     ["press-pass", 0.45],
   ];
+  /** The chance an item trades in a given hour. */
+  const busy = process.env.SEED_QUIET ? 0.05 : 0.55;
   let trades = 0;
   for (let h = 23; h >= 1; h--) {
     const at = new Date(now - h * HOUR);
     await recordSnapshots(db, false, (await readSim(db)).book.pools, at);
     for (const [item, buyOdds] of lean) {
-      if (rand() > 0.55) continue;
+      if (rand() > busy) continue;
       const t = traders[Math.floor(rand() * TRADERS.length)]!;
       const act: SimAction = rand() < buyOdds ? { action: "buy", item, amount: 1, maxBits: 10_000 } : { action: "sell", item, amount: 1, minBits: 0 };
       try {
