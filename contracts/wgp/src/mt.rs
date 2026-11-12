@@ -1,6 +1,7 @@
 //! Our NEP-245 multi-token core. Method names, arguments and return types mirror
 //! `defuse_nep245::{MultiTokenCore, MultiTokenResolver, MultiTokenEnumeration}`, so the
-//! contract is readable by NEAR Intents and anything else that speaks NEP-245.
+//! contract is readable by NEAR Intents and anything else that speaks NEP-245. The
+//! Metadata extension is in meta.rs.
 //!
 //! Game rules on top of the standard:
 //! - Every transfer needs exactly 1 yoctoNEAR (a full-access key), so a session key
@@ -15,7 +16,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 use near_sdk::{env, near, require, AccountId, Gas, GasWeight, NearToken};
 
-use crate::{MtEvent, MtTransferEvent, TokenId, Wgp, WgpExt};
+use crate::{MtEvent, MtTransferEvent, TokenId, Wgp, WgpExt, MAX_INDEX_BATCH};
 
 /// Tokens in one batch call.
 pub const MAX_BATCH: usize = 32;
@@ -233,26 +234,85 @@ impl Wgp {
 
     // ---------- MultiTokenEnumeration ----------
 
+    /// Every token with supply, `limit` (at most 100) from `from_index`. Order changes
+    /// when a token's whole supply is burned. Tokens minted before v3 appear once they are
+    /// indexed (their next mint, or `index_tokens`).
+    pub fn mt_tokens(&self, from_index: Option<U128>, limit: Option<u32>) -> Vec<Token> {
+        let from = from_index.map(|i| i.0).unwrap_or(0).min(u32::MAX as u128) as usize;
+        let limit = limit.unwrap_or(100).min(100) as usize;
+        self.tokens
+            .iter()
+            .skip(from)
+            .take(limit)
+            .map(|token_id| Token {
+                owner_id: self.single_owner(token_id),
+                token_id: token_id.clone(),
+            })
+            .collect()
+    }
+
+    /// How many token ids `mt_tokens` pages through.
+    pub fn mt_tokens_count(&self) -> U128 {
+        U128(self.tokens.len() as u128)
+    }
+
     pub fn mt_tokens_for_owner(
         &self,
         account_id: AccountId,
         from_index: Option<U128>,
         limit: Option<u32>,
     ) -> Vec<Token> {
-        let Some(view) = self.get_player(account_id.clone()) else {
-            return vec![];
-        };
-        let from = from_index.map(|i| i.0 as usize).unwrap_or(0);
+        let mut tokens: Vec<TokenId> = self
+            .get_player(account_id.clone())
+            .map(|view| view.tokens.into_iter().map(|(id, _)| id).collect())
+            .unwrap_or_default();
+        // The vendor's stock, tills and escrow are this contract's own tokens.
+        if account_id == env::current_account_id() {
+            let held = std::iter::once(crate::BITS_TOKEN.to_string())
+                .chain(self.market.pools.iter().map(|p| crate::item_token(&p.item)));
+            for token_id in held {
+                if self.market_holdings(&token_id) > 0 && !tokens.contains(&token_id) {
+                    tokens.push(token_id);
+                }
+            }
+        }
+        let from = from_index.map(|i| i.0).unwrap_or(0).min(u32::MAX as u128) as usize;
         let limit = limit.unwrap_or(100).min(100) as usize;
-        view.tokens
+        tokens
             .into_iter()
             .skip(from)
             .take(limit)
-            .map(|(token_id, _)| {
+            .map(|token_id| {
                 let owner_id = self.single_owner(&token_id).filter(|o| *o == account_id);
                 Token { token_id, owner_id }
             })
             .collect()
+    }
+
+    /// Bring the `mt_tokens` index in line with supply for these ids: adds the ones that
+    /// exist and aren't listed (tokens minted before v3), drops the ones that no longer
+    /// exist. Operators only; returns how many entries changed.
+    pub fn index_tokens(&mut self, token_ids: Vec<TokenId>) -> u32 {
+        require!(
+            self.operators.contains(&env::predecessor_account_id())
+                || env::predecessor_account_id() == self.owner_id,
+            "Only an operator or the owner can do this"
+        );
+        require!(
+            !token_ids.is_empty() && token_ids.len() <= MAX_INDEX_BATCH,
+            "Index 1 to 100 tokens at a time"
+        );
+        let mut changed = 0;
+        for token_id in token_ids {
+            let exists = self.supply_of(&token_id).is_some();
+            let moved = if exists {
+                self.tokens.insert(token_id)
+            } else {
+                self.tokens.remove(&token_id)
+            };
+            changed += u32::from(moved);
+        }
+        changed
     }
 
     // ---------- Internal ----------

@@ -13,6 +13,12 @@
 //!   and `ceiling_bps` of the vendor's spot price, so a stolen session key can neither dump
 //!   a player's items for nothing nor pay an accomplice's inflated listing in full.
 //!
+//! - **Investors** (invest.rs, v3): players fund a pool's till and earn a share of its gas
+//!   fee. Their Bits replace the same amount of *virtual* reserve, so `y` and every price
+//!   stay exactly where they were: investing changes what the vendor can pay, never what it
+//!   quotes. A pool whose till can't pay for one item is "broke" until someone invests in
+//!   it or buys from it (`market_shops`, the `market_shop` event).
+//!
 //! Every method here is callable by a session key: none takes a deposit. Per-account daily
 //! caps, a cap on open listings and a per-call amount cap bound what a leaked key can do.
 //! `apps/wgp/src/lib/market/math.ts` mirrors this math; `market-vectors.json` holds the
@@ -22,9 +28,10 @@ use near_sdk::json_types::U128;
 use near_sdk::store::{IterableMap, LookupMap};
 use near_sdk::{env, near, require, AccountId};
 
+use crate::invest::Investor;
 use crate::{
-    item_token, FillData, MtBurnEvent, MtEvent, MtMintEvent, MtTransferEvent, StorageKey, TokenId,
-    TradeData, Wgp, WgpEvent, WgpExt, MAX_ITEM_AMOUNT,
+    item_token, AdminData, FillData, MtBurnEvent, MtEvent, MtMintEvent, MtTransferEvent, ShopData,
+    StorageKey, TokenId, TradeData, Wgp, WgpEvent, WgpExt, MAX_ITEM_AMOUNT,
 };
 
 /// The currency's item id; its token is `item:bits`.
@@ -32,13 +39,20 @@ pub const BITS: &str = "bits";
 pub const BITS_TOKEN: &str = "item:bits";
 pub const MAX_POOLS: usize = 32;
 pub const MAX_PAGE: u32 = 50;
-const BPS: u128 = 10_000;
+pub(crate) const BPS: u128 = 10_000;
 const DAY_MS: u64 = 86_400_000;
+/// The longest `invest_lock_ms`: 30 days.
+const MAX_LOCK_MS: u64 = 30 * DAY_MS;
+/// Bits burned per crafted suit on a fresh deploy. A placeholder: the number to use comes
+/// from `docs/ECONOMY.md` (see `docs/CONTRACT-V3.md`, "Sinks"); the owner sets it with
+/// `set_market_params`.
+pub const DEFAULT_CRAFT_BITS: u128 = 50;
 /// Keeps `y · n · bps` far inside u128.
 const MAX_RESERVE: u128 = 1_000_000_000_000_000;
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct MarketParams {
     /// Off: no trades or new listings (open listings can still be cancelled).
     pub open: bool,
@@ -62,6 +76,20 @@ pub struct MarketParams {
     pub daily_fill_bits: U128,
     /// Bits burned by each crafted suit with a recipe. 0 turns the sink off.
     pub craft_bits: U128,
+    // ---- v3: investing in the vendor (invest.rs). Left out of the JSON: the defaults. ----
+    /// Off: no new investments (stakes can still be withdrawn and earnings claimed).
+    pub invest_open: bool,
+    /// The investors' share of a vendor trade's gas fee, in basis points of the fee
+    /// (5000 = half). The rest is burned. A pool with no investors burns it all.
+    pub invest_fee_bps: u32,
+    /// Bits per `market_invest` call, at least and at most.
+    pub min_invest: U128,
+    pub max_invest: U128,
+    /// Per account, per UTC day: `market_invest` calls, and the Bits they may add.
+    pub daily_invests: u32,
+    pub daily_invest_bits: U128,
+    /// A stake can be withdrawn this long after its last top-up.
+    pub invest_lock_ms: u64,
 }
 
 impl Default for MarketParams {
@@ -78,7 +106,14 @@ impl Default for MarketParams {
             daily_listings: 10,
             daily_fills: 10,
             daily_fill_bits: U128(3_000),
-            craft_bits: U128(0),
+            craft_bits: U128(DEFAULT_CRAFT_BITS),
+            invest_open: true,
+            invest_fee_bps: 5_000,
+            min_invest: U128(10),
+            max_invest: U128(500),
+            daily_invests: 6,
+            daily_invest_bits: U128(1_000),
+            invest_lock_ms: 3_600_000,
         }
     }
 }
@@ -96,6 +131,20 @@ pub struct Pool {
     pub stock: U128,
     /// Items escrowed in players' open listings.
     pub escrow: U128,
+    // ---- v3 (invest.rs) ----
+    /// Investors' Bits in the till. Each one replaced a virtual Bit, so `virtual_bits`
+    /// here is the owner's setting less this, and `virtual_bits + bits` never moved.
+    #[serde(default)]
+    pub invested: U128,
+    /// Fee earnings held for this pool's investors, not yet claimed. Not part of the till.
+    #[serde(default)]
+    pub rewards: U128,
+    /// Earnings per invested Bit so far, x 10^12.
+    #[serde(default)]
+    pub fee_acc: U128,
+    /// The investors' share of fees not yet a whole Bit, in 1/10000 Bits.
+    #[serde(default)]
+    pub fee_carry: u32,
 }
 
 /// How the owner sets up a pool. Seeds are minted to the vendor once, when the pool is new.
@@ -143,6 +192,8 @@ pub struct Market {
     pub listings: IterableMap<u64, Listing>,
     pub next_listing_id: u64,
     pub accounts: LookupMap<AccountId, MarketAccount>,
+    /// Stakes and today's investing counters, per investor. Added in v3.
+    pub investors: LookupMap<AccountId, Investor>,
 }
 
 impl Default for Market {
@@ -159,6 +210,7 @@ impl Market {
             listings: IterableMap::new(StorageKey::Listings),
             next_listing_id: 1,
             accounts: LookupMap::new(StorageKey::MarketAccounts),
+            investors: LookupMap::new(StorageKey::Investors),
         }
     }
 }
@@ -268,22 +320,51 @@ pub fn apply_sell(p: &mut Pool, n: u128, payout: u128) {
     p.bits.0 -= payout;
 }
 
-fn today() -> u32 {
+/// Bits the till is short of to buy one item from a player; 0 when it can.
+pub fn till_short(p: &Pool) -> u128 {
+    sell_payout(p, 1).saturating_sub(p.bits.0)
+}
+
+/// Why the vendor can't trade this item right now, if it can't: "broke" (the till can't
+/// pay for one item, so it buys nothing until someone invests or buys from it) and
+/// "sold-out" (no stock, so it sells nothing until someone sells to it).
+pub fn closed_reasons(p: &Pool) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if till_short(p) > 0 {
+        out.push("broke");
+    }
+    if p.stock.0 == 0 {
+        out.push("sold-out");
+    }
+    out
+}
+
+pub(crate) fn today() -> u32 {
     (env::block_timestamp_ms() / DAY_MS) as u32
 }
 
 fn transfer(from: &AccountId, to: &AccountId, token: TokenId, amount: u128) -> MtTransferEvent {
+    transfer_memo(from, to, token, amount, "market")
+}
+
+pub(crate) fn transfer_memo(
+    from: &AccountId,
+    to: &AccountId,
+    token: TokenId,
+    amount: u128,
+    memo: &str,
+) -> MtTransferEvent {
     MtTransferEvent {
         authorized_id: None,
         old_owner_id: from.clone(),
         new_owner_id: to.clone(),
         token_ids: vec![token],
         amounts: vec![U128(amount)],
-        memo: Some("market".to_string()),
+        memo: Some(memo.to_string()),
     }
 }
 
-fn burn_fee(owner: &AccountId, fee: u128) -> MtEvent {
+pub(crate) fn burn_fee(owner: &AccountId, fee: u128) -> MtEvent {
     MtEvent::MtBurn(vec![MtBurnEvent {
         owner_id: owner.clone(),
         authorized_id: None,
@@ -327,10 +408,14 @@ impl Wgp {
         player.debit(BITS_TOKEN, total);
         player.credit(&item_token(&item), n, true);
         self.players.insert(account.clone(), player);
-        self.sub_supply(BITS_TOKEN, fee);
+        let before = closed_reasons(&self.market.pools[i]);
+        let cut = self.investor_cut(i, fee);
+        self.sub_supply(BITS_TOKEN, fee - cut);
         apply_buy(&mut self.market.pools[i], n, cost);
         self.market.accounts.insert(account.clone(), acct);
-        self.trade_events(&account, "buy", i, amount, cost, fee)
+        let trade = self.trade_events(&account, "buy", i, amount, cost, (fee, cut));
+        self.shop_changed(i, &before, "buy");
+        trade
     }
 
     /// Sell `amount` of `item` to the vendor for at least `min_bits` (after the fee).
@@ -362,10 +447,14 @@ impl Wgp {
         player.debit(&item_token(&item), n);
         player.credit(BITS_TOKEN, net, true);
         self.players.insert(account.clone(), player);
-        self.sub_supply(BITS_TOKEN, fee);
+        let before = closed_reasons(&self.market.pools[i]);
+        let cut = self.investor_cut(i, fee);
+        self.sub_supply(BITS_TOKEN, fee - cut);
         apply_sell(&mut self.market.pools[i], n, payout);
         self.market.accounts.insert(account.clone(), acct);
-        self.trade_events(&account, "sell", i, amount, net, fee)
+        let trade = self.trade_events(&account, "sell", i, amount, net, (fee, cut));
+        self.shop_changed(i, &before, "sell");
+        trade
     }
 
     // ---------- Listings (session key) ----------
@@ -540,6 +629,20 @@ impl Wgp {
             params.max_open_listings <= 10 && params.max_listings <= 10_000,
             "At most 10 open listings each and 10000 in all"
         );
+        require!(
+            params.invest_fee_bps <= BPS as u32,
+            "invest_fee_bps is at most 10000 (the whole fee)"
+        );
+        require!(
+            params.min_invest.0 >= 1
+                && params.min_invest.0 <= params.max_invest.0
+                && params.max_invest.0 <= MAX_RESERVE,
+            "Need 1 <= min_invest <= max_invest"
+        );
+        require!(
+            params.invest_lock_ms <= MAX_LOCK_MS,
+            "invest_lock_ms is at most 30 days"
+        );
         require!(pools.len() <= MAX_POOLS, "At most 32 pools");
         let vendor = env::current_account_id();
         let mut minted = Vec::new();
@@ -563,7 +666,15 @@ impl Wgp {
                 "Virtual reserves start at 1"
             );
             if let Some(p) = self.market.pools.iter_mut().find(|p| p.item == c.item) {
-                p.virtual_bits = c.virtual_bits;
+                // Investors' Bits stand in for part of the virtual reserve; keep them in.
+                require!(
+                    c.virtual_bits.0 > p.invested.0,
+                    format!(
+                        "{}: virtual_bits must stay above the {} Bits invested",
+                        c.item, p.invested.0
+                    )
+                );
+                p.virtual_bits = U128(c.virtual_bits.0 - p.invested.0);
                 p.virtual_items = c.virtual_items;
                 continue;
             }
@@ -583,9 +694,14 @@ impl Wgp {
                 bits: c.seed_bits,
                 stock: c.seed_stock,
                 escrow: U128(0),
+                invested: U128(0),
+                rewards: U128(0),
+                fee_acc: U128(0),
+                fee_carry: 0,
             });
         }
         self.market.params = params;
+        self.admin("set_market_params", None);
         if !minted.is_empty() {
             MtEvent::MtMint(vec![MtMintEvent {
                 owner_id: vendor,
@@ -676,7 +792,12 @@ impl Wgp {
     /// till, plus escrowed listings.
     pub(crate) fn market_holdings(&self, token_id: &str) -> u128 {
         if token_id == BITS_TOKEN {
-            return self.market.pools.iter().map(|p| p.bits.0).sum();
+            return self
+                .market
+                .pools
+                .iter()
+                .map(|p| p.bits.0 + p.rewards.0)
+                .sum();
         }
         self.market
             .pools
@@ -686,7 +807,7 @@ impl Wgp {
             .unwrap_or(0)
     }
 
-    fn pool_index(&self, item: &str) -> usize {
+    pub(crate) fn pool_index(&self, item: &str) -> usize {
         self.market
             .pools
             .iter()
@@ -694,7 +815,7 @@ impl Wgp {
             .unwrap_or_else(|| env::panic_str(&format!("The market doesn't trade {item}")))
     }
 
-    fn assert_trading_open(&self) {
+    pub(crate) fn assert_trading_open(&self) {
         self.assert_live();
         require!(self.market.params.open, "The market is closed");
     }
@@ -741,6 +862,53 @@ impl Wgp {
         a
     }
 
+    /// Takes the investors' share of a vendor trade's fee out of what would be burned and
+    /// books it to the pool's investors. Whole Bits only; the fraction carries to the next
+    /// trade, so many small fees still add up. 0 while the pool has no investors.
+    fn investor_cut(&mut self, i: usize, fee: u128) -> u128 {
+        let share = self.market.params.invest_fee_bps as u128;
+        let p = &mut self.market.pools[i];
+        if p.invested.0 == 0 || share == 0 {
+            return 0;
+        }
+        let carry = p.fee_carry as u128 + fee * share;
+        let cut = carry / BPS;
+        p.fee_carry = (carry % BPS) as u32;
+        if cut > 0 {
+            p.rewards.0 += cut;
+            p.fee_acc.0 = p
+                .fee_acc
+                .0
+                .saturating_add(cut * crate::invest::ACC / p.invested.0);
+        }
+        cut
+    }
+
+    /// Logs `market_shop` when a pool opened or closed for buying or selling.
+    pub(crate) fn shop_changed(&self, i: usize, before: &[&'static str], cause: &str) {
+        let p = &self.market.pools[i];
+        let now = closed_reasons(p);
+        if now != before {
+            WgpEvent::MarketShop(vec![ShopData {
+                item: p.item.clone(),
+                closed: now.into_iter().map(String::from).collect(),
+                cause: cause.to_string(),
+                till: p.bits,
+                needs: U128(till_short(p)),
+            }])
+            .emit();
+        }
+    }
+
+    pub(crate) fn admin(&self, action: &str, account_id: Option<AccountId>) {
+        WgpEvent::Admin(vec![AdminData {
+            action: action.to_string(),
+            by: env::predecessor_account_id(),
+            account_id,
+        }])
+        .emit();
+    }
+
     /// Removes a listing from the book, the seller's open list and the pool's escrow.
     fn close_listing(&mut self, listing: &Listing) {
         self.market.listings.remove(&listing.id);
@@ -766,16 +934,18 @@ impl Wgp {
         i: usize,
         amount: u32,
         bits: u128,
-        fee: u128,
+        (fee, cut): (u128, u128),
     ) -> Trade {
         let pool = self.market.pools[i].clone();
         let vendor = env::current_account_id();
         let item = item_token(&pool.item);
         let n = amount as u128;
+        // The investors' cut of the fee isn't burned: on a buy it reaches the vendor with
+        // the cost; on a sell it never leaves the vendor.
         let (moves, burner) = if side == "buy" {
             (
                 vec![
-                    transfer(account, &vendor, BITS_TOKEN.to_string(), bits),
+                    transfer(account, &vendor, BITS_TOKEN.to_string(), bits + cut),
                     transfer(&vendor, account, item, n),
                 ],
                 account,
@@ -790,7 +960,9 @@ impl Wgp {
             )
         };
         MtEvent::MtTransfer(moves).emit();
-        burn_fee(burner, fee).emit();
+        if fee > cut {
+            burn_fee(burner, fee - cut).emit();
+        }
         // `bits` in the event and receipt: paid with the fee (buy) or received after it (sell).
         let paid = if side == "buy" { bits + fee } else { bits };
         WgpEvent::MarketTrade(vec![TradeData {

@@ -19,24 +19,34 @@
 //! - The owner pauses, manages operators, sets suit rules and upgrades the code.
 //!
 //! The contract pays for storage and bounds it per account (`MAX_KINDS` token kinds, a
-//! few open listings). Nothing is stored per run or per trade: digests and prices go in
-//! the event log only.
+//! few open listings, one stake per pool). Nothing is stored per run or per trade: digests
+//! and prices go in the event log only.
+//!
+//! v3 adds NEP-245 metadata (meta.rs) and enumeration (`mt_tokens`, mt.rs), investing in
+//! the vendor (invest.rs), a real crafting cost, owner-action events and `get_version` /
+//! `get_storage`. Every v2 method, view and event is unchanged.
 
 mod events;
+mod invest;
 mod market;
 #[cfg(test)]
 mod market_tests;
+mod meta;
 mod migrate;
 mod mt;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod v3_tests;
 
 use near_sdk::json_types::U128;
 use near_sdk::store::{IterableSet, LookupMap};
 use near_sdk::{env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault};
 
 pub use events::*;
+pub use invest::*;
 pub use market::*;
+pub use meta::*;
 pub use mt::Token;
 
 pub type TokenId = String;
@@ -56,6 +66,13 @@ pub const MAX_TOP: usize = 10;
 pub const MAX_ID_LEN: usize = 32;
 
 const GAS_FOR_MIGRATE: Gas = Gas::from_tgas(50);
+/// The state layout's number, in `get_version`.
+pub const STATE_VERSION: u32 = 3;
+/// The first four bytes of a v3 state. Older states start with the owner id's length
+/// (at most 64), so they can never be mistaken for this.
+pub(crate) const LAYOUT_V3: u32 = 0x5747_5003;
+/// Token ids per `index_tokens` call.
+pub const MAX_INDEX_BATCH: usize = 100;
 
 #[derive(BorshStorageKey)]
 #[near]
@@ -67,6 +84,10 @@ pub(crate) enum StorageKey {
     // Added with the market; new keys go at the end so existing prefixes never move.
     Listings,
     MarketAccounts,
+    // Added in v3.
+    Tokens,
+    TokenMeta,
+    Investors,
 }
 
 /// One ingredient of a suit recipe.
@@ -218,9 +239,40 @@ pub struct Config {
     pub max_kinds: u32,
 }
 
-#[near(contract_state)]
+#[near(serializers = [json])]
+pub struct Version {
+    /// The state layout: 3.
+    pub state: u32,
+    /// The crate version this wasm was built from.
+    pub contract: String,
+    pub standards: Vec<String>,
+}
+
+/// What the contract's storage costs and what it can still pay for. The contract sponsors
+/// every player's storage, so `available` running low is the thing to watch.
+#[near(serializers = [json])]
+pub struct StorageReport {
+    pub bytes: u64,
+    /// yoctoNEAR locked by those bytes.
+    pub locked: U128,
+    pub balance: U128,
+    /// `balance - locked`: what's left for new storage.
+    pub available: U128,
+    /// Token ids in the `mt_tokens` index.
+    pub tokens: u32,
+}
+
+#[near(
+    contract_state,
+    contract_metadata(
+        standard(standard = "nep245", version = "1.0.0"),
+        standard(standard = "nep297", version = "1.0.0"),
+    )
+)]
 #[derive(PanicOnDefault)]
 pub struct Wgp {
+    /// `LAYOUT_V3`. First, so `migrate` can tell this layout from the older ones.
+    layout: u32,
     owner_id: AccountId,
     operators: IterableSet<AccountId>,
     paused: bool,
@@ -233,6 +285,11 @@ pub struct Wgp {
     seasons: LookupMap<String, Season>,
     /// The Mempool Market. Appended in v2; `migrate` adds it to a v1 state.
     market: Market,
+    /// Every token id with supply, for `mt_tokens`. Added in v3; tokens minted before it
+    /// join on their next mint or through `index_tokens`.
+    tokens: IterableSet<TokenId>,
+    /// The collection's name, media base URI and the owner's metadata table. Added in v3.
+    meta: Meta,
 }
 
 #[near]
@@ -251,6 +308,7 @@ impl Wgp {
             set.insert(op);
         }
         Self {
+            layout: LAYOUT_V3,
             owner_id,
             operators: set,
             paused: false,
@@ -261,6 +319,8 @@ impl Wgp {
             supply: LookupMap::new(StorageKey::Supply),
             seasons: LookupMap::new(StorageKey::Seasons),
             market: Market::new(),
+            tokens: IterableSet::new(StorageKey::Tokens),
+            meta: Meta::new(),
         }
     }
 
@@ -291,6 +351,7 @@ impl Wgp {
         player.hero = Some(hero.clone());
         player.level = player.level.max(1);
         let mut minted = vec![hero_token(&account)];
+        self.tokens.insert(hero_token(&account));
         if player.balance(&suit_token) == 0 {
             player.credit(&suit_token, 1, false);
             self.add_supply(&suit_token, 1);
@@ -318,7 +379,7 @@ impl Wgp {
     /// Burn a suit's recipe and mint the suit, then equip it. Mirrors game-core's
     /// `craft-suit`: starter suits unlock at `starter_unlock_level` with no recipe,
     /// the rest need `min_level` and their ingredients, plus the market's `craft_bits`
-    /// (burned too; 0 by default).
+    /// (burned too: the crafting sink; 0 turns it off).
     pub fn craft_suit(&mut self, suit: String) {
         self.assert_live();
         let account = env::predecessor_account_id();
@@ -494,6 +555,10 @@ impl Wgp {
                 player.level = player.level.max(level);
             }
             let level = player.level;
+            // A hero from before the token index joins it on its next reward.
+            if player.hero.is_some() {
+                self.tokens.insert(hero_token(&r.account_id));
+            }
             self.players.insert(r.account_id.clone(), player);
 
             if !token_ids.is_empty() {
@@ -594,24 +659,28 @@ impl Wgp {
     pub fn set_paused(&mut self, paused: bool) {
         self.assert_owner();
         self.paused = paused;
+        self.admin(if paused { "pause" } else { "unpause" }, None);
     }
 
     #[payable]
     pub fn add_operator(&mut self, account_id: AccountId) {
         self.assert_owner();
-        self.operators.insert(account_id);
+        self.operators.insert(account_id.clone());
+        self.admin("add_operator", Some(account_id));
     }
 
     #[payable]
     pub fn remove_operator(&mut self, account_id: AccountId) {
         self.assert_owner();
         self.operators.remove(&account_id);
+        self.admin("remove_operator", Some(account_id));
     }
 
     #[payable]
     pub fn set_owner(&mut self, owner_id: AccountId) {
         self.assert_owner();
-        self.owner_id = owner_id;
+        self.owner_id = owner_id.clone();
+        self.admin("set_owner", Some(owner_id));
     }
 
     /// Replace the item list and suit rules (game balance changes). Existing balances
@@ -628,6 +697,7 @@ impl Wgp {
         self.items = items;
         self.suits = suits;
         self.starter_unlock_level = starter_unlock_level;
+        self.admin("set_rules", None);
     }
 
     /// Deploy new code (the raw wasm is the call's input) and run `migrate`.
@@ -640,6 +710,8 @@ impl Wgp {
         self.assert_owner();
         let code =
             env::input().unwrap_or_else(|| env::panic_str("Pass the wasm as the call input"));
+        require!(!code.is_empty(), "Pass the wasm as the call input");
+        self.admin("upgrade", None);
         let upgrade = env::promise_batch_create(&env::current_account_id());
         env::promise_batch_action_deploy_contract(upgrade, &code);
         env::promise_batch_action_function_call(
@@ -652,8 +724,9 @@ impl Wgp {
         env::promise_return(upgrade);
     }
 
-    /// Runs after `upgrade`: brings a v1 state (before the market) to v2 with an empty
-    /// market, and leaves a v2 state as it is, so running it twice is harmless.
+    /// Runs after `upgrade`: brings a v1 state (before the market) or a v2 state (before
+    /// metadata and investors) to v3, keeping every player, pool, listing and season, and
+    /// leaves a v3 state as it is, so running it twice is harmless.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
@@ -704,6 +777,27 @@ impl Wgp {
 
     pub fn is_operator(&self, account_id: AccountId) -> bool {
         self.operators.contains(&account_id)
+    }
+
+    pub fn get_version(&self) -> Version {
+        Version {
+            state: STATE_VERSION,
+            contract: env!("CARGO_PKG_VERSION").to_string(),
+            standards: ["nep245", "nep297", "nep330"].map(String::from).to_vec(),
+        }
+    }
+
+    pub fn get_storage(&self) -> StorageReport {
+        let bytes = env::storage_usage();
+        let locked = env::storage_byte_cost().saturating_mul(bytes as u128);
+        let balance = env::account_balance();
+        StorageReport {
+            bytes,
+            locked: U128(locked.as_yoctonear()),
+            balance: U128(balance.as_yoctonear()),
+            available: U128(balance.saturating_sub(locked).as_yoctonear()),
+            tokens: self.tokens.len(),
+        }
     }
 
     // ---------- Internal ----------
@@ -771,6 +865,8 @@ impl Wgp {
 
     pub(crate) fn add_supply(&mut self, token_id: &str, amount: u128) {
         let n = self.supply.get(token_id).copied().unwrap_or(0);
+        // Keeps the `mt_tokens` index: a no-op when the id is already there.
+        self.tokens.insert(token_id.to_string());
         self.supply.insert(
             token_id.to_string(),
             n.checked_add(amount)
@@ -787,6 +883,7 @@ impl Wgp {
             .saturating_sub(amount);
         if n == 0 {
             self.supply.remove(token_id);
+            self.tokens.remove(token_id);
         } else {
             self.supply.insert(token_id.to_string(), n);
         }

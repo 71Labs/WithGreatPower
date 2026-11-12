@@ -1,7 +1,7 @@
 [package]
 name = "wgp"
 description = "With Great Power: heroes, suits, loot and season trophies as NEP-245 multi-tokens."
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 publish = false
