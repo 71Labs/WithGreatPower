@@ -196,7 +196,7 @@ async function pass(vp) {
     check(await ev(`cardButton(${JSON.stringify(name)}, /^Sell/)?.disabled === true`), "its Sell button is off");
     await click(`cardButton(${JSON.stringify(name)}, /Why this price/)`, "Why this price?");
     const why = await waitFor(`(() => { const t = card(${JSON.stringify(name)})?.querySelector('[role="tooltip"]'); return t && getComputedStyle(t).visibility === "visible" && T(t); })()`, "Gwei's reasoning", 8_000).catch(() => null);
-    check(/I’m closed for buying these: my till is [\d,]+ Bits? short of paying for one\. Invest in this till and I reopen, at the same price\./.test(why ?? ""), "“Why this price?” says she is closed, why, and that investing reopens her", why?.slice(-170));
+    check(/I’m closed for buying these: my till is [\d,]+ Bits? short of paying for one\. Besides buying from me, investing in this till reopens me, at the same price\./.test(why ?? ""), "“Why this price?” says she is closed, why, and that investing reopens her", why?.slice(-170));
     await layout(`${tag} closed`, { "the closed card": `card(${JSON.stringify(name)})`, "her reasoning": `card(${JSON.stringify(name)})?.querySelector('[role="tooltip"]')` });
     await shot(`${tag}-1-closed-with-reason`, `card(${JSON.stringify(name)})`);
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });

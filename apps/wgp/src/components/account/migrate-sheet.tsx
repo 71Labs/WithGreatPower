@@ -12,9 +12,9 @@ import { CircleAlert } from "@/components/icons";
 import { StickerButton } from "@/components/game/kit";
 import { GameSheet, HeroSticker } from "@/components/game/ui";
 import { IMPORT_CAPS } from "@/game/import-caps";
+import { plural } from "@/lib/plural";
 import { acceptMigration, declineMigration, deferMigration, showToast, useMigrationOffer, type MigrationOffer } from "@/game/store";
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export function MigrationSheet({ blocked }: { blocked: boolean }) {
   const offer = useMigrationOffer();

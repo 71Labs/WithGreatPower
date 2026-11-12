@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { HeroArt, Sticker, type StickerSize } from "@/components/cast";
 import { X } from "@/components/icons";
 import { SUITS } from "@wgp/game-core/data";
-import { useGame } from "@/game/store";
+import { useAccount, useGame } from "@/game/store";
+import { QUICK_HERO, markQuickHero } from "@/lib/first-minute/quick-hero";
 import type { Hero, Save, SuitId } from "@wgp/game-core/types";
 
 import { ON_PAPER, StickerIconButton } from "./kit";
@@ -135,18 +136,32 @@ export function GameLoading() {
 }
 
 /**
- * The save, once loaded and once a hero exists. Players without a hero are sent to get
- * bitten first; until then this renders the loading state.
+ * The save, once loaded and once a hero exists; until then this renders the loading state,
+ * for a frame. A visitor without a hero is never left waiting on it:
+ *
+ * - A guest on Tonight (/play) goes to the quick start, which makes the ready hero and
+ *   opens the first night (components/first-minute/quick-start.tsx).
+ * - A guest on any other screen (a deep link to the market, the suits, a patrol) gets the
+ *   same ready hero in place and stays on the screen they asked for.
+ * - A signed-in player picks their hero's name first: it goes on the boards (/play/bitten).
  */
 export type HeroSave = Save & { hero: Hero };
 
 export function useHeroSave(): HeroSave | null {
-  const { save } = useGame();
+  const { save, dispatch } = useGame();
+  const status = useAccount().status;
   const router = useRouter();
+  const pathname = usePathname();
   const needsHero = !!save && !save.hero;
   useEffect(() => {
-    if (needsHero) router.replace("/play/bitten");
-  }, [needsHero, router]);
+    if (!needsHero || status === "loading") return;
+    if (status === "signed-in") router.replace("/play/bitten");
+    else if (pathname === "/play") router.replace("/play/start");
+    else {
+      markQuickHero(true);
+      dispatch({ type: "create-hero", ...QUICK_HERO });
+    }
+  }, [needsHero, status, pathname, router, dispatch]);
   return save && save.hero ? (save as HeroSave) : null;
 }
 

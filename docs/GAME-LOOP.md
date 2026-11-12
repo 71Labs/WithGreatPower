@@ -1,6 +1,6 @@
 # The game loop
 
-What a player does every 30 seconds, every 5 minutes and every session, and where the economy sits in each. This is the loop the game ships with, written up on Nov 12 from the live build. The plan it grew from is the Nov 2 [ARCHITECTURE.md](ARCHITECTURE.md).
+What a player does every 30 seconds, every 5 minutes and every session, and where the economy sits in each. This is the loop the game ships with, written up on Nov 12 from the live build: it documents the loop as built and does not predate the code. The plan the game grew from is [ARCHITECTURE.md](ARCHITECTURE.md), committed on Nov 2 (commit `94c8d19`) just before the first 3D simulation code (commit `143b12e`). Each claim here has a row in [EVIDENCE.md](EVIDENCE.md#the-game-loop-docsgame-loopmd).
 
 The rule behind it: **the chain is never a step in the loop.** A player's hands are on the stick, not on a wallet. Everything that reaches NEAR happens as a consequence of play, in the background.
 
@@ -21,7 +21,7 @@ Each decision is small and readable: swing now or keep running, take the Bits li
 A night is four stops, two villain fights and two errands for neighbours, and usually takes 2 to 5 minutes.
 
 1. **Finish.** The night ends on a results card with the score, each stop's result and the loot.
-2. **Verify.** Signed in, the browser uploads the night's input log (2–15 KB). The server replays it through the same deterministic simulation and ranks the score it computes itself, never the browser's.
+2. **Verify.** Signed in, the browser uploads the night's input log (usually 1–5 KB). The server replays it through the same deterministic simulation and ranks the score it computes itself, never the browser's.
 3. **Earn.** The verified night queues one reward: loot from the villains caught, plus Bits (`floor(score / 100) + 5`, +25 on a level-up, +1 per gold token up to 25, capped at 1,000 a night). The operator account mints it to the player's NEAR account as NEP-245 tokens. The player signs nothing and sees no prompt.
 4. **Choose what's next.** Another ranked night, today's Daily Run (same city for everyone, 3 tries), a time trial, a duel against another player's ghost, a case file, or the City.
 
@@ -37,7 +37,7 @@ A session is a few nights plus a visit to the market and the boards.
 | Sells spare loot to Gwei, or lists it for other players | Selling pays from her till and lowers her price; a listing escrows the items in the contract at the seller's price (within 50–400% of hers) |
 | Buys the missing part for a suit | Buying raises her price; 2% of every trade's Bits is burned |
 | Crafts a suit and equips it | The recipe's items are burned; the suit is a token the player owns |
-| Checks Tonight, Season and All-time boards, the Daily board and trial medals | Every score on them is a replayed run; the Season's final board is written to the contract once, and the top 10 get soulbound trophies |
+| Checks Tonight, Season and All-time boards, the Daily board and trial medals | Every score on them is a replayed run; at the Season's close the final board is written to the contract once, and the top 10 get soulbound trophies (built and tested; Season 1 has not closed yet) |
 | Invites friends, clears a case file, finishes City tasks | Soulbound badges (`trophy:badge:*`) for the first clear and for three friends who play; XP for City tasks |
 
 Trades are calls from the player's own account, signed by a game-only session key and sent by our relayer as NEP-366 meta-transactions. The key can only call the game contract and can't attach a deposit, so it can't move assets; the relayer pays the gas. From the player's side it's a Buy button.
@@ -64,7 +64,7 @@ This runs today in the practice market and in the simulated market (a local chec
 
 ## Why the economy is the gameplay
 
-- **Loot has a use.** Suits need specific parts from specific villains, so what you fight decides what you can build, and what you lack decides what you buy.
+- **Loot has a use.** Suits need specific parts from specific villains, so what you fight decides what you can build, and what you lack decides what you buy. Suits are cosmetic: they change how the hero looks, not how they fight.
 - **Prices are other players.** Nobody sets a price. A villain everyone farms floods Gwei with its parts and the price falls; a rare part climbs as it's bought. `/lab/economy` fast-forwards 21 days of this with bot players on the same pricing code.
 - **The vendor has limits.** Gwei sells only what she holds and pays only from her till. Sold out, she can't sell; with an empty till for an item, she can't buy it until someone buys from her (or, where investing runs, until someone invests in that till: see above).
 - **Sources and sinks.** Bits enter only through verified nights and leave through the 2% fee; items enter as loot and leave through crafting. Today more Bits are earned than burned; a Bits cost for crafting is in the contract and off on mainnet.

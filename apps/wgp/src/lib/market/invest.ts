@@ -47,6 +47,8 @@
  * u128. `feeAcc` (earnings per invested Bit × 10^12) outgrows a JS number, so it travels
  * as a decimal string.
  */
+import { plural } from "@/lib/plural";
+
 import type { InvestRules } from "./config";
 import { sellPayout, spotMilli, type Pool } from "./math";
 
@@ -374,7 +376,7 @@ export function unlocksIn(unlocksAtMs: number, nowMs: number): string | null {
   if (left <= 0) return null;
   if (left < 60_000) return "under a minute";
   const minutes = Math.ceil(left / 60_000);
-  if (minutes < 90) return `about ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+  if (minutes < 90) return `about ${plural(minutes, "minute")}`;
   const hours = Math.round(minutes / 60);
   return `about ${hours} hours`;
 }

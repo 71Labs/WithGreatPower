@@ -47,6 +47,7 @@ import {
 import { DEFAULT_INVEST_RULES, investorView, shopsOf } from "./invest";
 import { buyQuote, sellPayout, sellQuote, spotMilli, type Pool } from "./math";
 import type { NpcTraderView } from "./npc-api";
+import { sparkSteps, type SparkRow } from "./spark";
 import { booksToday, itemName, newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
 import { budgetLeft, NPC_ID, NPC_NAME, NPC_RULE_LINES, NPC_RULES, NPC_RULES_URL, npcStatus, statusLine } from "./npc-rules";
 import { npcTurn, walletOnBook } from "./npc-turn";
@@ -70,6 +71,8 @@ const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 const isItem = (id: string): id is ItemId => Object.hasOwn(ITEMS, id);
 const SPARK_POINTS = 24;
 const LOG_LINES = 6;
+/** Price rows kept per item: a busy practice day and the day before it. */
+const MARKS_KEPT = 240;
 const DAY_MS = 86_400_000;
 
 export interface PracticeState {
@@ -88,6 +91,12 @@ export interface PracticeState {
   spark: Record<string, number[]>;
   /** When each item was last traded with Gwei here (Unix ms), newest last. */
   traded: Record<string, number[]>;
+  /**
+   * Each item's price history here, as [Unix ms, spot × 1000] rows, oldest first: where it
+   * opened, then every trade that moved it. The card's step line is drawn from these alone
+   * (./spark.ts), at their real times. Absent from a market stored before it was kept.
+   */
+  marks?: Record<string, [at: number, priceMilli: number][]>;
 }
 
 /** What the visitor brings that practice doesn't own: their saved loot and their starting Bits. Read-only here. */
@@ -121,7 +130,9 @@ export function seedPractice(live: Pick<MarketView, "onChain" | "params" | "item
   const pools = live && live.items.length > 0 ? live.items.map((i) => fresh(i.pool)) : seededPools();
   const params: MarketParams = { ...DEFAULT_PARAMS, ...(live?.params ?? {}), open: true, invest: PRACTICE_INVEST_RULES };
   const spark: Record<string, number[]> = {};
+  const marks: NonNullable<PracticeState["marks"]> = {};
   for (const p of pools) {
+    marks[p.item] = [[nowMs, spotMilli(p)]];
     const liveSpark = live?.items.find((i) => i.item === p.item)?.spark;
     spark[p.item] = liveSpark && liveSpark.length > 1 ? liveSpark.slice(-SPARK_POINTS) : [spotMilli(p), spotMilli(p)];
   }
@@ -135,6 +146,7 @@ export function seedPractice(live: Pick<MarketView, "onChain" | "params" | "item
     npc: { bits: NPC_RULES.seedBits, items: {}, books: newBooks(), log: [] },
     spark,
     traded: {},
+    marks,
   };
 }
 
@@ -182,7 +194,10 @@ function note(s: PracticeState, item: string, nowMs: number, traded: boolean) {
   const pool = s.book.pools.find((p) => p.item === item);
   if (!pool) return;
   s.spark[item] = [...(s.spark[item] ?? []), spotMilli(pool)].slice(-SPARK_POINTS);
-  if (traded) s.traded[item] = [...(s.traded[item] ?? []), nowMs].filter((t) => nowMs - t < DAY_MS).slice(-200);
+  if (!traded) return;
+  s.traded[item] = [...(s.traded[item] ?? []), nowMs].filter((t) => nowMs - t < DAY_MS).slice(-200);
+  const marks = (s.marks ??= {});
+  marks[item] = [...(marks[item] ?? []), [nowMs, spotMilli(pool)] as [number, number]].slice(-MARKS_KEPT);
 }
 
 /* ------------------------------------------------------------------ the visitor's moves */
@@ -285,6 +300,11 @@ function itemViews(s: PracticeState, nowMs: number): MarketItemView[] {
     const meta = ITEMS[pool.item as ItemId];
     const spark = s.spark[pool.item] && s.spark[pool.item]!.length > 1 ? s.spark[pool.item]! : [spotMilli(pool), spotMilli(pool)];
     const first = spark[0]!;
+    // The step line, from this market's own trades at their own times: the last price before the day as its opening.
+    const rows = s.marks?.[pool.item];
+    const from = nowMs - DAY_MS;
+    const before = rows?.filter(([at]) => at < from).at(-1)?.[1];
+    const day: SparkRow[] = (rows ?? []).filter(([at]) => at >= from).map(([at, priceMilli]) => ({ kind: "trade", at, priceMilli }));
     return {
       item: meta.id,
       name: meta.name,
@@ -293,7 +313,9 @@ function itemViews(s: PracticeState, nowMs: number): MarketItemView[] {
       buyOne: buyQuote(pool, 1, p.feeBps)?.total ?? null,
       sellOne: sellQuote(pool, 1, p.feeBps)?.net ?? null,
       spark,
-      change24h: first > 0 ? (spotMilli(pool) - first) / first : null,
+      ...(rows ? { sparkSteps: sparkSteps(day, before, spotMilli(pool), { from, to: nowMs }) } : {}),
+      // Against where this market's own day began (its opening here, when it is younger than a day).
+      change24h: ((open) => (open > 0 ? (spotMilli(pool) - open) / open : null))(before ?? day[0]?.priceMilli ?? first),
       trades24h: (s.traded[pool.item] ?? []).filter((t) => nowMs - t < DAY_MS).length,
       pool,
     };
@@ -424,6 +446,12 @@ export function parsePractice(raw: string | null | undefined): PracticeState | n
     if (staked && (!count(p.invested) || !count(p.rewards) || typeof p.feeAcc !== "string" || !/^\d{1,39}$/.test(p.feeAcc) || !count(p.feeCarry))) return null;
   }
   for (const v of Object.values(s.items)) if (!whole(v)) return null;
+  if (s.marks !== undefined) {
+    if (!record(s.marks)) return null;
+    for (const rows of Object.values(s.marks)) {
+      if (!Array.isArray(rows) || rows.some((r) => !Array.isArray(r) || r.length !== 2 || !count(r[0]) || !count(r[1]))) return null;
+    }
+  }
   const npc = s.npc;
   if (!whole(npc.bits) || !record(npc.items) || !record(npc.books) || !Array.isArray(npc.log)) return null;
   const params = book.params;

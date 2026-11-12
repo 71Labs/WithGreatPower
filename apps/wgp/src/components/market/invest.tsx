@@ -26,6 +26,7 @@ import { closedText, INVEST_RISKS, shopOf, unlocksIn, type Shop, type StakeView 
 import { PRACTICE_INVEST_RULES, PRACTICE_LABEL, PRACTICE_START_BITS } from "@/lib/market/practice";
 import type { InvestingState } from "@/lib/market/reasoning-shop";
 import { INVEST_NOT_LIVE } from "@/lib/market/refusal";
+import { noun } from "@/lib/plural";
 
 import { ITEM_SOURCE } from "./copy";
 import type { TradeGate } from "./sheets";
@@ -405,7 +406,7 @@ export function InvestSheet({
           </div>
           <p id={`${ids}-hint`} className="num text-[12px] leading-4 text-game-muted [text-wrap:pretty]">
             {tab === "invest"
-              ? `You have ${bitsText(bits)}. ${formatBits(rules.min)} to ${formatBits(rules.max)} at a time; today you can invest ${formatBits(investsLeft)} more ${investsLeft === 1 ? "time" : "times"}, up to ${bitsText(bitsLeft)}.`
+              ? `You have ${bitsText(bits)}. ${formatBits(rules.min)} to ${formatBits(rules.max)} at a time; today you can invest ${formatBits(investsLeft)} more ${noun(investsLeft, "time")}, up to ${bitsText(bitsLeft)}.`
               : stake
                 ? `Your stake is ${bitsText(stake.bits)}. Withdrawing also pays out what it has earned.`
                 : "You have no stake here yet."}

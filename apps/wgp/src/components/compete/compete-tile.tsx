@@ -46,7 +46,7 @@ export function CompeteTile({ className = "" }: { className?: string }) {
           Compete<span aria-hidden> · </span>
           <span className="sr-only">, </span>Daily Run{fresh ? <span className="sr-only">, not run yet today</span> : null}
         </span>
-        <span className="num truncate text-[15px] font-bold leading-5">{line}</span>
+        <span className="num line-clamp-2 text-[15px] font-bold leading-5">{line}</span>
       </span>
       {d && d.streak > 0 ? (
         <span className="num inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-semibold text-game-muted">

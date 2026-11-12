@@ -75,7 +75,7 @@ export function MakeItYoursTile({ save, className = "" }: { save: Save & { hero:
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-[11px] font-bold uppercase leading-4 tracking-[0.08em] text-game-muted">Make it yours</span>
-          <span className="truncate text-[15px] font-bold leading-5">Name your hero, pick a suit</span>
+          <span className="line-clamp-2 text-[15px] font-bold leading-5">Name your hero, pick a suit</span>
         </span>
         <ChevronRight aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
       </button>

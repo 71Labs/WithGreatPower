@@ -21,6 +21,7 @@ import { INVEST_NOT_LIVE } from "@/lib/market/refusal";
 import { investingOf, InvestSheet, PracticeBanner, ShopLine, shopFor, StakesPanel } from "./invest";
 import { TraderStrip } from "./other-traders";
 import { QuestStrip } from "./quest-strip";
+import { TradeSheet } from "./sheets";
 import { stake } from "./use-market";
 
 const NOW = Date.parse("2026-11-12T12:00:00Z");
@@ -265,5 +266,23 @@ describe("sending an investing move", () => {
     expect(url).toBe("/api/market/invest");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({ action: "invest", item: "crumbs", bits: 100 });
+  });
+});
+
+describe("the trade sheet on an item Gwei can't pay for", () => {
+  const sheet = (v: MarketView, props: Partial<Parameters<typeof TradeSheet>[0]> = {}) =>
+    text(html(createElement(TradeSheet, { item: crumbs(v), side: "sell", view: v, me: me({ items: { crumbs: 4 } }), onSide: noop, onClose: noop, onTrade: async () => ({ ok: true as const, snapshot: null }), ...props })));
+
+  it("offers to invest instead, where the market takes investors", () => {
+    const words = sheet(SIM, { onInvest: noop });
+    expect(words).toContain("Gwei’s till for these can’t pay for one");
+    expect(words).toContain("Invest in Gwei instead");
+    expect(words).toContain("Put Bits into her till for Crumbs and she can buy again, at the same price.");
+  });
+
+  it("offers nothing of the kind without a way to invest (contract v2), on the buy side, or on an open shop", () => {
+    expect(sheet(V2)).not.toContain("Invest in Gwei instead");
+    expect(sheet(SIM, { onInvest: noop, side: "buy" })).not.toContain("Invest in Gwei instead");
+    expect(sheet(view({ params: SIM.params }), { onInvest: noop })).not.toContain("Invest in Gwei instead");
   });
 });

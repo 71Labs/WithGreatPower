@@ -35,6 +35,8 @@ import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
 import { withShop } from "@/lib/market/reasoning-shop";
 import { INVEST_NOT_LIVE } from "@/lib/market/refusal";
+import { sparkQuiet } from "@/lib/market/spark";
+import { plural } from "@/lib/plural";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
@@ -125,7 +127,21 @@ function Vendor({
             Gas fee {feeText(view.params.feeBps)}, burned
           </p>
         </div>
-        {!signedIn ? (
+        {practice ? (
+          // Practice trading is open to everyone: say so first. Signing in is the second offer, and only for a guest.
+          <div className="flex flex-col gap-2">
+            <p className="text-[13px] font-semibold leading-[18px] [text-wrap:pretty]">Buy, sell and invest below with practice Bits. Nothing here is on NEAR.</p>
+            {signedIn ? null : (
+              <>
+                <StickerButton size="sm" onClick={askToSignIn} className="w-full">
+                  <LogIn aria-hidden className="size-4" strokeWidth={2} />
+                  Sign in to trade for real
+                </StickerButton>
+                <p className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">Signed in, every verified night pays Bits you can spend on the real market.</p>
+              </>
+            )}
+          </div>
+        ) : !signedIn ? (
           <div className="flex flex-col gap-1.5">
             <StickerButton variant="hero" onClick={askToSignIn} className="w-full">
               <LogIn aria-hidden className="size-5" strokeWidth={2} />
@@ -174,7 +190,8 @@ interface CardShop {
 
 function ItemCard({ item, me, params, coached, onTrade, stall }: { item: MarketItemView; me: MarketMe | null; params: MarketParams; coached: boolean; onTrade(side: Side): void; stall: CardShop }) {
   const held = me?.items[item.item] ?? 0;
-  const first = item.spark[0] ?? item.priceMilli;
+  const first = item.sparkSteps?.[0]?.[1] ?? item.spark[0] ?? item.priceMilli;
+  const quiet = item.sparkSteps !== undefined && (item.sparkSteps.length === 0 || sparkQuiet(item.sparkSteps));
   // Gwei's own account of this price, from the pool the server just read; a closed shop adds why, and what reopens it.
   const why = withShop(explainPrice({ pool: item.pool, open: params.open, feeBps: params.feeBps, change24h: item.change24h, trades24h: item.trades24h }), stall.shop, stall.investing);
   const blocked = [why.buyBlocked, why.sellBlocked].filter((t, i, all) => t !== null && all.indexOf(t) === i);
@@ -198,12 +215,17 @@ function ItemCard({ item, me, params, coached, onTrade, stall }: { item: MarketI
       <VendorChips reasoning={why} />
       <Sparkline
         points={item.spark}
+        steps={item.sparkSteps}
         className="h-8 w-full sm:h-10"
-        label={`${item.name} over 24 hours: from ${formatPrice(first)} to ${formatPrice(item.priceMilli)} Bits${item.change24h !== null ? `, ${formatChange(item.change24h)}` : ""}`}
+        label={
+          quiet
+            ? `${item.name}: no trades in the last 24 hours, holding at ${formatPrice(item.priceMilli)} Bits`
+            : `${item.name} over 24 hours: from ${formatPrice(first)} to ${formatPrice(item.priceMilli)} Bits${item.change24h !== null ? `, ${formatChange(item.change24h)}` : ""}`
+        }
       />
       <p className="num flex flex-wrap justify-between gap-x-3 text-[12px] leading-4 text-game-muted">
         <span>Stock {formatBits(item.pool.stock)}</span>
-        {me ? <span>You have {formatBits(held)}</span> : <span>{formatBits(item.trades24h)} trades today</span>}
+        {me ? <span>You have {formatBits(held)}</span> : <span>{plural(item.trades24h, "trade")} in 24 h</span>}
       </p>
       {/* The popover spreads from the card's own edge: the right-hand column opens leftwards, so it stays on a phone's screen. */}
       <WhyPrice name={`for ${item.name}`} reasoning={why} popoverClassName="start-0 group-even/card:start-auto group-even/card:end-0" />
@@ -693,6 +715,14 @@ export function MarketScreen() {
           />
           <TradeSheet
             eyebrow={practice.on ? "Practice market · not on NEAR" : undefined}
+            onInvest={
+              sheet && investingOf(view) === "available"
+                ? () => {
+                    setInvestIn({ item: sheet.item.item, tab: "invest" });
+                    setSheet(null);
+                  }
+                : undefined
+            }
             key={`${sheet?.item.item ?? "none"}:${sheet?.from ?? ""}`}
             initialAmount={sheet?.amount}
             gate={canTrade ? null : gate}

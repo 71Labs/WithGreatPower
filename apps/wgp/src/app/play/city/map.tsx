@@ -39,6 +39,7 @@ import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import { NavStyles } from "../patrol/waypoint";
 import { capturePointer } from "@/lib/pointer";
+import { plural } from "@/lib/plural";
 
 /** The fit leaves this much paper round the city (CSS px). */
 const PAD = 18;
@@ -563,7 +564,7 @@ function Finds({ frame }: { frame: RenderFrame3D }) {
       <p className="num text-[14px] font-semibold leading-5">
         {roam.pages.filter((p) => p.found).length} of {roam.pages.length} Daily Rug pages · {roam.views.filter((v) => v.synced).length} of {roam.views.length} viewpoints
       </p>
-      <p className="text-[13px] leading-[18px] text-pretty text-game-muted">{hidden ? `${hidden} pages aren’t on the map yet: sync a district’s mast to reveal its pages.` : "Every page left is on the map."}</p>
+      <p className="text-[13px] leading-[18px] text-pretty text-game-muted">{hidden ? `${plural(hidden, "page")} ${hidden === 1 ? "isn’t" : "aren’t"} on the map yet: sync a district’s mast to reveal ${hidden === 1 ? "it" : "them"}.` : "Every page left is on the map."}</p>
       <ul className="flex flex-wrap gap-1.5">
         {w.views.map((v, i) => (
           <li key={i}>

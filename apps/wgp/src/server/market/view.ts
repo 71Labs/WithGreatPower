@@ -54,6 +54,7 @@ export function itemViews(params: MarketParams, pools: Pool[], stats: ReturnType
       buyOne: buyQuote(pool, 1, params.feeBps)?.total ?? null,
       sellOne: sellQuote(pool, 1, params.feeBps)?.net ?? null,
       spark: s?.spark ?? [spotMilli(pool), spotMilli(pool)],
+      sparkSteps: s?.steps ?? [],
       change24h: s?.change24h ?? null,
       trades24h: s?.trades24h ?? 0,
       pool,
@@ -71,7 +72,7 @@ export async function marketView(): Promise<MarketView> {
 async function buildView(source: MarketSource): Promise<MarketView> {
   const { params, pools } = poolsOf(source);
   const history = await loadHistory(await getDb(), source.onChain);
-  const items = itemViews(params, pools, priceStats(pools, history.rows, history.opening));
+  const items = itemViews(params, pools, priceStats(pools, history.rows, history.opening, history.window));
   return {
     onChain: source.onChain,
     network: source.onChain ? source.chain.network : null,

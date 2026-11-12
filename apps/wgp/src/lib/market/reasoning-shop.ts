@@ -4,7 +4,10 @@
  *
  * Kept apart from ./reasoning.ts on purpose: `explainPrice` owns the price's story and its
  * wording; these lines are composed onto its answer (`withShop`), so either can change
- * without touching the other. Pure: a pool's stall (./invest.ts `shopOf`) and where
+ * without touching the other. `explainPrice` says a broke till reopens when someone buys from
+ * her; the line here adds the other way (investing) without contradicting it. A pool with
+ * investors in it has no "opening" to compare with (its virtual reserve moved), so there
+ * `explainPrice` states her stock and till plainly and the line here says whose Bits they are. Pure: a pool's stall (./invest.ts `shopOf`) and where
  * investing stands go in, sentences come out. Every number is the stall's own.
  */
 import { bitsText } from "./format";
@@ -27,10 +30,10 @@ export function shopReasons(shop: Pick<Shop, "closed" | "needs" | "invested">, i
     const why = `I’m closed for buying these: my till is ${bitsText(shop.needs)} short of paying for one.`;
     out.push(
       investing === "available"
-        ? `${why} Invest in this till and I reopen, at the same price.`
+        ? `${why} Besides buying from me, investing in this till reopens me, at the same price.`
         : investing === "paused"
-          ? `${why} I’m not taking new investors right now, so buy one from me and I can buy again.`
-          : `${why} Investing would reopen me, but it comes with contract v3, which isn’t live yet. You can try it in the practice market.`,
+          ? `${why} I’m not taking new investors right now, so buying from me is the way to reopen me.`
+          : `${why} Investing would reopen me too, but it comes with contract v3, which isn’t live yet. You can try it in the practice market.`,
     );
   } else if (shop.invested > 0) {
     out.push(`Players have invested ${bitsText(shop.invested)} in this till. That’s what lets me keep buying; it doesn’t change the price.`);

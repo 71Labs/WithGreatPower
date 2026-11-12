@@ -103,7 +103,7 @@ describe("WhyPrice", () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain(`aria-describedby="${id}"`);
     expect(html).toContain(`<div id="${id}" role="tooltip"`);
-    expect(html).toContain("Up 14% since I opened. Heroes keep buying these.");
+    expect(html).toContain("Up 14% since I opened.");
     expect(reasoning.reasons.length).toBeGreaterThanOrEqual(2);
     for (const r of reasoning.reasons) expect(html).toContain(r);
   });
@@ -127,6 +127,18 @@ describe("VendorChips", () => {
     const html = chips({ ...glider(), bits: 0 });
     expect(html).toContain("Gwei can’t pay");
     expect(html).toContain("<svg");
+  });
+
+  it("labels the levels her reasoning names, and only those", () => {
+    // Seven of eight is not "running low"; four of eight is; one of eight is "nearly out".
+    expect(chips(bought(glider(), 1))).toBe("");
+    expect(chips(bought(glider(), 4))).toContain("Running low");
+    const last = chips(bought(glider(), 7));
+    expect(last).toContain("Nearly out");
+    expect(last).not.toContain("Running low");
+    expect(chips({ ...glider(), bits: 600 })).toContain("Till running low");
+    expect(chips({ ...glider(), bits: 240 })).toContain("Till nearly empty");
+    expect(chips({ ...glider(), bits: 601 })).toBe("");
   });
 
   it("labels a closed market instead", () => {

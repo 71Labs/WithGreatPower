@@ -10,6 +10,7 @@
  * unclear whether the trade landed (the connection dropped after it was sent, a server
  * error) says so, so nobody pays twice by trying again blind.
  */
+import { noun, plural } from "@/lib/plural";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
@@ -58,7 +59,7 @@ export function refusalText(said: string): string {
   if ((m = /Price it between (\d+) and (\d+) Bits/i.exec(said))) {
     return `Gwei’s price moved: price this lot between ${Number(m[1]).toLocaleString("en-US")} and ${bits(m[2]!)}.`;
   }
-  if ((m = /You can have (\d+) listings open/i.exec(said))) return `You can have ${m[1]} listings up at once. Take one down first.`;
+  if ((m = /You can have (\d+) listings open/i.exec(said))) return `You can have ${plural(Number(m[1]), "listing")} up at once. Take one down first.`;
   if (/Daily market limit/i.test(said)) return "That’s today’s market limit. It resets at midnight UTC.";
   if (/That listing is gone/i.test(said)) return "Someone bought that lot first, or it was taken down.";
   if (/your own listing/i.test(said)) return "That’s your own listing. Take it down from the Listings tab instead.";
@@ -78,7 +79,7 @@ export function refusalText(said: string): string {
   if ((m = /You have no stake in ([a-z0-9-]+)/i.exec(said))) return `You have no stake in Gwei’s till for ${itemName(m[1]!)}.`;
   if ((m = /You have (\d+) Bits staked in ([a-z0-9-]+)/i.exec(said))) return `You have ${bits(m[1]!)} staked in Gwei’s till for ${itemName(m[2]!)}. Withdraw that many or fewer.`;
   if ((m = /Your stake unlocks in about (\d+) minutes?/i.exec(said))) {
-    return `Your stake is still locked: about ${Number(m[1]).toLocaleString("en-US")} more ${m[1] === "1" ? "minute" : "minutes"}. A stake unlocks a set time after its last top-up. Nothing was moved.`;
+    return `Your stake is still locked: about ${Number(m[1]).toLocaleString("en-US")} more ${noun(Number(m[1]), "minute")}. A stake unlocks a set time after its last top-up. Nothing was moved.`;
   }
   if ((m = /The till can pay back only (\d+) Bits right now; it refills as players buy ([a-z0-9-]+)/i.exec(said))) {
     return Number(m[1]) === 0

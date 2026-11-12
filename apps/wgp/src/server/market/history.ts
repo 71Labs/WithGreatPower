@@ -7,6 +7,7 @@
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import { spotMilli, type Pool } from "@/lib/market/math";
+import { sparkSteps, type SparkStep } from "@/lib/market/spark";
 
 import type { Db } from "../db/client";
 import { marketPrices } from "../db/schema";
@@ -109,8 +110,10 @@ export async function recordSnapshots(db: Db, onChain: boolean, pools: Pool[], n
 }
 
 export interface PriceStats {
-  /** Spot × 1000, oldest first, ending at the current price. */
+  /** Spot × 1000, oldest first, ending at the current price: one point per row, evenly spaced (no times). */
   spark: number[];
+  /** The same day as steps at their real times (src/lib/market/spark.ts): what the market's sparklines draw. */
+  steps: SparkStep[];
   /** Fractional change over the last 24 hours (0.12 = +12%), or null without history. */
   change24h: number | null;
   /** Trades and fills in the last 24 hours. */
@@ -127,13 +130,18 @@ export function thin(points: number[], max = SPARK_POINTS): number[] {
 
 /**
  * Sparklines and 24-hour changes for `pools` (current state), from the rows of the last
- * day plus the last row before it as the opening price. Pure over the rows given.
+ * day plus the last row before it as the opening price. `window` is the day the rows
+ * cover (epoch ms); it defaults to the 24 hours ending at the newest row. Pure over the
+ * rows given.
  */
 export function priceStats(
   pools: Pool[],
   rows: { item: string; kind: string; priceMilli: number; at: Date }[],
   opening: Map<string, number>,
+  window?: { from: number; to: number },
 ): Map<string, PriceStats> {
+  const newest = rows.reduce((t, r) => Math.max(t, r.at.getTime()), 0);
+  const span = window ?? { from: newest - DAY_MS, to: newest };
   const out = new Map<string, PriceStats>();
   for (const pool of pools) {
     const now = spotMilli(pool);
@@ -143,6 +151,7 @@ export function priceStats(
     const points = thin([...(open !== undefined ? [open] : []), ...curve, now]);
     out.set(pool.item, {
       spark: points.length > 1 ? points : [now, now],
+      steps: sparkSteps(mine, opening.get(pool.item), now, span),
       change24h: open !== undefined && open > 0 ? (now - open) / open : null,
       // Trades and fills only: a snapshot or an investment moves no price.
       trades24h: mine.filter((r) => r.kind === "trade" || r.kind === "fill").length,
@@ -165,5 +174,5 @@ export async function loadHistory(db: Db, onChain: boolean, now = new Date()) {
     .from(marketPrices)
     .where(and(eq(marketPrices.onChain, onChain), lt(marketPrices.at, since), sql`${marketPrices.kind} <> 'fill'`))
     .orderBy(marketPrices.item, desc(marketPrices.at));
-  return { rows, opening: new Map(before.map((b) => [b.item, b.priceMilli])) };
+  return { rows, opening: new Map(before.map((b) => [b.item, b.priceMilli])), window: { from: since.getTime(), to: now.getTime() } };
 }

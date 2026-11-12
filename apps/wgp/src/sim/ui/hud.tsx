@@ -21,6 +21,8 @@ import { ALLY_CAST, VILLAINS } from "@wgp/game-core/data";
 import type { Stop, StopResult } from "@wgp/game-core/types";
 
 import type { AbilityHud, HudSnapshot, HudStore } from "../loop";
+import { plural } from "@/lib/plural";
+
 import { ARC_BUTTON, ARC_PAD, arcLayout } from "./arc";
 import { Chip, Face, HeroFace, Kbd, POWER_HELP, POWER_ICONS } from "./bits";
 import { useNarrowViewport, useShortViewport } from "./hooks";
@@ -180,7 +182,7 @@ function AbilityButton({ a, onUse, compact = false }: { a: AbilityHud; onUse: ()
   const cooling = a.cd > 0;
   const pct = cooling ? a.cd / a.cdMax : 0;
   const C = 2 * Math.PI * 29;
-  const why = a.reason === "fluid" ? "not enough web fluid" : a.reason === "cooldown" ? `ready in ${Math.ceil(a.cd)} seconds` : a.reason === "target" ? "nobody in reach" : null;
+  const why = a.reason === "fluid" ? "not enough web fluid" : a.reason === "cooldown" ? `ready in ${plural(Math.ceil(a.cd), "second")}` : a.reason === "target" ? "nobody in reach" : null;
   return (
     <div className="flex flex-col items-center gap-1">
       <button

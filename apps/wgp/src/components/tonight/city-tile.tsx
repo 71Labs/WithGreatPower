@@ -8,6 +8,7 @@ import Link from "next/link";
 
 import { ON_PAPER } from "@/components/game/kit";
 import { ChevronRight, Compass } from "@/components/icons";
+import { noun } from "@/lib/plural";
 import { cityRecord, cityTotals, TASK_IDS } from "@wgp/game-core/city";
 import type { Save } from "@wgp/game-core/types";
 
@@ -30,7 +31,7 @@ export function CityTile({ save, className = "" }: { save: Save; className?: str
         <span className="truncate text-[15px] font-bold leading-5">{fresh ? "Roam the city" : "Back into the city"}</span>
       </span>
       <span className="num whitespace-nowrap text-[12px] font-semibold text-game-muted">
-        {fresh ? "No timer" : `${t.tasks}/${TASK_IDS.length} tasks · ${t.pages}/${COUNTS.pages} pages`}
+        {fresh ? "No timer" : `${t.tasks}/${TASK_IDS.length} ${noun(TASK_IDS.length, "task")} · ${t.pages}/${COUNTS.pages} ${noun(COUNTS.pages, "page")}`}
       </span>
       <ChevronRight aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
     </Link>

@@ -249,6 +249,11 @@
     color: var(--vs-ink-strong);
   }
 
+  /* On the game's paper, a heading takes the paper's ink, not the site's (pale on cream). */
+  .text-game-ink :where(h1, h2, h3) {
+    color: inherit;
+  }
+
   p {
     text-wrap: pretty;
   }

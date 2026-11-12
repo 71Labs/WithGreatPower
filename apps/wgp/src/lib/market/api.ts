@@ -9,6 +9,7 @@ import type { MarketParams } from "./config";
 import type { Fill, Listing, StakeReceipt, Trade } from "./engine";
 import type { InvestorView, Shop } from "./invest";
 import type { Pool } from "./math";
+import type { SparkStep } from "./spark";
 
 export interface MarketItemView {
   item: ItemId;
@@ -22,6 +23,11 @@ export interface MarketItemView {
   sellOne: number | null;
   /** Spot × 1000 over the last day, oldest first. */
   spark: number[];
+  /**
+   * The last day as steps at their real times, from recorded price history only (./spark.ts).
+   * One step: nothing traded. None: no history yet. Absent from a source that keeps no times.
+   */
+  sparkSteps?: SparkStep[];
   /** Fractional change over 24 hours, or null with no history yet. */
   change24h: number | null;
   trades24h: number;

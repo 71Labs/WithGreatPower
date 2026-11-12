@@ -35,6 +35,8 @@ import type { Db } from "./client";
 import { isCompeteMode, submitCompete, type CompeteOutcome } from "./compete";
 import { recordScore } from "./leaderboard";
 import { BITS_TOKEN_ID, enqueueRewardMint, lootDiff, withBits, type MintItem } from "./outbox";
+import { plural } from "@/lib/plural";
+
 import { ensureSave, getPlayer, writeSave } from "./players";
 import { chainOps, players, runs, saves, type Run } from "./schema";
 
@@ -118,7 +120,7 @@ export async function startRun(
   if (!reserved.ok) {
     const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
     const retryAfterSeconds = Math.max(1, Math.ceil((midnight - now.getTime()) / 1000));
-    const message = chapter ? `That’s ${limit} tries at this case today. Bearson’s door opens again at midnight UTC.` : `That’s ${limit} runs today. The city resets at midnight UTC.`;
+    const message = chapter ? `That’s ${plural(limit, "try", "tries")} at this case today. Bearson’s door opens again at midnight UTC.` : `That’s ${plural(limit, "run")} today. The city resets at midnight UTC.`;
     throw new HttpError(429, "daily_cap", message, { limit, retryAfterSeconds });
   }
 

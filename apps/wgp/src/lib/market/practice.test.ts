@@ -40,6 +40,7 @@ import {
 } from "./practice";
 import { explainPrice } from "./reasoning";
 import { shopReasons, withShop } from "./reasoning-shop";
+import { sparkQuiet } from "./spark";
 
 const T0 = Date.parse("2026-11-12T12:00:00Z");
 const MIN = 60_000;
@@ -180,7 +181,7 @@ describe("Gwei goes broke in practice, and an investment reopens her", () => {
     // "Why this price?" says she is closed, why, and that investing reopens her here.
     const why = withShop(explainPrice({ pool: pool(s), open: true, feeBps: 200 }), brokeShop, "available");
     expect(why.state).toBe("broke");
-    expect(why.reasons.at(-1)).toBe(`I’m closed for buying these: my till is ${bitsText(brokeShop.needs)} short of paying for one. Invest in this till and I reopen, at the same price.`);
+    expect(why.reasons.at(-1)).toBe(`I’m closed for buying these: my till is ${bitsText(brokeShop.needs)} short of paying for one. Besides buying from me, investing in this till reopens me, at the same price.`);
     expect(() => practiceTrade(s, b, { action: "sell", item: "crumbs", amount: 1, minBits: 0 }, T0 + MIN)).toThrow(/till holds only/);
 
     // Invest: the shop reopens, the price doesn't move, and the stake is on the books.
@@ -239,7 +240,7 @@ describe("Gwei goes broke in practice, and an investment reopens her", () => {
     const s = seedPractice(liveView(), T0);
     expect(shopReasons(shopOf(pool(s), true), "available")).toEqual([]);
     const broke = shopOf({ ...pool(s), bits: 0 }, true);
-    expect(shopReasons(broke, "not-live")[0]).toMatch(/Investing would reopen me, but it comes with contract v3, which isn’t live yet\. You can try it in the practice market\.$/);
+    expect(shopReasons(broke, "not-live")[0]).toMatch(/Investing would reopen me too, but it comes with contract v3, which isn’t live yet\. You can try it in the practice market\.$/);
     expect(shopReasons(broke, "paused")[0]).toMatch(/not taking new investors right now/);
     expect(shopReasons({ closed: ["sold-out"], needs: 0, invested: 0 }, "available")).toEqual(["I’m closed for selling these until someone sells me one. Investing fills my till, not my shelf."]);
     expect(shopReasons({ closed: [], needs: 0, invested: 120 }, "available")[0]).toMatch(/Players have invested 120 Bits in this till/);
@@ -335,5 +336,70 @@ describe("practice gains can't be laundered", () => {
     // A wallet edited to a fortune is still only a practice wallet: it parses, and buys practice items.
     const rich = parsePractice(JSON.stringify({ ...s, bits: 1_000_000 }))!;
     expect(practiceScreen(rich, base(), T0).me.bits).toBe(PRACTICE_START_BITS + 1_000_000);
+  });
+});
+
+describe("the practice cards' step lines", () => {
+  it("are drawn from the practice market's own trades at their own times, not a fallback", () => {
+    const b = base({ crumbs: 5 });
+    let s = seedPractice(liveView(), T0);
+    const crumbs = (st: PracticeState, at: number) => practiceScreen(st, b, at).view.items.find((i) => i.item === "crumbs")!;
+    // Just opened: one step where it opened, and nothing has traded.
+    expect(crumbs(s, T0 + MIN).sparkSteps).toHaveLength(1);
+    expect(sparkQuiet(crumbs(s, T0 + MIN).sparkSteps!)).toBe(true);
+    expect(crumbs(s, T0 + MIN).change24h).toBe(0);
+
+    s = practiceTrade(s, b, { action: "buy", item: "crumbs", amount: 3, maxBits: 1e9 }, T0 + 60 * MIN).state;
+    const afterBuy = spotMilli(pool(s));
+    s = practiceTrade(s, b, { action: "sell", item: "crumbs", amount: 8, minBits: 0 }, T0 + 120 * MIN).state;
+    const item = crumbs(s, T0 + 180 * MIN);
+    // Three steps: the opening, the buy, the sell, each at its real place in the last 24 hours.
+    expect(item.sparkSteps!.map(([, price]) => price)).toEqual([12_000, afterBuy, spotMilli(pool(s))]);
+    const day = 24 * 60 * MIN;
+    expect(item.sparkSteps!.map(([t]) => Math.round(t * day))).toEqual([day - 180 * MIN, day - 120 * MIN, day - 60 * MIN]);
+    expect(sparkQuiet(item.sparkSteps!)).toBe(false);
+    expect(item.trades24h).toBe(2);
+    expect(item.change24h).toBeCloseTo((spotMilli(pool(s)) - 12_000) / 12_000, 10);
+    // An investment moves no price, so it adds no step.
+    const staked = practiceStake(s, b, { action: "invest", item: "crumbs", bits: 50 }, T0 + 150 * MIN).state;
+    expect(crumbs(staked, T0 + 180 * MIN).sparkSteps).toEqual(item.sparkSteps);
+    // Two days on with nothing traded: a flat line from the last price, which the card labels as quiet.
+    const later = crumbs(s, T0 + 3 * day);
+    expect(later.sparkSteps).toEqual([[0, spotMilli(pool(s))]]);
+    expect(later.trades24h).toBe(0);
+  });
+
+  it("survive storage, and a market stored before they were kept still draws", () => {
+    const s = practiceTrade(seedPractice(liveView(), T0), base(), { action: "buy", item: "crumbs", amount: 1, maxBits: 1e9 }, T0 + MIN).state;
+    expect(parsePractice(storePractice(s))!.marks).toEqual(s.marks);
+    const { marks: _dropped, ...old } = s;
+    void _dropped;
+    const read = parsePractice(JSON.stringify(old))!;
+    expect(practiceScreen(read, base(), T0 + MIN).view.items[0]!.sparkSteps).toBeUndefined();
+    expect(parsePractice(JSON.stringify({ ...s, marks: { crumbs: [[1, "x"]] } }))).toBeNull();
+  });
+});
+
+describe("Gwei's closed-shop lines beside her own reasoning", () => {
+  it("never contradict the till line: a broke till says buying from her reopens it, and investing too", () => {
+    const s = practiceDrain(seedPractice(liveView(), T0), base(), "crumbs", T0).state;
+    const why = withShop(explainPrice({ pool: pool(s), open: true, feeBps: 200 }), shopOf(pool(s), true), "available");
+    expect(why.state).toBe("broke");
+    expect(why.reasons[0]).toMatch(/can’t buy more until someone buys from me/);
+    expect(why.reasons.at(-1)).toMatch(/Besides buying from me, investing in this till reopens me, at the same price\.$/);
+    expect(why.covers).toBe(0);
+  });
+
+  it("in a till players funded, state her stock and till plainly and say whose Bits keep her buying", () => {
+    let s = practiceDrain(seedPractice(liveView(), T0), base(), "crumbs", T0).state;
+    s = practiceStake(s, base(), { action: "invest", item: "crumbs", bits: 150 }, T0).state;
+    const why = withShop(explainPrice({ pool: pool(s), open: true, feeBps: 200 }), shopOf(pool(s), true), "available");
+    const all = why.reasons.join(" ");
+    // No "up from … at opening. Buyers paid in, and that lifts the price": investors paid in, and the price didn't move.
+    expect(all).not.toMatch(/Buyers paid in|lifts the price|up from/);
+    expect(all).toContain(`My till for these holds ${bitsText(pool(s).bits)}.`);
+    expect(why.reasons.at(-1)).toBe("Players have invested 150 Bits in this till. That’s what lets me keep buying; it doesn’t change the price.");
+    expect(why.covers).toBeGreaterThan(0);
+    expect(why.reasons.length).toBeLessThanOrEqual(5);
   });
 });

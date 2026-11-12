@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BoardRow } from "@/server/db/leaderboard";
 
-import { boardLines, placeNotice, type BoardLine } from "./board-lines";
+import { BOARD_TOP, boardInvite, boardLines, msToUtcMidnight, placeNotice, type BoardLine } from "./board-lines";
 
 const row = (rank: number, who = `p${rank}`): BoardRow => ({
   rank,
@@ -71,5 +71,38 @@ describe("the board draws your row once", () => {
     expect(youLines(boardLines({ rows, me: null, around: [] }))).toEqual([]);
     expect(placeNotice({ rows, me: null, around: [], signedIn: false })).toBe("sign-in");
     expect(placeNotice({ rows, me: null, around: [], signedIn: true })).toBe("unranked");
+  });
+});
+
+describe("a short board invites the next hero in", () => {
+  it("the judge's board: 2 heroes, a guest looking", () => {
+    expect(boardInvite({ total: 2, me: null, signedIn: false })).toEqual({ open: 8, claimRank: 3, needs: "sign-in" });
+  });
+
+  it("signed in without a row: the same place, one ranked patrol away", () => {
+    expect(boardInvite({ total: 2, me: null, signedIn: true })).toEqual({ open: 8, claimRank: 3, needs: "patrol" });
+  });
+
+  it("already on it: the open places, and nothing to claim", () => {
+    expect(boardInvite({ total: 2, me: row(2), signedIn: true })).toEqual({ open: 8, claimRank: null, needs: null });
+  });
+
+  it.each([1, 5, BOARD_TOP - 1])("with %i on the board, open places and rows add up to the top ten", (total) => {
+    const invite = boardInvite({ total, me: null, signedIn: true })!;
+    expect(invite.open + total).toBe(BOARD_TOP);
+    expect(invite.claimRank).toBe(total + 1);
+  });
+
+  it("says nothing on a full board, an empty one, or one that no longer takes scores", () => {
+    expect(boardInvite({ total: BOARD_TOP, me: null, signedIn: true })).toBeNull();
+    expect(boardInvite({ total: 240, me: null, signedIn: false })).toBeNull();
+    expect(boardInvite({ total: 0, me: null, signedIn: false })).toBeNull();
+    expect(boardInvite({ total: 2, me: null, signedIn: true }, false)).toBeNull();
+  });
+
+  it("counts down to the next midnight UTC", () => {
+    expect(msToUtcMidnight(Date.UTC(2026, 10, 12, 18, 0, 0))).toBe(6 * 3_600_000);
+    expect(msToUtcMidnight(Date.UTC(2026, 10, 12, 23, 59, 59))).toBe(1_000);
+    expect(msToUtcMidnight(Date.UTC(2026, 10, 12, 0, 0, 0))).toBe(86_400_000);
   });
 });

@@ -10,12 +10,12 @@ import { Check, Lock, Sparkles } from "@/components/icons";
 import { InviteTile } from "@/components/referrals/invite-tile";
 import { MAX_LOADOUT, POWERS, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
+import { plural } from "@/lib/plural";
 import type { PowerId, Stats } from "@wgp/game-core/types";
 
-import { MAX_POWER_LEVEL, POWER_ICONS, PowerFacts, USES_PER_LEVEL, costLabel, masteryProgress } from "./powers";
+import { MAX_POWER_LEVEL, POWER_ICONS, PowerFacts, USES_PER_LEVEL, costLabel, masteryProgress, powerBlurb, rechargeLabel } from "./powers";
 
 const ALL_POWERS = Object.keys(POWERS) as PowerId[];
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 /** Signed with a real minus sign, for reputation. */
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0");
 
@@ -127,7 +127,7 @@ function Powers({ save }: { save: HeroSave }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[13px] leading-5 text-game-muted">
-        {plural(owned.length, "power")} learned. Every {USES_PER_LEVEL} uses is a level, up to {MAX_POWER_LEVEL}; each level adds 15%.
+        {plural(owned.length, "power")} learned. Every {plural(USES_PER_LEVEL, "use")} is a level, up to {MAX_POWER_LEVEL}; each level adds 15%.
       </p>
       <ul className="grid gap-2 md:grid-cols-2">
         {owned.map((id) => {
@@ -149,7 +149,7 @@ function Powers({ save }: { save: HeroSave }) {
                       </span>
                     ) : null}
                   </h3>
-                  <p className="text-[13px] leading-[18px] text-game-muted">{p.blurb}</p>
+                  <p className="text-[13px] leading-[18px] text-game-muted">{powerBlurb(p)}</p>
                 </div>
                 <span className="num inline-flex h-7 shrink-0 items-center rounded-full border-2 border-game-ink bg-game-gold px-2 text-[12px] font-bold leading-none text-game-ink">
                   Lv {m.level}
@@ -195,13 +195,13 @@ function Loadout({ save }: { save: HeroSave }) {
       }
       const next = current.filter((p) => p !== id);
       dispatch({ type: "set-loadout", loadout: next });
-      setMessage(`${name} left at home. ${next.length} of ${MAX_LOADOUT} slots used.`);
+      setMessage(`${name} left at home. ${next.length} of ${plural(MAX_LOADOUT, "slot")} used.`);
     } else if (full) {
       setMessage(`Your loadout is full. Take a power out to make room for ${name}.`);
     } else {
       const next = [...current, id];
       dispatch({ type: "set-loadout", loadout: next });
-      setMessage(`${name} is coming on patrol. ${next.length} of ${MAX_LOADOUT} slots used.`);
+      setMessage(`${name} is coming on patrol. ${next.length} of ${plural(MAX_LOADOUT, "slot")} used.`);
     }
   }
 
@@ -258,9 +258,9 @@ function Loadout({ save }: { save: HeroSave }) {
                   </span>
                   <span className={`flex min-w-0 flex-col ${blocked ? "opacity-60" : ""}`}>
                     <span className="text-[14px] font-semibold leading-[18px]">{p.name}</span>
-                    <span id={`loadout-${id}-meta`} className={`num text-[12px] leading-4 ${checked ? "text-game-paper/75" : "text-game-muted"}`}>
+                    <span id={`loadout-${id}-meta`} className={`num text-[12px] leading-4 ${checked ? "text-game-paper/75" : blocked ? "text-game-ink" : "text-game-muted"}`}>
                       {costLabel(p.cost)}
-                      {p.cooldown ? ` · ${p.cooldown}-turn cooldown` : ""}
+                      {` · ${rechargeLabel(p.cooldown)} recharge`}
                     </span>
                   </span>
                   {checked ? (
@@ -305,7 +305,7 @@ function PickPowerSheet({ save, open, onClose, onLearn }: { save: HeroSave; open
                 <PowerIcon id={id} />
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <h3 className="text-[15px] font-semibold leading-5 text-game-ink">{p.name}</h3>
-                  <p className="text-[13px] leading-[18px] text-game-muted">{p.blurb}</p>
+                  <p className="text-[13px] leading-[18px] text-game-muted">{powerBlurb(p)}</p>
                 </div>
               </div>
               <PowerFacts power={p} pills />

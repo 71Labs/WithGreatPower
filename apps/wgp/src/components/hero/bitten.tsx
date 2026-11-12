@@ -10,13 +10,13 @@ import { ON_PAPER, StickerButton, StickerFrame, StickerIconButton, StickerPanel 
 import { GameLoading } from "@/components/game/ui";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, City, Heart, Swords, Zap } from "@/components/icons";
 import { POWERS, STARTER_POWERS, SUITS } from "@wgp/game-core/data";
-import { useGame } from "@/game/store";
+import { useAccount, useGame } from "@/game/store";
 import { QUICK_HERO, markQuickHero } from "@/lib/first-minute/quick-hero";
 import type { PowerId, SuitId } from "@wgp/game-core/types";
 
 import { Mark, SELECT_CARD, SELECT_CARD_OFF, SELECT_CARD_ON } from "./controls";
 import { HeroCardPreview } from "./hero-card";
-import { POWER_ICONS, PowerFacts } from "./powers";
+import { POWER_ICONS, PowerFacts, powerBlurb } from "./powers";
 
 const NAME_MAX = 24;
 const PICKS = 3;
@@ -154,7 +154,7 @@ function ErrorLine({ id, children }: { id: string; children: ReactNode }) {
 /* ------------------------------------------------------------------ intro */
 
 /** The origin moment: a comic narration box over the night city, and one big button. */
-function Intro({ onStart, onSkip }: { onStart: () => void; onSkip: () => void }) {
+function Intro({ onStart, onSkip }: { onStart: () => void; onSkip: (() => void) | null }) {
   return (
     <section aria-labelledby="bitten-intro-title" className="mx-auto flex min-h-[calc(100dvh-96px)] w-full max-w-[560px] flex-col justify-center px-4 pb-10">
       <div className="relative">
@@ -184,12 +184,18 @@ function Intro({ onStart, onSkip }: { onStart: () => void; onSkip: () => void })
             Get bitten
           </StickerButton>
           <p className="text-center text-[13px] leading-5 text-game-muted">Name, suit, powers. About a minute.</p>
-          {/* The quick start: The Node, the Classic suit and three starter powers, straight into night one. */}
-          <StickerButton size="md" onClick={onSkip} className="w-full">
-            Skip to the first night
-            <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
-          </StickerButton>
-          <p className="text-center text-[13px] leading-5 text-game-muted">You start as The Node and can rename your hero after.</p>
+          {/* The quick start: The Node, the Classic suit and three starter powers, straight into night one.
+              Guests only: they can name the hero afterwards, from Tonight. A signed-in hero's name is final
+              (it goes on the boards), so a signed-in player chooses it here. */}
+          {onSkip ? (
+            <>
+              <StickerButton size="md" onClick={onSkip} className="w-full">
+                Skip to the first night
+                <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
+              </StickerButton>
+              <p className="text-center text-[13px] leading-5 text-game-muted">You start as The Node. You can name your hero once, from Tonight.</p>
+            </>
+          ) : null}
         </StickerPanel>
       </div>
     </section>
@@ -200,6 +206,7 @@ function Intro({ onStart, onSkip }: { onStart: () => void; onSkip: () => void })
 
 export function Bitten() {
   const { save, dispatch } = useGame();
+  const guest = useAccount().status === "guest";
   const router = useRouter();
   const hasHero = !!save?.hero;
 
@@ -245,11 +252,15 @@ export function Bitten() {
             playVoice("narrator-bite");
             setStep(1);
           }}
-          onSkip={() => {
-            skipped.current = true;
-            markQuickHero(true);
-            dispatch({ type: "create-hero", ...QUICK_HERO });
-          }}
+          onSkip={
+            guest
+              ? () => {
+                  skipped.current = true;
+                  markQuickHero(true);
+                  dispatch({ type: "create-hero", ...QUICK_HERO });
+                }
+              : null
+          }
         />
       </>
     );
@@ -367,7 +378,7 @@ export function Bitten() {
                   </div>
                   {nameError ? <ErrorLine id={nameErrorId}>{nameError}</ErrorLine> : null}
                   <p id={nameHintId} className="text-[13px] leading-5 text-game-muted">
-                    Up to {NAME_MAX} characters. You can’t change it later, so no pressure.
+                    Up to {NAME_MAX} characters. The name you choose here is final, so no pressure.
                   </p>
                 </div>
 
@@ -521,7 +532,7 @@ export function Bitten() {
                               {p.name}
                             </span>
                             <span id={`${ids}-power-${id}-blurb`} className={`text-[13px] leading-[18px] ${checked ? "text-game-paper/75" : "text-game-muted"}`}>
-                              {p.blurb}
+                              {powerBlurb(p)}
                             </span>
                           </span>
                           <Mark checked={checked} shape="checkbox" />

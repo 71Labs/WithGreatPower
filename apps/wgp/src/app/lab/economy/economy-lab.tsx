@@ -26,6 +26,8 @@ import { shopOf } from "@/lib/market/invest";
 import { explainPrice } from "@/lib/market/reasoning";
 import { withShop } from "@/lib/market/reasoning-shop";
 
+import { plural } from "@/lib/plural";
+
 import { FlowPanel } from "./flow-panel";
 import { InvestPanel } from "./invest-panel";
 import { NpcPanel } from "./npc-panel";
@@ -331,7 +333,7 @@ export function EconomyLab() {
                   type="button"
                   aria-pressed={speed === s.id}
                   onClick={() => setSpeed(s.id)}
-                  className={`num h-9 min-w-11 rounded-full px-2.5 text-[13px] font-semibold focus-visible:outline-offset-2 pointer-coarse:h-11 ${speed === s.id ? "bg-game-ink text-game-paper" : "pointer-fine:hover:bg-game-paper-2"}`}
+                  className={`num h-9 min-w-11 rounded-full px-2.5 text-[13px] font-semibold focus-visible:outline-offset-2 max-sm:h-11 pointer-coarse:h-11 ${speed === s.id ? "bg-game-ink text-game-paper" : "pointer-fine:hover:bg-game-paper-2"}`}
                 >
                   {s.label}
                 </button>
@@ -381,7 +383,7 @@ export function EconomyLab() {
           <div className="ml-auto flex gap-2 max-sm:w-full">
             <StickerButton variant="hero" onClick={toggle} className="max-sm:flex-1">
               {running ? <Pause aria-hidden className="size-5" strokeWidth={2.25} /> : <Play aria-hidden className="size-5" strokeWidth={2.25} />}
-              {running ? "Pause" : done ? `Run ${days} days again` : last.day > 0 ? "Resume" : `Run ${days} days`}
+              {running ? "Pause" : done ? `Run ${plural(days, "day")} again` : last.day > 0 ? "Resume" : `Run ${plural(days, "day")}`}
             </StickerButton>
             <StickerButton onClick={() => fresh()} disabled={last.day === 0}>
               Reset
@@ -392,7 +394,7 @@ export function EconomyLab() {
         <dl aria-live="off" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Day" value={`${last.day} / ${days}`} />
           <Stat label="Bits in play" value={formatBits(last.supply)} hint="Held by heroes, plus Gwei’s till" />
-          <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The vendor’s own wallet" />
+          <Stat label="Gwei’s till" value={formatBits(last.till)} hint="The Bits she buys with" />
           <Stat label="Bits burned" value={formatBits(last.burned)} hint={`Gas fee${setting.craftBits ? " and crafting" : ""}, of ${formatBits(last.minted)} earned`} />
           <Stat label="Suits crafted" value={formatBits(last.crafted)} />
           <Stat label="Trades" value={formatBits(totals.trades + totals.fills)} hint={`${formatBits(totals.fills)} player-to-player · ${last.listings} listed now`} />

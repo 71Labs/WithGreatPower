@@ -1,0 +1,74 @@
+/**
+ * Claims about what this repository does NOT do, or has built but not switched on. Each is
+ * checked against the source that would have to change for the claim to stop being true.
+ */
+import { describe, expect, it } from "vitest";
+
+import { read } from "./repo";
+
+/** Every `pub fn` in a Rust file, by name. */
+const pubFns = (file: string) => [...read(file).matchAll(/^\s*pub fn (\w+)/gm)].map((m) => m[1]!);
+
+describe("the deployed contract's NEP-245 surface (contracts/wgp, v2)", () => {
+  const mt = pubFns("contracts/wgp/src/mt.rs").filter((name) => name.startsWith("mt_"));
+
+  it("has the core transfers, the balance and supply views and mt_tokens_for_owner, and nothing else", () => {
+    expect(mt.sort()).toEqual(
+      ["mt_balance_of", "mt_batch_balance_of", "mt_batch_supply", "mt_batch_transfer", "mt_batch_transfer_call", "mt_resolve_transfer", "mt_supply", "mt_token", "mt_tokens_for_owner", "mt_transfer", "mt_transfer_call"].sort(),
+    );
+  });
+
+  it("has no metadata extension, no global enumeration and no approval methods anywhere in the contract", () => {
+    const all = ["lib.rs", "mt.rs", "market.rs", "events.rs", "migrate.rs"].flatMap((f) => pubFns(`contracts/wgp/src/${f}`));
+    expect(all.filter((name) => /^mt_metadata|^mt_tokens$|^mt_approve|^mt_revoke|^mt_is_approved/.test(name))).toEqual([]);
+  });
+
+  it("has no way to invest in the merchant: the market's calls are trades, listings and the owner's settings", () => {
+    const market = pubFns("contracts/wgp/src/market.rs").filter((name) => !["new", "reserves", "spot_milli", "buy_cost", "sell_payout", "fee_of", "listing_bounds", "apply_buy", "apply_sell"].includes(name));
+    expect(market.sort()).toEqual(["bits_of", "buy_listing", "cancel_listing", "list_item", "market_account", "market_buy", "market_listing", "market_listings", "market_quote", "market_sell", "market_state", "set_market_params"].sort());
+    expect(market.some((name) => /invest/.test(name))).toBe(false);
+  });
+
+  it("says so in the README, and names v3 as built and not deployed", () => {
+    const readme = read("README.md");
+    expect(readme).toContain("It has no metadata extension, no global enumeration (`mt_tokens`) and no approvals.");
+    expect(readme).toContain("it is not deployed ([draft PR #59]");
+    expect(readme).toContain("The deployed contract (v2) has no way to invest in her to reopen; investing is in v3, which is not deployed.");
+  });
+});
+
+describe("no cron jobs", () => {
+  it("vercel.json schedules nothing", () => {
+    const config = JSON.parse(read("apps/wgp/vercel.json")) as Record<string, unknown>;
+    expect(config).not.toHaveProperty("crons");
+  });
+
+  it("no workflow in .github runs on a schedule", () => {
+    expect(read(".github/workflows/ci.yml")).not.toMatch(/^\s*schedule:/m);
+  });
+});
+
+describe("the faucet taper is written and not wired in", () => {
+  it("the ranked submit path pays nightBits, and never calls taperedNightBits", () => {
+    const runs = read("apps/wgp/src/server/db/runs.ts");
+    expect(runs).toMatch(/const bits = nightBits\(/);
+    expect(runs).not.toContain("taperedNightBits");
+    expect(read("apps/wgp/src/lib/market/rewards.ts")).toContain("export function taperedNightBits(");
+  });
+});
+
+describe("Sandwich Man is off unless the owner turns him on", () => {
+  it("nothing in the repository sets his account or key: .env.example names both commented out, the key empty", () => {
+    const lines = read("apps/wgp/.env.example").split("\n");
+    const account = lines.filter((l) => l.includes("NPC_TRADER_ACCOUNT_ID="));
+    const key = lines.filter((l) => l.includes("NPC_TRADER_PRIVATE_KEY="));
+    expect(account).toEqual(["# NPC_TRADER_ACCOUNT_ID=sandwich.wgpnear.near"]);
+    expect(key).toEqual(["# NPC_TRADER_PRIVATE_KEY="]);
+  });
+
+  it("the stats script counts his calls apart from players'", () => {
+    const stats = read("scripts/stats.mjs");
+    expect(stats).toContain('const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];');
+    expect(stats).toMatch(/if \(NPC_ACCOUNTS\.includes\(sender\)\) npcCalls \+= 1;\s*else if \(played/);
+  });
+});

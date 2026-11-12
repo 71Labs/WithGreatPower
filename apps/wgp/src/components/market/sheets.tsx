@@ -22,6 +22,8 @@ import { feeText } from "@/lib/market/format";
 import { explainPrice } from "@/lib/market/reasoning";
 
 import { ITEM_SOURCE } from "./copy";
+import { plural as count } from "@/lib/plural";
+
 import { bitsText, formatBits, formatChange, formatPrice } from "./sparkline";
 import type { TradeOutcome } from "./use-market";
 import { VendorChips } from "./why-price";
@@ -141,6 +143,7 @@ export function TradeSheet({
   initialAmount = 1,
   eyebrow = "Mempool Market",
   gate = null,
+  onInvest,
   onSide,
   onClose,
   onTrade,
@@ -154,6 +157,11 @@ export function TradeSheet({
   /** The amount the sheet opens on (a prompt's prefill). Remount with a new `key` to apply it. */
   initialAmount?: number;
   gate?: TradeGate | null;
+  /**
+   * Where the market takes investors: opens the invest sheet for this item. Offered on the
+   * sell side when her till for it is empty, as the other way to reopen her.
+   */
+  onInvest?: () => void;
   onSide(side: Side): void;
   onClose(): void;
   onTrade(req: SimTradeRequest): Promise<TradeOutcome>;
@@ -304,10 +312,21 @@ export function TradeSheet({
         </dl>
         {/* The button below is off while Gwei can't take this side; say why where it can be read. */}
         {cant !== null ? (
-          <p id={`${ids}-cant`} className="flex items-start gap-2 rounded-[14px] border-2 border-game-ink bg-game-paper-2 px-3.5 py-3 text-[14px] leading-5">
-            <CircleAlert aria-hidden className="mt-px size-5 shrink-0 text-game-hero" strokeWidth={2} />
-            <span className="[text-wrap:pretty]">{cant}</span>
-          </p>
+          <div className="flex flex-col gap-3 rounded-[14px] border-2 border-game-ink bg-game-paper-2 px-3.5 py-3">
+            <p id={`${ids}-cant`} className="flex items-start gap-2 text-[14px] leading-5">
+              <CircleAlert aria-hidden className="mt-px size-5 shrink-0 text-game-hero" strokeWidth={2} />
+              <span className="[text-wrap:pretty]">{cant}</span>
+            </p>
+            {/* Her till is empty and this market takes investors: the other way to reopen her, one tap away. */}
+            {side === "sell" && why.cantPay && !why.closed && onInvest ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <StickerButton size="sm" onClick={onInvest} className="max-sm:w-full">
+                  Invest in Gwei instead
+                </StickerButton>
+                <p className="min-w-0 flex-1 basis-[200px] text-[12px] leading-4 text-game-muted [text-wrap:pretty]">Put Bits into her till for {item.name} and she can buy again, at the same price.</p>
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {gate ? (
           <p id={`${ids}-gate`} className="flex items-start gap-2 rounded-[14px] border-2 border-game-ink bg-game-gold px-3.5 py-3 text-[14px] font-medium leading-5">
@@ -373,7 +392,7 @@ export function ListSheet({
           : me && me.listingsLeft <= 0
             ? "That’s today’s listings used up. The market resets at midnight UTC."
             : me && me.open.length >= view.params.maxOpenListings
-              ? `You can have ${view.params.maxOpenListings} listings up at once. Take one down first.`
+              ? `You can have ${count(view.params.maxOpenListings, "listing")} up at once. Take one down first.`
               : null;
     setProblem(why);
     if (why) return;
