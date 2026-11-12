@@ -18,10 +18,12 @@ import type { ItemId } from "@wgp/game-core/types";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
 import { afterBuy, afterSell, buyQuote, lessSlippage, listingBounds, sellQuote, spotMilli, withSlippage } from "@/lib/market/math";
+import { explainPrice } from "@/lib/market/reasoning";
 
 import { ITEM_SOURCE } from "./copy";
 import { bitsText, formatBits, formatChange, formatPrice } from "./sparkline";
 import type { TradeOutcome } from "./use-market";
+import { VendorChips } from "./why-price";
 
 /** How far the price may move against you before a trade refuses: 3%. */
 export const SLIPPAGE_BPS = 300;
@@ -154,6 +156,9 @@ export function TradeSheet({
   const after = buy ? afterBuy(pool, amount, buy.cost) : sell ? afterSell(pool, amount, sell.payout) : null;
   const move = after ? (spotMilli(after) - item.priceMilli) / item.priceMilli : 0;
   const limit = buy ? withSlippage(buy.total, SLIPPAGE_BPS) : sell ? lessSlippage(sell.net, SLIPPAGE_BPS) : 0;
+  // Why the price is what it is, and whether Gwei can take this side of the trade at all.
+  const why = explainPrice({ pool, open: view.params.open, feeBps: fee, change24h: item.change24h, trades24h: item.trades24h });
+  const cant = side === "buy" ? why.buyBlocked : why.sellBlocked;
 
   function blocker(): string | null {
     if (!me) return "Sign in to trade.";
@@ -198,13 +203,19 @@ export function TradeSheet({
       eyebrow="Mempool Market"
       title={`${verb} ${item.name}`}
       footer={
-        <StickerButton variant="hero" size="lg" onClick={submit} disabled={busy} aria-describedby={`${ids}-problem`} className="w-full sm:w-auto">
+        <StickerButton variant="hero" size="lg" onClick={submit} disabled={busy || cant !== null} aria-describedby={cant !== null ? `${ids}-cant` : `${ids}-problem`} className="w-full sm:w-auto">
           {busy ? (side === "buy" ? "Buying…" : "Selling…") : total !== null ? `${verb} ${formatBits(amount)} for ${bitsText(total)}` : `${verb} ${formatBits(amount)}`}
         </StickerButton>
       }
     >
       <div className="flex flex-col gap-5">
         <ItemHead item={item} />
+        <div className="flex flex-col gap-2 rounded-[16px] border-2 border-game-ink bg-game-paper-2 px-3.5 py-2.5">
+          <p className="text-[11px] font-bold uppercase leading-4 tracking-[0.08em] text-game-muted">Gwei says</p>
+          <p className="num text-[14px] font-semibold leading-5 [text-wrap:pretty]">“{why.headline}”</p>
+          <VendorChips reasoning={why} />
+          <p className="num text-[13px] leading-[18px] text-game-muted [text-wrap:pretty]">{why.reasons[0]}</p>
+        </div>
         <div role="group" aria-label="Buy or sell" className="grid grid-cols-2 gap-1 rounded-full border-2 border-game-ink bg-game-paper p-1 shadow-[var(--game-shadow-sm)]">
           {(["buy", "sell"] as const).map((s) => (
             <button
@@ -254,6 +265,13 @@ export function TradeSheet({
             />
           ) : null}
         </dl>
+        {/* The button below is off while Gwei can't take this side; say why where it can be read. */}
+        {cant !== null ? (
+          <p id={`${ids}-cant`} className="flex items-start gap-2 rounded-[14px] border-2 border-game-ink bg-game-paper-2 px-3.5 py-3 text-[14px] leading-5">
+            <CircleAlert aria-hidden className="mt-px size-5 shrink-0 text-game-hero" strokeWidth={2} />
+            <span className="[text-wrap:pretty]">{cant}</span>
+          </p>
+        ) : null}
         <Problem id={`${ids}-problem`} text={problem} />
       </div>
     </GameSheet>
