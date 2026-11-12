@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -25,10 +25,10 @@ const every = Number(opt("every", "250"));
 const label = opt("label", "f");
 const width = Number(opt("width", "960"));
 const height = Number(opt("height", "600"));
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 mkdirSync(out, { recursive: true });
 
-const { send, evaluate, logs, close } = await launch({ port: 9733, profile: "/private/tmp/claude-501/wgp-city-strip" });
+const { send, evaluate, logs, close } = await launch({ port: 9733, profile: "/tmp/wgp-city-strip" });
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });

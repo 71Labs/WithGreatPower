@@ -59,7 +59,7 @@ const cities: { name: string; city: City }[] = [];
 
 const NAMES = ["Peter Parquet", "Miles Mempool", "Gwen Gasless", "Ben Blockly", "May Merkle", "Otto Oracle", "Ada Ledger", "Sam Satoshi"];
 /** A hero save to start patrol nights from (the night and the name make the seed). */
-const HERO = JSON.parse(readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8"));
+const HERO = JSON.parse(readFileSync(opt("save", "launch/brand/hero/fixtures/hero-save.json"), "utf8"));
 for (const level of [1, 4, 9]) {
   const night = level === 1 ? 1 : 2 * level - 1;
   for (let k = 0; k < SEEDS; k++) {

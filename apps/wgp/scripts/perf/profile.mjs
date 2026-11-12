@@ -25,7 +25,7 @@ const save = opt("save", null);
 const out = opt("out", null);
 
 const port = 9500 + Math.floor(Math.random() * 100);
-const profile = `/private/tmp/claude-501/wgp-prof-${port}`;
+const profile = `/tmp/wgp-prof-${port}`;
 rmSync(profile, { recursive: true, force: true });
 mkdirSync(profile, { recursive: true });
 const proc = spawn(CHROME, ["--headless=new", "--mute-audio", "--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });

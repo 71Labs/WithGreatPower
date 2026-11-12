@@ -54,7 +54,7 @@ const CLOCK = `(() => {
 })();`;
 
 const port = 9400 + Math.floor(Math.random() * 90);
-const profile = `/private/tmp/claude-501/wgp-shots-${port}`;
+const profile = `/tmp/wgp-shots-${port}`;
 rmSync(profile, { recursive: true, force: true });
 mkdirSync(profile, { recursive: true });
 const proc = spawn(CHROME, ["--headless=new", "--hide-scrollbars", "--mute-audio", "--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--force-color-profile=srgb", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });

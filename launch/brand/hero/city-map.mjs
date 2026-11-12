@@ -16,7 +16,7 @@
  */
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (n, d) => {
@@ -33,7 +33,7 @@ const cdpPort = Number(opt("cdp", "9430"));
 const act = opt("act", null);
 mkdirSync(out, { recursive: true });
 const V = vp === "landscape" ? { width: 915, height: 412 } : vp === "desktop" ? { width: 1440, height: 900, desktop: true } : { width: 412, height: 915 };
-const c = await launch({ port: cdpPort, profile: `/private/tmp/claude-501/wgp-ux-cdp-${cdpPort}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const c = await launch({ port: cdpPort, profile: `/tmp/wgp-ux-cdp-${cdpPort}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const report = { viewport: V, marks, steps: [] };
 try {
   await c.send("Page.enable");
@@ -47,7 +47,7 @@ try {
   await c.send("Emulation.setFocusEmulationEnabled", { enabled: true });
   if (steady) await c.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   // A city half done: one task finished, two under way (some items found), pages and masts.
-  const hero = JSON.parse(readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8"));
+  const hero = JSON.parse(readFileSync(opt("save", "launch/brand/hero/fixtures/hero-save.json"), "utf8"));
   hero.city ??= { tasks: { bread: 9, pixels: 1, graffiti: 1 }, items: { pixels: 5, graffiti: 1 }, pages: 11, views: 3, xp: 0, at: null, outings: 1 };
   const save = JSON.stringify(hero);
   await c.send("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("wgp:save:v1", ${JSON.stringify(save)}); localStorage.removeItem("wgp:3d-settings:v1"); } catch {}` });

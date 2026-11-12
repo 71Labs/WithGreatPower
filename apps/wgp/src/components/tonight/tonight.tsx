@@ -7,6 +7,7 @@ import { createElement, useEffect, useState } from "react";
 import { AVATARS, HeroArt } from "@/components/cast";
 import { CaseTile } from "@/components/cases/case-tile";
 import { CompeteTile } from "@/components/compete/compete-tile";
+import { MarketTile } from "@/components/market/market-tile";
 import { CityTile } from "@/components/tonight/city-tile";
 import { ComeBackTile } from "@/components/first-minute/come-back-tile";
 import { MakeItYoursTile } from "@/components/first-minute/make-it-yours";
@@ -302,6 +303,7 @@ export function Tonight() {
           <MakeItYoursTile save={save} />
           <CrewChecklistTile save={save} />
           <CaseTile save={save} />
+          <MarketTile save={save} />
           <CompeteTile />
           <CityTile save={save} />
           <ComeBackTile nightDone={save.nightDone} />

@@ -183,8 +183,8 @@ class Player {
       if (needsErrand(run)) chooseErrand(run, 0);
       else stepRun(run, botFrame(run.sim, mem));
     }
-    // The server refuses a night that ran faster than real time (60 s of slack): wait it out.
-    const wait = (run.sim.tick / 60 - 50) * 1000 - (Date.now() - startedAt);
+    // The server refuses a night that ran faster than real time (5 s of slack): wait it out.
+    const wait = (run.sim.tick / 60 - 4) * 1000 - (Date.now() - startedAt);
     if (wait > 0) await sleep(wait);
     const submitted = await this.http<{ status: string; score: number; bits: number; reason?: string }>("POST", `/api/runs/${started.body.runId}/submit`, {
       log: Buffer.from(runLog(run)).toString("base64"),

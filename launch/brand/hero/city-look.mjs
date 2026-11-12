@@ -16,7 +16,7 @@
  */
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (n, d) => {
@@ -31,14 +31,14 @@ const look = opt("look", null);
 const steady = opt("steady", null);
 const cdpPort = Number(opt("cdp", "9430"));
 const V = vp === "landscape" ? { width: 915, height: 412 } : { width: 412, height: 915 };
-const c = await launch({ port: cdpPort, profile: `/private/tmp/claude-501/wgp-ux-cdp-${cdpPort}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+const c = await launch({ port: cdpPort, profile: `/tmp/wgp-ux-cdp-${cdpPort}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 await c.send("Page.enable");
 await c.send("Runtime.enable");
 await c.send("Emulation.setDeviceMetricsOverride", { width: V.width, height: V.height, deviceScaleFactor: 2, mobile: true, screenOrientation: V.width > V.height ? { type: "landscapePrimary", angle: 90 } : { type: "portraitPrimary", angle: 0 } });
 await c.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
 await c.send("Emulation.setUserAgentOverride", { userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36", platform: "Linux armv8l" });
 await c.send("Emulation.setFocusEmulationEnabled", { enabled: true });
-const save = readFileSync("/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json", "utf8");
+const save = readFileSync("launch/brand/hero/fixtures/hero-save.json", "utf8");
 const settings = look || steady ? JSON.stringify({ ...(look ? { look: Number(look) } : {}), ...(steady ? { steady: true } : {}) }) : null;
 await c.send("Page.addScriptToEvaluateOnNewDocument", {
   source: `try { localStorage.setItem("wgp:save:v1", ${JSON.stringify(save)}); ${settings ? `localStorage.setItem("wgp:3d-settings:v1", ${JSON.stringify(settings)});` : `localStorage.removeItem("wgp:3d-settings:v1");`} } catch {}`,

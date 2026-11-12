@@ -26,7 +26,7 @@ const opt = (name: string, def: string) => {
 };
 const base = opt("base", "http://127.0.0.1:3930");
 const out = opt("out", "launch/brand/hero/game-shots/compete/run");
-const SAVE = readFileSync(opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json"), "utf8");
+const SAVE = readFileSync(opt("save", "launch/brand/hero/fixtures/hero-save.json"), "utf8");
 const stamp = Date.now() % 100000;
 mkdirSync(out, { recursive: true });
 
@@ -37,7 +37,7 @@ type Cdp = Awaited<ReturnType<typeof launch>>;
 const report: Record<string, unknown> = { base, stamp, errors: {} as Record<string, string[]> };
 
 async function browser(name: string, device = DESKTOP) {
-  const c: Cdp = await launch({ port: 9700 + Math.floor(Math.random() * 200), profile: `/private/tmp/claude-501/wgp-compete/${name}-${stamp}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
+  const c: Cdp = await launch({ port: 9700 + Math.floor(Math.random() * 200), profile: `/tmp/wgp-compete/${name}-${stamp}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
   await c.send("Page.enable");
   await c.send("Runtime.enable");
   await c.send("Emulation.setDeviceMetricsOverride", device);

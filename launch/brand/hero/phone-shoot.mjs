@@ -65,7 +65,7 @@ const GL_FLAGS = GL === "swiftshader" ? ["--use-angle=swiftshader", "--enable-un
 
 async function phone({ viewport, cpu = 1, ua = ANDROID_UA, inject = [] }) {
   const port = 9720 + Math.floor(Math.random() * 60);
-  const c = await launch({ port, profile: `/private/tmp/claude-501/wgp-phone/cdp-${port}`, flags: GL_FLAGS });
+  const c = await launch({ port, profile: `/tmp/wgp-phone/cdp-${port}`, flags: GL_FLAGS });
   const v = { ...VIEWPORTS[viewport] };
   if (opt("dsf")) v.deviceScaleFactor = Number(opt("dsf"));
   await c.send("Page.enable");

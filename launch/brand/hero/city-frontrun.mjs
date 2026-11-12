@@ -18,7 +18,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { launch, sleep } from "/Users/eromonseleodigie/near-hackathon/launch/lib/cdp.mjs";
+import { launch, sleep } from "../../lib/cdp.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -31,10 +31,10 @@ const tier = opt("tier", "high");
 const port = Number(opt("cdp", "9410"));
 const width = Number(opt("width", "1280"));
 const height = Number(opt("height", "800"));
-const SAVE = opt("save", "/Users/eromonseleodigie/near-hackathon/launch/out/saves/hero.json");
+const SAVE = opt("save", "launch/brand/hero/fixtures/hero-save.json");
 mkdirSync(out, { recursive: true });
 
-const cdp = await launch({ port, profile: `/private/tmp/claude-501/wgp-city-frontrun-${port}` });
+const cdp = await launch({ port, profile: `/tmp/wgp-city-frontrun-${port}` });
 const { logs } = cdp;
 const within = (promise, what) => Promise.race([promise, new Promise((_, j) => setTimeout(() => j(new Error(`timed out: ${what}`)), 8000))]);
 const send = (method, params) => within(cdp.send(method, params), method);

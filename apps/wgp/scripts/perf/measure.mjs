@@ -58,7 +58,7 @@ const VIEWS = {
 };
 
 async function launch(port) {
-  const profile = `/private/tmp/claude-501/wgp-perf-${port}`;
+  const profile = `/tmp/wgp-perf-${port}`;
   rmSync(profile, { recursive: true, force: true });
   mkdirSync(profile, { recursive: true });
   const proc = spawn(

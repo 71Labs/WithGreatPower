@@ -46,7 +46,7 @@ mkdirSync(out, { recursive: true });
 const port = 9640 + Math.floor(Math.random() * 50);
 // --uncapped: no vsync or frame-rate limit, so fps reads the renderer's headroom rather than the display's rate.
 const uncapped = flag("uncapped") ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : [];
-const { send, evaluate, close, logs } = await launch({ port, profile: `/private/tmp/claude-501/wgp-hero/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", ...uncapped] });
+const { send, evaluate, close, logs } = await launch({ port, profile: `/tmp/wgp-hero/cdp-${port}`, flags: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", ...uncapped] });
 
 const shot = async (file) => {
   const { data } = await send("Page.captureScreenshot", { format: "png" });

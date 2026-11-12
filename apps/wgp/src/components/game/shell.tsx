@@ -168,6 +168,7 @@ function ReputationChip({ rep }: { rep: number }) {
 const HOW_TO: { who: CastId; title: string; text: string }[] = [
   { who: "node", title: "Swing out every night", text: "Four stops across the city: a fight, two errands and a boss at the end." },
   { who: "gas-goblin", title: "Catch villains, keep the loot", text: "Stitch what they drop into new suits in the Suit lab." },
+  { who: "gwei", title: "Trade at the Mempool Market", text: "Verified nights pay Bits. Buy the part a suit is missing from Gwei Stacy, or sell loot you don’t need." },
   { who: "aunt-mainnet", title: "Help the neighbors", text: "Errands raise your responsibility and fill your sticker album." },
   { who: "uncle-gen", title: "Level up, learn powers", text: "Each level brings a new power. Up to four ride along on patrol." },
   { who: "bearson", title: "Read The Daily Rug", text: "Bearson writes up every night. Vote in his poll and take his quest for bonus XP." },
