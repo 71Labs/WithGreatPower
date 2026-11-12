@@ -491,7 +491,8 @@ export function GameShell({ children }: { children: ReactNode }) {
   const { save } = useGame();
   // The 3D games take the whole screen: a night, and free roam's city.
   const game = !!pathname?.startsWith("/play/patrol") || !!pathname?.startsWith("/play/city");
-  const onboarding = !!pathname?.startsWith("/play/bitten");
+  // Onboarding, and the quick start that skips it (/play/start: a loading beat on the way into the first night).
+  const onboarding = !!pathname?.startsWith("/play/bitten") || !!pathname?.startsWith("/play/start");
   /** A case's intro comic: the whole screen, with its own way back. */
   const comic = pathname === CASE_PATHS.intro;
   const chrome = !game && !onboarding && !comic;

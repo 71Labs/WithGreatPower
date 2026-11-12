@@ -11,6 +11,7 @@ import { GameLoading } from "@/components/game/ui";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, City, Heart, Swords, Zap } from "@/components/icons";
 import { POWERS, STARTER_POWERS, SUITS } from "@wgp/game-core/data";
 import { useGame } from "@/game/store";
+import { QUICK_HERO, markQuickHero } from "@/lib/first-minute/quick-hero";
 import type { PowerId, SuitId } from "@wgp/game-core/types";
 
 import { Mark, SELECT_CARD, SELECT_CARD_OFF, SELECT_CARD_ON } from "./controls";
@@ -153,7 +154,7 @@ function ErrorLine({ id, children }: { id: string; children: ReactNode }) {
 /* ------------------------------------------------------------------ intro */
 
 /** The origin moment: a comic narration box over the night city, and one big button. */
-function Intro({ onStart }: { onStart: () => void }) {
+function Intro({ onStart, onSkip }: { onStart: () => void; onSkip: () => void }) {
   return (
     <section aria-labelledby="bitten-intro-title" className="mx-auto flex min-h-[calc(100dvh-96px)] w-full max-w-[560px] flex-col justify-center px-4 pb-10">
       <div className="relative">
@@ -183,6 +184,12 @@ function Intro({ onStart }: { onStart: () => void }) {
             Get bitten
           </StickerButton>
           <p className="text-center text-[13px] leading-5 text-game-muted">Name, suit, powers. About a minute.</p>
+          {/* The quick start: The Node, the Classic suit and three starter powers, straight into night one. */}
+          <StickerButton size="md" onClick={onSkip} className="w-full">
+            Skip to the first night
+            <ArrowRight aria-hidden className="size-5" strokeWidth={2.25} />
+          </StickerButton>
+          <p className="text-center text-[13px] leading-5 text-game-muted">You start as The Node and can rename your hero after.</p>
         </StickerPanel>
       </div>
     </section>
@@ -196,9 +203,12 @@ export function Bitten() {
   const router = useRouter();
   const hasHero = !!save?.hero;
 
+  /** "Skip to the first night" made the hero: go into the night, not to the hub. */
+  const skipped = useRef(false);
+
   // Already bitten: this page has nothing for you.
   useEffect(() => {
-    if (hasHero) router.replace("/play");
+    if (hasHero) router.replace(skipped.current ? "/play/patrol" : "/play");
   }, [hasHero, router]);
 
   const [step, setStep] = useState<Step>(0);
@@ -234,6 +244,11 @@ export function Bitten() {
           onStart={() => {
             playVoice("narrator-bite");
             setStep(1);
+          }}
+          onSkip={() => {
+            skipped.current = true;
+            markQuickHero(true);
+            dispatch({ type: "create-hero", ...QUICK_HERO });
           }}
         />
       </>
@@ -281,6 +296,7 @@ export function Bitten() {
 
   function start(e: FormEvent) {
     e.preventDefault();
+    markQuickHero(false);
     dispatch({ type: "create-hero", name: heroName, suit, powers });
     // Start fresh if this hero is ever deleted and the page shows again. The redirect
     // above takes over from here.
