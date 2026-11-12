@@ -90,12 +90,8 @@ function chainTarget(env: Record<string, string | undefined>): Pick<PublicStats[
 
 export async function publicStats(db: Db, options: { now?: Date; env?: Record<string, string | undefined> } = {}): Promise<PublicStats> {
   const now = options.now ?? new Date();
-  const season = await defaultSeason(db, now);
   const dayStart = `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
   const verified = sql`${runs.status} = 'verified'`;
-  const inSeason = season
-    ? sql`${runs.issuedAt} >= ${season.startsAt.toISOString()}::timestamptz and ${runs.issuedAt} < ${season.endsAt.toISOString()}::timestamptz`
-    : sql`false`;
   const today = sql`${runs.issuedAt} >= ${dayStart}::timestamptz`;
   // The constant is inlined: as a parameter, the SELECT and the GROUP BY would not match.
   const duel = sql.raw(`'${DUEL_COURSE}'`);
@@ -104,8 +100,14 @@ export async function publicStats(db: Db, options: { now?: Date; env?: Record<st
   const cityTasks = sql`case when jsonb_typeof(${saves.state}->'city'->'tasks') = 'object'
     then (select count(*) from jsonb_each_text(${saves.state}->'city'->'tasks') as t where t.value = ${String(TASK_DONE)}) else 0 end`;
 
-  const [[totals], modes, [people], [city], [friends], [rewards], [mints]] = await Promise.all([
-    db
+  // The season is looked up alongside the counts that don't need it, not ahead of them all:
+  // on a cold connection every round trip in a row is time the page's numbers wait.
+  const seasonLookup = defaultSeason(db, now);
+  const totalsQuery = seasonLookup.then((season) => {
+    const inSeason = season
+      ? sql`${runs.issuedAt} >= ${season.startsAt.toISOString()}::timestamptz and ${runs.issuedAt} < ${season.endsAt.toISOString()}::timestamptz`
+      : sql`false`;
+    return db
       .select({
         started: count(),
         verified: count(verified),
@@ -119,7 +121,12 @@ export async function publicStats(db: Db, options: { now?: Date; env?: Record<st
         // As text in UTC, so both drivers answer the same thing.
         first: sql<string | null>`to_char(min(${runs.issuedAt}) at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
       })
-      .from(runs),
+      .from(runs);
+  });
+
+  const [season, [totals], modes, [people], [city], [friends], [rewards], [mints]] = await Promise.all([
+    seasonLookup,
+    totalsQuery,
     db.select({ mode, started: count(), verified: count(verified) }).from(runs).groupBy(mode),
     // Raw SQL: the subqueries need table-qualified columns, which a one-table Drizzle select drops.
     queryRows<{ total: number; played: number; with_verified: number }>(

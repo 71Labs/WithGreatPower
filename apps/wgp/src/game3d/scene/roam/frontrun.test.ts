@@ -49,4 +49,29 @@ describe("Front-run's scene", () => {
     expect(Math.hypot(v[0].vel!.x, v[0].vel!.y, v[0].vel!.z)).toBeGreaterThan(100);
     expect(Math.hypot(v[0].facing!.x, v[0].facing!.z)).toBeCloseTo(1, 6);
   });
+
+  it("tells the cast when he's climbing the facade, so he climbs it instead of rising in a jump pose", () => {
+    const w = roamWorld();
+    const s = createRoamSim({ stage: TASK_IDS.map(() => 0), items: TASK_IDS.map(() => 0), pages: 0, views: 0, talks: [], at: { ...w.race.spot } });
+    const frame = () => fillRoamFrame(s, fillRenderFrame(s, newRenderFrame()));
+    stepRoam(s, { dir: 0, mag: 0, web: false, shot: 0 });
+    stepRoam(s, { dir: 0, mag: 0, web: false, shot: SHOT_ACT });
+    const seen = new Set<string>();
+    for (let i = 0; i < 60 * 5; i++) {
+      stepRoam(s, { dir: 0, mag: 0, web: false, shot: 0 });
+      const f = frame();
+      const rival = raceRival(f);
+      if (!rival || f.roam!.race!.over !== null) break;
+      seen.add(`${f.roam!.race!.rivalMove}:${rival.state}`);
+      if (rival.state === "climb") {
+        // Straight up the face, turned mostly into it (+x: the Mempool Market block's west facade;
+        // the race faces him the way on over the top, a little askew, and the cast squares him up).
+        expect(rival.vel!.y).toBeGreaterThan(200);
+        expect(rival.facing!.x).toBeGreaterThan(0.9);
+      }
+    }
+    expect(seen).toContain("climb:climb");
+    expect(seen).toContain("run:idle");
+    expect(seen).toContain("leap:idle");
+  });
 });

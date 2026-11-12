@@ -30,6 +30,7 @@ import { LOOK_PITCH_PER_PX, LOOK_YAW_PER_PX, ORBIT_PITCH_PER_PX, ORBIT_YAW_PER_P
 import { InputLatch } from "./latch";
 import { keysStick, stickInput, type View } from "./stick";
 import { TouchRouter, type StickVisual } from "./touch";
+import { capturePointer } from "@/lib/pointer";
 
 export type RoamAction = "forward" | "back" | "left" | "right" | "jump" | "sprint" | "web" | "zip" | "act" | "drop" | "walk" | "pause" | "map";
 
@@ -278,17 +279,17 @@ export function attachRoamControls(opts: RoamControlsOptions): RoamControls {
     if (e.pointerType === "touch") {
       e.preventDefault();
       if (e.isPrimary && touch.size > 0) touch.reset();
-      surface.setPointerCapture(e.pointerId);
+      capturePointer(surface, e.pointerId);
       touch.down(e.pointerId, e.clientX, e.clientY, surface.clientWidth || window.innerWidth, performance.now());
       if (touch.waiting) schedulePoll();
       return;
     }
     if (e.button === 0) {
       if (!locked() && lockable) Promise.resolve(surface.requestPointerLock()).catch(() => {});
-      surface.setPointerCapture(e.pointerId);
+      capturePointer(surface, e.pointerId);
       latch.base.setWeb("mouse", true);
     } else if (e.button === 2 && !locked()) {
-      surface.setPointerCapture(e.pointerId);
+      capturePointer(surface, e.pointerId);
       mouseOrbit = { id: e.pointerId, x: e.clientX, y: e.clientY };
       opts.orbit(0, 0, true);
     }

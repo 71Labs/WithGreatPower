@@ -38,6 +38,7 @@ import type { City, RenderFrame3D } from "@wgp/game-core/sim3d/contract";
 import { roamWorld } from "@wgp/game-core/sim3d/roam";
 
 import { NavStyles } from "../patrol/waypoint";
+import { capturePointer } from "@/lib/pointer";
 
 /** The fit leaves this much paper round the city (CSS px). */
 const PAD = 18;
@@ -294,7 +295,7 @@ function MapPane({ city, frame, pins, target, heroColor, still, label, described
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button")) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     const p = local(e);
     pointers.current.set(e.pointerId, p);
     if (pointers.current.size === 1) downAt.current = { id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp };

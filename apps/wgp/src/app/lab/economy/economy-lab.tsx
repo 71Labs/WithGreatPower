@@ -105,7 +105,7 @@ function ItemChart({
             {RARITY_LABEL[ITEMS[item].rarity]} · day {history[at]!.day}
           </span>
         </span>
-        <ChangePill change={n > 1 ? change : null} />
+        <ChangePill change={n > 1 ? change : null} over="since opening" />
       </div>
       <p className="flex items-baseline gap-1">
         <span className="num text-[22px] font-bold leading-6 tracking-[-0.02em]">{formatPrice(prices[at]!)}</span>

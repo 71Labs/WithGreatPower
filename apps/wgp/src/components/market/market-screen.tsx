@@ -345,7 +345,7 @@ function Header({ view }: { view: MarketView | null }) {
               href={`${EXPLORER_URL}/address/${view.contractId}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border-2 border-game-ink bg-game-mint px-3 text-[13px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border-2 border-game-ink bg-game-mint px-3 text-[13px] font-semibold text-game-ink shadow-[var(--game-shadow-sm)] focus-visible:outline-offset-2 pointer-coarse:h-11"
             >
               On NEAR {view.network} · {view.contractId}
               <ExternalLink aria-hidden className="size-4" strokeWidth={2} />

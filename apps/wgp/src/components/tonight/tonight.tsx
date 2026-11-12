@@ -102,7 +102,7 @@ function RouteRow({ save, stops }: { save: HeroSave; stops: Stop[] }) {
             </span>
             <span
               aria-hidden
-              className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink px-2 text-[11px] font-bold uppercase tracking-[0.04em] ${
+              className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full border-2 border-game-ink px-2 text-[11px] font-bold uppercase tracking-[0.04em] max-[359px]:gap-0.5 max-[359px]:px-1.5 max-[359px]:text-[10px] max-[359px]:tracking-normal ${
                 current ? "bg-game-gold text-game-ink" : stop.kind === "fight" && stop.boss ? "bg-game-hero text-game-paper" : "bg-game-paper text-game-ink"
               }`}
             >

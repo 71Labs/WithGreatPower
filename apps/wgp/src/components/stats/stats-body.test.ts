@@ -60,6 +60,21 @@ describe("StatsBody", () => {
     expect(text(markup)).toContain("Nov 12, 2026, 2:05 PM UTC");
   });
 
+  it("draws the whole page still counting when it has no numbers yet", () => {
+    const markup = renderToStaticMarkup(createElement(StatsBody, { stats: null }));
+    const seen = text(markup);
+    expect(seen).toContain("By the numbers");
+    expect(seen).toContain("Counting from the game’s own records…");
+    // Every group and label is already in place, so the numbers arrive without moving anything.
+    for (const label of ["Matches", "Verified today (UTC)", "Verified in this season", "Verified matches by mode", "Patrol nights", "Players", "The City", "Invites", "On NEAR", "Reward mints sent"]) {
+      expect(seen).toContain(label);
+    }
+    expect(markup.match(/<dt/g)).toHaveLength(20);
+    expect(markup).not.toMatch(/<dd[^>]*>\d/);
+    expect(seen).not.toContain("No matches yet");
+    expect(markup).toContain('href="/api/stats"');
+  });
+
   it("shows every number once there are matches", () => {
     const markup = html(FILLED);
     const seen = text(markup);
