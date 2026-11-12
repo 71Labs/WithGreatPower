@@ -22,7 +22,7 @@ import { npcTurn, type NpcTurn } from "@/lib/market/npc-turn";
 import type { Db } from "../db/client";
 import { marketSim } from "../db/schema";
 import { recordTrade } from "../market/history";
-import { seedSim, SIM_ID, type SimState } from "../market/sim";
+import { seedSim, SIM_ID, simStateOf, type SimState } from "../market/sim";
 import { NPC_SIM_ACCOUNT } from "./env";
 
 /** The ledger with Sandwich Man acting: he pays and receives; a seller he buys from is paid in Bits. */
@@ -74,7 +74,7 @@ export async function npcSimTurn(db: Db, books: NpcBooks, now: Date): Promise<Np
   return db.transaction(async (tx) => {
     await tx.insert(marketSim).values({ id: SIM_ID, state: seedSim(), rev: 0, updatedAt: now }).onConflictDoNothing({ target: marketSim.id });
     const [row] = await tx.select().from(marketSim).where(eq(marketSim.id, SIM_ID)).for("update");
-    const state = row!.state as SimState;
+    const state = simStateOf(row!.state);
     const book = state.book;
     const wallets = { ...state.wallets };
     const items = { ...(state.npc?.items ?? {}) };

@@ -43,6 +43,12 @@ export function parseCallArgs(bytes: Uint8Array): Record<string, unknown> | null
   }
 }
 
+/** The suit a relayed `craft_suit` names, or null when its args aren't `{ suit: <a known suit> }`. */
+export function craftSuitArg(args: Record<string, unknown> | null): SuitId | null {
+  const parsed = suitArgs.safeParse(args);
+  return parsed.success ? parsed.data.suit : null;
+}
+
 /** Refuses (409 run_active) a call that would change the save while a ranked run is in flight. */
 export async function guardGameCall(db: Db, playerId: string, method: string, now = new Date()): Promise<void> {
   if (!SAVE_METHODS.has(method)) return;

@@ -6,6 +6,7 @@ import { newSave, reduce, type Action } from "@wgp/game-core/engine";
 import type { Hero, Save } from "@wgp/game-core/types";
 
 import { getMe, migrateLocalSave, postAction, type ApiResult, type Me } from "@/lib/api/client";
+import { craftRefusalText } from "@/lib/market/craft";
 
 import { chainFor, clearActivity, refreshChain, reportActivity, sendSuitOnChain, type ChainActivity } from "./chain";
 import { isSuitAction, routeAction, type SuitAction } from "./chain-route";
@@ -193,6 +194,9 @@ function failureText(res: Extract<ApiResult<unknown>, { ok: false }>): string {
   if (res.error === "run_active") return "Finish or abandon your patrol first, then try that again.";
   if (res.status === 429) return "That’s a lot of changes at once. Wait a moment and try again.";
   if (res.status === 403) return "This account is suspended, so changes can’t be saved.";
+  // A craft refused over the Bits it burns (src/server/market/craft.ts).
+  const craft = res.status === 422 ? craftRefusalText(res.error, res.message) : null;
+  if (craft) return craft;
   return "The server couldn’t save that change. Try again.";
 }
 

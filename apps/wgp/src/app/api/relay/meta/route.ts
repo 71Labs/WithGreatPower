@@ -16,6 +16,8 @@
  *                                              has a hero, or the price moved past the trade's limit)
  * 400/401/403 { error: <code>, message }       refused before spending gas (see server/near/relay.ts)
  * 409 run_active                               craft or equip while a ranked run is in flight
+ * 422 craft_bits_short "Needs bits xN"         a craft the contract would refuse for Bits (its `craft_bits`),
+ *                                              refused before spending gas (server/market/craft.ts)
  * 429 rate limited · 503 relayer not configured, out of funds or out of budget
  *
  * Needs a session cookie; the delegate must come from the signed-in account.
@@ -43,7 +45,8 @@ import {
   validateAddKeyDelegate,
   validateGameDelegate,
 } from "@/server/near/relay";
-import { guardGameCall, mirrorGameCall, parseCallArgs, type Mirrored } from "@/server/near/mirror";
+import { assertCraftAffordable } from "@/server/market/craft";
+import { craftSuitArg, guardGameCall, mirrorGameCall, parseCallArgs, type Mirrored } from "@/server/near/mirror";
 import { provider } from "@/server/near/rpc";
 import { addSessionKey, relayLookup, touchSessionKey } from "@/server/near/session-keys";
 
@@ -88,6 +91,11 @@ export const POST = handle("relay/meta", (request: Request) =>
       await guardGameCall(db, session.playerId, verdict.methodName);
       innerGas = verdict.gas;
       method = verdict.methodName;
+      if (method === "craft_suit") {
+        const first = signed.delegate.actions[0];
+        const suit = craftSuitArg(first?.kind === "FunctionCall" ? parseCallArgs(first.args) : null);
+        if (suit) await assertCraftAffordable({ accountId, suit });
+      }
       // Market trades are mirrored into the save, so none while a ranked run replays from it.
       if (isMarketMethod(method)) await beforeMarketRelay(db, session.playerId);
     } else {
