@@ -1,14 +1,14 @@
 # Sandwich Man, the NPC trader
 
-Sandwich Man is the Mempool Market's arbitrageur: an NPC with his own NEAR wallet who trades by fixed, published rules. This page says who he is, what his rules are, what stops him doing harm, how to check his trades on chain, and how the owner switches him on.
+Sandwich Man is the Mempool Market's arbitrageur: an NPC made to trade from his own NEAR account by fixed, published rules. He is built and tested, and his mainnet account is not created yet. This page says who he is, what his rules are, what stops him doing harm, how to check his trades on chain, and how the owner switches him on.
 
-**Status: off on mainnet until the owner runs the setup below.** Nothing in this repo creates his account, funds it or sends a transaction. Locally, and wherever the simulated market stands in for the contract's, he trades in the simulation, where no tokens move.
+**Status: built and tested; off on mainnet. `sandwich.wgpnear.near` does not exist yet** (a `view_account` answers `UNKNOWN_ACCOUNT`, and the live `/api/market/npc` says `"mode":"off"`), so he has never traded on chain. He starts when the owner runs the setup below. Nothing in this repo creates his account, funds it or sends a transaction. `pnpm evidence --chain` checks the account and fails when it appears, which is the signal to update this page and the README. Everything below written in the present tense describes how he works once he is on. Locally, and wherever the simulated market stands in for the contract's, he trades in the simulation, where no tokens move.
 
 ## Who he is
 
 - **Cast:** Sandwich Man, a villain from the story bible (`docs/story/bible.md`): "front-runs you; sets bread traps; works the Mempool Market". Gwei already warns players about him: "Listed. Someone will buy it, or Sandwich Man will try to." Now he really does.
-- **A second kind of NPC.** Gwei Stacy, the vendor, *is* the contract: her stock and till are the contract account's balances. Sandwich Man is the opposite: an ordinary account, `sandwich.wgpnear.near`, with no role in the contract at all.
-- **His wallet is his own.** His Bits and items are NEP-245 balances of his account in `game.wgpnear.near`. He signs his own calls with his own key and pays his own gas.
+- **A second kind of NPC.** Gwei Stacy, the vendor, *is* the contract: her stock and till are the contract account's balances. Sandwich Man is the opposite: an ordinary account, `sandwich.wgpnear.near` (once the owner creates it), with no role in the contract at all.
+- **His wallet will be his own.** Once he is on, his Bits and items are NEP-245 balances of his account in `game.wgpnear.near`, and he signs his own calls with his own key and pays his own gas. In the simulated market his wallet is a row in the simulation.
 - **No special powers.** He can call only the five market methods every player's session key can call: `market_buy`, `market_sell`, `list_item`, `buy_listing` and `cancel_listing`. He is not an operator or the owner. Every cap the contract puts on a player is on him too.
 - **Always labelled.** In the game he appears only in the "Other traders" strip on `/play/market`, marked NPC, with his account id. He is never shown or counted as a player (`pnpm stats` counts his calls on their own line and leaves him out of player accounts).
 
@@ -134,11 +134,13 @@ jq -j '.private_key' ~/.near-credentials/mainnet/sandwich.wgpnear.near.json \
 
 (If near-cli saved the key under a folder instead, the file is `~/.near-credentials/mainnet/sandwich.wgpnear.near/ed25519_*.json`.)
 
-**6. Disclose it.** The README's "How it meets the track" table and "By the numbers" already say that Sandwich Man is an NPC with a one-off 300 Bit seed and that his calls are counted apart from players'. After switching him on, re-run `pnpm stats` and update the numbers.
+**6. Disclose it.** The README's "How it meets the track" table already says that Sandwich Man is an NPC with a one-off 300 Bit seed and that his calls are counted apart from players'. After switching him on, re-run `pnpm stats`, update the README's numbers and its status rows, and change his claims in `docs/evidence.json` from `built, off on mainnet`.
 
 **To switch him off:** remove either env var and redeploy. **To retire him:** cancel his listings, then `near account delete-account sandwich.wgpnear.near beneficiary wgpnear.near …` returns his NEAR.
 
 ## Tests
+
+Each claim on this page has a row in [EVIDENCE.md](EVIDENCE.md#sandwich-man-docsnpc-tradermd).
 
 - `apps/wgp/src/lib/market/npc-rules.test.ts`: every rule, the caps, the closed shop and reopening, the books, determinism, and 40 fast-forwards in which the market never refuses one of his actions.
 - `apps/wgp/src/server/npc/npc.test.ts`: the runner on PGlite. A player lists cheap and he buys it; one action a look; rate-limited; two looks at once act once; off when unconfigured; a refusal is booked, not retried forever; only the five market methods.
