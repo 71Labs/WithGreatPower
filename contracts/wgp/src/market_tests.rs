@@ -14,12 +14,12 @@ use crate::{RewardStatus, Wgp};
 
 const DAY_NS: u64 = 86_400_000_000_000;
 
-fn carol() -> AccountId {
+pub(crate) fn carol() -> AccountId {
     "carol.wgp.testnet".parse().unwrap()
 }
 
 /// `who` calling with `deposit` on UTC day `day` (since the epoch).
-fn on_day(who: AccountId, deposit: u128, day: u64) {
+pub(crate) fn on_day(who: AccountId, deposit: u128, day: u64) {
     let mut b = VMContextBuilder::new();
     b.current_account_id(contract())
         .predecessor_account_id(who)
@@ -29,7 +29,7 @@ fn on_day(who: AccountId, deposit: u128, day: u64) {
     testing_env!(b.build());
 }
 
-fn pool_cfg(item: &str, vb: u128, vi: u128, sb: u128, ss: u128) -> PoolConfig {
+pub(crate) fn pool_cfg(item: &str, vb: u128, vi: u128, sb: u128, ss: u128) -> PoolConfig {
     PoolConfig {
         item: item.into(),
         virtual_bits: U128(vb),
@@ -41,7 +41,7 @@ fn pool_cfg(item: &str, vb: u128, vi: u128, sb: u128, ss: u128) -> PoolConfig {
 
 /// The default curves by rarity, as in apps/wgp/src/lib/market/config.ts: commons at
 /// 12 Bits, uncommons at 40, rares at 150.
-fn default_pools() -> Vec<PoolConfig> {
+pub(crate) fn default_pools() -> Vec<PoolConfig> {
     vec![
         pool_cfg("crumbs", 480, 40, 480, 40),
         pool_cfg("fee-bomb", 480, 40, 480, 40),
@@ -50,19 +50,19 @@ fn default_pools() -> Vec<PoolConfig> {
     ]
 }
 
-fn open_market(params: MarketParams) -> Wgp {
+pub(crate) fn open_market(params: MarketParams) -> Wgp {
     let mut c = setup();
     as_(owner(), 1);
     c.set_market_params(params, default_pools());
     c
 }
 
-fn market() -> Wgp {
+pub(crate) fn market() -> Wgp {
     open_market(MarketParams::default())
 }
 
 /// Mints Bits and items to `who` as one reward.
-fn fund(c: &mut Wgp, who: AccountId, bits: u32, items: Vec<(&str, u32)>) {
+pub(crate) fn fund(c: &mut Wgp, who: AccountId, bits: u32, items: Vec<(&str, u32)>) {
     let nonce = c.reward_nonce(who.clone()) + 1;
     let mut list = if bits > 0 {
         vec![ing("bits", bits)]
@@ -76,7 +76,7 @@ fn fund(c: &mut Wgp, who: AccountId, bits: u32, items: Vec<(&str, u32)>) {
     );
 }
 
-fn pool(c: &Wgp, item: &str) -> Pool {
+pub(crate) fn pool(c: &Wgp, item: &str) -> Pool {
     c.market_state()
         .pools
         .into_iter()
@@ -84,7 +84,7 @@ fn pool(c: &Wgp, item: &str) -> Pool {
         .unwrap()
 }
 
-fn panics(f: impl FnOnce()) -> String {
+pub(crate) fn panics(f: impl FnOnce()) -> String {
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
     match r {
         Ok(_) => panic!("expected a panic"),
@@ -106,6 +106,10 @@ fn p(vb: u128, vi: u128, bits: u128, stock: u128) -> Pool {
         bits: U128(bits),
         stock: U128(stock),
         escrow: U128(0),
+        invested: U128(0),
+        rewards: U128(0),
+        fee_acc: U128(0),
+        fee_carry: 0,
     }
 }
 
