@@ -52,6 +52,34 @@ describe("Sandwich Man's strip", () => {
     expect(html).toContain(">Wallet<");
     expect(html).toContain("His latest moves");
     expect(html).not.toContain("Practice only");
+    expect(html).toContain('href="https://nearblocks.io/address/sandwich.wgpnear.near"');
+    expect(html).not.toMatch(/isn’t funded|Practice|Simulated|Sim account/);
+  });
+
+  it("on chain, after his first move: his words, where his Bits live, and each move's transaction", () => {
+    // The live answer on Nov 13, 2026, after his first trade on mainnet.
+    const txUrl = "https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf";
+    const html = strip({
+      ...base,
+      mode: "on-chain",
+      status: "open",
+      accountId: "sandwich.wgpnear.near",
+      explorerUrl: "https://nearblocks.io/address/sandwich.wgpnear.near",
+      bits: 228,
+      statusLine: "I was here before you. I’ll be here after you.",
+      items: [{ item: "sybil-goo", name: "Sybil goo", amount: 2 }],
+      log: [{ at: "2026-11-13T07:15:06.761Z", kind: "buy", text: "Bought 2 × Sybil goo from Gwei for 72 Bits", reason: "17% under the opening price. First in line for the dip.", txHash: "AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf", txUrl }],
+      now: "2026-11-13T07:17:31.569Z",
+    });
+    expect(html).toContain("“I was here before you. I’ll be here after you.”");
+    // His own words don't push out the plain statement of where he trades from.
+    expect(html).toContain("He trades by fixed rules from his own NEAR account.");
+    expect(html).toContain('href="https://nearblocks.io/address/sandwich.wgpnear.near"');
+    expect(html).toContain("Bought 2 × Sybil goo from Gwei for 72 Bits");
+    expect(html).toContain(`href="${txUrl}"`);
+    expect(html).toContain("See the transaction");
+    expect(html).toContain("2 × Sybil goo");
+    expect(html).not.toMatch(/isn’t funded|Practice|Simulated|Sim account|No moves yet/);
   });
 
   it("simulated: says his Bits are simulated, never a wallet", () => {
