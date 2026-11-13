@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { NpcTraderView } from "@/lib/market/npc-api";
+import { NPC_OFF_LINE, type NpcTraderView } from "@/lib/market/npc-api";
 import { NPC_RULE_LINES, NPC_RULES, NPC_RULES_URL } from "@/lib/market/npc-rules";
 
 import { NPC_LAB_HREF, NPC_PRACTICE_HREF, TraderStrip } from "./other-traders";
@@ -14,7 +14,7 @@ const base: NpcTraderView = {
   accountId: null,
   explorerUrl: null,
   status: "off",
-  statusLine: "Practice only. His NEAR account isn’t funded yet, so he trades in the practice market and the economy lab’s simulation.",
+  statusLine: NPC_OFF_LINE,
   bits: null,
   items: [],
   listings: [],
@@ -29,18 +29,22 @@ const base: NpcTraderView = {
 const strip = (npc: NpcTraderView) => renderToStaticMarkup(createElement(TraderStrip, { npc }));
 
 describe("Sandwich Man's strip", () => {
-  it("off: says he's practice only and why, links to the lab, and claims no wallet", () => {
+  it("off: says he's switched off right now, links to the practice market and the lab, and claims nothing about his account", () => {
     const html = strip(base);
-    expect(html).toContain("Practice only");
-    expect(html).toContain("isn’t trading on this market yet: his NEAR account isn’t funded");
+    expect(html).toContain("Switched off");
+    expect(html).toContain("Sandwich Man is switched off right now, so he isn’t trading on this market.");
+    // His account exists and is funded, so "off" can never be blamed on funding, or on anything else.
+    expect(html).not.toMatch(/funded|NEAR account|isn’t trading on this market yet|Practice only/);
+    expect(NPC_OFF_LINE).toMatch(/^Sandwich Man is switched off right now\./);
+    expect(NPC_OFF_LINE).not.toMatch(/funded|account|yet/);
     expect(html).toContain(`href="${NPC_LAB_HREF}"`);
     expect(html).toContain("Watch him trade in the economy lab");
     // He does trade in the practice market: say so, and link there too.
-    expect(html).toContain("he trades in the practice market and in the economy lab’s simulation");
+    expect(html).toContain("He still trades in the practice market and in the economy lab’s simulation");
     expect(html).toContain(`href="${NPC_PRACTICE_HREF}"`);
     expect(html).toContain("Trade alongside him in the practice market");
-    // Nothing that reads as broken or claims an account he doesn't have.
-    expect(html).not.toMatch(/own wallet|Wallet<|>Off<|His latest moves|off right now/);
+    // No wallet and no moves for an account the strip wasn't given.
+    expect(html).not.toMatch(/own wallet|Wallet<|>Off<|His latest moves/);
     // His rules are still one press away.
     expect(html).toContain("How he trades");
   });
@@ -51,7 +55,7 @@ describe("Sandwich Man's strip", () => {
     expect(html).toContain("sandwich.wgpnear.near");
     expect(html).toContain(">Wallet<");
     expect(html).toContain("His latest moves");
-    expect(html).not.toContain("Practice only");
+    expect(html).not.toMatch(/Practice only|Switched off|switched off/);
     expect(html).toContain('href="https://nearblocks.io/address/sandwich.wgpnear.near"');
     expect(html).not.toMatch(/isn’t funded|Practice|Simulated|Sim account/);
   });

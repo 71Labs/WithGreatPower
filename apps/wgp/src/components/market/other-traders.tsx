@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * "Other traders" on the Mempool Market: Sandwich Man, the NPC arbitrageur. While he has no
- * account on this market he is shown as practice only, with a link to the economy lab where
- * he does trade, and no wallet is claimed for him. Otherwise: who he is,
+ * "Other traders" on the Mempool Market: Sandwich Man, the NPC arbitrageur. While he is
+ * switched off on this market he is shown as switched off, with links to where
+ * he does trade (the practice market, the economy lab), and no wallet is claimed for him. Otherwise: who he is,
  * his wallet (his own NEAR account, linked to NearBlocks, when he trades on chain), what
  * he holds, his latest moves with the reason for each in his own words, and his rules in
  * a popover that links to the one file they live in (src/lib/market/npc-rules.ts).
@@ -17,7 +17,7 @@ import { createElement, useEffect, useId, useRef, useState } from "react";
 
 import { StickerFrame, StickerPanel } from "@/components/game/kit";
 import { AVATARS } from "@/components/cast";
-import { ArrowRight, CircleAlert, ExternalLink, HelpCircle, Lock, Moon, Store, TestTube } from "@/components/icons";
+import { ArrowRight, CircleAlert, ExternalLink, HelpCircle, Lock, Moon, Store } from "@/components/icons";
 import { getNpcTrader, type NpcTraderView } from "@/lib/market/npc-api";
 
 import { formatBits } from "./sparkline";
@@ -215,10 +215,11 @@ export const NPC_LAB_HREF = "/lab/economy#lab-npc";
 export const NPC_PRACTICE_HREF = "/play/market?practice=1";
 
 /**
- * Sandwich Man when he isn't configured for this market (no account of his own yet): said
- * plainly, with where he does trade. No wallet, no "latest moves", nothing that reads as broken.
+ * Sandwich Man when he is switched off on this market (his account or key isn't set on the
+ * server): said plainly, with where he does trade. It gives no reason, since the strip can't
+ * know one: no claim about his account or its balance. No wallet, no "latest moves".
  */
-function PracticeOnly({ npc, headingId }: { npc: NpcTraderView; headingId: string }) {
+function SwitchedOff({ npc, headingId }: { npc: NpcTraderView; headingId: string }) {
   return (
     <StickerPanel as="section" aria-labelledby={headingId} className="flex flex-col gap-3 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
@@ -239,13 +240,13 @@ function PracticeOnly({ npc, headingId }: { npc: NpcTraderView; headingId: strin
             <p className="flex flex-wrap gap-1.5">
               <span className={`${chip} bg-game-paper-2 pl-2`}>NPC</span>
               <span className={`${chip} bg-game-paper-2`}>
-                <TestTube aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
-                Practice only
+                <Moon aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+                Switched off
               </span>
             </p>
           </div>
           <p className="max-w-[62ch] text-[14px] leading-5 [text-wrap:pretty]">
-            {npc.name} isn’t trading on this market yet: his NEAR account isn’t funded. For now he trades in the practice market and in the economy lab’s simulation, by the same rules he’ll follow here.
+            {npc.name} is switched off right now, so he isn’t trading on this market. He still trades in the practice market and in the economy lab’s simulation, by the same rules.
           </p>
           <p className="flex flex-wrap gap-x-4 gap-y-1">
             <Link href={NPC_PRACTICE_HREF} className={`inline-flex min-h-8 items-center gap-1 text-[14px] leading-5 max-sm:min-h-11 pointer-coarse:min-h-11 ${link}`}>
@@ -263,10 +264,10 @@ function PracticeOnly({ npc, headingId }: { npc: NpcTraderView; headingId: strin
   );
 }
 
-/** The strip for one answer from the server: his practice-only notice while he's off, else who he is, what he holds and his moves. */
+/** The strip for one answer from the server: his switched-off notice while he's off, else who he is, what he holds and his moves. */
 export function TraderStrip({ npc }: { npc: NpcTraderView }) {
   const headingId = useId();
-  if (npc.mode === "off") return <PracticeOnly npc={npc} headingId={headingId} />;
+  if (npc.mode === "off") return <SwitchedOff npc={npc} headingId={headingId} />;
   // His Bits are real tokens only on chain; in the simulated market nothing moves.
   const how =
     npc.mode === "on-chain"
