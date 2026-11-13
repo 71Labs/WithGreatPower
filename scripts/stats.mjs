@@ -185,6 +185,7 @@ export function createTally(contract) {
   let functionCalls = 0;
   let otherReceipts = 0;
   let failed = 0;
+  let failedOtherReceipts = 0;
   let failedFunctionCalls = 0;
   let npcCalls = 0;
   const sorted = (map) => Object.fromEntries([...map].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
@@ -199,6 +200,7 @@ export function createTally(contract) {
       const called = actions.filter((a) => a.method);
       const failedHere = txn.outcomes?.status === false;
       if (failedHere) failed += 1;
+      if (failedHere && called.length === 0) failedOtherReceipts += 1;
       if (called.length === 0) otherReceipts += 1;
       functionCalls += called.length;
       if (failedHere) failedFunctionCalls += called.length;
@@ -237,6 +239,7 @@ export function createTally(contract) {
         functionCalls,
         failedFunctionCalls,
         otherReceipts,
+        failedOtherReceipts,
         failed,
         byMethod: sorted(methods),
         otherActions: sorted(others),
@@ -246,6 +249,8 @@ export function createTally(contract) {
           // The author's account plays like any other and is counted; this says so.
           authorAccounts: authors,
           withOneCall: each.filter((p) => p.calls === 1).length,
+          // Only grows, unlike the count above (an account's second call moves it from one to the other).
+          withMoreThanOneCall: each.filter((p) => p.calls > 1).length,
           calls: each.reduce((n, p) => n + p.calls, 0),
           marketAccounts: traders.length,
           marketCalls: traders.reduce((n, p) => n + p.market, 0),
@@ -299,8 +304,8 @@ function printChain(t) {
       ["function calls", t.functionCalls],
       ["  of them failed", t.failedFunctionCalls],
       ["receipts with no function call (transfers, refunds, the account's creation)", t.otherReceipts],
+      ["  of them failed", t.failedOtherReceipts],
       ["receipts in all, as NearBlocks lists them", t.receipts],
-      ["  of them failed", t.failed],
       ["pages read", t.pages],
     ]),
   );
@@ -313,6 +318,7 @@ function printChain(t) {
     table("Player accounts that called a game method themselves", [
       ["accounts", p.accounts],
       [`  of them the author's own (${p.authorAccounts.join(", ") || "none"})`, p.authorAccounts.length],
+      ["  that made more than one call", p.withMoreThanOneCall],
       ["  that made exactly one call", p.withOneCall],
       ["their calls in all", p.calls],
       ["accounts that made a market call", p.marketAccounts],
