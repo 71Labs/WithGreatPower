@@ -65,7 +65,7 @@ describe("the faucet taper is written and not wired in", () => {
 describe("Sandwich Man runs only where the owner turned him on", () => {
   it("the chain checks expect him on mainnet: his account with its key, the live site on chain, and his calls as a lower bound", () => {
     type Check = { kind: string; account?: string; keys?: boolean; expect: { path: string; op: string; value: unknown }[] };
-    const checks = evidence().checks as Record<string, Check>;
+    const checks = evidence().checks as unknown as Record<string, Check>;
     const expects = (id: string) => checks[id]!.expect.map((e) => `${e.path} ${e.op} ${JSON.stringify(e.value)}`);
 
     expect(checks["sandwich-account"]).toMatchObject({ kind: "account", account: "sandwich.wgpnear.near", keys: true });
