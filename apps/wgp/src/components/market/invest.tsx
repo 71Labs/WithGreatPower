@@ -15,7 +15,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { StickerButton, StickerPanel } from "@/components/game/kit";
 import { GameSheet } from "@/components/game/ui";
-import { CircleAlert, ExternalLink, HandCoins, KeyRound, Lock, RotateCcw, TestTube, TriangleAlert } from "@/components/icons";
+import { Check, CircleAlert, ExternalLink, HandCoins, KeyRound, Lock, RotateCcw, TestTube, TriangleAlert } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
@@ -469,10 +469,16 @@ export function PracticeBanner({
   signedIn,
   drainName,
   live = null,
+  note = null,
   onDrain,
   onReset,
   onLeave,
 }: {
+  /**
+   * What the banner's own button just did. It is said here, beside the button, and not in the
+   * floating toast: the toast sits over the bottom of the screen, where it covered the quest strip.
+   */
+  note?: string | null;
   seededFrom: "near" | "simulated" | "defaults" | null;
   signedIn: boolean;
   /** The real market's contract, when it is on chain: a guest can still go and look at it. */
@@ -527,6 +533,15 @@ export function PracticeBanner({
           </a>
         ) : null}
       </div>
+      {/* Always in the page, so a screen reader hears the words arrive. Empty, it takes no room. */}
+      <p role="status" className="num flex items-start gap-1.5 text-[13px] font-semibold leading-[18px] [text-wrap:pretty] empty:sr-only">
+        {note ? (
+          <>
+            <Check aria-hidden className="mt-px size-4 shrink-0" strokeWidth={2.5} />
+            <span>{note}</span>
+          </>
+        ) : null}
+      </p>
     </section>
   );
 }
