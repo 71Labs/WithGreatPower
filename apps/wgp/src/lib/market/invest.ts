@@ -348,7 +348,7 @@ export function investorView(rules: InvestRules, pools: Pool[], investor: Invest
 /**
  * What a player risks by investing, said before they confirm. Plain, short, no hype:
  * contract v3's own list (docs/CONTRACT-V3.md, "What an investor does risk") and the
- * independent review's point that a funded till is exit liquidity for whoever holds loot.
+ * v3 review's point that a funded till is exit liquidity for whoever holds loot.
  */
 export const INVEST_RISKS: readonly string[] = [
   "Your stake waits when the till is empty. You can only withdraw Bits the till holds.",

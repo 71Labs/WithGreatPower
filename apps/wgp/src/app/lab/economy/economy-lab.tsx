@@ -400,7 +400,7 @@ export function EconomyLab() {
           <Stat label="Trades" value={formatBits(totals.trades + totals.fills)} hint={`${formatBits(totals.fills)} player-to-player · ${last.listings} listed now`} />
         </dl>
 
-        <FlowPanel history={history} days={days} feeBps={setting.feeBps} headingId={`${ids}-flow`} />
+        <FlowPanel history={history} days={days} headingId={`${ids}-flow`} />
 
         <section aria-labelledby={`${ids}-prices`} className="flex flex-col gap-3">
           <h2 id={`${ids}-prices`} className="text-[13px] font-bold uppercase leading-4 tracking-[0.08em] text-game-paper/85">

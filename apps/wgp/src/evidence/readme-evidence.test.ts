@@ -175,7 +175,7 @@ describe("what the docs say about themselves", () => {
 
   it("dates the live counts and says they are lower bounds", () => {
     const readme = plainDoc("README.md");
-    expect(readme).toContain("The chain counts are as of Nov 13, 2026, 07:23 UTC and the game's as of Nov 12, 2026, 17:35 UTC. Both only grow");
+    expect(readme).toContain("The chain counts are as of Nov 13, 2026, 11:56 UTC and the game's as of Nov 13, 2026, 11:54 UTC. Both only grow");
     expect(readme).toContain("pnpm evidence --chain reads the numbers from the two tables below and fails if a live count is below one of them.");
     expect(readme).not.toMatch(/went from \d+ on Nov/);
   });

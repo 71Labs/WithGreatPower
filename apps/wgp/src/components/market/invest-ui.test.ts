@@ -5,6 +5,8 @@
  * market's banner and labels, and the one function that sends an investing move, which
  * must send nothing to a market that can't take it.
  */
+import { readFileSync } from "node:fs";
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -225,6 +227,19 @@ describe("the practice market's labels", () => {
     // Only a signed-in player has a real market to go back to.
     expect(words).not.toContain("Go back to the real market");
     expect(text(html(createElement(PracticeBanner, { seededFrom: "simulated", signedIn: true, drainName: null, onDrain: noop, onReset: noop, onLeave: noop })))).toContain("Go back to the real market");
+  });
+
+  it("says what its own buttons did inside the banner, as a status, so no toast covers the quest strip", () => {
+    const quiet = html(createElement(PracticeBanner, { seededFrom: "near", signedIn: false, drainName: "Crumbs", onDrain: noop, onReset: noop, onLeave: noop }));
+    // The live region is there before anything is said, and says nothing.
+    expect(quiet).toMatch(/<p role="status"[^>]*><\/p>/);
+    const note = "A crowd sold Gwei 80 Crumbs. Her till for it is empty, so she is closed for buying it.";
+    const said = html(createElement(PracticeBanner, { seededFrom: "near", signedIn: false, drainName: null, note, onDrain: noop, onReset: noop, onLeave: noop }));
+    expect(said).toMatch(/<p role="status"[^>]*>.*A crowd sold Gwei 80 Crumbs\./);
+    // The screen sends both of the banner's messages here and neither to the toast.
+    const screen = readFileSync(new URL("./market-screen.tsx", import.meta.url), "utf8");
+    expect(screen).toContain("note={practiceNote}");
+    expect(screen).not.toMatch(/showToast\([^)]*(crowd sold|[Ss]tarted over)/);
   });
 
   it("says practice trades earn no XP on the quest strip", () => {

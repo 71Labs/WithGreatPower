@@ -4,8 +4,10 @@
  *
  *   1. GET <base>/api/stats: what the game's own database counts (matches, players, City
  *      outings, referrals, reward mints). Aggregates only.
- *   2. The NearBlocks API: every call the game contract has received on NEAR, tallied here by
- *      method, and how many player accounts sent one. Nothing from (1) is used for (2).
+ *   2. The NearBlocks API: every receipt the game contract has received on NEAR. Function calls
+ *      are tallied by method and kept apart from receipts that carry none (transfers, refunds,
+ *      the account's creation); then how many player accounts called a game method, how many
+ *      did so once, and how concentrated the market's calls are. Nothing from (1) is used here.
  *
  * No dependencies and no keys: Node 18+ (global fetch).
  *
@@ -20,6 +22,9 @@
  * waited out (up to three retries a page) before it becomes one.
  */
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 const DEFAULT_BASE = "https://www.wgponnear.fun";
 const DEFAULT_CONTRACT = "game.wgpnear.near";
 const NEARBLOCKS_API = "https://api.nearblocks.io/v1";
@@ -31,10 +36,14 @@ const OWN_ACCOUNTS = ["operator.wgpnear.near", "relayer.wgpnear.near"];
  */
 const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];
 /** The methods players call from their own accounts (signed by their session key, relayed). */
+/** The author's own player account. It plays like any other and is counted as one; the tally says whether it is among them. */
+const AUTHOR_ACCOUNTS = ["sele.wgpnear.near"];
 const PLAYER_METHODS = ["register_hero", "craft_suit", "equip_suit", "market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
+/** The market's five, a subset of the player methods. */
+const MARKET_METHODS = ["market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
 const PER_PAGE = 25;
 const PAGE_GAP_MS = 1000;
-/** A stop for a runaway loop: 25,000 calls. Past it the tally says it is partial. */
+/** A stop for a runaway loop: 25,000 receipts. Past it the tally says it is partial. */
 const MAX_PAGES = 1000;
 /** Seconds to wait before each retry of a rate-limited page. */
 const RATE_LIMIT_WAITS_S = [15, 30, 60];
@@ -150,69 +159,174 @@ function printSite(base, s) {
 /* ------------------------------------------------------------------ 2. the chain */
 
 /**
+ * Counts NearBlocks' rows for the contract. Pure: `add` takes one row, `snapshot` answers the
+ * tally so far, and nothing here touches the network (the tests run it on a fixture).
+ *
+ * A row is a receipt the contract received, not a call. Most carry one function call; a few
+ * carry none (a transfer, a refund from `system`, the account's creation) and a deploy carries
+ * the code and its `new` together. So the tally keeps three things apart:
+ *
+ *   receipts        every row
+ *   functionCalls   the FUNCTION_CALL actions in them, also by method (`byMethod`)
+ *   otherReceipts   rows with no function call at all (`otherActions` counts every action
+ *                   that isn't a function call, a deploy's included)
+ *
+ * and, for people: `players` says how many accounts called a game method themselves, how many
+ * of them did so exactly once, whether the author's account is among them, and how
+ * concentrated the market's calls are. The NPC trader is never one of them.
+ */
+export function createTally(contract) {
+  const methods = new Map();
+  const others = new Map();
+  /** account -> { calls, market }: the player methods an account called itself. */
+  const players = new Map();
+  const seen = new Set();
+  let receipts = 0;
+  let functionCalls = 0;
+  let otherReceipts = 0;
+  let failed = 0;
+  let failedOtherReceipts = 0;
+  let failedFunctionCalls = 0;
+  let npcCalls = 0;
+  const sorted = (map) => Object.fromEntries([...map].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+  return {
+    /** Adds one row. Answers false for a row already counted (a page can shift while new calls land). */
+    add(txn) {
+      const id = txn.receipt_id ?? txn.id ?? `${txn.transaction_hash}:${txn.predecessor_account_id}`;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      receipts += 1;
+      const actions = txn.actions ?? [];
+      const called = actions.filter((a) => a.method);
+      const failedHere = txn.outcomes?.status === false;
+      if (failedHere) failed += 1;
+      if (failedHere && called.length === 0) failedOtherReceipts += 1;
+      if (called.length === 0) otherReceipts += 1;
+      functionCalls += called.length;
+      if (failedHere) failedFunctionCalls += called.length;
+      for (const action of actions) {
+        if (action.method) methods.set(action.method, (methods.get(action.method) ?? 0) + 1);
+        else {
+          const kind = String(action.action ?? "unknown").toLowerCase();
+          others.set(kind, (others.get(kind) ?? 0) + 1);
+        }
+      }
+      // A player account is one that called a game method itself: not the deploy, the setup or a
+      // transfer, which the owner and the setup payer send.
+      const sender = txn.predecessor_account_id;
+      const played = called.filter((a) => PLAYER_METHODS.includes(a.method));
+      if (NPC_ACCOUNTS.includes(sender)) npcCalls += 1;
+      else if (played.length && sender && sender !== contract && !OWN_ACCOUNTS.includes(sender)) {
+        const p = players.get(sender) ?? { calls: 0, market: 0 };
+        p.calls += played.length;
+        p.market += played.filter((a) => MARKET_METHODS.includes(a.method)).length;
+        players.set(sender, p);
+      }
+      return true;
+    },
+    get receipts() {
+      return receipts;
+    },
+    snapshot(complete, pages = 0) {
+      const each = [...players.values()];
+      const traders = each.filter((p) => p.market > 0).sort((a, b) => b.market - a.market);
+      const authors = AUTHOR_ACCOUNTS.filter((a) => players.has(a));
+      return {
+        contract,
+        complete,
+        pages,
+        receipts,
+        functionCalls,
+        failedFunctionCalls,
+        otherReceipts,
+        failedOtherReceipts,
+        failed,
+        byMethod: sorted(methods),
+        otherActions: sorted(others),
+        playerAccounts: players.size,
+        players: {
+          accounts: players.size,
+          // The author's account plays like any other and is counted; this says so.
+          authorAccounts: authors,
+          withOneCall: each.filter((p) => p.calls === 1).length,
+          // Only grows, unlike the count above (an account's second call moves it from one to the other).
+          withMoreThanOneCall: each.filter((p) => p.calls > 1).length,
+          calls: each.reduce((n, p) => n + p.calls, 0),
+          marketAccounts: traders.length,
+          marketCalls: traders.reduce((n, p) => n + p.market, 0),
+          // The market's calls by its two busiest accounts.
+          marketCallsTopTwo: traders.slice(0, 2).reduce((n, p) => n + p.market, 0),
+          marketCallsByAuthor: authors.reduce((n, a) => n + players.get(a).market, 0),
+        },
+        npcCalls,
+      };
+    },
+  };
+}
+
+/** The tally of a list of rows (a fixture, or pages already read). */
+export function tallyRows(rows, contract = DEFAULT_CONTRACT) {
+  const tally = createTally(contract);
+  for (const row of rows) tally.add(row);
+  return tally.snapshot(true);
+}
+
+/**
  * Every receipt the contract received, page by page until one comes back empty. Throws on
  * the first page it can't read; `partial` on the error carries what was counted before it.
  */
 async function tallyChain(contract, onPage = () => {}, onWait = () => {}) {
-  const methods = new Map();
-  const senders = new Set();
-  const seen = new Set();
-  let calls = 0;
-  let failed = 0;
-  let npcCalls = 0;
+  const tally = createTally(contract);
   let pages = 0;
-  const snapshot = (complete) => ({
-    contract,
-    complete,
-    pages,
-    calls,
-    failed,
-    byMethod: Object.fromEntries([...methods].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))),
-    playerAccounts: senders.size,
-    npcCalls,
-  });
   for (let page = 1; page <= MAX_PAGES; page++) {
     if (page > 1) await sleep(PAGE_GAP_MS);
     let body;
     try {
       body = await getJsonPatiently(`${NEARBLOCKS_API}/account/${encodeURIComponent(contract)}/txns?per_page=${PER_PAGE}&page=${page}`, onWait);
     } catch (error) {
-      error.partial = snapshot(false);
+      error.partial = tally.snapshot(false, pages);
       throw error;
     }
     const txns = Array.isArray(body?.txns) ? body.txns : [];
-    if (txns.length === 0) return snapshot(true);
+    if (txns.length === 0) return tally.snapshot(true, pages);
     pages = page;
-    for (const txn of txns) {
-      // A page can shift while new calls land: never count one receipt twice.
-      const id = txn.receipt_id ?? txn.id ?? `${txn.transaction_hash}:${txn.predecessor_account_id}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      calls += 1;
-      if (txn.outcomes?.status === false) failed += 1;
-      for (const action of txn.actions ?? []) {
-        const name = action.method ?? `(${String(action.action ?? "unknown").toLowerCase()})`;
-        methods.set(name, (methods.get(name) ?? 0) + 1);
-      }
-      // A player account is one that called a game method itself: not the deploy, the setup or a
-      // transfer, which the owner and the setup payer send.
-      const sender = txn.predecessor_account_id;
-      const played = (txn.actions ?? []).some((a) => PLAYER_METHODS.includes(a.method));
-      if (NPC_ACCOUNTS.includes(sender)) npcCalls += 1;
-      else if (played && sender && sender !== contract && !OWN_ACCOUNTS.includes(sender)) senders.add(sender);
-    }
-    onPage(page, calls);
+    for (const txn of txns) tally.add(txn);
+    onPage(page, tally.receipts);
   }
-  return snapshot(false);
+  return tally.snapshot(false, pages);
 }
 
 function printChain(t) {
   const explorer = `https://nearblocks.io/address/${t.contract}`;
   console.log(`On chain, counted from NearBlocks${t.complete ? "" : " (partial: stopped early)"}\n  contract  ${t.contract}\n  explorer  ${explorer}\n`);
-  console.log(table("Calls the contract received", [["calls", t.calls], ["of them failed", t.failed], ["pages read", t.pages]]));
+  console.log(
+    table("What the contract received", [
+      ["function calls", t.functionCalls],
+      ["  of them failed", t.failedFunctionCalls],
+      ["receipts with no function call (transfers, refunds, the account's creation)", t.otherReceipts],
+      ["  of them failed", t.failedOtherReceipts],
+      ["receipts in all, as NearBlocks lists them", t.receipts],
+      ["pages read", t.pages],
+    ]),
+  );
   const rows = Object.entries(t.byMethod);
-  if (rows.length) console.log(table("Actions by method", rows));
-  console.log(table(`Player accounts that called a game method themselves`, [["accounts", t.playerAccounts]]));
+  if (rows.length) console.log(table("Function calls by method", rows));
+  const others = Object.entries(t.otherActions);
+  if (others.length) console.log(table("Actions that aren't function calls", others));
+  const p = t.players;
+  console.log(
+    table("Player accounts that called a game method themselves", [
+      ["accounts", p.accounts],
+      [`  of them the author's own (${p.authorAccounts.join(", ") || "none"})`, p.authorAccounts.length],
+      ["  that made more than one call", p.withMoreThanOneCall],
+      ["  that made exactly one call", p.withOneCall],
+      ["their calls in all", p.calls],
+      ["accounts that made a market call", p.marketAccounts],
+      ["market calls by players", p.marketCalls],
+      ["  of them by the two busiest accounts", p.marketCallsTopTwo],
+      ["  of them by the author's account", p.marketCallsByAuthor],
+    ]),
+  );
   if (t.npcCalls > 0) console.log(table("Calls by the NPC trader (not a player; included in the methods above)", [["calls", t.npcCalls]]));
 }
 
@@ -254,7 +368,7 @@ async function main() {
     if (!args.contract && result.site && !result.site.chain?.contractId && !args.json) {
       console.log(`Note: ${args.base} is not connected to a contract; tallying ${DEFAULT_CONTRACT} on mainnet.\n`);
     }
-    const progress = args.json || !process.stderr.isTTY ? () => {} : (page, calls) => process.stderr.write(`\r  reading NearBlocks: page ${page}, ${calls} calls`);
+    const progress = args.json || !process.stderr.isTTY ? () => {} : (page, calls) => process.stderr.write(`\r  reading NearBlocks: page ${page}, ${calls} receipts`);
     try {
       const waiting = args.json ? () => {} : (seconds) => console.error(`${process.stderr.isTTY ? "\r\x1b[K" : ""}  NearBlocks is rate limiting; waiting ${seconds} s…`);
       result.chain = await tallyChain(contract, progress, waiting);
@@ -263,9 +377,9 @@ async function main() {
     } catch (error) {
       if (process.stderr.isTTY && !args.json) process.stderr.write("\r\x1b[K");
       const why = error.status === 429 ? "HTTP 429: NearBlocks is rate limiting this address" : reason(error);
-      const note = `NearBlocks could not be read (${why}), so the on-chain tally is ${error.partial?.calls ? "partial" : "missing"}. Try again in a minute, or open https://nearblocks.io/address/${contract}.`;
+      const note = `NearBlocks could not be read (${why}), so the on-chain tally is ${error.partial?.receipts ? "partial" : "missing"}. Try again in a minute, or open https://nearblocks.io/address/${contract}.`;
       result.notes.push(note);
-      result.chain = error.partial?.calls ? error.partial : null;
+      result.chain = error.partial?.receipts ? error.partial : null;
       if (!args.json) {
         if (result.chain) printChain(result.chain);
         console.log(`Note: ${note}`);
@@ -277,4 +391,4 @@ async function main() {
   return code;
 }
 
-process.exitCode = await main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main();

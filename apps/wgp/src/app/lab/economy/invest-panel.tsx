@@ -15,6 +15,7 @@ import { formatBits } from "@/components/market/sparkline";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
+import { vendorLimits } from "@/lib/market/balance";
 import { LAB_INVESTORS, type DaySnapshot, type InvestEvent } from "@/lib/market/bots";
 import { bitsText } from "@/lib/market/format";
 
@@ -44,7 +45,8 @@ export function InvestPanel({ history, hover, headingId }: { history: DaySnapsho
   const day = history[at]!;
   const upTo = history.slice(0, at + 1);
   const events = upTo.flatMap((d) => d.investors?.events ?? []);
-  const closedDays = upTo.slice(1).reduce((sum, d) => sum + Object.values(d.broke).filter(Boolean).length, 0);
+  // The header's "unable to buy on N item-days" is this same count over the whole run.
+  const closedDays = vendorLimits(upTo).broke;
   const reopenings = upTo.reduce((sum, d, i) => sum + (d.investors?.events ?? []).filter((e) => e.kind === "invest" && i > 0 && history[i - 1]!.broke[e.item]).length, 0);
   const invested = events.filter((e) => e.kind === "invest").reduce((s, e) => s + e.bits, 0);
   const withdrawn = events.filter((e) => e.kind === "withdraw").reduce((s, e) => s + e.bits, 0);
@@ -60,7 +62,7 @@ export function InvestPanel({ history, hover, headingId }: { history: DaySnapsho
         </h2>
         <p className="num max-w-[76ch] text-[13px] leading-[18px] text-game-muted [text-wrap:pretty]">
           {LAB_INVESTORS.count} investor bots start with {bitsText(LAB_INVESTORS.bits)} each. The morning after one of her tills can’t pay for an item, one of them puts up to {bitsText(LAB_INVESTORS.lot)} into it, on the investing rules of
-          contract v3 (built and reviewed, not live on mainnet). Her price doesn’t move; she just buys again. They earn half the gas fee on those items’ trades.
+          contract v3 (built, not live on mainnet). Her price doesn’t move; she just buys again. They earn half the gas fee on those items’ trades.
         </p>
       </div>
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">

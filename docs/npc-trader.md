@@ -19,7 +19,7 @@ Nothing in this repo creates an account, funds one or sends a transaction: the o
 - **Cast:** Sandwich Man, a villain from the story bible (`docs/story/bible.md`): "front-runs you; sets bread traps; works the Mempool Market". Gwei already warns players about him: "Listed. Someone will buy it, or Sandwich Man will try to." Now he really does.
 - **A second kind of NPC.** Gwei Stacy, the vendor, *is* the contract: her stock and till are the contract account's balances. Sandwich Man is the opposite: an ordinary account, `sandwich.wgpnear.near`, with no role in the contract at all.
 - **His wallet is his own.** His Bits and items are NEP-245 balances of his account in `game.wgpnear.near`, and he signs his own calls with his own key and pays his own gas (his calls are not relayed). In the simulated market his wallet is a row in the simulation.
-- **No special powers.** He can call only the five market methods every player's session key can call: `market_buy`, `market_sell`, `list_item`, `buy_listing` and `cancel_listing`. He is not an operator or the owner. Every cap the contract puts on a player is on him too.
+- **No special powers.** The server only ever sends these five calls from his account; his key is a full-access key. The five are the market methods every player's session key can call: `market_buy`, `market_sell`, `list_item`, `buy_listing` and `cancel_listing`. So the limit is the server's, not the key's ([Limits](#limits)). He is not an operator or the owner. Every cap the contract puts on a player is on him too.
 - **Always labelled.** In the game he appears only in the "Other traders" strip on `/play/market`, marked NPC, with his account id linked to NearBlocks and each move linked to its transaction. He is never shown or counted as a player (`pnpm stats` counts his calls on their own line and leaves him out of player accounts). He holds no hero, suit, badge or trophy.
 
 ## His rules
@@ -104,7 +104,7 @@ curl -s https://www.wgponnear.fun/api/market/npc | jq '{mode, accountId, bits, i
 
 Each line of his ledger in the game links to its transaction. A transaction's events show the same thing the game says: `market_fill` (he bought a listing), `market_trade` (he traded with Gwei), `market_list` or `market_cancel`, with `mt_transfer` and the burned gas fee. To check a decision, read the rule it names in `npc-rules.ts` against the market state in the block before.
 
-The sandbox test `contracts/wgp/sandbox/tests/npc_trader.rs` proves an ordinary account can do all of it against the real wasm, and that the contract refuses him where it refuses anyone.
+The sandbox test `contracts/wgp/sandbox/tests/npc_trader.rs` has an ordinary account do all of it against the real wasm, and checks that the contract refuses him where it refuses anyone. `pnpm evidence` does not run it (it needs cargo-near and a built wasm); CI's `sandbox` job does, and the README's sandbox command runs it by hand. It passed locally on Nov 13, 2026.
 
 ## What the owner ran (mainnet, Nov 13, 2026)
 
@@ -156,10 +156,16 @@ jq -j '.private_key' ~/.near-credentials/mainnet/sandwich.wgpnear.near.json \
 
 **To switch him off:** remove either env var and redeploy. **To retire him:** cancel his listings, then `near account delete-account sandwich.wgpnear.near beneficiary wgpnear.near …` returns his NEAR.
 
+## Limits
+
+- **His key is a full-access key.** Nothing on chain stops that key sending something else from his account: a transfer of his NEAR, another contract's method, a new key. What limits him to the five market calls is the server's code (`npcCall` in `apps/wgp/src/server/npc/chain.ts`, and its test). The key can't mint, change the contract's settings or move a player's tokens, because the contract gives his account no role.
+- **Planned: a function-call key.** The owner adds a key limited to `game.wgpnear.near` and the five market methods, gives the server that one and deletes the full-access key. Then the limit is the key's as well. The market calls attach no deposit, so a function-call key can sign all of them. Not done as of Nov 13; `pnpm evidence --chain` still expects the one full-access key and fails when that changes, which is the signal to update this page.
+- **Rule-based.** He follows six fixed rules. He does not learn, plan or read anything but the market.
+
 ## Tests
 
 Each claim on this page has a row in [EVIDENCE.md](EVIDENCE.md#sandwich-man-docsnpc-tradermd).
 
 - `apps/wgp/src/lib/market/npc-rules.test.ts`: every rule, the caps, the closed shop and reopening, the books, determinism, and 40 fast-forwards in which the market never refuses one of his actions.
-- `apps/wgp/src/server/npc/npc.test.ts`: the runner on PGlite. A player lists cheap and he buys it; one action a look; rate-limited; two looks at once act once; off when unconfigured; a refusal is booked, not retried forever; only the five market methods.
+- `apps/wgp/src/server/npc/npc.test.ts`: the runner on PGlite. A player lists cheap and he buys it; one action a look; rate-limited; two looks at once act once; off when unconfigured; a refusal is booked, not retried forever; the server only ever sends these five calls from his account (his key is a full-access key).
 - `contracts/wgp/sandbox/tests/npc_trader.rs`: the real wasm in near-workspaces.

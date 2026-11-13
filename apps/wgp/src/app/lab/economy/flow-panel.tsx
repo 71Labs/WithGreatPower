@@ -5,34 +5,18 @@
  */
 import { formatBits } from "@/components/market/sparkline";
 
+import { vendorLimits } from "@/lib/market/balance";
 import type { DaySnapshot } from "@/lib/market/bots";
-import { seededPools } from "@/lib/market/config";
-import { sellQuote } from "@/lib/market/math";
 
-const SEEDED = seededPools();
-
-/** Item-days in `history` that ended with Gwei sold out, and with a till that can't buy one. */
-export function vendorLimits(history: DaySnapshot[], feeBps: number): { soldOut: number; broke: number; itemDays: number } {
-  let soldOut = 0;
-  let broke = 0;
-  const days = history.slice(1);
-  for (const d of days) {
-    for (const p of SEEDED) {
-      if (d.stock[p.item] === 0) soldOut += 1;
-      if (sellQuote({ ...p, stock: d.stock[p.item] ?? 0, bits: d.tills[p.item] ?? 0 }, 1, feeBps) === null) broke += 1;
-    }
-  }
-  return { soldOut, broke, itemDays: days.length * SEEDED.length };
-}
-
-export function FlowPanel({ history, days, feeBps, headingId }: { history: DaySnapshot[]; days: number; feeBps: number; headingId: string }) {
+export function FlowPanel({ history, days, headingId }: { history: DaySnapshot[]; days: number; headingId: string }) {
   const last = history[history.length - 1]!;
   const top = Math.max(1, last.minted);
   const x = (day: number) => (days > 0 ? (day / days) * 100 : 0);
   const y = (bits: number) => 94 - (bits / top) * 88;
   const path = (pick: (d: DaySnapshot) => number) => history.map((d, i) => `${i ? "L" : "M"}${x(d.day).toFixed(2)} ${y(pick(d)).toFixed(2)}`).join(" ");
   const share = last.minted ? Math.round((last.burned / last.minted) * 100) : 0;
-  const limits = vendorLimits(history, feeBps);
+  // The same count the investors' panel shows as "Shop-days closed" (balance.ts `vendorLimits`).
+  const limits = vendorLimits(history);
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-[20px] border-2 border-game-ink bg-game-paper p-4 text-game-ink shadow-[var(--game-shadow-sm)]">
@@ -69,7 +53,7 @@ export function FlowPanel({ history, days, feeBps, headingId }: { history: DaySn
         </dl>
       </div>
       <p className="num border-t-2 border-dashed border-game-ink/20 pt-2.5 text-[13px] leading-5 text-game-muted [text-wrap:pretty]">
-        Gwei’s limits so far: sold out on {formatBits(limits.soldOut)} and unable to buy on {formatBits(limits.broke)} of {formatBits(limits.itemDays)} item-days (8 items × each day’s close). She sells only
+        Gwei’s limits so far: sold out on {formatBits(limits.soldOut)} and unable to buy on {formatBits(limits.broke)} of {formatBits(limits.itemDays)} item-days ({Object.keys(last.broke).length} items × each day’s close). She sells only
         what she holds and pays only from her till.
       </p>
     </section>

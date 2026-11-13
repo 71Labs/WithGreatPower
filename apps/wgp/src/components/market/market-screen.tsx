@@ -430,6 +430,8 @@ export function MarketScreen() {
   const [listItem, setListItem] = useState<ItemId | null>(null);
   const [filling, setFilling] = useState<ListingView | null>(null);
   const [after, setAfter] = useState<string | null>(null);
+  /** What the practice banner's own button just did, said in the banner. */
+  const [practiceNote, setPracticeNote] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<number | null>(null);
   // Counts the player's trades: Sandwich Man (the NPC) may answer one, so his strip looks again.
   const [traded, setTraded] = useState(0);
@@ -587,13 +589,14 @@ export function MarketScreen() {
             const item = practice.drainItem;
             const name = view?.items.find((i) => i.item === item)?.name ?? "that item";
             const sold = item ? practice.drain(item) : 0;
-            if (sold > 0) showToast(`Practice: a crowd sold Gwei ${formatBits(sold)} ${name}. Her till for it is empty, so she is closed for buying it.`, "info");
+            if (sold > 0) setPracticeNote(`A crowd sold Gwei ${formatBits(sold)} ${name}. Her till for it is empty, so she is closed for buying it.`);
           }}
           onReset={() => {
             practice.reset();
             setAfter(null);
-            showToast("Practice: started over from the live prices.", "info");
+            setPracticeNote("Started over: your practice Bits, loot and prices are back where they began.");
           }}
+          note={practiceNote}
           onLeave={() => setPracticeMode(false)}
         />
       ) : null}

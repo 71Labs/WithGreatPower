@@ -61,7 +61,7 @@ When one of Gwei's tills can't pay for an item, her shop for that item is closed
 | Keeps trading, or just waits | They earn half the gas fee on every trade of that item with her, split by stake, instead of it being burned |
 | Presses **Withdraw or claim** | Fee earnings can be claimed at any time. The stake comes out once its lock has passed and the till holds the Bits. If sellers emptied the till, the stake waits until someone buys that stock. |
 
-This runs today in the practice market and in the simulated market (a local checkout). **It is not live on mainnet:** the contract there (v2) has no invest call, so on mainnet a broke shop reopens only when someone buys from her, and the market says that investing arrives with contract v3. v3 is built and reviewed on the branch `review/contract-v3` ([CONTRACT-V3-REVIEW.md](CONTRACT-V3-REVIEW.md)). The whole story, with the maths and the risks, is [INVESTING.md](INVESTING.md).
+This runs today in the practice market and in the simulated market (a local checkout). **It is not live on mainnet:** the contract there (v2) has no invest call, so on mainnet a broke shop reopens only when someone buys from her, and the market says that investing arrives with contract v3. v3 is built on the branch `review/contract-v3` and was reviewed by a second AI agent that did not write it (not an audit) ([CONTRACT-V3-REVIEW.md](CONTRACT-V3-REVIEW.md)). The whole story, with the maths and the risks, is [INVESTING.md](INVESTING.md).
 
 ## Why the economy is the gameplay
 

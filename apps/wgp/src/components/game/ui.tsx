@@ -8,6 +8,7 @@ import { X } from "@/components/icons";
 import { SUITS } from "@wgp/game-core/data";
 import { useAccount, useGame } from "@/game/store";
 import { QUICK_HERO, markQuickHero } from "@/lib/first-minute/quick-hero";
+import { noHeroStep } from "@/lib/first-minute/quick-start-route";
 import type { Hero, Save, SuitId } from "@wgp/game-core/types";
 
 import { ON_PAPER, StickerIconButton } from "./kit";
@@ -154,14 +155,14 @@ export function useHeroSave(): HeroSave | null {
   const pathname = usePathname();
   const needsHero = !!save && !save.hero;
   useEffect(() => {
-    if (!needsHero || status === "loading") return;
-    if (status === "signed-in") router.replace("/play/bitten");
-    else if (pathname === "/play") router.replace("/play/start");
-    else {
+    // The decision is a pure function (lib/first-minute/quick-start-route.ts), tested there.
+    const step = noHeroStep({ status, saveLoaded: !!save, hasHero: !needsHero, pathname });
+    if (step.kind === "go") router.replace(step.to);
+    else if (step.kind === "make-hero") {
       markQuickHero(true);
       dispatch({ type: "create-hero", ...QUICK_HERO });
     }
-  }, [needsHero, status, pathname, router, dispatch]);
+  }, [save, needsHero, status, pathname, router, dispatch]);
   return save && save.hero ? (save as HeroSave) : null;
 }
 

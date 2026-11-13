@@ -10,6 +10,8 @@ import { newSave, reduce } from "@wgp/game-core/engine";
 import { STARTER_POWERS, SUITS } from "@wgp/game-core/data";
 
 import { QUICK_HERO } from "@/lib/first-minute/quick-hero";
+import { noHeroStep, quickStartStep } from "@/lib/first-minute/quick-start-route";
+import { PRACTICE_INVEST_RULES, PRACTICE_LABEL, PRACTICE_START_BITS } from "@/lib/market/practice";
 import { START_URL, startUrl } from "@/lib/site";
 
 import { exists, plainDoc, read } from "./repo";
@@ -38,6 +40,11 @@ const LABELS: [label: string, file: string, inSource?: string][] = [
   ["You earned N Bits", "app/play/patrol/night-results.tsx", "You earned <span"],
   ["On NEAR mainnet · game.wgpnear.near", "components/market/market-screen.tsx", "On NEAR {view.network} · {view.contractId}"],
   ["Why this price?", "components/market/why-price.tsx"],
+  // What a signed-out visitor sees on /play/market: the practice market's own labels.
+  ["Practice market: not on NEAR. Sign in to trade for real.", "lib/market/practice.ts"],
+  ["Your practice Bits", "components/market/market-screen.tsx"],
+  ["See the real market on NEAR mainnet: game.wgpnear.near", "components/market/invest.tsx", "See the real market on NEAR {live.network}: {live.contractId}"],
+  ["Withdraw or claim", "components/market/invest.tsx"],
   ["Enable quick play", "components/account/quick-play.tsx"],
   ["Empty Gwei's … till", "components/market/invest.tsx", "Empty Gwei’s {drainName} till"],
   ["Invest in Gwei", "components/market/invest.tsx"],
@@ -77,13 +84,17 @@ describe("the README's do-this, see-that steps name what the code renders", () =
     expect(startUrl("https://www.wgponnear.fun/play")).toBe("https://www.wgponnear.fun/play/start");
     expect(flat("components/landing/hero.tsx")).toMatch(/<StickerLink href=\{START_URL\}[^>]*> Play now/);
     // /play itself, with no hero: a guest goes to the quick start, a signed-in player to the origin.
-    const guard = flat("components/game/ui.tsx");
-    expect(guard).toContain('if (status === "signed-in") router.replace("/play/bitten"); else if (pathname === "/play") router.replace("/play/start");');
+    expect(noHeroStep({ status: "guest", saveLoaded: true, hasHero: false, pathname: "/play" })).toEqual({ kind: "go", to: "/play/start" });
+    expect(noHeroStep({ status: "signed-in", saveLoaded: true, hasHero: false, pathname: "/play" })).toEqual({ kind: "go", to: "/play/bitten" });
     // The quick start makes the ready hero and goes into the patrol; a signed-in player without a hero gets the origin.
+    expect(quickStartStep({ status: "guest", saveLoaded: true, hasHero: false, madeHere: false })).toEqual({ kind: "make-hero" });
+    expect(quickStartStep({ status: "guest", saveLoaded: true, hasHero: true, madeHere: true })).toEqual({ kind: "go", to: "/play/patrol" });
+    expect(quickStartStep({ status: "signed-in", saveLoaded: true, hasHero: false, madeHere: false })).toEqual({ kind: "go", to: "/play/bitten" });
+    // Both pages act on those decisions and on nothing else.
+    expect(flat("components/game/ui.tsx")).toContain("const step = noHeroStep({ status, saveLoaded: !!save, hasHero: !needsHero, pathname });");
     const quick = flat("components/first-minute/quick-start.tsx");
+    expect(quick).toContain("const step = quickStartStep({ status, saveLoaded: !!save, hasHero, madeHere: made.current });");
     expect(quick).toContain('dispatch({ type: "create-hero", ...QUICK_HERO })');
-    expect(quick).toContain('router.replace(made.current ? "/play/patrol" : "/play")');
-    expect(quick).toContain('if (status === "signed-in") { router.replace("/play/bitten"); return; }');
 
     // The hero the README describes: The Node, the Classic suit, three starter powers, accepted by the rules.
     expect(QUICK_HERO.name).toBe("The Node");
@@ -104,6 +115,33 @@ describe("the README's do-this, see-that steps name what the code renders", () =
       expect(README, `the README no longer names “${label}”: drop it from this list`).toContain(label);
       expect(flat(file), `${file} no longer renders “${label}”: fix the README's step`).toContain(inSource ?? label);
     }
+  });
+
+  it("the market step is in two labelled parts, and the guest's part is the practice market a signed-out visitor gets", () => {
+    const step = README.slice(README.indexOf("Trade in the Mempool Market."), README.indexOf("Watch the economy move."));
+    const guestAt = step.indexOf("See, signed out (a guest): the practice market.");
+    const playerAt = step.indexOf("See, signed in: the real market.");
+    expect(guestAt).toBeGreaterThan(0);
+    expect(playerAt).toBeGreaterThan(guestAt);
+    const guest = step.slice(guestAt, playerAt);
+    const player = step.slice(playerAt);
+    // The guest's part carries the practice labels and none of the on-chain ones; the player's part the reverse.
+    expect(guest).toContain(PRACTICE_LABEL);
+    expect(guest).toContain("It runs in your browser and is not on NEAR.");
+    for (const label of ["Your practice Bits", "Why this price?", "Buy", "Sell", "Invest in Gwei", "Empty Gwei's … till", "Withdraw or claim"]) expect(guest, label).toContain(label);
+    expect(guest).not.toContain("On NEAR mainnet · game.wgpnear.near");
+    expect(guest).not.toMatch(/market_buy|session key|relayer/);
+    expect(player).toContain("On NEAR mainnet · game.wgpnear.near");
+    expect(player).not.toContain("practice Bits");
+    expect(player).toContain("There is no investing here until contract v3");
+    // Its two numbers are the code's.
+    expect(guest).toContain(`Your practice Bits (${PRACTICE_START_BITS} to start)`);
+    expect(guest).toContain(`takes the stake out again ${PRACTICE_INVEST_RULES.lockMs / 1000} seconds later`);
+    // The screen shows the practice market to every signed-out visitor, with the banner and the practice wallet.
+    const screen = flat("components/market/market-screen.tsx");
+    expect(screen).toContain('{practice ? "Your practice Bits" : "Your Bits"}');
+    expect(screen).toMatch(/\{practice\.on \? \( <PracticeBanner/);
+    expect(flat("components/market/use-practice.ts")).toContain("const on = signedIn === null ? false : !signedIn || chosen;");
   });
 
   it("every page the README names is a route in the app", () => {

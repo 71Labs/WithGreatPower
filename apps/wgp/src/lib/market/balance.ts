@@ -326,6 +326,28 @@ export interface InvestStory {
   staked: number;
 }
 
+/**
+ * Gwei's limits over a run, counted in one place for every panel and document: the item-days
+ * (an item at a day's close) that ended sold out, and those that ended with a till that
+ * couldn't buy one. "Couldn't buy" is the engine's own flag on the day's snapshot (`tillShort`
+ * on the pool as it stood), so Bits an investor put in are already counted. Day 0 is the
+ * opening state and isn't a day's close.
+ */
+export function vendorLimits(history: DaySnapshot[]): { soldOut: number; broke: number; itemDays: number } {
+  const days = history.slice(1);
+  let soldOut = 0;
+  let broke = 0;
+  let itemDays = 0;
+  for (const d of days) {
+    for (const item of Object.keys(d.broke)) {
+      itemDays += 1;
+      if (d.stock[item] === 0) soldOut += 1;
+      if (d.broke[item]) broke += 1;
+    }
+  }
+  return { soldOut, broke, itemDays };
+}
+
 export function investStory(e: Economy): InvestStory {
   const h = e.history;
   const events = h.flatMap((d) => d.investors?.events ?? []);
@@ -335,7 +357,7 @@ export function investStory(e: Economy): InvestStory {
   });
   const last = h[h.length - 1]!;
   return {
-    brokeDays: sum(h.slice(1).map((d) => Object.values(d.broke).filter(Boolean).length)),
+    brokeDays: vendorLimits(h).broke,
     reopenings,
     invested: sum(events.filter((x) => x.kind === "invest").map((x) => x.bits)),
     withdrawn: sum(events.filter((x) => x.kind === "withdraw").map((x) => x.bits)),

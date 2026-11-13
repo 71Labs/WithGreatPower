@@ -44,7 +44,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 export const EVIDENCE_JSON = "docs/evidence.json";
 export const EVIDENCE_MD = "docs/EVIDENCE.md";
 
-export const STATUSES = ["proven by test", "proven on chain", "live check", "checked in git", "simulation only", "built, off on mainnet", "owner action needed"];
+export const STATUSES = ["proven by test", "pinned by test", "proven on chain", "live check", "checked in git", "simulation only", "built, off on mainnet", "owner action needed"];
 
 /** Where each package's tests run from, and how one test is run by hand. */
 export const PACKAGES = {
@@ -58,7 +58,7 @@ const CHAIN_TIMEOUT_MS = 20_000;
 const RETRY_WAITS_S = [2, 5, 12];
 
 /** Statuses whose proof is a test in this repository; the others rest on a chain or site check, or on the owner. */
-export const TEST_STATUSES = ["proven by test", "simulation only", "built, off on mainnet"];
+export const TEST_STATUSES = ["proven by test", "pinned by test", "simulation only", "built, off on mainnet"];
 export const CHAIN_STATUSES = ["proven on chain", "live check"];
 
 export const README = "README.md";
@@ -93,6 +93,7 @@ export function loadEvidence() {
     const tests = (c.tests ?? []).length;
     const chain = (c.chain ?? []).length;
     if (c.status === "proven by test" && !tests) problems.push(`${at}: "proven by test" needs a test`);
+    if (c.status === "pinned by test" && !tests) problems.push(`${at}: "pinned by test" needs the test that pins it`);
     if (c.status === "simulation only" && !tests) problems.push(`${at}: "simulation only" needs a test of the simulation`);
     if (c.status === "built, off on mainnet" && !tests) problems.push(`${at}: "built, off on mainnet" needs a test of what is built`);
     if ((c.status === "proven on chain" || c.status === "live check") && !chain) problems.push(`${at}: "${c.status}" needs a chain or site check`);
@@ -328,6 +329,8 @@ export function expectProblem(value, e) {
       return typeof num(got) === "number" && num(got) <= e.value ? null : `${where} is ${show(got)}, expected at most ${e.value}`;
     case "includes":
       return (Array.isArray(got) || typeof got === "string") && got.includes(e.value) ? null : `${where} doesn't include ${show(e.value)}: ${show(got)}`;
+    case "excludes":
+      return (Array.isArray(got) || typeof got === "string") && !got.includes(e.value) ? null : `${where} ${Array.isArray(got) || typeof got === "string" ? `includes ${show(e.value)}` : `is ${show(got)}, expected a list`}`;
     case "anyMatch": {
       const re = new RegExp(e.value);
       const list = Array.isArray(got) ? got : [got];
@@ -409,6 +412,29 @@ export function statsDerived(stats) {
   };
 }
 
+/**
+ * Who sent a set of transactions: the distinct senders, in the order first seen. Pure. For a
+ * relayed call the sender is the account inside the delegate action, not the relayer.
+ */
+export function distinctSenders(senders) {
+  const accounts = [...new Set(senders)];
+  return { accounts, count: accounts.length, transactions: senders.length };
+}
+
+/**
+ * What an account holds in the game contract, added up: its Bits, the items in its wallet and
+ * the items it has listed (those sit in the contract's escrow). Pure: `player` is what
+ * `get_player` answered and `account` what `market_account` did.
+ */
+export function holdingsOf(player, account) {
+  const tokens = Array.isArray(player?.tokens) ? player.tokens : [];
+  const amount = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const bits = tokens.filter(([id]) => id === "item:bits").reduce((sum, [, v]) => sum + amount(v), 0);
+  const items = tokens.filter(([id]) => typeof id === "string" && id.startsWith("item:") && id !== "item:bits").reduce((sum, [, v]) => sum + amount(v), 0);
+  const listed = (Array.isArray(account?.open) ? account.open : []).reduce((sum, l) => sum + (l && typeof l === "object" ? amount(l.amount ?? 1) : 1), 0);
+  return { bits, items, listed, total: bits + items + listed };
+}
+
 /** What each season state is called in a PASS note. */
 const SEASON_STATE_NOTE = {
   open: "still open: get_season is null and there is no results file",
@@ -434,7 +460,20 @@ async function runChainCheck(check, meta) {
       const { state, problems } = seasonState({ id: check.season, endsAt: check.endsAt, now: Date.now(), season, results, balances });
       return problems.length ? { ok: false, why: `${problems.join("; ")}${check.whenFails ? `. ${check.whenFails}` : ""}` } : { ok: true, note: `${check.season} is ${SEASON_STATE_NOTE[state]}` };
     }
-    if (check.kind === "view") {
+    if (check.kind === "holdings") {
+      value = holdingsOf(await viewCall("get_player", { account_id: check.account }), await viewCall("market_account", { account_id: check.account }));
+    } else if (check.kind === "senders") {
+      // The senders of other checks' transactions, looked up again and counted.
+      const senders = [];
+      for (const id of check.of) {
+        const tx = meta.checks[id];
+        const j = await rpc(meta.archivalRpc, "tx", { tx_hash: tx.hash, sender_account_id: tx.sender, wait_until: "FINAL" });
+        if (!j.result) return { ok: false, why: `tx ${tx.hash}: ${j.error?.data ?? j.error?.message ?? "no result"}` };
+        const delegate = j.result.transaction.actions.find((a) => a.Delegate)?.Delegate.delegate_action;
+        senders.push(delegate?.sender_id ?? j.result.transaction.signer_id);
+      }
+      value = distinctSenders(senders);
+    } else if (check.kind === "view") {
       const j = await rpc(meta.rpc, "query", { request_type: "call_function", finality: "final", account_id: check.contract ?? meta.contract, method_name: check.method, args_base64: b64(check.args ?? {}) });
       const failure = j.result?.error ?? j.error?.data ?? j.error?.message;
       if (check.absent) {
@@ -546,8 +585,13 @@ export function runCommand(t) {
 
 function curlFor(check, meta) {
   const rpcCall = (url, method, params) => `curl -s ${url} -H 'content-type: application/json' -d '${JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })}'`;
-  if (check.kind === "view") {
-    return `${rpcCall(meta.rpc[0], "query", { request_type: "call_function", finality: "final", account_id: check.contract ?? meta.contract, method_name: check.method, args_base64: b64(check.args ?? {}) })} \\\n  | jq -r '.result.result | implode' | jq .`;
+  const view = (method, args) => `${rpcCall(meta.rpc[0], "query", { request_type: "call_function", finality: "final", account_id: check.contract ?? meta.contract, method_name: method, args_base64: b64(args) })} \\\n  | jq -r '.result.result | implode' | jq .`;
+  if (check.kind === "view") return view(check.method, check.args ?? {});
+  if (check.kind === "holdings") return `${view("get_player", { account_id: check.account })}\n${view("market_account", { account_id: check.account })}`;
+  if (check.kind === "senders") {
+    return check.of
+      .map((id) => `${rpcCall(meta.archivalRpc[0], "tx", { tx_hash: meta.checks[id].hash, sender_account_id: meta.checks[id].sender, wait_until: "FINAL" })} \\\n  | jq -r '.result.transaction | (.actions[0].Delegate.delegate_action.sender_id // .signer_id)'`)
+      .join("\n");
   }
   if (check.kind === "account") {
     const account = `${rpcCall(meta.rpc[0], "query", { request_type: "view_account", finality: "final", account_id: check.account })} | jq '.result // .error.cause'`;
@@ -576,7 +620,7 @@ const describeExpect = (e) => {
   const where = e.path ? `\`${e.path}\`` : "the answer";
   // A number read from a document is named by where it is read, so this file doesn't copy it.
   const v = e.doc !== undefined ? `the number ${e.source ?? README} gives (read with \`/${e.doc}/\`)` : `\`${JSON.stringify(e.value)}\``;
-  return { eq: `${where} is ${v}`, ne: `${where} is not ${v}`, gte: `${where} is at least ${v}`, lte: `${where} is at most ${v}`, includes: `${where} includes ${v}`, anyMatch: `something in ${where} matches \`/${e.value}/\``, type: `${where} is a ${e.value}` }[e.op];
+  return { eq: `${where} is ${v}`, ne: `${where} is not ${v}`, gte: `${where} is at least ${v}`, lte: `${where} is at most ${v}`, includes: `${where} includes ${v}`, excludes: `${where} does not include ${v}`, anyMatch: `something in ${where} matches \`/${e.value}/\``, type: `${where} is a ${e.value}` }[e.op];
 };
 
 const cell = (s) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -671,7 +715,8 @@ export function renderMarkdown(data) {
   out.push("| Status | Meaning | Claims |");
   out.push("|---|---|---|");
   const meaning = {
-    "proven by test": "A test in this repo runs the real code path and asserts the claim. Runs offline.",
+    "proven by test": "A test in this repo asserts the claim, and at least one of the cited tests runs the code that does it: the simulation, the server on an in-memory database, the contract, a script. Other tests cited beside it may only read text. Runs offline.",
+    "pinned by test": "Every cited test only reads: it compares the document's words with source text, a constant, a config file or a lockfile, and runs none of the behaviour. It fails when the two drift apart; it does not show the code works. Runs offline.",
     "proven on chain": "A read-only call to NEAR mainnet shows it: contract state, or a transaction that happened. Needs `--chain`.",
     "live check": "A read-only request to the live site (or a third-party index of the chain) shows it. Needs `--chain`.",
     "checked in git": "This clone's own commit history shows it: an order of commits, a date, a branch. Runs offline; skipped, with a note, in a clone without that history.",
@@ -721,11 +766,13 @@ export function renderMarkdown(data) {
     out.push(`${check.about} Used by ${used.join(", ") || "no claim"}.`);
     out.push("");
     out.push("```bash");
-    out.push(curlFor(check, data.meta));
+    out.push(curlFor(check, { ...data.meta, checks: data.checks }));
     out.push("```");
     out.push("");
     out.push("Expected:");
     out.push("");
+    if (check.kind === "holdings") out.push("- (`bits` is the account's `item:bits`, `items` its other `item:*` balances added up, `listed` the items in its open listings, `total` the three together)");
+    if (check.kind === "senders") out.push(`- (the sender of each of ${check.of.map((id) => `[${id}](#check-${id})`).join(", ")}: \`accounts\` are the distinct ones, \`count\` how many, \`transactions\` how many were looked up. A relayed call's sender is the player inside the delegate action.)`);
     if (check.kind === "tx") out.push("- (fields as the script reads them: `signer`, `sender` and `receiver` of the call, `relayed`, `actions`, `deposits`, `succeeded`, `logs`)");
     if (check.kind === "command") out.push(`- (\`exit\` is the exit code, \`lines\` the output${check.json ? ", `json` the JSON it prints" : ""})`);
     if (check.kind === "view" && check.absent) out.push(`- the call fails with \`MethodNotFound\`: ${check.contract ?? data.meta.contract} has no \`${check.method}\``);
@@ -915,7 +962,7 @@ async function main() {
       const queue = [...wanted];
       await Promise.all(
         Array.from({ length: 4 }, async () => {
-          for (let id = queue.shift(); id; id = queue.shift()) results.set(id, await runChainCheck(data.checks[id], data.meta));
+          for (let id = queue.shift(); id; id = queue.shift()) results.set(id, await runChainCheck(data.checks[id], { ...data.meta, checks: data.checks }));
         }),
       );
       for (const c of claims) {

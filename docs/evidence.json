@@ -232,6 +232,10 @@
         {
           "path": "docs/ARCHITECTURE.md",
           "anchor": "## 1. Deterministic core"
+        },
+        {
+          "path": "apps/wgp/src/server/db/stats.ts",
+          "anchor": "export const STAT_MODES ="
         }
       ],
       "tests": [
@@ -247,14 +251,24 @@
         },
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
-          "name": "the ways to play: how many, and each mode's counts"
+          "file": "apps/wgp/src/evidence/ways-to-play.test.ts",
+          "name": "every run mode the server counts belongs to exactly one way, and no way claims a mode the server doesn't have"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/ways-to-play.test.ts",
+          "name": "every way has its page and its API route in the app: all are built"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/ways-to-play.test.ts",
+          "name": "the README's table names exactly these ways, and its count is theirs"
         }
       ],
       "chain": [
         "site-duels"
       ],
-      "note": "Duels had no verified run as of Nov 13; the check reads the live count and passes on any. The order the loop was written in has its own row (track-loop-order)."
+      "note": "The count of ways to play is checked against the code: every run mode the server counts (STAT_MODES) belongs to one way, and each way's page and API route exist; the README's table must then name exactly those. \"Built\" here means the page, the route and their tests exist, not that each has been played on mainnet: duels had no verified run as of Nov 13, and the check holds the live count to the README's figure. The order the loop was written in has its own row (track-loop-order)."
     },
     {
       "id": "track-loop-order",
@@ -380,12 +394,12 @@
       "id": "track-nep245-v3",
       "section": "track",
       "source": "README.md",
-      "quote": "v3 adds metadata, enumeration and merchant investing. It is built, independently reviewed and rehearsed on a copy of mainnet state, and it is not deployed",
+      "quote": "v3 adds metadata, enumeration and merchant investing. It is built, reviewed by a second AI agent that did not write it (not an audit) and rehearsed on a copy of mainnet state, and it is not deployed",
       "status": "owner action needed",
       "code": [
         {
           "path": "docs/CONTRACT-V3-REVIEW.md",
-          "anchor": "## The independent review (Nov 12)"
+          "anchor": "## The review (Nov 12): a second AI agent, not an audit"
         },
         {
           "path": "contracts/wgp/src/mt.rs",
@@ -404,6 +418,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/coverage.test.ts",
           "name": "the review summary is on main, names the branch's commits, and the check looks for them in git"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "says who reviewed contract v3: a second AI agent that did not write it, not an audit"
         }
       ]
     },
@@ -551,8 +570,8 @@
         },
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "nothing in the repository sets his account or key: .env.example names both commented out, the key empty"
+          "file": "apps/wgp/src/server/npc/npc.test.ts",
+          "name": "signs one market call with his own account and books it with its transaction"
         }
       ],
       "chain": [
@@ -564,7 +583,7 @@
         "tx-npc-first-trade",
         "chain-tally"
       ],
-      "note": "Rule-based, not an LLM or any other AI agent: the rules are the one file the code pointer names. The chain checks show his account with its one key, his Bits, the seed mint, his first market_buy signed by that key, and the live site reporting him on chain. The tally's count of his calls is a lower bound (1 on Nov 13). The tests still cover the off path: with his account or key unset he does nothing."
+      "note": "Rule-based, not an LLM or any other AI agent: the rules are the one file the code pointer names. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key, and the live site reporting him on chain. The runner test builds his call from a decision, signs it as his account and books it with its transaction. The tally's count of his calls is a lower bound (1 on Nov 13). The tests still cover the off path: with his account or key unset he does nothing."
     },
     {
       "id": "track-merchant-prices",
@@ -734,7 +753,7 @@
       "section": "track",
       "source": "README.md",
       "quote": "The deployed contract (v2) has no way to invest in her to reopen; investing is in v3, which is not deployed.",
-      "status": "proven by test",
+      "status": "pinned by test",
       "code": [
         {
           "path": "contracts/wgp/src/market.rs",
@@ -1135,6 +1154,10 @@
         {
           "path": "apps/wgp/src/app/play/patrol/page.tsx",
           "anchor": "export const metadata: Metadata ="
+        },
+        {
+          "path": "apps/wgp/src/lib/first-minute/quick-start-route.ts",
+          "anchor": "export function quickStartStep("
         }
       ],
       "tests": [
@@ -1147,12 +1170,17 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-flow.test.ts",
           "name": "a first visit is the quick start: /play and Play now lead to /play/start, which makes The Node and opens the night"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/first-minute/quick-start-route.test.ts",
+          "name": "walks a new guest from /play to the quick start, makes The Node, and opens the night"
         }
       ],
       "chain": [
         "site-play"
       ],
-      "note": "The check only shows the page is served. The flow was walked by hand in a headless browser on Nov 13 (a first visit to /play lands in the night as The Node; a bot night ended on the Banked card in about 80 seconds); the tests pin the routing and labels that walk found, and play whole nights in the simulation."
+      "note": "The live check is reachability only: it only shows the page is served. /play is client-rendered, so its HTML says nothing about the night. The app tests run the two routing decisions the pages act on (a guest on /play goes to the quick start, which makes The Node and opens the night), and the game-core test plays whole nights in the simulation. The flow was also walked by hand in a headless browser on Nov 13."
     },
     {
       "id": "judge-2",
@@ -1305,6 +1333,10 @@
         {
           "path": "packages/game-core/src/golden.ts",
           "anchor": "export const GOLDEN_CASES"
+        },
+        {
+          "path": "apps/wgp/src/lib/lab/determinism.ts",
+          "anchor": "export function replayAll()"
         }
       ],
       "tests": [
@@ -1322,12 +1354,22 @@
           "pkg": "core",
           "file": "packages/game-core/test/determinism-scan.test.ts",
           "name": "finds none of them in src/rules, src/sim3d or src/input"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/lab/determinism.test.ts",
+          "name": "replays the page's four recorded nights to the hashes Node recorded, and the page's verdict is All 4 replays match Node"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/lab/determinism.test.ts",
+          "name": "would say so if a replay differed: one wrong hash fails the page"
         }
       ],
       "chain": [
         "site-lab-determinism"
       ],
-      "note": "The page replays the same four recorded nights in the browser that golden.test.ts replays in Node."
+      "note": "The live check is reachability only: it only shows the page is served. The page is client-rendered, so its HTML never contains the verdict. The app test runs the function the page runs (replayAll) and asserts that every hash equals the one Node recorded on disk and that the page's verdict line is \"All 4 replays match Node\". That a given browser agrees with Node is what opening the page shows; no script here opens a browser."
     },
     {
       "id": "judge-9",
@@ -1390,7 +1432,7 @@
       "id": "numbers-chain",
       "section": "numbers",
       "source": "README.md",
-      "quote": "Calls to game.wgpnear.near",
+      "quote": "Function calls to game.wgpnear.near",
       "status": "live check",
       "code": [
         {
@@ -1402,14 +1444,58 @@
         "chain-tally",
         "nearblocks-count"
       ],
-      "note": "Counted from NearBlocks, a third-party index of the chain. The check reads each lower bound from the README's table when it runs; nothing is copied into evidence.json.",
+      "note": "Counted from NearBlocks, a third-party index of the chain. Its rows are receipts, not calls: the tally counts function calls and the receipts that carry none (transfers, refunds, the account's creation) on separate lines. The check reads each lower bound from the README's table when it runs; nothing is copied into evidence.json.",
       "tests": [
         {
           "pkg": "app",
           "file": "apps/wgp/src/evidence/coverage.test.ts",
           "name": "the live-count checks read their numbers from the README's text, not from a second copy"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "counts function calls apart from receipts that carry none"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "every number in the table, the ones in brackets included, is read by a check on a named field of the tally"
         }
       ]
+    },
+    {
+      "id": "numbers-players-split",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "The player accounts include the author's own, sele.wgpnear.near, and most of the activity comes from a few accounts: the first table gives the split, and pnpm stats derives every figure in it.",
+      "status": "live check",
+      "code": [
+        {
+          "path": "scripts/stats.mjs",
+          "anchor": "export function createTally("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "leaves out the game's own senders, and counts the author's account as a player and says so"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "works out the split: who called once, and how concentrated the market is"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "the one derived figure is the arithmetic it says it is"
+        }
+      ],
+      "chain": [
+        "chain-tally"
+      ],
+      "note": "The check asserts the author's account is among the player accounts and holds each figure of the split (accounts with more than one call, market calls, the accounts that made them, the two busiest accounts' share, the author's) to the table's number as a lower bound. \"Exactly one call\" is the accounts less those with more than one, as of the table's date."
     },
     {
       "id": "numbers-npc",
@@ -1426,8 +1512,8 @@
       "tests": [
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "the stats script counts his calls apart from players'"
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "never counts Sandwich Man as a player: his calls are on their own line"
         }
       ],
       "chain": [
@@ -1466,12 +1552,55 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/coverage.test.ts",
           "name": "the live-count checks read their numbers from the README's text, not from a second copy"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "the same holds for the game's table: every number is read by the check on /api/stats"
         }
       ],
       "chain": [
         "site-stats"
       ],
       "note": "Matches, heroes, outings, play time, rejections, mints and invites come from the game's own database. They can be re-read, not independently checked. The test proves the counting code; the check compares the live counts with the README's as lower bounds."
+    },
+    {
+      "id": "numbers-heroes",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "Heroes: signed-in players who have started a match (players.played, the count the landing page shows)",
+      "status": "live check",
+      "code": [
+        {
+          "path": "apps/wgp/src/components/landing/live-proof.tsx",
+          "anchor": "export function proofCounts("
+        },
+        {
+          "path": "apps/wgp/src/server/db/stats.ts",
+          "anchor": "export const STAT_MODES ="
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/landing/live-proof.test.ts",
+          "name": "shows verified runs and heroes who have played"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/stats.test.ts",
+          "name": "counts every field"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "the same holds for the game's table: every number is read by the check on /api/stats"
+        }
+      ],
+      "chain": [
+        "site-stats"
+      ],
+      "note": "One definition everywhere: a hero is a signed-in, unbanned player who has started a match (players.played), which is what the landing page's proof line prints. The row also gives players.total (signed up) and players.withVerifiedRun, each under its own name. The README's \"Scale\" line is held to the same field."
     },
     {
       "id": "numbers-duels",
@@ -1496,7 +1625,7 @@
           "name": "race a ranked night on its own seed and save, verified, on no board"
         }
       ],
-      "note": "A dated lower bound like the row's other counts: the check passes on any count at or above it."
+      "note": "A dated lower bound like the row's other counts: the check reads the figure from the README and fails if the live count is below it."
     },
     {
       "id": "economy-earn",
@@ -1881,6 +2010,30 @@
       ]
     },
     {
+      "id": "modes-duels-count",
+      "section": "modes",
+      "source": "README.md",
+      "quote": "The count of verified duels is runs.byMode.duel in /api/stats; it was 0 on Nov 13.",
+      "status": "live check",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/db/compete.ts",
+          "anchor": "export function competeKind("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/compete.test.ts",
+          "name": "race a ranked night on its own seed and save, verified, on no board"
+        }
+      ],
+      "chain": [
+        "site-duels"
+      ],
+      "note": "The check reads this sentence's figure and the numbers table's, and fails if the live count is below either. The test shows a duel can be started, replayed and verified; no duel had been played on the live site as of Nov 13."
+    },
+    {
       "id": "modes-cases",
       "section": "modes",
       "source": "README.md",
@@ -2026,7 +2179,7 @@
       "id": "tryit-classic",
       "section": "tryit",
       "source": "README.md",
-      "quote": "which plays the same night turn by turn, for reduced motion or devices without WebGL. It's unranked.",
+      "quote": "which plays the same night turn by turn: the same four stops, from the same seed. It's unranked.",
       "status": "proven by test",
       "code": [
         {
@@ -2036,6 +2189,10 @@
         {
           "path": "apps/wgp/src/server/db/actions.ts",
           "anchor": "export const menuAction"
+        },
+        {
+          "path": "apps/wgp/src/game3d/session/night.ts",
+          "anchor": "export const localSeed"
         }
       ],
       "tests": [
@@ -2048,9 +2205,24 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-flow.test.ts",
           "name": "every page the README names is a route in the app"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/classic-night.test.ts",
+          "name": "starts tonight's patrol with the same four stops the 3D night has"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/classic-night.test.ts",
+          "name": "is turn by turn: a swing is one action that lands the hero at the stop"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/classic-night.test.ts",
+          "name": "shares the night: once classic has played a stop, the 3D game does not start the night over"
         }
       ],
-      "note": "Unranked because the server takes no patrol step from a client: a turn-based night can't reach the server's save or a board."
+      "note": "Same night: the turn-based game and the 3D night start tonight's patrol from the same seed and post the same stops, and a night belongs to one of them at a time. Unranked: the server takes no patrol step from a client, so a turn-based night can't reach the server's save or a board. The README used to add \"for reduced motion or devices without WebGL\"; nothing tested that, so it was cut."
     },
     {
       "id": "tryit-google",
@@ -2206,6 +2378,61 @@
         "tx-relayed-buy",
         "tx-market-sell"
       ]
+    },
+    {
+      "id": "tryit-practice",
+      "section": "tryit",
+      "source": "README.md",
+      "quote": "See, signed out (a guest): the practice market. It runs in your browser and is not on NEAR.",
+      "status": "simulation only",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/practice.ts",
+          "anchor": "export const PRACTICE_LABEL"
+        },
+        {
+          "path": "apps/wgp/src/components/market/use-practice.ts",
+          "anchor": "const on = signedIn === null ? false : !signedIn || chosen;"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-flow.test.ts",
+          "name": "the market step is in two labelled parts, and the guest's part is the practice market a signed-out visitor gets"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-flow.test.ts",
+          "name": "every button and label the README names is in the component that renders it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "buys and sells on Gwei's curve: the quote the sheet shows is what it charges, fee burned"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "can stage it for a visitor with no loot: a crowd sells into one till until it is empty"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/practice.test.ts",
+          "name": "closes the shop with the reason, reopens it on an investment, pays a fee share and lets the stake out"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "carries the label word for word, where its prices came from, and its controls"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/invest-ui.test.ts",
+          "name": "says what its own buttons did inside the banner, as a status, so no toast covers the quest strip"
+        }
+      ],
+      "note": "What a signed-out visitor gets on /play/market, with the labels they see. The practice tests buy, sell, empty a till, invest and withdraw through the same code the page calls; the label tests pin the words. The step was walked signed out in a headless browser at 375 and 1440 pixels wide on Nov 13 against a local build."
     },
     {
       "id": "tryit-quick-play",
@@ -2849,6 +3076,24 @@
           "pkg": "contract",
           "file": "contracts/wgp/src/market_tests.rs",
           "name": "a_v1_state_migrates_to_v2"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/wasm-imports.test.ts",
+          "name": "refuses a wasm that imports promise_batch_action_use_global_contract, and names it",
+          "nameInSource": "refuses a wasm that imports %s, and names it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/wasm-imports.test.ts",
+          "name": "refuses a wasm that imports promise_batch_action_state_init, and names it",
+          "nameInSource": "refuses a wasm that imports %s, and names it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/wasm-imports.test.ts",
+          "name": "refuses a wasm that imports promise_batch_action_add_gas_key_with_function_call, and names it",
+          "nameInSource": "refuses a wasm that imports %s, and names it"
         }
       ]
     },
@@ -2884,6 +3129,10 @@
         {
           "path": "apps/wgp/src/server/npc/runner.ts",
           "anchor": "export async function runNpcTrader("
+        },
+        {
+          "path": "scripts/stats.mjs",
+          "anchor": "export function createTally("
         }
       ],
       "tests": [
@@ -2894,8 +3143,8 @@
         },
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "the stats script counts his calls apart from players'"
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "never counts Sandwich Man as a player: his calls are on their own line"
         }
       ],
       "chain": [
@@ -3106,7 +3355,7 @@
       "id": "proven-mint",
       "section": "proven",
       "source": "README.md",
-      "quote": "mint_rewards from the operator (one of 168 as of Nov 13)",
+      "quote": "mint_rewards from the operator (one of 169 as of Nov 13)",
       "status": "proven on chain",
       "chain": [
         "tx-mint-rewards",
@@ -3254,9 +3503,10 @@
         "tx-list-item",
         "tx-buy-listing",
         "tx-relayed-buy",
-        "player-tokens"
+        "player-tokens",
+        "player-senders"
       ],
-      "note": "Each of these transaction checks asserts its sender is not sele.wgpnear.near. The judge's commands B and E use other players' accounts too. Accounts were picked from the contract's public transaction list (README command D), nothing from the game's database."
+      "note": "The check player-senders looks up the eight player transactions again, takes each one's sender (the player inside the delegate action, not the relayer) and asserts there are exactly five different accounts and that sele.wgpnear.near is not among them. Each transaction's own check asserts the same of its sender. Accounts were picked from the contract's public transaction list (README command D), nothing from the game's database."
     },
     {
       "id": "proven-npc-account",
@@ -3724,6 +3974,31 @@
       ]
     },
     {
+      "id": "local-ci-sandbox",
+      "section": "local",
+      "source": "README.md",
+      "quote": "CI (.github/workflows/ci.yml) runs typecheck, lint, tests, the build, the contract's unit tests, its sandbox tests and pnpm evidence on every push to main, with no secrets.",
+      "status": "pinned by test",
+      "code": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "anchor": "  sandbox:"
+        },
+        {
+          "path": "contracts/wgp/sandbox/tests/sandbox.rs",
+          "anchor": "async fn deploy_mint_craft_transfer()"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "are the five the README counts, the NPC trader's among them, and CI's sandbox job builds the wasm and runs them"
+        }
+      ],
+      "note": "Pinned, not proven: the test reads the workflow file. The sandbox job was added on Nov 13, 2026 and had not run on GitHub when this row was written; its two commands passed on a developer machine (macOS) the same day. If the job fails on the runner, fix the job or take \"its sandbox tests\" out of the sentence."
+    },
+    {
       "id": "limits-bots",
       "section": "limits",
       "source": "README.md",
@@ -3839,7 +4114,7 @@
       "id": "limits-scale",
       "section": "limits",
       "source": "README.md",
-      "quote": "26 heroes as of Nov 12.",
+      "quote": "26 heroes as of Nov 13.",
       "status": "live check",
       "code": [
         {
@@ -4244,7 +4519,7 @@
       "id": "npc-no-powers",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "He can call only the five market methods every player's session key can call",
+      "quote": "The server only ever sends these five calls from his account; his key is a full-access key.",
       "status": "proven by test",
       "code": [
         {
@@ -4262,13 +4537,19 @@
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/npc-rules.test.ts",
           "name": "never buys his own listing"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "says whose limit his five calls are: the server's, with a full-access key, and the planned swap under Limits"
         }
       ],
       "chain": [
+        "sandwich-account",
         "sandwich-wallet",
         "tx-npc-first-trade"
       ],
-      "note": "The limit to five methods is the runner's, so a test proves it. The chain checks add what mainnet shows: he has no hero and no role, and the one call he has sent is a market_buy. His key is a full-access key of his own account only."
+      "note": "The limit to five methods is the server's, so a test proves it: every action the runner can take becomes one of those five calls. The key is a full-access key of his own account, which the chain check shows (one key, full access); nothing on chain stops that key sending another call. The planned swap to a function-call key is under Limits. The other checks add what mainnet shows: he has no hero and no role, and the one call he has sent is a market_buy."
     },
     {
       "id": "npc-runner",
@@ -4315,11 +4596,6 @@
       "tests": [
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "the stats script counts his calls apart from players'"
-        },
-        {
-          "pkg": "app",
           "file": "apps/wgp/src/server/market/quest.test.ts",
           "name": "his trades complete nobody's quest, and he is never a quest player"
         },
@@ -4327,6 +4603,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/components/market/other-traders.test.ts",
           "name": "on chain: the strip with his own NEAR account, linked to the explorer"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "never counts Sandwich Man as a player: his calls are on their own line"
         }
       ],
       "chain": [
@@ -4334,21 +4615,28 @@
         "site-npc",
         "sandwich-wallet"
       ],
-      "note": "The tally (from NearBlocks) counts his calls on their own line and leaves him out of player accounts; in the contract he has no hero."
+      "note": "The tally (from NearBlocks) counts his calls on their own line and leaves him out of player accounts: the test runs that tally on a fixture with his account in it, and the check runs it on the live list. In the contract he has no hero."
     },
     {
       "id": "npc-sandbox",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "The sandbox test contracts/wgp/sandbox/tests/npc_trader.rs proves an ordinary account can do all of it against the real wasm",
-      "status": "owner action needed",
+      "quote": "The sandbox test contracts/wgp/sandbox/tests/npc_trader.rs has an ordinary account do all of it against the real wasm",
+      "status": "pinned by test",
       "code": [
         {
           "path": "contracts/wgp/sandbox/tests/npc_trader.rs",
           "anchor": "async fn an_ordinary_account_trades_as_the_npc_does()"
         }
       ],
-      "note": "The sandbox suite needs cargo-near and a built wasm, so pnpm evidence doesn't run it. To run it: the README's sandbox command."
+      "note": "pnpm evidence does not run the sandbox suite (it needs cargo-near and a built wasm), so this row is only pinned: the test checks that the sandbox test is declared and that CI's sandbox job builds the wasm and runs the suite. The suite passed locally on Nov 13, 2026 (5 tests). To run it: the README's sandbox command.",
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "are the five the README counts, the NPC trader's among them, and CI's sandbox job builds the wasm and runs them"
+        }
+      ]
     },
     {
       "id": "npc-setup",
@@ -4843,7 +5131,7 @@
       "section": "compete",
       "source": "docs/compete.md",
       "quote": "runs:daily 3 a UTC day (DAILY_ATTEMPTS); runs:trial 80 a day (trials and duels)",
-      "status": "proven by test",
+      "status": "pinned by test",
       "code": [
         {
           "path": "apps/wgp/src/server/db/compete.ts",
@@ -4917,7 +5205,7 @@
       "id": "referrals-no-money",
       "section": "compete",
       "source": "docs/referrals.md",
-      "quote": "The game never pays money and never promises it.",
+      "quote": "The game and its referral rewards never pay money and never promise it: an invite earns XP and a soulbound badge, nothing else.",
       "status": "proven by test",
       "code": [
         {
@@ -4935,9 +5223,14 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/db/referrals.test.ts",
           "name": "is granted at three qualified friends: 300 XP once, rev + 1, one Recruiter badge in the outbox"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/referrals/referrals.test.ts",
+          "name": "never promises money or prizes, in any state"
         }
       ],
-      "note": "The reward the code grants is XP and a soulbound badge. The owner's own payouts through Uprail happen outside the game and aren't checked here."
+      "note": "The invite screens are rendered in every state and searched for money and prize words, and the reward the code grants is XP and one soulbound badge. The owner's separate Uprail payout happens outside the game; it is disclosed on this page and in the README's credits, and nothing here checks it."
     },
     {
       "id": "arch-status",
@@ -5228,6 +5521,10 @@
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
           "anchor": "export function investStory("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/balance.ts",
+          "anchor": "export function vendorLimits("
         }
       ],
       "tests": [
@@ -5240,6 +5537,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
           "name": "only ever funds a till that ended the day before broke, and keeps her buying far more of the time"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "counts her closed item-days one way: the lab's header, the investors' panel and docs/INVESTING.md read the same number"
         }
       ]
     },
@@ -5445,7 +5747,7 @@
       "id": "evidence-statuses",
       "section": "evidence",
       "source": "README.md",
-      "quote": "proven by test, simulation only and built, off on mainnet rows always cite a test.",
+      "quote": "proven by test, pinned by test, simulation only and built, off on mainnet rows always cite a test.",
       "status": "proven by test",
       "code": [
         {
@@ -5467,9 +5769,19 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-evidence.test.ts",
           "name": "is honest about reach: a claim whose only proof is on chain or on the live site doesn't say proven by test"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "a proven by test row cites a test that runs code, and a pinned by test row cites only tests that read"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "every owner action needed row checks that it is not live, except the one the README names"
         }
       ],
-      "note": "The script refuses an evidence.json that breaks this (exit 2), and the guard test fails on it."
+      "note": "A guard test keeps the split honest: a row whose every cited test only reads text may not say proven by test, and a pinned row may cite nothing else. The list of read-only tests is in that test."
     },
     {
       "id": "evidence-output",
@@ -5495,6 +5807,26 @@
         }
       ],
       "note": "The README used to promise one PASS line per claim. Offline, the rows that rest on the chain or the site are SKIP. The exact summary line for each command is generated into the README's coverage block by the function that prints it."
+    },
+    {
+      "id": "evidence-one-minute",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "Each line ends with the id of its row in docs/EVIDENCE.md, which names the test or the read-only check behind it.",
+      "status": "pinned by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function renderMarkdown(data) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
+          "name": "the README opens with ten lines, each backed by a row that exists and still passes its static checks"
+        }
+      ]
     },
     {
       "id": "evidence-numbers-bound",
@@ -5813,7 +6145,7 @@
       "section": "disclosures",
       "source": "README.md",
       "quote": "Next.js 16 (with the React Compiler), React 19, three.js 0.187, React Three Fiber 9 and drei 10",
-      "status": "proven by test",
+      "status": "pinned by test",
       "code": [
         {
           "path": "apps/wgp/package.json",
@@ -5837,7 +6169,7 @@
       "section": "disclosures",
       "source": "README.md",
       "quote": "pushes to main don't deploy by themselves",
-      "status": "proven by test",
+      "status": "pinned by test",
       "code": [
         {
           "path": "apps/wgp/vercel.json",
@@ -5853,9 +6185,14 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/claims-precise.test.ts",
           "name": "every file the disclosures and credits name is in the repository"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
+          "name": "vercel.json turns git deployments off for main, so a push to main deploys nothing"
         }
       ],
-      "note": "The same test checks that every file the disclosures and credits name exists. Which earlier project a file was adapted from is the author's statement and has no check."
+      "note": "The test parses apps/wgp/vercel.json and asserts git.deploymentEnabled.main is false. It reads the setting; it can't show what Vercel does with it. The other test checks that every file the disclosures and credits name exists. Which earlier project a file was adapted from is the author's statement and has no check."
     },
     {
       "id": "arch-routes",
@@ -6071,7 +6408,7 @@
       "code": [
         {
           "path": "docs/CONTRACT-V3-REVIEW.md",
-          "anchor": "## The independent review (Nov 12)"
+          "anchor": "## The review (Nov 12): a second AI agent, not an audit"
         }
       ],
       "tests": [
@@ -6091,7 +6428,7 @@
       "section": "story",
       "source": "docs/chapters/case-002.md",
       "quote": "CASE_002_RULESET = \"c002-1\"",
-      "status": "proven by test",
+      "status": "pinned by test",
       "code": [
         {
           "path": "packages/game-core/src/rules/chapters.ts",
@@ -6401,24 +6738,22 @@
       "whenFails": "If the key differs, the owner rotated it: put the new public key here. If the account is gone or out of NEAR, he was retired or needs a top-up: update the README's track table and docs/npc-trader.md."
     },
     "sandwich-bits": {
-      "kind": "view",
-      "method": "bits_of",
-      "args": {
-        "account_id": "sandwich.wgpnear.near"
-      },
-      "about": "The contract holds a Bits balance for Sandwich Man's account and answers it as a number.",
+      "kind": "holdings",
+      "account": "sandwich.wgpnear.near",
+      "about": "Sandwich Man holds something in the contract: his Bits, the items in his wallet and the items he has listed add up to more than zero. This stays true as he spends, because Bits he spends become items he holds or lists.",
       "expect": [
         {
-          "path": "",
-          "op": "type",
-          "value": "string"
+          "path": "total",
+          "op": "gte",
+          "value": 1
         },
         {
-          "path": "",
-          "op": "anyMatch",
-          "value": "^\\d+$"
+          "path": "bits",
+          "op": "type",
+          "value": "number"
         }
-      ]
+      ],
+      "whenFails": "If the total is 0 he holds nothing at all: he was drained or retired. Say so in the README's track table and docs/npc-trader.md."
     },
     "sandwich-wallet": {
       "kind": "view",
@@ -6500,8 +6835,8 @@
         },
         {
           "path": "runs.rejected",
-          "op": "type",
-          "value": "number"
+          "op": "gte",
+          "doc": "Runs rejected by the verifier \\| ([\\d,]+)"
         },
         {
           "path": "runs.hoursVerified",
@@ -6532,16 +6867,6 @@
           "path": "runs.byMode.duel.verified",
           "op": "gte",
           "doc": "Duels ([\\d,]+) \\|"
-        },
-        {
-          "path": "players.total",
-          "op": "gte",
-          "doc": "\\| Heroes \\| ([\\d,]+) \\("
-        },
-        {
-          "path": "players.withVerifiedRun",
-          "op": "gte",
-          "doc": "\\| Heroes \\| [\\d,]+ \\(([\\d,]+) have a verified match"
         },
         {
           "path": "city.outings",
@@ -6582,6 +6907,26 @@
           "path": "chain.contractId",
           "op": "eq",
           "value": "game.wgpnear.near"
+        },
+        {
+          "path": "players.played",
+          "op": "gte",
+          "doc": "the count the landing page shows\\) \\| ([\\d,]+) \\("
+        },
+        {
+          "path": "players.withVerifiedRun",
+          "op": "gte",
+          "doc": "the count the landing page shows\\) \\| [\\d,]+ \\(([\\d,]+) have a verified match"
+        },
+        {
+          "path": "players.total",
+          "op": "gte",
+          "doc": "have a verified match; ([\\d,]+) have signed up"
+        },
+        {
+          "path": "players.played",
+          "op": "gte",
+          "doc": "\\*\\*Scale:\\*\\* ([\\d,]+) heroes as of"
         }
       ],
       "derive": "stats"
@@ -6589,12 +6934,17 @@
     "site-duels": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/stats",
-      "about": "The live count of verified duels (any count passes: the README gives a dated figure and points here for the current one).",
+      "about": "The live count of verified duels is at least each figure the README states for it (the numbers table and the ways-to-play row; the check reads both).",
       "expect": [
         {
           "path": "runs.byMode.duel.verified",
-          "op": "type",
-          "value": "number"
+          "op": "gte",
+          "doc": "Duels ([\\d,]+) \\|"
+        },
+        {
+          "path": "runs.byMode.duel.verified",
+          "op": "gte",
+          "doc": "`runs\\.byMode\\.duel` in `/api/stats`; it was ([\\d,]+) on Nov 13"
         }
       ]
     },
@@ -6645,7 +6995,7 @@
       "kind": "http",
       "url": "https://www.wgponnear.fun/play",
       "text": true,
-      "about": "The game's page is served.",
+      "about": "Reachability only: the game's page is served. It is client-rendered, so this request can't show the night; the claim's tests run the routing and the simulation.",
       "expect": [
         {
           "path": "text.length",
@@ -6671,7 +7021,7 @@
       "kind": "http",
       "url": "https://www.wgponnear.fun/lab/determinism",
       "text": true,
-      "about": "The determinism lab is served.",
+      "about": "Reachability only: the determinism lab is served. It is client-rendered, so this request can't read its verdict; the claim's test runs the same replays.",
       "expect": [
         {
           "path": "text.length",
@@ -6703,22 +7053,78 @@
       "json": true,
       "skipUnless": "json.chain.complete",
       "timeoutMs": 420000,
-      "about": "pnpm stats' own tally of every call the contract received (30 seconds to two minutes): each count at least the README's table (the check reads the table), with the NPC trader's calls counted apart from players'.",
+      "about": "pnpm stats' own tally of every receipt NearBlocks lists for the contract (30 seconds to two minutes): function calls apart from the receipts that carry none, each count at least the README's table (the check reads the table, the figures in brackets included), the author's account among the player accounts, and the NPC trader's calls counted apart from players'.",
       "expect": [
         {
-          "path": "json.chain.calls",
+          "path": "json.chain.functionCalls",
           "op": "gte",
-          "doc": "Calls to `game\\.wgpnear\\.near` \\| ([\\d,]+)"
+          "doc": "Function calls to `game\\.wgpnear\\.near` \\| ([\\d,]+)"
+        },
+        {
+          "path": "json.chain.failedFunctionCalls",
+          "op": "gte",
+          "doc": "Function calls to `game\\.wgpnear\\.near` \\| [\\d,]+ \\(([\\d,]+) of them failed\\)"
+        },
+        {
+          "path": "json.chain.otherReceipts",
+          "op": "gte",
+          "doc": "Other receipts NearBlocks lists[^|]*\\| ([\\d,]+)"
+        },
+        {
+          "path": "json.chain.failedOtherReceipts",
+          "op": "gte",
+          "doc": "Other receipts NearBlocks lists[^|]*\\| [\\d,]+ \\(([\\d,]+) of them failed\\)"
         },
         {
           "path": "json.chain.playerAccounts",
           "op": "gte",
-          "doc": "\\(Sandwich Man is not one\\) \\| ([\\d,]+)"
+          "doc": "Sandwich Man is not\\) \\| ([\\d,]+)"
+        },
+        {
+          "path": "json.chain.players.authorAccounts",
+          "op": "includes",
+          "value": "sele.wgpnear.near"
+        },
+        {
+          "path": "json.chain.players.withMoreThanOneCall",
+          "op": "gte",
+          "doc": "made more than one call \\| ([\\d,]+),"
+        },
+        {
+          "path": "json.chain.players.marketCalls",
+          "op": "gte",
+          "doc": "the accounts that made them \\| ([\\d,]+) calls"
+        },
+        {
+          "path": "json.chain.players.marketAccounts",
+          "op": "gte",
+          "doc": "calls from ([\\d,]+) accounts:"
+        },
+        {
+          "path": "json.chain.players.marketCallsTopTwo",
+          "op": "gte",
+          "doc": "accounts: ([\\d,]+) from the two busiest"
+        },
+        {
+          "path": "json.chain.players.marketCallsByAuthor",
+          "op": "gte",
+          "doc": "the two busiest, ([\\d,]+) from the author's"
         },
         {
           "path": "json.chain.byMethod.mint_rewards",
           "op": "gte",
           "doc": "one is Sandwich Man's seed\\) \\| ([\\d,]+)"
+        },
+        {
+          "path": "json.chain.byMethod.mint_rewards",
+          "op": "gte",
+          "doc": "from the operator \\(one of ([\\d,]+) as of Nov 13\\)"
+        },
+        {
+          "path": "json.chain.byMethod.mint_rewards",
+          "op": "gte",
+          "doc": "([\\d,]+) calls as of Nov 13, 2026",
+          "source": "docs/SUSTAINABILITY.md"
         },
         {
           "path": "json.chain.byMethod.register_hero",
@@ -7597,6 +8003,47 @@
           "path": "derived.secondsPerVerifiedRun",
           "op": "lte",
           "value": 180
+        }
+      ]
+    },
+    "player-senders": {
+      "kind": "senders",
+      "of": [
+        "tx-register-hero",
+        "tx-craft-suit",
+        "tx-equip-suit",
+        "tx-market-buy",
+        "tx-market-sell",
+        "tx-list-item",
+        "tx-buy-listing",
+        "tx-relayed-buy"
+      ],
+      "about": "Who sent the player transactions the README lists: looked up again, they come from five different accounts, and the author's is not one of them.",
+      "expect": [
+        {
+          "path": "transactions",
+          "op": "eq",
+          "value": 8
+        },
+        {
+          "path": "count",
+          "op": "eq",
+          "value": 5
+        },
+        {
+          "path": "accounts",
+          "op": "excludes",
+          "value": "sele.wgpnear.near"
+        },
+        {
+          "path": "accounts",
+          "op": "excludes",
+          "value": "sandwich.wgpnear.near"
+        },
+        {
+          "path": "accounts",
+          "op": "excludes",
+          "value": "operator.wgpnear.near"
         }
       ]
     }

@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
-import { ALTERNATIVES, BAND, DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, SIXTY, economyConfig, gini, investStory, measure, measureEconomy, measured, median, play, poolConfigsFor, verdict, type Setting } from "./balance";
+import { ALTERNATIVES, BAND, DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, SIXTY, economyConfig, gini, investStory, measure, measureEconomy, measured, median, play, poolConfigsFor, vendorLimits, verdict, type Setting } from "./balance";
 import { LAB_INVESTORS } from "./bots";
 import { defaultPoolConfigs, seededPools } from "./config";
-import { spotMilli } from "./math";
+import { sellQuote, spotMilli } from "./math";
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const SETTINGS: Setting[] = [MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES];
@@ -220,6 +222,24 @@ describe("the showcase: Gwei goes broke, an investor reopens her", () => {
     expect(story.invested - story.withdrawn).toBe(story.staked);
     // Never principal: what they hold, plus what they have staked, is what they started with plus fees earned.
     expect(last.wallet + last.staked).toBe(LAB_INVESTORS.count * LAB_INVESTORS.bits + story.earned);
+  });
+
+  it("counts her closed item-days one way: the lab's header, the investors' panel and docs/INVESTING.md read the same number", () => {
+    const e = showcase();
+    const limits = vendorLimits(e.history);
+    // The header's "unable to buy on N of M item-days" and the panel's "Shop-days closed" are both this.
+    expect(limits.broke).toBe(investStory(e).brokeDays);
+    expect(limits.itemDays).toBe(INVEST_SHOWCASE.days * e.book.pools.length);
+    // It agrees with the measured share (balance.ts `measureEconomy`), which works the till out from the curve.
+    expect(Math.round(measureEconomy("showcase", e).broke * limits.itemDays)).toBe(limits.broke);
+    // The old header ignored the Bits investors had put in and read one item-day too many (12). Without investors nothing changes.
+    const feeBps = e.book.params.feeBps;
+    const ignoringInvestors = (h: typeof e.history) => h.slice(1).reduce((n, d) => n + seededPools().filter((p) => sellQuote({ ...p, stock: d.stock[p.item] ?? 0, bits: d.tills[p.item] ?? 0 }, 1, feeBps) === null).length, 0);
+    expect(ignoringInvestors(e.history)).toBe(limits.broke + 1);
+    const plain = play(economyConfig(MAINNET, { ...DRAIN, seed: INVEST_SHOWCASE.seed, npc: true }));
+    expect(ignoringInvestors(plain.history)).toBe(vendorLimits(plain.history).broke);
+    // And the document says this number.
+    expect(readFileSync(new URL("../../../../../docs/INVESTING.md", import.meta.url), "utf8")).toContain(`her shops end ${limits.broke} item-days closed, against ${vendorLimits(plain.history).broke} in the same run without investors`);
   });
 
   it("gives the numbers docs/INVESTING.md quotes for seed 2026", () => {

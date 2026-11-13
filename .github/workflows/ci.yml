@@ -73,6 +73,39 @@ jobs:
 
       - run: cargo test --locked
 
+  # The built wasm in a local NEAR sandbox (near-workspaces): deploy, mint, craft and transfer,
+  # the market, an upgrade from v1, and the NPC trader's calls from an ordinary account.
+  # `pnpm evidence` does not run these (they need cargo-near and a built wasm); this job does.
+  sandbox:
+    name: Contract sandbox tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: contracts/wgp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs the toolchain contracts/wgp/rust-toolchain.toml pins (1.95.0), with wasm32.
+      - run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            contracts/wgp -> target
+            contracts/wgp/sandbox -> target
+
+      # cargo-near 0.22.0, the version the deployed wasm was built with, from its release binary.
+      - run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/download/cargo-near-v0.22.0/cargo-near-installer.sh | sh
+
+      - run: cargo near build non-reproducible-wasm --locked
+
+      # One at a time: each test starts its own sandbox node.
+      - run: cargo test --locked -- --test-threads=1
+        working-directory: contracts/wgp/sandbox
+
   # Runs every claim's proof: the three test suites once each, mapped back to the claims in
   # docs/evidence.json, and the test counts the README quotes. No network and no secrets.
   evidence:
