@@ -257,7 +257,8 @@ function fakeChain(version: 2 | 3, rules: InvestRules = { ...DEFAULT_INVEST_RULE
     network: "mainnet",
     async view(method, args = {}) {
       calls.push(method);
-      if (state.down) throw new Error("fetch failed");
+      // A fake outage: nothing here touches the network (src/test/no-network.ts would fail the test if it did).
+      if (state.down) throw new Error("the fake RPC is down");
       const v3 = state.version === 3;
       const p = book.params;
       switch (method) {
@@ -376,8 +377,18 @@ describe("a v2 contract (mainnet today)", () => {
   it("is treated as v2 when the version can't be read, without remembering that", async () => {
     const chain = fakeChain(3);
     chain.state.down = true;
-    expect(await contractVersion(chain.reader)).toEqual({ state: 2, version: null });
-    expect(await investingLive(chain.reader)).toBe(false);
+    // The reader's failure is logged, once per read; caught here so the test log stays quiet.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await contractVersion(chain.reader)).toEqual({ state: 2, version: null });
+      expect(await investingLive(chain.reader)).toBe(false);
+      expect(logged.mock.calls.map((c) => String(c[0]))).toEqual([
+        "[market] couldn't read game.wgpnear.near's version, treating it as v2 for now: the fake RPC is down",
+        "[market] couldn't read game.wgpnear.near's version, treating it as v2 for now: the fake RPC is down",
+      ]);
+    } finally {
+      logged.mockRestore();
+    }
     chain.state.down = false;
     expect(await investingLive(chain.reader)).toBe(true);
   });
