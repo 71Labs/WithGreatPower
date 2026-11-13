@@ -16,7 +16,21 @@ const BASES = ["", "apps/wgp", "apps/wgp/src", "packages/game-core", "packages/g
  * Paths the docs name on purpose that aren't in a fresh clone: files a command creates, the
  * owner's own files, and build output. Each needs its reason.
  */
+const V3_BRANCH = "contract v3's file, on the branch review/contract-v3 and deliberately not on main (docs/CONTRACT-V3-REVIEW.md names it)";
 const NOT_IN_A_CLONE: Record<string, string> = {
+  "docs/CONTRACT-V3.md": V3_BRANCH,
+  "src/meta.rs": V3_BRANCH,
+  "src/invest.rs": V3_BRANCH,
+  "CONTRACT-V3.md": V3_BRANCH,
+  "v3_tests.rs": V3_BRANCH,
+  "v3_tests/review.rs": V3_BRANCH,
+  "upgrade_v3.rs": V3_BRANCH,
+  "review_v3.rs": V3_BRANCH,
+  "mainnet_rehearsal.rs": V3_BRANCH,
+  "src/v3_tests/review.rs": V3_BRANCH,
+  "sandbox/tests/review_v3.rs": V3_BRANCH,
+  "sandbox/tests/mainnet_rehearsal.rs": V3_BRANCH,
+  "contracts/wgp/rollback/build.sh": V3_BRANCH,
   // docs/ARCHITECTURE.md is the Nov 2 plan. It names files of the author's earlier game, blastoff,
   // that code was ported from, and one file the plan itself moved.
   "packages/game-core/src/input.ts": "blastoff's file (another repository), named as the source of the input log",
