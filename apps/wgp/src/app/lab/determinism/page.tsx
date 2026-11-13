@@ -8,51 +8,16 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
-import { GOLDEN_CASES, GOLDEN_EXPECT, GOLDEN_RULESET, replayGolden } from "@wgp/game-core/golden";
+import { GOLDEN_CASES } from "@wgp/game-core/golden";
 import { RULESET_VERSION } from "@wgp/game-core/score";
 
-interface Row {
-  name: string;
-  note: string;
-  expected: string;
-  got: string;
-  checkpointsMatch: boolean;
-  score: number;
-  expectedScore: number;
-  ticks: number;
-  ms: number;
-  pass: boolean;
-}
-
-type Status = "running" | "pass" | "fail";
+// The replays and the verdict are plain functions, so a test runs exactly what this page runs.
+import { replayAll, verdictOf, verdictText, type DeterminismRow as Row, type DeterminismStatus as Status } from "@/lib/lab/determinism";
 
 declare global {
   interface Window {
     __wgpDeterminism?: { status: Status; rows: Row[]; ruleset: number };
   }
-}
-
-function replayAll(): Row[] {
-  return GOLDEN_CASES.map((c) => {
-    const want = GOLDEN_EXPECT[c.name];
-    const t0 = performance.now();
-    const res = replayGolden(c);
-    const ms = performance.now() - t0;
-    const checkpointsMatch = !!want && res.checkpoints.length === want.checkpoints.length && res.checkpoints.every((h, i) => h === want.checkpoints[i]);
-    const pass = !!want && res.hash === want.hash && checkpointsMatch && res.score === want.score && res.ticks === want.ticks && res.ok === want.ok;
-    return {
-      name: c.name,
-      note: c.note,
-      expected: want?.hash ?? "missing",
-      got: res.hash,
-      checkpointsMatch,
-      score: res.score,
-      expectedScore: want?.score ?? 0,
-      ticks: res.ticks,
-      ms,
-      pass,
-    };
-  });
 }
 
 export default function DeterminismLab() {
@@ -64,7 +29,7 @@ export default function DeterminismLab() {
     // Let the "running" state paint before the replays take the main thread.
     window.setTimeout(() => {
       const next = replayAll();
-      const verdict: Status = next.length > 0 && next.every((r) => r.pass) && GOLDEN_RULESET === RULESET_VERSION ? "pass" : "fail";
+      const verdict: Status = verdictOf(next);
       setRows(next);
       setStatus(verdict);
       window.__wgpDeterminism = { status: verdict, rows: next, ruleset: RULESET_VERSION };
@@ -76,9 +41,7 @@ export default function DeterminismLab() {
     return () => window.clearTimeout(id);
   }, [run]);
 
-  const failed = rows.filter((r) => !r.pass).length;
-  const verdict =
-    status === "running" ? "Replaying the golden logs…" : status === "pass" ? `All ${rows.length} replays match Node` : `${failed} of ${rows.length} replays differ from Node`;
+  const verdict = verdictText(status, rows);
 
   return (
     <main id="main" data-status={status} className="min-h-dvh bg-page px-4 py-10 text-ink sm:px-8">

@@ -19,6 +19,7 @@ import { useEffect, useRef } from "react";
 import { GameLoading } from "@/components/game/ui";
 import { useAccount, useGame } from "@/game/store";
 import { QUICK_HERO, markQuickHero } from "@/lib/first-minute/quick-hero";
+import { quickStartStep } from "@/lib/first-minute/quick-start-route";
 
 if (typeof window !== "undefined") {
   // Warm the patrol page's code (it asks for the 3D stage itself as soon as it runs).
@@ -35,18 +36,14 @@ export function QuickStart() {
   const status = account.status;
 
   useEffect(() => {
-    if (status === "loading" || !save) return;
-    if (hasHero) {
-      router.replace(made.current ? "/play/patrol" : "/play");
-      return;
+    // The decision is a pure function (lib/first-minute/quick-start-route.ts), tested there.
+    const step = quickStartStep({ status, saveLoaded: !!save, hasHero, madeHere: made.current });
+    if (step.kind === "go") router.replace(step.to);
+    else if (step.kind === "make-hero") {
+      made.current = true;
+      markQuickHero(true);
+      dispatch({ type: "create-hero", ...QUICK_HERO });
     }
-    if (status === "signed-in") {
-      router.replace("/play/bitten");
-      return;
-    }
-    made.current = true;
-    markQuickHero(true);
-    dispatch({ type: "create-hero", ...QUICK_HERO });
   }, [status, save, hasHero, dispatch, router]);
 
   return <GameLoading />;
