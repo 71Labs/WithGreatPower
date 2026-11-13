@@ -410,11 +410,37 @@
       ]
     },
     {
+      "id": "track-npc-own-wallet",
+      "section": "track",
+      "source": "README.md",
+      "quote": "Live on mainnet since Nov 13, 2026: Sandwich Man, a trader with a NEAR account of his own, sandwich.wgpnear.near, which holds his Bits and items and signs his trades",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/runner.ts",
+          "anchor": "export async function runNpcTrader("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/npc.test.ts",
+          "name": "is off unless both his account and key are set"
+        }
+      ],
+      "chain": [
+        "sandwich-account",
+        "sandwich-bits",
+        "tx-npc-first-trade"
+      ],
+      "note": "His Bits and items are balances of his account in the game contract (bits_of), and his first trade was signed by his account's own key, not relayed."
+    },
+    {
       "id": "track-agent-npc",
       "section": "track",
       "source": "README.md",
-      "quote": "Built and tested; his mainnet account (sandwich.wgpnear.near) is not created yet, so on mainnet he is off and has never traded.",
-      "status": "built, off on mainnet",
+      "quote": "Live on mainnet since Nov 13, 2026: he trades from his own account, sandwich.wgpnear.near.",
+      "status": "proven on chain",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/npc-rules.ts",
@@ -464,10 +490,14 @@
       ],
       "chain": [
         "sandwich-account",
+        "sandwich-bits",
+        "sandwich-wallet",
         "site-npc",
+        "tx-npc-seed",
+        "tx-npc-first-trade",
         "chain-tally"
       ],
-      "note": "Rule-based, not an AI agent. The chain checks prove he is off: the account answers UNKNOWN_ACCOUNT, the live site says mode off, and the tally counts 0 calls from him. They fail when the owner creates the account."
+      "note": "Rule-based, not an LLM or any other AI agent: the rules are the one file the code pointer names. The chain checks show his account with its one key, his Bits, the seed mint, his first market_buy signed by that key, and the live site reporting him on chain. The tally's count of his calls is a lower bound (1 on Nov 13). The tests still cover the off path: with his account or key unset he does nothing."
     },
     {
       "id": "track-merchant-prices",
@@ -896,7 +926,7 @@
       "id": "track-npc-broke",
       "section": "track",
       "source": "README.md",
-      "quote": "Sandwich Man (simulation only today) closes shop under 60 Bits and reopens at 120 by selling what he holds.",
+      "quote": "Sandwich Man closes shop under 60 Bits and reopens at 120 by selling what he holds; that is proven in tests and the lab, not yet by a mainnet transaction",
       "status": "simulation only",
       "code": [
         {
@@ -921,7 +951,7 @@
           "name": "has Sandwich Man go broke and recover in the lab's showcase seed"
         }
       ],
-      "note": "Simulation here covers the practice market (in a visitor's browser), the simulated market and the lab."
+      "note": "He trades on mainnet, but has not been broke there, so his closed shop is still proven only in simulation: the practice market (in a visitor's browser), the simulated market and the lab."
     },
     {
       "id": "track-player-markets",
@@ -1293,7 +1323,31 @@
         "chain-tally",
         "nearblocks-count"
       ],
-      "note": "Counted from NearBlocks, a third-party index of the chain: 232 calls, 17 player accounts, and each method's count, as lower bounds."
+      "note": "Counted from NearBlocks, a third-party index of the chain, on Nov 13: 245 calls, 18 player accounts, and each method's count, as lower bounds."
+    },
+    {
+      "id": "numbers-npc",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "Of those, calls by Sandwich Man, the NPC trader (counted apart; not a player)",
+      "status": "live check",
+      "code": [
+        {
+          "path": "scripts/stats.mjs",
+          "anchor": "const NPC_ACCOUNTS"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
+          "name": "the stats script counts his calls apart from players'"
+        }
+      ],
+      "chain": [
+        "chain-tally"
+      ],
+      "note": "1 on Nov 13, as a lower bound. The tally leaves him out of the player accounts."
     },
     {
       "id": "numbers-game",
@@ -2583,6 +2637,42 @@
       ]
     },
     {
+      "id": "status-npc",
+      "section": "status",
+      "source": "README.md",
+      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, by fixed rules: rule-based, not an AI agent, and never counted as a player.",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-rules.ts",
+          "anchor": "export function decide("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/runner.ts",
+          "anchor": "export async function runNpcTrader("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/npc.test.ts",
+          "name": "can only ever send the five market methods a player's session key may call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
+          "name": "the stats script counts his calls apart from players'"
+        }
+      ],
+      "chain": [
+        "sandwich-account",
+        "site-npc",
+        "tx-npc-create",
+        "tx-npc-seed",
+        "tx-npc-first-trade"
+      ]
+    },
+    {
       "id": "status-season",
       "section": "status",
       "source": "README.md",
@@ -2721,7 +2811,7 @@
       "id": "proven-mint",
       "section": "proven",
       "source": "README.md",
-      "quote": "mint_rewards from the operator (one of 160 as of Nov 12)",
+      "quote": "mint_rewards from the operator (one of 168 as of Nov 13)",
       "status": "proven on chain",
       "chain": [
         "tx-mint-rewards",
@@ -2846,6 +2936,58 @@
           "anchor": "pub fn buy_listing(&mut self, listing_id: u64) -> Listing {"
         }
       ]
+    },
+    {
+      "id": "proven-npc-account",
+      "section": "proven",
+      "source": "README.md",
+      "quote": "Sandwich Man's account, sandwich.wgpnear.near: created by wgpnear.near with 0.3 NEAR and one full-access key (Nov 13)",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "docs/npc-trader.md",
+          "anchor": "## What the owner ran (mainnet, Nov 13, 2026)"
+        }
+      ],
+      "chain": [
+        "tx-npc-create",
+        "sandwich-account"
+      ]
+    },
+    {
+      "id": "proven-npc-seed",
+      "section": "proven",
+      "source": "README.md",
+      "quote": "His one-off seed: a mint_rewards of 300 Bits from the operator, with the digest sha256(\"npc-seed:sandwich.wgpnear.near:v1\")",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-rules.ts",
+          "anchor": "seedBits: 300,"
+        }
+      ],
+      "chain": [
+        "tx-npc-seed",
+        "sandwich-wallet"
+      ],
+      "note": "sandwich-wallet shows his reward nonce is still 1: nothing has been minted to him since."
+    },
+    {
+      "id": "proven-npc-trade",
+      "section": "proven",
+      "source": "README.md",
+      "quote": "His first trade: a market_buy of 2 Sybil goo from Gwei for 72 Bits, 2 of them the burned fee, signed by his own key and not relayed",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-rules.ts",
+          "anchor": "First in line for the dip."
+        }
+      ],
+      "chain": [
+        "tx-npc-first-trade"
+      ],
+      "note": "Rule 5, buy the dip: the reason he gave was \"17% under the opening price. First in line for the dip.\""
     },
     {
       "id": "verify-one-sim",
@@ -3605,11 +3747,35 @@
       ]
     },
     {
+      "id": "gameloop-npc",
+      "section": "gameloop",
+      "source": "docs/GAME-LOOP.md",
+      "quote": "He is a rule-based trader, not a player and not an AI agent, with his own NEAR account (sandwich.wgpnear.near, on mainnet since Nov 13, 2026).",
+      "status": "live check",
+      "code": [
+        {
+          "path": "apps/wgp/src/components/market/other-traders.tsx",
+          "anchor": "export function TraderStrip("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/other-traders.test.ts",
+          "name": "on chain: the strip with his own NEAR account, linked to the explorer"
+        }
+      ],
+      "chain": [
+        "site-npc",
+        "sandwich-account"
+      ]
+    },
+    {
       "id": "npc-status",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "Status: built and tested; off on mainnet. sandwich.wgpnear.near does not exist yet",
-      "status": "built, off on mainnet",
+      "quote": "Status: live on NEAR mainnet since Nov 13, 2026.",
+      "status": "proven on chain",
       "code": [
         {
           "path": "apps/wgp/src/server/npc/runner.ts",
@@ -3625,8 +3791,13 @@
       ],
       "chain": [
         "sandwich-account",
-        "site-npc"
-      ]
+        "sandwich-bits",
+        "site-npc",
+        "tx-npc-create",
+        "tx-npc-seed",
+        "tx-npc-first-trade"
+      ],
+      "note": "The account, its key and his Bits are read from an RPC node; the three transactions are looked up by hash. The test is the other half: with his two environment variables unset he is off."
     },
     {
       "id": "npc-rules-file",
@@ -3713,7 +3884,7 @@
       "section": "npc",
       "source": "docs/npc-trader.md",
       "quote": "He can call only the five market methods every player's session key can call",
-      "status": "built, off on mainnet",
+      "status": "proven by test",
       "code": [
         {
           "path": "apps/wgp/src/lib/near/policy.ts",
@@ -3731,7 +3902,12 @@
           "file": "apps/wgp/src/lib/market/npc-rules.test.ts",
           "name": "never buys his own listing"
         }
-      ]
+      ],
+      "chain": [
+        "sandwich-wallet",
+        "tx-npc-first-trade"
+      ],
+      "note": "The limit to five methods is the runner's, so a test proves it. The chain checks add what mainnet shows: he has no hero and no role, and the one call he has sent is a market_buy. His key is a full-access key of his own account only."
     },
     {
       "id": "npc-runner",
@@ -3768,7 +3944,7 @@
       "section": "npc",
       "source": "docs/npc-trader.md",
       "quote": "He is never shown or counted as a player",
-      "status": "built, off on mainnet",
+      "status": "live check",
       "code": [
         {
           "path": "scripts/stats.mjs",
@@ -3785,11 +3961,19 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/market/quest.test.ts",
           "name": "his trades complete nobody's quest, and he is never a quest player"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/other-traders.test.ts",
+          "name": "on chain: the strip with his own NEAR account, linked to the explorer"
         }
       ],
       "chain": [
-        "chain-tally"
-      ]
+        "chain-tally",
+        "site-npc",
+        "sandwich-wallet"
+      ],
+      "note": "The tally (from NearBlocks) counts his calls on their own line and leaves him out of player accounts; in the contract he has no hero."
     },
     {
       "id": "npc-sandbox",
@@ -3809,18 +3993,21 @@
       "id": "npc-setup",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "Only the owner runs these",
-      "status": "owner action needed",
+      "quote": "Only the owner ran these",
+      "status": "proven on chain",
       "code": [
         {
           "path": "docs/npc-trader.md",
-          "anchor": "## Owner-run setup (mainnet)"
+          "anchor": "## What the owner ran (mainnet, Nov 13, 2026)"
         }
       ],
       "chain": [
-        "sandwich-account"
+        "tx-npc-create",
+        "tx-npc-seed",
+        "sandwich-account",
+        "site-npc"
       ],
-      "note": "Creating and funding his account, seeding 300 Bits and setting his key are the owner's transactions. None has been sent."
+      "note": "Creating and funding his account and seeding 300 Bits are the owner's two transactions, checked by hash. Setting his key in production leaves no trace on chain; the live site answering mode on-chain is the sign of it."
     },
     {
       "id": "econdoc-not-applied",
@@ -3987,7 +4174,7 @@
       "id": "sustain-storage",
       "section": "sustain",
       "source": "docs/SUSTAINABILITY.md",
-      "quote": "374 KB of code and state on game.wgpnear.near",
+      "quote": "375 KB of code and state on game.wgpnear.near",
       "status": "proven on chain",
       "code": [
         {
@@ -4010,7 +4197,7 @@
       "chain": [
         "contract-account"
       ],
-      "note": "A figure from Nov 12; storage only grows, so the check is a lower bound."
+      "note": "A figure from Nov 13 (374,986 bytes); storage only grows, so the check is a lower bound."
     },
     {
       "id": "sustain-operator",
@@ -4147,6 +4334,49 @@
       "chain": [
         "replay-top"
       ]
+    },
+    {
+      "id": "sustain-npc-gas",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "Sandwich Man signs and pays for his own market calls; they are not relayed.",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/runner.ts",
+          "anchor": "export async function runNpcTrader("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/npc-rules.test.ts",
+          "name": "takes at most 10 actions a day, refused ones included"
+        }
+      ],
+      "chain": [
+        "tx-npc-first-trade",
+        "sandwich-account"
+      ],
+      "note": "His first trade's signer is his own account and the transaction is not a delegate action. It burned 3.3 Tgas, 0.00031 NEAR."
+    },
+    {
+      "id": "sustain-topup",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "On Nov 13, 2026 the owner topped it up with 1 NEAR from the relayer's account",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "docs/SUSTAINABILITY.md",
+          "anchor": "**Runway:**"
+        }
+      ],
+      "chain": [
+        "tx-contract-topup",
+        "contract-account"
+      ],
+      "note": "The balances in the table beside it were read on Nov 13, 07:23 UTC and move with every call; the check proves the transfer, not the balances."
     },
     {
       "id": "compete-daily-seed",
@@ -4349,7 +4579,7 @@
       "id": "arch-status",
       "section": "arch",
       "source": "docs/ARCHITECTURE.md",
-      "quote": "Three things here are built and not yet on mainnet: record_season and its trophies first run when Season 1 closes, the NPC trader's account is not created, and NEAR Auth waits for its mainnet client.",
+      "quote": "Two things here are built and not yet on mainnet: record_season and its trophies first run when Season 1 closes, and NEAR Auth waits for its mainnet client.",
       "status": "proven on chain",
       "code": [
         {
@@ -4359,7 +4589,6 @@
       ],
       "chain": [
         "season-not-recorded",
-        "sandwich-account",
         "contract-account"
       ]
     },
@@ -5017,7 +5246,7 @@
         {
           "path": "storage_usage",
           "op": "gte",
-          "value": 374000
+          "value": 374900
         }
       ],
       "whenFails": "If the code hash changed, the contract was upgraded: every claim about the deployed contract needs a second look."
@@ -5025,15 +5254,87 @@
     "sandwich-account": {
       "kind": "account",
       "account": "sandwich.wgpnear.near",
-      "about": "Sandwich Man's account does not exist on mainnet.",
+      "keys": true,
+      "about": "Sandwich Man's account exists on mainnet, holds NEAR for gas, runs no contract code and has exactly one key: the full-access key its creating transaction added.",
       "expect": [
         {
           "path": "exists",
           "op": "eq",
-          "value": false
+          "value": true
+        },
+        {
+          "path": "code_hash",
+          "op": "eq",
+          "value": "11111111111111111111111111111111"
+        },
+        {
+          "path": "amount",
+          "op": "gte",
+          "value": 10000000000000000000000
+        },
+        {
+          "path": "keys.length",
+          "op": "eq",
+          "value": 1
+        },
+        {
+          "path": "fullAccessKeys",
+          "op": "includes",
+          "value": "ed25519:2JdLK77r21bBczZK5GyAjapnwAhXaTWz4CjLWFHZkiuP"
         }
       ],
-      "whenFails": "The owner created his account: update the README's track table, docs/npc-trader.md and the status of his claims in docs/evidence.json."
+      "whenFails": "If the key differs, the owner rotated it: put the new public key here. If the account is gone or out of NEAR, he was retired or needs a top-up: update the README's track table and docs/npc-trader.md."
+    },
+    "sandwich-bits": {
+      "kind": "view",
+      "method": "bits_of",
+      "args": {
+        "account_id": "sandwich.wgpnear.near"
+      },
+      "about": "The contract holds a Bits balance for Sandwich Man's account and answers it as a number.",
+      "expect": [
+        {
+          "path": "",
+          "op": "type",
+          "value": "string"
+        },
+        {
+          "path": "",
+          "op": "anyMatch",
+          "value": "^\\d+$"
+        }
+      ]
+    },
+    "sandwich-wallet": {
+      "kind": "view",
+      "method": "get_player",
+      "args": {
+        "account_id": "sandwich.wgpnear.near"
+      },
+      "about": "Sandwich Man is not a player in the contract: he has no hero and no level, and the operator has minted to him exactly once (the seed).",
+      "expect": [
+        {
+          "path": "hero",
+          "op": "eq",
+          "value": null
+        },
+        {
+          "path": "level",
+          "op": "eq",
+          "value": 0
+        },
+        {
+          "path": "reward_nonce",
+          "op": "eq",
+          "value": 1
+        },
+        {
+          "path": "tokens",
+          "op": "type",
+          "value": "array"
+        }
+      ],
+      "whenFails": "If reward_nonce is over 1, something was minted to him after the seed: the docs' \"one-off seed\" needs a second look."
     },
     "season-not-recorded": {
       "kind": "view",
@@ -5206,17 +5507,22 @@
     "site-npc": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market/npc",
-      "about": "The live game says Sandwich Man is off and has no account.",
+      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, and shows at least one move with its transaction.",
       "expect": [
         {
           "path": "mode",
           "op": "eq",
-          "value": "off"
+          "value": "on-chain"
         },
         {
           "path": "accountId",
           "op": "eq",
-          "value": null
+          "value": "sandwich.wgpnear.near"
+        },
+        {
+          "path": "explorerUrl",
+          "op": "eq",
+          "value": "https://nearblocks.io/address/sandwich.wgpnear.near"
         },
         {
           "path": "seedBits",
@@ -5224,12 +5530,22 @@
           "value": 300
         },
         {
+          "path": "bits",
+          "op": "type",
+          "value": "number"
+        },
+        {
           "path": "log.length",
-          "op": "eq",
-          "value": 0
+          "op": "gte",
+          "value": 1
+        },
+        {
+          "path": "log.*.txUrl",
+          "op": "anyMatch",
+          "value": "^https://nearblocks\\.io/txns/[1-9A-HJ-NP-Za-km-z]{43,44}$"
         }
       ],
-      "whenFails": "He was switched on: update the README and docs/npc-trader.md."
+      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md."
     },
     "site-play": {
       "kind": "http",
@@ -5293,27 +5609,27 @@
       "json": true,
       "skipUnless": "json.chain.complete",
       "timeoutMs": 420000,
-      "about": "pnpm stats' own tally of every call the contract received (about two minutes): each count at least the README's, and no call from the NPC trader.",
+      "about": "pnpm stats' own tally of every call the contract received (about two minutes): each count at least the README's, with the NPC trader's calls counted apart from players'.",
       "expect": [
         {
           "path": "json.chain.calls",
           "op": "gte",
-          "value": 232
+          "value": 245
         },
         {
           "path": "json.chain.playerAccounts",
           "op": "gte",
-          "value": 17
+          "value": 18
         },
         {
           "path": "json.chain.byMethod.mint_rewards",
           "op": "gte",
-          "value": 160
+          "value": 168
         },
         {
           "path": "json.chain.byMethod.register_hero",
           "op": "gte",
-          "value": 18
+          "value": 19
         },
         {
           "path": "json.chain.byMethod.craft_suit",
@@ -5328,12 +5644,12 @@
         {
           "path": "json.chain.byMethod.market_buy",
           "op": "gte",
-          "value": 10
+          "value": 11
         },
         {
           "path": "json.chain.byMethod.market_sell",
           "op": "gte",
-          "value": 3
+          "value": 5
         },
         {
           "path": "json.chain.byMethod.list_item",
@@ -5347,8 +5663,8 @@
         },
         {
           "path": "json.chain.npcCalls",
-          "op": "eq",
-          "value": 0
+          "op": "gte",
+          "value": 1
         }
       ]
     },
@@ -5865,6 +6181,170 @@
       "expect": [],
       "absent": true,
       "whenFails": "v3 (or later) is deployed: rewrite the investing claims in the README, docs/INVESTING.md and docs/GAME-LOOP.md, and check investing against the real contract."
+    },
+    "tx-npc-create": {
+      "kind": "tx",
+      "hash": "Hx32N4dymGnQXUoD1cY36w3kekY2WqKbfvLpvd84W4rm",
+      "sender": "wgpnear.near",
+      "about": "The owner's account, wgpnear.near, created sandwich.wgpnear.near with a transfer and one key (Nov 13, 2026).",
+      "expect": [
+        {
+          "path": "succeeded",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "signer",
+          "op": "eq",
+          "value": "wgpnear.near"
+        },
+        {
+          "path": "receiver",
+          "op": "eq",
+          "value": "sandwich.wgpnear.near"
+        },
+        {
+          "path": "relayed",
+          "op": "eq",
+          "value": false
+        },
+        {
+          "path": "actions",
+          "op": "eq",
+          "value": [
+            "CreateAccount",
+            "Transfer",
+            "AddKey"
+          ]
+        }
+      ]
+    },
+    "tx-npc-seed": {
+      "kind": "tx",
+      "hash": "HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7",
+      "sender": "operator.wgpnear.near",
+      "about": "The one-off seed: the operator's mint_rewards of 300 Bits to Sandwich Man, nonce 1, with the digest sha256(\"npc-seed:sandwich.wgpnear.near:v1\").",
+      "expect": [
+        {
+          "path": "succeeded",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "signer",
+          "op": "eq",
+          "value": "operator.wgpnear.near"
+        },
+        {
+          "path": "receiver",
+          "op": "eq",
+          "value": "game.wgpnear.near"
+        },
+        {
+          "path": "actions",
+          "op": "eq",
+          "value": [
+            "mint_rewards"
+          ]
+        },
+        {
+          "path": "logs",
+          "op": "anyMatch",
+          "value": "\"event\":\"mt_mint\".*\"owner_id\":\"sandwich\\.wgpnear\\.near\",\"token_ids\":\\[\"item:bits\"\\],\"amounts\":\\[\"300\"\\]"
+        },
+        {
+          "path": "logs",
+          "op": "anyMatch",
+          "value": "\"event\":\"reward\".*\"account_id\":\"sandwich\\.wgpnear\\.near\",\"nonce\":1,.*\"digest\":\"e13df65bd44f334ef3490cc7f0df0ac8f1022e904c5ee4fb2f467d7c9f23189c\""
+        }
+      ]
+    },
+    "tx-npc-first-trade": {
+      "kind": "tx",
+      "hash": "AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf",
+      "sender": "sandwich.wgpnear.near",
+      "about": "Sandwich Man's first trade: a market_buy of 2 Sybil goo from Gwei for 72 Bits, signed by his own key (not relayed), with no deposit and the fee burned.",
+      "expect": [
+        {
+          "path": "succeeded",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "signer",
+          "op": "eq",
+          "value": "sandwich.wgpnear.near"
+        },
+        {
+          "path": "sender",
+          "op": "eq",
+          "value": "sandwich.wgpnear.near"
+        },
+        {
+          "path": "relayed",
+          "op": "eq",
+          "value": false
+        },
+        {
+          "path": "receiver",
+          "op": "eq",
+          "value": "game.wgpnear.near"
+        },
+        {
+          "path": "actions",
+          "op": "eq",
+          "value": [
+            "market_buy"
+          ]
+        },
+        {
+          "path": "deposits",
+          "op": "eq",
+          "value": [
+            "0"
+          ]
+        },
+        {
+          "path": "logs",
+          "op": "anyMatch",
+          "value": "\"event\":\"mt_burn\".*\"owner_id\":\"sandwich\\.wgpnear\\.near\".*gas-fee"
+        },
+        {
+          "path": "logs",
+          "op": "anyMatch",
+          "value": "\"event\":\"market_trade\".*\"account_id\":\"sandwich\\.wgpnear\\.near\",\"side\":\"buy\",\"item\":\"sybil-goo\",\"amount\":2,\"bits\":\"72\",\"fee\":\"2\""
+        }
+      ]
+    },
+    "tx-contract-topup": {
+      "kind": "tx",
+      "hash": "FH2tpfkzDkY8MtEX6fWCmMc7E7RRndGA8nibM1ZYEjuB",
+      "sender": "relayer.wgpnear.near",
+      "about": "The Nov 13, 2026 top-up of the contract's storage balance: a transfer from the relayer's account to game.wgpnear.near.",
+      "expect": [
+        {
+          "path": "succeeded",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "signer",
+          "op": "eq",
+          "value": "relayer.wgpnear.near"
+        },
+        {
+          "path": "receiver",
+          "op": "eq",
+          "value": "game.wgpnear.near"
+        },
+        {
+          "path": "actions",
+          "op": "eq",
+          "value": [
+            "Transfer"
+          ]
+        }
+      ]
     }
   }
 }

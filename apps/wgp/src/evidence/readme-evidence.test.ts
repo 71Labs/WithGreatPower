@@ -4,6 +4,8 @@
  * generated docs/EVIDENCE.md is current. `pnpm evidence` runs the proofs; this keeps the map
  * itself true on every `pnpm test`.
  */
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import { TOP_DOCS, anchorsOf, evidence, evidenceScript, exists, plainDoc, read, tableAfter } from "./repo";
@@ -104,8 +106,12 @@ describe("docs/evidence.json", () => {
       if (c.status === "proven by test") expect((c.tests ?? []).length, c.id).toBeGreaterThan(0);
       if (c.status === "proven on chain" || c.status === "live check") expect((c.chain ?? []).length, c.id).toBeGreaterThan(0);
     }
-    // What is off on mainnet is labelled so, wherever it is claimed.
-    for (const id of ["track-agent-npc", "npc-status"]) expect(byId.get(id)?.status, id).toBe("built, off on mainnet");
+    // Sandwich Man is on mainnet since Nov 13, 2026: those claims rest on his account, his Bits and his first trade, read from the chain.
+    for (const id of ["track-agent-npc", "npc-status"]) {
+      expect(byId.get(id)?.status, id).toBe("proven on chain");
+      for (const check of ["sandwich-account", "sandwich-bits", "site-npc", "tx-npc-first-trade"]) expect(byId.get(id)?.chain, id).toContain(check);
+    }
+    // His closed shop has not happened on mainnet, so it stays a claim about the simulation.
     for (const id of ["track-fast-forward", "track-npc-broke", "tryit-sim-market"]) expect(byId.get(id)?.status, id).toBe("simulation only");
     for (const id of ["modes-season", "status-season"]) expect(byId.get(id)?.note ?? byId.get(id)?.quote, id).toMatch(/null|not run|Not run/);
   });
@@ -126,17 +132,41 @@ describe("what the docs say about themselves", () => {
     expect(readme).not.toMatch(/designed on paper first/i);
   });
 
-  it("says in every place that Sandwich Man's mainnet account doesn't exist yet", () => {
-    expect(plainDoc("README.md")).toContain("his mainnet account (sandwich.wgpnear.near) is not created yet");
-    expect(plainDoc("docs/npc-trader.md")).toContain("sandwich.wgpnear.near does not exist yet");
-    expect(plainDoc("docs/ARCHITECTURE.md")).toContain("the NPC trader's account is not created");
-    // Nothing in the README or the docs states, in the present tense, that he has his own account.
-    for (const doc of TOP_DOCS) expect(plainDoc(doc), doc).not.toMatch(/an NPC with his own (account|NEAR wallet)/);
+  it("says in every place that Sandwich Man is live on mainnet from his own account, and that he is rule-based", () => {
+    const readme = plainDoc("README.md");
+    expect(readme).toContain("Live on mainnet since Nov 13, 2026: he trades from his own account, sandwich.wgpnear.near.");
+    expect(readme).toContain("He is rule-based, not an LLM or any other AI agent");
+    expect(readme).toContain("Both are rule-based, not AI agents.");
+    const doc = plainDoc("docs/npc-trader.md");
+    expect(doc).toContain("Status: live on NEAR mainnet since Nov 13, 2026.");
+    expect(doc).toContain("He is rule-based: no LLM and no other AI decides anything he does.");
+    expect(plainDoc("docs/ARCHITECTURE.md")).toContain("has traded on mainnet from his own account, sandwich.wgpnear.near, since Nov 13; he is rule-based, not an AI agent");
+    // Nothing in the README or the docs still says his account is missing or that he is off on mainnet.
+    for (const name of TOP_DOCS.filter((d) => d !== "docs/EVIDENCE.md")) {
+      expect(plainDoc(name), name).not.toMatch(/account \(sandwich\.wgpnear\.near\) is not created|sandwich\.wgpnear\.near does not exist|NPC trader's account is not created|whose mainnet account is not created|off on mainnet until his account/);
+    }
+  });
+
+  it("discloses his seed, his label and that he is no player, with the transactions", () => {
+    const readme = plainDoc("README.md");
+    expect(readme).toContain("he starts from a one-off seed of 300 Bits minted by the operator, is always labelled NPC, is never counted as a player");
+    const doc = plainDoc("docs/npc-trader.md");
+    expect(doc).toContain("His 300 Bits were minted to him once by the operator, not earned in play");
+    expect(doc).toContain("He is always labelled NPC, is never counted as a player, and his trades complete nobody's market quest.");
+    // The seed's digest in the docs is the hash of the string they name, and the chain check looks for the same digest.
+    const digest = createHash("sha256").update("npc-seed:sandwich.wgpnear.near:v1").digest("hex");
+    expect(read("docs/npc-trader.md")).toContain(`"digest":"${digest}"`);
+    expect(JSON.stringify((data.checks as Record<string, unknown>)["tx-npc-seed"])).toContain(digest);
+    // His three transactions are in the README and in his own page.
+    for (const hash of ["Hx32N4dymGnQXUoD1cY36w3kekY2WqKbfvLpvd84W4rm", "HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7", "AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf"]) {
+      expect(read("README.md"), hash).toContain(`https://nearblocks.io/txns/${hash}`);
+      expect(read("docs/npc-trader.md"), hash).toContain(`https://nearblocks.io/txns/${hash}`);
+    }
   });
 
   it("dates the live counts and says they are lower bounds", () => {
     const readme = plainDoc("README.md");
-    expect(readme).toContain("as of Nov 12, 2026, 17:35 UTC and only grow");
+    expect(readme).toContain("The chain counts are as of Nov 13, 2026, 07:23 UTC and the game's as of Nov 12, 2026, 17:35 UTC. Both only grow");
     expect(readme).toContain("pnpm evidence --chain fails if a live count is below a number here");
     expect(readme).not.toMatch(/went from \d+ on Nov/);
   });

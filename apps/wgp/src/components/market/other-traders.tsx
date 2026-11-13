@@ -298,6 +298,8 @@ export function TraderStrip({ npc }: { npc: NpcTraderView }) {
             <p role="status" className="text-[13px] leading-[18px] [text-wrap:pretty]">
               {npc.log.length > 0 ? `“${npc.statusLine}”` : how}
             </p>
+            {/* Once he has moves his own words take the line above; where his Bits live still has to be said. */}
+            {npc.log.length > 0 ? <p className="text-[12px] leading-4 text-game-muted [text-wrap:pretty]">{how}</p> : null}
             <Wallet npc={npc} />
           </div>
         </div>

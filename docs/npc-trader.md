@@ -1,16 +1,26 @@
 # Sandwich Man, the NPC trader
 
-Sandwich Man is the Mempool Market's arbitrageur: an NPC made to trade from his own NEAR account by fixed, published rules. He is built and tested, and his mainnet account is not created yet. This page says who he is, what his rules are, what stops him doing harm, how to check his trades on chain, and how the owner switches him on.
+Sandwich Man is the Mempool Market's arbitrageur: an NPC who trades from his own NEAR account, `sandwich.wgpnear.near`, by fixed, published rules. He is rule-based: no LLM and no other AI decides anything he does. This page says who he is, what his rules are, what stops him doing harm, how to check his trades on chain, and what the owner did to switch him on.
 
-**Status: built and tested; off on mainnet. `sandwich.wgpnear.near` does not exist yet** (a `view_account` answers `UNKNOWN_ACCOUNT`, and the live `/api/market/npc` says `"mode":"off"`), so he has never traded on chain. He starts when the owner runs the setup below. Nothing in this repo creates his account, funds it or sends a transaction. `pnpm evidence --chain` checks the account and fails when it appears, which is the signal to update this page and the README. Everything below written in the present tense describes how he works once he is on. Locally, and wherever the simulated market stands in for the contract's, he trades in the simulation, where no tokens move.
+**Status: live on NEAR mainnet since Nov 13, 2026.** The owner created `sandwich.wgpnear.near` with 0.3 NEAR, the operator seeded it once with 300 Bits, and the server was given his account id and key. The live `/api/market/npc` answers `"mode":"on-chain"` with his account id. His first trade landed at 07:15 UTC the same day: a `market_buy` of 2 Sybil goo from Gwei for 72 Bits, by rule 5 ("17% under the opening price. First in line for the dip."). `pnpm evidence --chain` checks his account, its key, his Bits, the live endpoint and the three transactions below.
+
+| What | When (UTC, Nov 13, 2026) | Transaction |
+|---|---|---|
+| `wgpnear.near` creates his account with 0.3 NEAR and one full-access key | 07:03 | [`Hx32N4dy…`](https://nearblocks.io/txns/Hx32N4dymGnQXUoD1cY36w3kekY2WqKbfvLpvd84W4rm) |
+| The operator's `mint_rewards` of 300 Bits to him (nonce 1), the one-off seed | 07:12 | [`Hjvobzmd…`](https://nearblocks.io/txns/HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7) |
+| His first trade, signed by his own key: `market_buy` of 2 Sybil goo, 70 Bits to Gwei's till and 2 burned as the fee | 07:15 | [`AcmNAmHr…`](https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf) |
+
+**Disclosure.** His 300 Bits were minted to him once by the operator, not earned in play; the mint's digest is `sha256("npc-seed:sandwich.wgpnear.near:v1")`, so it is recognisable on chain. Everything he has held since comes from trading. He is always labelled NPC, is never counted as a player, and his trades complete nobody's market quest.
+
+Nothing in this repo creates an account, funds one or sends a transaction: the owner ran the setup at the end of this page by hand. Locally, and wherever the simulated market stands in for the contract's, he trades in the simulation, where no tokens move. With his two environment variables unset he is off, and the market says so.
 
 ## Who he is
 
 - **Cast:** Sandwich Man, a villain from the story bible (`docs/story/bible.md`): "front-runs you; sets bread traps; works the Mempool Market". Gwei already warns players about him: "Listed. Someone will buy it, or Sandwich Man will try to." Now he really does.
-- **A second kind of NPC.** Gwei Stacy, the vendor, *is* the contract: her stock and till are the contract account's balances. Sandwich Man is the opposite: an ordinary account, `sandwich.wgpnear.near` (once the owner creates it), with no role in the contract at all.
-- **His wallet will be his own.** Once he is on, his Bits and items are NEP-245 balances of his account in `game.wgpnear.near`, and he signs his own calls with his own key and pays his own gas. In the simulated market his wallet is a row in the simulation.
+- **A second kind of NPC.** Gwei Stacy, the vendor, *is* the contract: her stock and till are the contract account's balances. Sandwich Man is the opposite: an ordinary account, `sandwich.wgpnear.near`, with no role in the contract at all.
+- **His wallet is his own.** His Bits and items are NEP-245 balances of his account in `game.wgpnear.near`, and he signs his own calls with his own key and pays his own gas (his calls are not relayed). In the simulated market his wallet is a row in the simulation.
 - **No special powers.** He can call only the five market methods every player's session key can call: `market_buy`, `market_sell`, `list_item`, `buy_listing` and `cancel_listing`. He is not an operator or the owner. Every cap the contract puts on a player is on him too.
-- **Always labelled.** In the game he appears only in the "Other traders" strip on `/play/market`, marked NPC, with his account id. He is never shown or counted as a player (`pnpm stats` counts his calls on their own line and leaves him out of player accounts).
+- **Always labelled.** In the game he appears only in the "Other traders" strip on `/play/market`, marked NPC, with his account id linked to NearBlocks and each move linked to its transaction. He is never shown or counted as a player (`pnpm stats` counts his calls on their own line and leaves him out of player accounts). He holds no hero, suit, badge or trophy.
 
 ## His rules
 
@@ -50,25 +60,33 @@ The contract's limits, which apply to him as to any account (`contracts/wgp/src/
 | He drains Gwei or moves prices | His whole wallet starts at 300 Bits and he spends at most 35% of it a day. Gwei's tills start at 6,240 Bits. His buys and sells move her curve exactly as a player's do, by a few Bits. |
 | He out-competes players | His only edge is being awake. A player whose cheap listing he buys gets exactly the price they asked, sooner. His own listings are always under Gwei's price, so a player who buys from him pays less than at the stall. |
 | A player games him | Possible, and bounded: someone can push Gwei's price up, list under her inflated sell-back and hope he buys. He won't pay over 150% of an item's opening price, and at worst loses that day's budget (about 105 Bits on day one). Bits have no cash value. |
-| The key leaks | It is a full-access key of his account only. It holds about 0.3 NEAR and his market inventory. It can't mint, can't touch the contract's settings and can't move any player's tokens. Fix: delete the env var, rotate the key. |
+| The key leaks | It is a full-access key of his account only, held by the server as an environment variable. It holds about 0.3 NEAR and his market inventory. It can't mint, can't touch the contract's settings and can't move any player's tokens. Fix: delete the env var, rotate the key. |
 | The runner loops or double-sends | One look takes a lock in the database (a lease) and looks are at least 20 seconds apart. A refused call is counted against the day's 10 actions, so a failing call can cost at most 10 failed transactions a day (about 0.003 NEAR). |
 | It runs when it shouldn't | On chain he is off unless both `NPC_TRADER_ACCOUNT_ID` and `NPC_TRADER_PRIVATE_KEY` are set. Removing either stops him at the next request. |
 | Background cost | No cron job. He looks at the market only after a request: when a player's trade or listing lands, or when someone opens the market (at most once every 5 minutes). Nobody playing, nothing runs. |
 
 ## How it runs
 
-- `apps/wgp/src/server/npc/runner.ts` is the runner. It is triggered through `after()` (`src/server/background.ts` `npcTraderSoon`) from the relayer's market hook, the simulated trade route and reads of `/api/market/npc`.
+- `apps/wgp/src/server/npc/runner.ts` is the runner. It is triggered through `after()` (`src/server/background.ts` `npcTraderSoon`) from the relayer's market hook (a player's trade or listing landed on chain), the simulated trade route and reads of `/api/market/npc`, which the market page makes when someone opens it. A read lets him look at most once every 5 minutes. His first mainnet trade was a rule 5 buy: Sybil goo stood 17% under its opening price.
 - A look: take the lock, read the market, his wallet and the open listings, bring his books up to date, call `decide`, send the first action only, write it to his ledger with its reason. A trade also goes into the price history (`market_prices`) under his account id, like any player's.
 - His books and ledger are one JSON row in the existing `market_sim` table (`npc:chain` or `npc:sim`). **No migration.**
 - `/lab/economy` runs him among the bot heroes with the same `decide`. Press **Load a run where he goes broke** to watch him close shop, clear stock and reopen.
 
 ## Verify his trades on chain
 
-Once he is on, anyone can check him without trusting the game:
+Anyone can check him without trusting the game:
 
 ```bash
 # His account: every transaction he ever sent is a call to game.wgpnear.near
 open https://nearblocks.io/address/sandwich.wgpnear.near
+
+# The account itself: about 0.3 NEAR, no contract code (code_hash is all 1s)
+curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_account","finality":"final","account_id":"sandwich.wgpnear.near"}}' | jq .result
+
+# Its keys: one full-access key, the one the creating transaction added
+curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"view_access_key_list","finality":"final","account_id":"sandwich.wgpnear.near"}}' | jq .result.keys
 
 # His wallet in the contract: Bits, what he may still do today, his open listings
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' \
@@ -88,11 +106,11 @@ Each line of his ledger in the game links to its transaction. A transaction's ev
 
 The sandbox test `contracts/wgp/sandbox/tests/npc_trader.rs` proves an ordinary account can do all of it against the real wasm, and that the contract refuses him where it refuses anyone.
 
-## Owner-run setup (mainnet)
+## What the owner ran (mainnet, Nov 13, 2026)
 
-Only the owner runs these, from their own terminal with near-cli-rs (0.30) and the key files `scripts/near/setup-mainnet.sh` saved in `~/.near-credentials/mainnet/`. Total cost: **0.3 NEAR** moved into his account (still the owner's; recoverable by deleting the account) plus under **0.002 NEAR** of gas.
+Only the owner ran these, from their own terminal with near-cli-rs (0.30) and the key files `scripts/near/setup-mainnet.sh` saved in `~/.near-credentials/mainnet/`. They are kept here as the record of what was done, and as the steps for a fresh network. Cost: **0.3 NEAR** moved into his account (still the owner's; recoverable by deleting the account) plus gas: the creating transaction burned 0.0071 NEAR and the seed mint 0.0003 NEAR.
 
-**1. Create his account** from `wgpnear.near` with a new full-access key, funded with 0.3 NEAR. The key is saved to a file; nothing prints it.
+**1. Create his account** from `wgpnear.near` with a new full-access key, funded with 0.3 NEAR. The key is saved to a file; nothing prints it. Done: [`Hx32N4dy…`](https://nearblocks.io/txns/Hx32N4dymGnQXUoD1cY36w3kekY2WqKbfvLpvd84W4rm).
 
 ```bash
 near account create-account fund-myself sandwich.wgpnear.near '0.3 NEAR' \
@@ -100,11 +118,11 @@ near account create-account fund-myself sandwich.wgpnear.near '0.3 NEAR' \
   sign-as wgpnear.near network-config mainnet sign-with-legacy-keychain send
 ```
 
-Why 0.3 NEAR: the account itself needs about 0.002 NEAR of storage, and a market call burns about 3 Tgas (about 0.0003 NEAR). At his cap of 10 actions a day that is at most 0.003 NEAR a day, so 0.3 NEAR is well over two months.
+Why 0.3 NEAR: the account itself needs about 0.002 NEAR of storage, and a market call burns about 3 Tgas (about 0.0003 NEAR; his first trade burned 3.3 Tgas, 0.00031 NEAR). At his cap of 10 actions a day that is at most about 0.003 NEAR a day, so 0.3 NEAR is well over two months.
 
 **2. Storage registration: none needed.** The contract sponsors storage for every account (about 0.005 NEAR of the contract's own balance for his entry) and has no `storage_deposit`. He needs no hero either.
 
-**3. Seed him once: 300 Bits, minted by the operator.** This is the only time Bits reach him other than by trading. The digest is `sha256("npc-seed:sandwich.wgpnear.near:v1")`, so the mint is recognisable on chain. Gas: about 3 Tgas (0.0003 NEAR) from `operator.wgpnear.near`.
+**3. Seed him once: 300 Bits, minted by the operator.** This is the only time Bits reach him other than by trading. The digest is `sha256("npc-seed:sandwich.wgpnear.near:v1")`, so the mint is recognisable on chain. Gas: about 3 Tgas (0.0003 NEAR) from `operator.wgpnear.near`. Done: [`Hjvobzmd…`](https://nearblocks.io/txns/HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7), which answered `["applied"]`.
 
 ```bash
 near contract call-function as-transaction game.wgpnear.near mint_rewards json-args \
@@ -113,14 +131,14 @@ near contract call-function as-transaction game.wgpnear.near mint_rewards json-a
   sign-as operator.wgpnear.near network-config mainnet sign-with-legacy-keychain send
 ```
 
-It should answer `["applied"]`. Running it twice is harmless: the contract answers `["duplicate"]` for a nonce it already applied. He gets no items: he buys those himself.
+Running it twice is harmless: the contract answers `["duplicate"]` for a nonce it already applied. He gets no items: he buys those himself.
 
 **4. Check the seed.**
 
 ```bash
 near contract call-function as-read-only game.wgpnear.near bits_of \
   json-args '{"account_id":"sandwich.wgpnear.near"}' network-config mainnet now
-# → "300"
+# → "300" right after the seed; it moves once he trades (228 after his first buy)
 ```
 
 **5. Give the server his account id and key** (production environment, straight from the key file, never echoed), then redeploy.
@@ -134,7 +152,7 @@ jq -j '.private_key' ~/.near-credentials/mainnet/sandwich.wgpnear.near.json \
 
 (If near-cli saved the key under a folder instead, the file is `~/.near-credentials/mainnet/sandwich.wgpnear.near/ed25519_*.json`.)
 
-**6. Disclose it.** The README's "How it meets the track" table already says that Sandwich Man is an NPC with a one-off 300 Bit seed and that his calls are counted apart from players'. After switching him on, re-run `pnpm stats`, update the README's numbers and its status rows, and change his claims in `docs/evidence.json` from `built, off on mainnet`.
+**6. Disclose it.** Done on Nov 13: the README's track table, its status and "Proven on mainnet" tables and its numbers say he is an NPC with a one-off 300 Bit seed, name his account and transactions, and count his calls apart from players'. His claims in `docs/evidence.json` are `proven on chain`.
 
 **To switch him off:** remove either env var and redeploy. **To retire him:** cancel his listings, then `near account delete-account sandwich.wgpnear.near beneficiary wgpnear.near …` returns his NEAR.
 
