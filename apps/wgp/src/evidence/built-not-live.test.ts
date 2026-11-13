@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { read } from "./repo";
+import { evidence, read } from "./repo";
 
 /** Every `pub fn` in a Rust file, by name. */
 const pubFns = (file: string) => [...read(file).matchAll(/^\s*pub fn (\w+)/gm)].map((m) => m[1]!);
@@ -57,7 +57,30 @@ describe("the faucet taper is written and not wired in", () => {
   });
 });
 
-describe("Sandwich Man is off unless the owner turns him on", () => {
+/**
+ * Sandwich Man has traded on mainnet since Nov 13, 2026, because the owner set his account and
+ * key in production. The repository still turns nothing on by itself, and the chain checks
+ * now expect him there.
+ */
+describe("Sandwich Man runs only where the owner turned him on", () => {
+  it("the chain checks expect him on mainnet: his account with its key, the live site on chain, and his calls as a lower bound", () => {
+    type Check = { kind: string; account?: string; keys?: boolean; expect: { path: string; op: string; value: unknown }[] };
+    const checks = evidence().checks as Record<string, Check>;
+    const expects = (id: string) => checks[id]!.expect.map((e) => `${e.path} ${e.op} ${JSON.stringify(e.value)}`);
+
+    expect(checks["sandwich-account"]).toMatchObject({ kind: "account", account: "sandwich.wgpnear.near", keys: true });
+    expect(expects("sandwich-account")).toEqual(expect.arrayContaining(["exists eq true", "keys.length eq 1"]));
+    expect(expects("sandwich-account").some((e) => e.startsWith("fullAccessKeys includes "))).toBe(true);
+    expect(expects("site-npc")).toEqual(expect.arrayContaining(['mode eq "on-chain"', 'accountId eq "sandwich.wgpnear.near"', "log.length gte 1"]));
+    // A lower bound, never zero: the tally must find at least the one call the README cites.
+    const npcCalls = checks["chain-tally"]!.expect.find((e) => e.path === "json.chain.npcCalls");
+    expect(npcCalls?.op).toBe("gte");
+    expect(npcCalls?.value).toBeGreaterThanOrEqual(1);
+    // No claim is left saying he is built and off.
+    const off = evidence().claims.filter((c) => c.status === "built, off on mainnet").map((c) => c.id);
+    expect(off.filter((id) => id.includes("npc"))).toEqual([]);
+  });
+
   it("nothing in the repository sets his account or key: .env.example names both commented out, the key empty", () => {
     const lines = read("apps/wgp/.env.example").split("\n");
     const account = lines.filter((l) => l.includes("NPC_TRADER_ACCOUNT_ID="));

@@ -307,6 +307,13 @@ async function runChainCheck(check, meta) {
       const missing = j.error?.cause?.name === "UNKNOWN_ACCOUNT";
       if (!j.result && !missing) return { ok: false, why: `view_account: ${j.error?.data ?? JSON.stringify(j).slice(0, 200)}` };
       value = { exists: !missing, ...(j.result ?? {}) };
+      if (check.keys && !missing) {
+        // Also the account's access keys: every public key, and those with full access.
+        const k = await rpc(meta.rpc, "query", { request_type: "view_access_key_list", finality: "final", account_id: check.account });
+        if (!k.result?.keys) return { ok: false, why: `view_access_key_list: ${k.error?.data ?? JSON.stringify(k).slice(0, 200)}` };
+        value.keys = k.result.keys.map((key) => key.public_key);
+        value.fullAccessKeys = k.result.keys.filter((key) => key.access_key?.permission === "FullAccess").map((key) => key.public_key);
+      }
     } else if (check.kind === "tx") {
       const j = await rpc(meta.archivalRpc, "tx", { tx_hash: check.hash, sender_account_id: check.sender, wait_until: "FINAL" });
       if (!j.result) return { ok: false, why: `tx ${check.hash}: ${j.error?.data ?? j.error?.message ?? "no result"}` };
@@ -374,7 +381,11 @@ function curlFor(check, meta) {
   if (check.kind === "view") {
     return `${rpcCall(meta.rpc[0], "query", { request_type: "call_function", finality: "final", account_id: check.contract ?? meta.contract, method_name: check.method, args_base64: b64(check.args ?? {}) })} \\\n  | jq -r '.result.result | implode' | jq .`;
   }
-  if (check.kind === "account") return `${rpcCall(meta.rpc[0], "query", { request_type: "view_account", finality: "final", account_id: check.account })} | jq '.result // .error.cause'`;
+  if (check.kind === "account") {
+    const account = `${rpcCall(meta.rpc[0], "query", { request_type: "view_account", finality: "final", account_id: check.account })} | jq '.result // .error.cause'`;
+    if (!check.keys) return account;
+    return `${account}\n${rpcCall(meta.rpc[0], "query", { request_type: "view_access_key_list", finality: "final", account_id: check.account })} | jq '.result.keys'`;
+  }
   if (check.kind === "tx") {
     return `${rpcCall(meta.archivalRpc[0], "tx", { tx_hash: check.hash, sender_account_id: check.sender, wait_until: "FINAL" })} \\\n  | jq '{signer: .result.transaction.signer_id, status: .result.status, actions: .result.transaction.actions, logs: [.result.receipts_outcome[].outcome.logs[]]}'`;
   }
@@ -475,7 +486,7 @@ export function renderMarkdown(data) {
     if (check.kind === "tx") out.push("- (fields as the script reads them: `signer`, `sender` and `receiver` of the call, `relayed`, `actions`, `deposits`, `succeeded`, `logs`)");
     if (check.kind === "command") out.push(`- (\`exit\` is the exit code, \`lines\` the output${check.json ? ", `json` the JSON it prints" : ""})`);
     if (check.kind === "view" && check.absent) out.push(`- the call fails with \`MethodNotFound\`: ${check.contract ?? data.meta.contract} has no \`${check.method}\``);
-    if (check.kind === "account") out.push("- (`exists` is false when the RPC answers `UNKNOWN_ACCOUNT`)");
+    if (check.kind === "account") out.push(`- (\`exists\` is false when the RPC answers \`UNKNOWN_ACCOUNT\`${check.keys ? "; `keys` are the account's public keys and `fullAccessKeys` those with full access" : ""})`);
     if (check.kind === "git") out.push("- (`ancestor`: the first commit is in the second one's history; `added`: the files the first commit added)");
     if (check.kind === "http" && check.text) out.push("- (`text` is the page's HTML)");
     for (const e of check.expect ?? []) out.push(`- ${describeExpect(e)}`);
