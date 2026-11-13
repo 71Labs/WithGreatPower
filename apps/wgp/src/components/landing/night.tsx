@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { Chip, InlineTwoTone, Section } from "@/components/frame";
 import { Gamepad, Headphones, Smartphone } from "@/components/icons";
 
+import { ERRAND_CAPTION, FIGHT_PANEL, NIGHT_HEADING, NIGHT_INTRO, SOUNDTRACK_FACT, TIERS_FACT } from "./copy";
+
 interface Panel {
   id: string;
   /** The comic caption in the panel's corner. */
@@ -32,9 +34,9 @@ const panels: Panel[] = [
   },
   {
     id: "fight",
-    caption: "A warm-up and a boss",
+    caption: FIGHT_PANEL.caption,
     title: "Fight",
-    body: "Villains fight in real time, each the way his joke goes. Four powers on 1–4, and one call to Gwei Stacy for backup.",
+    body: FIGHT_PANEL.body,
     src: "/media/night/fight.webp",
     alt: "Sandwich Man on a rooftop as the hero lands a hit: Zap! Wham!",
     wide: false,
@@ -42,7 +44,7 @@ const panels: Panel[] = [
   },
   {
     id: "errand",
-    caption: "Two errands",
+    caption: ERRAND_CAPTION,
     title: "Help the neighbors",
     body: "Aunt Mainnet, Uncle Gen, Mary Jpeg, Bearson and Gwei each need a hand. What you choose moves your responsibility and reputation.",
     src: "/media/night/errand.webp",
@@ -99,12 +101,12 @@ const facts: { icon: ReactNode; title: string; body: string }[] = [
   {
     icon: <Smartphone strokeWidth={2} />,
     title: "Built for phones too",
-    body: "Three quality tiers and a frame-rate check keep the city smooth on a phone.",
+    body: TIERS_FACT,
   },
   {
     icon: <Headphones strokeWidth={2} />,
     title: "A full original soundtrack",
-    body: "Six looping themes, a sting for every villain and a voice for the whole cast.",
+    body: SOUNDTRACK_FACT,
   },
 ];
 
@@ -113,10 +115,9 @@ export function Night() {
     <Section id="night" labelledBy="night-title" inner="px-4 py-20 sm:px-10 sm:py-28">
       <div className="flex flex-col items-start">
         <Chip>How a night plays</Chip>
-        <InlineTwoTone id="night-title" className="mt-6 max-w-[22ch]" lead="Four stops across the city," point="and a swing between each." />
+        <InlineTwoTone id="night-title" className="mt-6 max-w-[22ch]" lead={NIGHT_HEADING.lead} point={NIGHT_HEADING.point} />
         <p className="mt-5 max-w-[60ch] text-[17px] leading-7 text-ink-subtle">
-          Every night is a route: a warm-up villain and two errands, in a new order each night, then a boss. Between
-          stops the whole city is yours to swing through.
+          {NIGHT_INTRO}
         </p>
       </div>
 

@@ -6,7 +6,7 @@
  */
 import { cacheLife, cacheTag } from "next/cache";
 
-import type { NpcTraderView } from "@/lib/market/npc-api";
+import { NPC_OFF_LINE, type NpcTraderView } from "@/lib/market/npc-api";
 import { booksToday, itemName } from "@/lib/market/npc-book";
 import { budgetLeft, NPC_ID, NPC_NAME, NPC_RULE_LINES, NPC_RULES, NPC_RULES_URL, npcStatus, statusLine, type NpcWallet } from "@/lib/market/npc-rules";
 import { walletOnBook } from "@/lib/market/npc-turn";
@@ -30,7 +30,7 @@ const off = (now: number): NpcTraderView => ({
   accountId: null,
   explorerUrl: null,
   status: "off",
-  statusLine: "Practice only. His NEAR account isn’t funded yet, so he trades in the practice market and the economy lab’s simulation.",
+  statusLine: NPC_OFF_LINE,
   bits: null,
   items: [],
   listings: [],

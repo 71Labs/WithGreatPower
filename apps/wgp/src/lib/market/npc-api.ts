@@ -5,6 +5,9 @@
 import type { NpcEventKind } from "./npc-book";
 import type { NpcStatus } from "./npc-rules";
 
+/** His status line while he is switched off on this market. It says nothing about why: not his account, not its balance. */
+export const NPC_OFF_LINE = "Sandwich Man is switched off right now. He still trades in the practice market and in the economy lab’s simulation.";
+
 export interface NpcTraderView {
   id: "sandwich-man";
   name: string;

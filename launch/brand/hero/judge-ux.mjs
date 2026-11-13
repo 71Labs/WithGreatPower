@@ -13,7 +13,7 @@
  * It plays the judge's guest (Captain Finality, level 2, 93/160 XP, a power to pick) and
  * checks: Gwei's words against her numbers on every card, plurals, sparklines that differ
  * and say when nothing traded, both popovers clear of the dock, Sandwich Man's honest
- * "off" (the API answer is swapped for the one production gives while he has no account),
+ * "off" (the API answer is swapped for the one the server gives while he is switched off),
  * the lab heading's contrast, 44px targets and the hero chip on a phone, power cards in
  * seconds, the two name lines agreeing, a first visit to /play reaching the city, and the
  * short board's open place. Prints each check, writes <out>/<label>/*.png and report.json,
@@ -65,7 +65,7 @@ const SAVE = {
   stats: { villainsCaught: 2, errands: 2, knockouts: 0, perfectSwings: 3, nights: 1 },
 };
 
-/** What GET /api/market/npc answers in production while Sandwich Man has no account. */
+/** What GET /api/market/npc answers while Sandwich Man is switched off (his account or key unset on the server). */
 const NPC_OFF = (rules, rulesUrl, seedBits) => ({
   id: "sandwich-man",
   name: "Sandwich Man",
@@ -73,7 +73,7 @@ const NPC_OFF = (rules, rulesUrl, seedBits) => ({
   accountId: null,
   explorerUrl: null,
   status: "off",
-  statusLine: "Practice only. His NEAR account isn’t funded yet, so he trades in the practice market and the economy lab’s simulation.",
+  statusLine: "Sandwich Man is switched off right now. He still trades in the practice market and in the economy lab’s simulation.",
   bits: null,
   items: [],
   listings: [],
@@ -291,7 +291,7 @@ try {
   const practiceHref = await evaluate(`[...document.querySelectorAll("section")].find((s) => /Other traders/.test(s.textContent))?.querySelector('a[href^="/play/market"]')?.getAttribute("href") ?? null`);
   check(practiceHref === "/play/market?practice=1", "5 · off: it also links to the practice market, where he does trade", practiceHref);
   const off = await evaluate(`(() => { const s = [...document.querySelectorAll("section")].find((s) => /Other traders/.test(s.textContent)); return { text: s.innerText.replace(/\\s+/g, " "), href: s.querySelector('a[href^="/lab/economy"]')?.getAttribute("href") ?? null }; })()`);
-  check(/Practice only/.test(off.text) && /his NEAR account isn’t funded/.test(off.text) && off.href === "/lab/economy#lab-npc", "5 · off: “Practice only”, why, and a link to his run in the economy lab", off.text.slice(0, 220));
+  check(/Switched off/.test(off.text) && /is switched off right now/.test(off.text) && !/funded/.test(off.text) && off.href === "/lab/economy#lab-npc", "5 · off: “Switched off”, no claim about his account, and a link to his run in the economy lab", off.text.slice(0, 220));
   check(!/own wallet|\bOff\b|His latest moves|Wallet/.test(off.text), "5 · off: no wallet claimed, no “Off” chip, no empty “latest moves”");
   await shot("05-sandwich-man-practice-only-desktop");
   await placed("desktop, practice only");

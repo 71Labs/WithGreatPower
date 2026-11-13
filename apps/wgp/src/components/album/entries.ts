@@ -4,7 +4,8 @@ import type { VillainId } from "@wgp/game-core/types";
 
 /** The album's pages, in the order they're shown. */
 export const GROUPS: { role: Role; title: string; blurb: string }[] = [
-  { role: "Hero", title: "Heroes", blurb: "You, the original, and your backup." },
+  { role: "Hero", title: "Heroes", blurb: "You and the original." },
+  { role: "Vendor", title: "Vendor", blurb: "Gwei Stacy runs the Mempool Market stall, and swings in once a night if you call." },
   { role: "Ally", title: "Allies", blurb: "The neighbors. Help them out on errands." },
   { role: "Press", title: "Press", blurb: "The Daily Rug’s editor. He wants a quote." },
   { role: "Villain", title: "Villains", blurb: "Catch them on patrol. They come back anyway." },

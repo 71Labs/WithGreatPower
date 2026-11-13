@@ -15,7 +15,8 @@ export type CastId =
   | "sandwich-man"
   | "sybil";
 
-export type Role = "Hero" | "Ally" | "Press" | "Villain";
+/** The label under a name in every cast list. Display only: the sim never reads it. */
+export type Role = "Hero" | "Vendor" | "Ally" | "Press" | "Villain";
 
 export interface CastMember {
   id: CastId;
@@ -35,7 +36,8 @@ export const CAST: CastMember[] = [
   {
     id: "gwei",
     name: "Gwei Stacy",
-    role: "Hero",
+    // She runs the Mempool Market stall: the vendor everywhere she appears, and backup on one errand.
+    role: "Vendor",
     line: "Swung in from another chain. Still counts everything in gwei.",
   },
   {

@@ -47,7 +47,7 @@ import {
 import { DEFAULT_INVEST_RULES, investorView, shopsOf } from "./invest";
 import { buyQuote, sellPayout, sellQuote, spotMilli, type Pool } from "./math";
 import type { NpcTraderView } from "./npc-api";
-import { sparkSteps, type SparkRow } from "./spark";
+import { dayFacts, sparkSteps, type SparkRow } from "./spark";
 import { booksToday, itemName, newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
 import { budgetLeft, NPC_ID, NPC_NAME, NPC_RULE_LINES, NPC_RULES, NPC_RULES_URL, npcStatus, statusLine } from "./npc-rules";
 import { npcTurn, walletOnBook } from "./npc-turn";
@@ -318,9 +318,15 @@ function itemViews(s: PracticeState, nowMs: number): MarketItemView[] {
       sellOne: sellQuote(pool, 1, p.feeBps)?.net ?? null,
       spark,
       ...(rows ? { sparkSteps: sparkSteps(day, before, spotMilli(pool), { from, to: nowMs }) } : {}),
-      // Against where this market's own day began (its opening here, when it is younger than a day).
-      change24h: ((open) => (open > 0 ? (spotMilli(pool) - open) / open : null))(before ?? day[0]?.priceMilli ?? first),
-      trades24h: (s.traded[pool.item] ?? []).filter((t) => nowMs - t < DAY_MS).length,
+      // The pill and Gwei's reasoning read one history: this market's marks, which open on the live
+      // market's last day and then take every trade made here (./spark.ts `dayFacts`). A market
+      // stored before marks were kept falls back to its own trades and its sparkline's first point.
+      ...(rows
+        ? ((f) => ({ change24h: f.change24h, trades24h: f.moves }))(dayFacts(rows, before, spotMilli(pool), from))
+        : {
+            change24h: first > 0 ? (spotMilli(pool) - first) / first : null,
+            trades24h: (s.traded[pool.item] ?? []).filter((t) => nowMs - t < DAY_MS).length,
+          }),
       pool,
     };
   });

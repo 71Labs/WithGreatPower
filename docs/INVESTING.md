@@ -7,7 +7,7 @@ Gwei Stacy, the Mempool Market's vendor, pays sellers only from the Bits in her 
 | Where | Stops when broke | Invest to reopen |
 |---|---|---|
 | **Mainnet** (`game.wgpnear.near`, contract v2) | **Yes.** The contract refuses a sale her till can't pay. The market shows the shop closed, with the reason. | **No.** v2 has no invest call. She reopens only when someone buys that item from her. The market says so: "Investing in a merchant is built into contract v3, which isn't live yet. Try it in the practice market." |
-| **Contract v3** (branch `review/contract-v3`, draft PR #59) | Yes, and it says so in a view (`market_shops`) and an event (`market_shop`) | **Built, reviewed, not deployed.** `market_invest`, `market_withdraw`, `market_claim`. Upgrading is the owner's call; after an upgrade investing arrives switched off until the owner opens it. |
+| **Contract v3** (branch `review/contract-v3`; [CONTRACT-V3-REVIEW.md](CONTRACT-V3-REVIEW.md)) | Yes, and it says so in a view (`market_shops`) and an event (`market_shop`) | **Built, reviewed, not deployed.** `market_invest`, `market_withdraw`, `market_claim`. Upgrading is the owner's call; after an upgrade investing arrives switched off until the owner opens it. |
 | **Practice market** (any guest, in the browser) | Yes | **Yes.** The same rules, with practice Bits. Not on NEAR; nothing in it can become real. |
 | **Simulated market** (a local checkout with no chain configured) | Yes | **Yes**, server-side: `POST /api/market/invest`, on the player's own Bits. |
 | **`/lab/economy`** (the bot fast-forward) | Yes | **Yes**, as a showcase run: **Drain Gwei, then invest in her**. Off by default. |

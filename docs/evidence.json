@@ -18,6 +18,11 @@
       "title": "What the game is"
     },
     {
+      "id": "evidence",
+      "title": "The evidence layer itself",
+      "about": "What the README says this file and its script do, held to the script."
+    },
+    {
       "id": "track",
       "title": "How it meets the track",
       "about": "One row for each row of the README's track table, in the same order."
@@ -30,6 +35,10 @@
       "id": "numbers",
       "title": "By the numbers",
       "about": "The README's counts are dated lower bounds: each check passes while the live count is at least the number quoted."
+    },
+    {
+      "id": "problem",
+      "title": "The problem"
     },
     {
       "id": "economy",
@@ -69,6 +78,11 @@
       "title": "Limits and what's next"
     },
     {
+      "id": "disclosures",
+      "title": "Built during the hackathon, credits and disclosure",
+      "about": "Only what can be checked has a row: dates and trailers in git, versions, files. Where code was adapted from is the author's statement."
+    },
+    {
       "id": "gameloop",
       "title": "The game loop (docs/GAME-LOOP.md)"
     },
@@ -96,6 +110,16 @@
     {
       "id": "arch",
       "title": "Architecture (docs/ARCHITECTURE.md)"
+    },
+    {
+      "id": "v3",
+      "title": "Contract v3's review (docs/CONTRACT-V3-REVIEW.md)",
+      "about": "v3 is not on main and not deployed. These rows check that the branch and its commits exist and that the summary on main matches what it names; they do not run v3's tests."
+    },
+    {
+      "id": "story",
+      "title": "Chapters and story (docs/chapters, docs/story)",
+      "about": "The prose has no rows. These hold the ruleset tags and the cast to the code."
     }
   ],
   "claims": [
@@ -168,7 +192,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/lib/near/session-key.ts"
+          "path": "apps/wgp/src/lib/near/session-key.ts",
+          "anchor": "export interface SessionKey {"
         },
         {
           "path": "apps/wgp/src/server/near/relay.ts",
@@ -193,15 +218,16 @@
       "id": "track-game-loop",
       "section": "track",
       "source": "README.md",
-      "quote": "A real-time 3D action game: swing, fight, climb, race. 8 ways to play; all are built, and duels have no verified run yet.",
+      "quote": "A real-time 3D action game: swing, fight, climb, race. 8 ways to play; all are built.",
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/sim3d/sim.ts"
+          "path": "packages/game-core/src/sim3d/sim.ts",
+          "anchor": "export const IDLE_FRAME: InputFrame ="
         },
         {
           "path": "docs/GAME-LOOP.md",
-          "anchor": "## Every 30 seconds: move and decide"
+          "anchor": "## Every few seconds: move and decide"
         },
         {
           "path": "docs/ARCHITECTURE.md",
@@ -226,10 +252,37 @@
         }
       ],
       "chain": [
-        "loop-on-paper",
         "site-duels"
       ],
-      "note": "On paper first: docs/ARCHITECTURE.md was committed (94c8d19, Nov 2) before the first 3D simulation commit (143b12e); the git check proves the order. docs/GAME-LOOP.md is from Nov 12 and documents the loop as built."
+      "note": "Duels had no verified run as of Nov 13; the check reads the live count and passes on any. The order the loop was written in has its own row (track-loop-order)."
+    },
+    {
+      "id": "track-loop-order",
+      "section": "track",
+      "source": "README.md",
+      "quote": "a 2D real-time prototype of the night came first (Nov 1, commit 699457d). The plan for the 3D game, docs/ARCHITECTURE.md, was committed on Nov 2 (94c8d19), three minutes before the first 3D simulation code (143b12e).",
+      "status": "checked in git",
+      "code": [
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "anchor": "## 1. Deterministic core"
+        },
+        {
+          "path": "docs/GAME-LOOP.md",
+          "anchor": "The order things were written in, from `git log`"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-evidence.test.ts",
+          "name": "states the real order: the 2D prototype, then the 3D plan, then the 3D code, with GAME-LOOP.md written last"
+        }
+      ],
+      "chain": [
+        "loop-on-paper"
+      ],
+      "note": "The README used to say the loop was designed on paper first. git log says otherwise: the first playable (2D) loop predates the plan by six hours, and the plan predates the 3D code by three minutes. The check reads the four commits' order, dates and added files."
     },
     {
       "id": "track-chain-unnoticed",
@@ -284,7 +337,8 @@
           "anchor": "pub fn mt_batch_transfer("
         },
         {
-          "path": "contracts/wgp/src/events.rs"
+          "path": "contracts/wgp/src/events.rs",
+          "anchor": "use near_sdk::json_types::U128;"
         }
       ],
       "tests": [
@@ -330,16 +384,28 @@
       "status": "owner action needed",
       "code": [
         {
+          "path": "docs/CONTRACT-V3-REVIEW.md",
+          "anchor": "## The independent review (Nov 12)"
+        },
+        {
           "path": "contracts/wgp/src/mt.rs",
           "anchor": "pub fn mt_tokens_for_owner(",
-          "what": "(v2, this branch: no mt_tokens beside it)"
+          "what": "(v2, on main: no mt_tokens beside it)"
         }
       ],
       "chain": [
+        "v3-branch",
         "no-metadata",
         "no-enumeration"
       ],
-      "note": "v3 is not on this branch: it is draft PR #59, branch review/contract-v3 (contracts/wgp/src/meta.rs, invest.rs). Nothing here tests it; the checks only prove it is not deployed. Deploying is the owner's call."
+      "note": "v3 is not on main. The git check finds the branch review/contract-v3 and the thirteen commits the review summary names, and confirms it is not merged; the two view checks confirm it is not deployed. Nothing here runs v3's tests: the counts and findings are the branch's own write-up, summarised in docs/CONTRACT-V3-REVIEW.md. Deploying is the owner's call.",
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the review summary is on main, names the branch's commits, and the check looks for them in git"
+        }
+      ]
     },
     {
       "id": "track-social-login",
@@ -349,7 +415,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/server/auth/privy.ts"
+          "path": "apps/wgp/src/server/auth/privy.ts",
+          "anchor": "export class PrivyConfigError extends Error {"
         },
         {
           "path": "apps/wgp/src/server/near/wallet-auth.ts",
@@ -552,7 +619,8 @@
           "anchor": "GWEI STACY'S PRICING RULES: the one file to read."
         },
         {
-          "path": "contracts/wgp/market-vectors.json"
+          "path": "contracts/wgp/market-vectors.json",
+          "anchor": "\"ceiling\": \"48\""
         }
       ],
       "tests": [
@@ -585,7 +653,8 @@
           "anchor": "export function explainPrice("
         },
         {
-          "path": "apps/wgp/src/components/market/why-price.tsx"
+          "path": "apps/wgp/src/components/market/why-price.tsx",
+          "anchor": "export interface WhyState {"
         }
       ],
       "tests": [
@@ -1064,7 +1133,8 @@
       "status": "live check",
       "code": [
         {
-          "path": "apps/wgp/src/app/play/patrol/page.tsx"
+          "path": "apps/wgp/src/app/play/patrol/page.tsx",
+          "anchor": "export const metadata: Metadata ="
         }
       ],
       "tests": [
@@ -1072,12 +1142,17 @@
           "pkg": "core",
           "file": "packages/game-core/test/bot-nights.test.ts",
           "name": "clears every night with no NaN, every encounter finished, sensible durations, and replays to the same hash"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-flow.test.ts",
+          "name": "a first visit is the quick start: /play and Play now lead to /play/start, which makes The Node and opens the night"
         }
       ],
       "chain": [
         "site-play"
       ],
-      "note": "The check only shows the page is served. Playing the night is by hand; the test plays whole nights in the simulation."
+      "note": "The check only shows the page is served. The flow was walked by hand in a headless browser on Nov 13 (a first visit to /play lands in the night as The Node; a bot night ended on the Banked card in about 80 seconds); the tests pin the routing and labels that walk found, and play whole nights in the simulation."
     },
     {
       "id": "judge-2",
@@ -1133,7 +1208,8 @@
           "path": "contracts/wgp/src/lib.rs",
           "anchor": "pub fn get_player(&self, account_id: AccountId) -> Option<PlayerView> {"
         }
-      ]
+      ],
+      "note": "The account in command B is another player's, not the author's."
     },
     {
       "id": "judge-5",
@@ -1146,7 +1222,8 @@
       ],
       "code": [
         {
-          "path": "apps/wgp/src/app/api/market/route.ts"
+          "path": "apps/wgp/src/app/api/market/route.ts",
+          "anchor": "export const GET ="
         }
       ],
       "tests": [
@@ -1222,7 +1299,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/app/lab/determinism/page.tsx"
+          "path": "apps/wgp/src/app/lab/determinism/page.tsx",
+          "anchor": "export default function DeterminismLab("
         },
         {
           "path": "packages/game-core/src/golden.ts",
@@ -1263,7 +1341,8 @@
           "anchor": "async function tallyChain("
         },
         {
-          "path": "apps/wgp/src/server/db/stats.ts"
+          "path": "apps/wgp/src/server/db/stats.ts",
+          "anchor": "export const STAT_MODES ="
         }
       ],
       "tests": [
@@ -1323,7 +1402,14 @@
         "chain-tally",
         "nearblocks-count"
       ],
-      "note": "Counted from NearBlocks, a third-party index of the chain, on Nov 13: 245 calls, 18 player accounts, and each method's count, as lower bounds."
+      "note": "Counted from NearBlocks, a third-party index of the chain. The check reads each lower bound from the README's table when it runs; nothing is copied into evidence.json.",
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the live-count checks read their numbers from the README's text, not from a second copy"
+        }
+      ]
     },
     {
       "id": "numbers-npc",
@@ -1357,10 +1443,12 @@
       "status": "live check",
       "code": [
         {
-          "path": "apps/wgp/src/server/db/stats.ts"
+          "path": "apps/wgp/src/server/db/stats.ts",
+          "anchor": "export const STAT_MODES ="
         },
         {
-          "path": "apps/wgp/src/app/api/stats/route.ts"
+          "path": "apps/wgp/src/app/api/stats/route.ts",
+          "anchor": "export const GET ="
         }
       ],
       "tests": [
@@ -1373,6 +1461,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/db/stats.test.ts",
           "name": "answers zeros, every mode and no chain for a fresh database"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the live-count checks read their numbers from the README's text, not from a second copy"
         }
       ],
       "chain": [
@@ -1387,6 +1480,7 @@
       "quote": "Duels 0",
       "status": "live check",
       "chain": [
+        "site-stats",
         "site-duels"
       ],
       "code": [
@@ -1402,7 +1496,7 @@
           "name": "race a ranked night on its own seed and save, verified, on no board"
         }
       ],
-      "note": "Duels are built and tested; no player has finished a verified one. The check fails when one has, so the README gets updated."
+      "note": "A dated lower bound like the row's other counts: the check passes on any count at or above it."
     },
     {
       "id": "economy-earn",
@@ -1517,7 +1611,8 @@
           "anchor": "export function craftCost("
         },
         {
-          "path": "apps/wgp/src/components/hero/suit-lab.tsx"
+          "path": "apps/wgp/src/components/hero/suit-lab.tsx",
+          "anchor": "export interface CraftBits {"
         }
       ],
       "tests": [
@@ -1644,7 +1739,8 @@
           "anchor": "export async function verifyChapterRun("
         },
         {
-          "path": "apps/wgp/src/server/db/city.ts"
+          "path": "apps/wgp/src/server/db/city.ts",
+          "anchor": "export const CITY_FILINGS_PER_DAY ="
         }
       ],
       "tests": [
@@ -1720,7 +1816,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/sim3d/trial.ts"
+          "path": "packages/game-core/src/sim3d/trial.ts",
+          "anchor": "export const TRIAL_COURSE_IDS: readonly TrialCourseId[] ="
         }
       ],
       "tests": [
@@ -1745,11 +1842,12 @@
       "id": "modes-duels",
       "section": "modes",
       "source": "README.md",
-      "quote": "Race the ghost of any player's verified run. Built and tested; no player has finished a verified duel yet.",
+      "quote": "Race the ghost of any player's verified run. Built and tested.",
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/ghost.ts"
+          "path": "packages/game-core/src/ghost.ts",
+          "anchor": "export const GHOST_ACTIONS: readonly HeroAction[] ="
         },
         {
           "path": "apps/wgp/src/server/db/compete.ts",
@@ -1771,6 +1869,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/db/compete.test.ts",
           "name": "races another player's Daily as a ghost and says who won"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the documents describe both states, so no edit is needed when the season closes"
         }
       ],
       "chain": [
@@ -1870,7 +1973,7 @@
       "id": "modes-season",
       "section": "modes",
       "source": "README.md",
-      "quote": "At the close: the final board's root and digest, recorded once, and trophy:s1:1…10 for the top 10. Not run on mainnet yet (see the status table).",
+      "quote": "At the close: the final board's root and digest, recorded once, and trophy:s1:1…10 for the top 10.",
       "status": "proven by test",
       "code": [
         {
@@ -1902,22 +2005,33 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/near/season-record.test.ts",
           "name": "holds the record while the contract isn't live, then sends it once, when it is"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the documents describe both states, so no edit is needed when the season closes"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "after the record: passes only if the root, the digest, the board and every trophy match"
         }
       ],
       "chain": [
-        "season-not-recorded"
+        "season-s1"
       ],
-      "note": "Proven by unit and server tests only. No sandbox test covers record_season, and no mainnet transaction exists: get_season(\"s1\") is null, which the chain check confirms (and it fails once the season is recorded)."
+      "note": "Until Season 1 is recorded this rests on the contract's unit tests and the server's tests; no sandbox test covers record_season. The chain check passes in each state and, once the record lands, checks the root, the digest, the board and every trophy against the results file."
     },
     {
       "id": "tryit-classic",
       "section": "tryit",
       "source": "README.md",
-      "quote": "/play/classic plays the same night turn by turn, for reduced motion or devices without WebGL. It's unranked.",
+      "quote": "which plays the same night turn by turn, for reduced motion or devices without WebGL. It's unranked.",
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/app/play/classic/page.tsx"
+          "path": "apps/wgp/src/app/play/classic/page.tsx",
+          "anchor": "export const metadata: Metadata ="
         },
         {
           "path": "apps/wgp/src/server/db/actions.ts",
@@ -1929,6 +2043,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/db/actions.test.ts",
           "name": "only accepts menu actions in the request body"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-flow.test.ts",
+          "name": "every page the README names is a route in the app"
         }
       ],
       "note": "Unranked because the server takes no patrol step from a client: a turn-based night can't reach the server's save or a board."
@@ -2053,7 +2172,8 @@
       "status": "proven on chain",
       "code": [
         {
-          "path": "apps/wgp/src/lib/near/delegate-codec.ts"
+          "path": "apps/wgp/src/lib/near/delegate-codec.ts",
+          "anchor": "export const DELEGATE_ACTION_PREFIX ="
         },
         {
           "path": "apps/wgp/src/server/near/relay.ts",
@@ -2099,7 +2219,8 @@
           "anchor": "export function validateAddKeyDelegate("
         },
         {
-          "path": "apps/wgp/src/lib/near/quick-play.ts"
+          "path": "apps/wgp/src/lib/near/quick-play.ts",
+          "anchor": "export type QuickPlay ="
         }
       ],
       "tests": [
@@ -2128,10 +2249,12 @@
       "status": "simulation only",
       "code": [
         {
-          "path": "apps/wgp/src/lib/market/engine.ts"
+          "path": "apps/wgp/src/lib/market/engine.ts",
+          "anchor": "export interface Listing {"
         },
         {
-          "path": "apps/wgp/src/server/market/sim.ts"
+          "path": "apps/wgp/src/server/market/sim.ts",
+          "anchor": "export const SIM_ID ="
         }
       ],
       "tests": [
@@ -2226,7 +2349,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/sim3d/roam/index.ts"
+          "path": "packages/game-core/src/sim3d/roam/index.ts",
+          "anchor": "export type * from \"./types\";"
         }
       ],
       "tests": [
@@ -2245,7 +2369,8 @@
       "status": "proven on chain",
       "code": [
         {
-          "path": "contracts/wgp/src/events.rs"
+          "path": "contracts/wgp/src/events.rs",
+          "anchor": "use near_sdk::json_types::U128;"
         }
       ],
       "tests": [
@@ -2290,7 +2415,7 @@
       "id": "near-one-yocto",
       "section": "near",
       "source": "README.md",
-      "quote": "Transfers need 1 yoctoNEAR and a function-call key can't attach a deposit, so a game key can never move a player's assets.",
+      "quote": "Transfers need 1 yoctoNEAR and a function-call key can't attach a deposit, so a game key can't transfer a token out of a player's account.",
       "status": "proven by test",
       "code": [
         {
@@ -2313,6 +2438,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/near/relay.test.ts",
           "name": "keeps owner and transfer methods off the list"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "can call exactly the game's deposit-free methods; transfers, owner and operator methods need a deposit or a role"
         }
       ],
       "note": "That a function-call access key can't attach a deposit is a NEAR protocol rule, not this repository's code."
@@ -2393,7 +2523,7 @@
       "id": "near-no-crons",
       "section": "near",
       "source": "README.md",
-      "quote": "Mints are sent in the background of player requests; there are no cron jobs.",
+      "quote": "nothing is scheduled: vercel.json has no crons entry and no workflow runs on a schedule. Three bearer-protected routes, /api/cron/mint, /api/cron/sweep and /api/cron/market-snapshot, are manual fallbacks for the owner; in this repository only the local sandbox end-to-end script calls one.",
       "status": "proven by test",
       "code": [
         {
@@ -2401,7 +2531,16 @@
           "anchor": "export async function claimWindow("
         },
         {
-          "path": "apps/wgp/vercel.json"
+          "path": "apps/wgp/vercel.json",
+          "anchor": "\"deploymentEnabled\": {"
+        },
+        {
+          "path": "apps/wgp/src/server/http.ts",
+          "anchor": "export function assertCron("
+        },
+        {
+          "path": "scripts/near/e2e-sandbox.ts",
+          "anchor": "const first = await fetch(`${BASE}/api/cron/market-snapshot`"
         }
       ],
       "tests": [
@@ -2419,15 +2558,30 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/background.test.ts",
           "name": "lets one caller per window run a job, across callers"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the three /api/cron routes are bearer-protected manual fallbacks, and only the sandbox script calls one"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/sweep.test.ts",
+          "name": "needs the bearer secret when one is set"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/near/mint-worker.test.ts",
+          "name": "refuses a missing, wrong or scheme-less secret"
         }
       ],
-      "note": "The routes under /api/cron exist and need a bearer secret; nothing in the repository schedules them. Whether the production project has a scheduler set outside the repository can't be seen from here."
+      "note": "The test lists the routes, checks each asserts the bearer secret, and searches the app, the scripts and the workflows for anything that requests one: only scripts/near/e2e-sandbox.ts does, against a local sandbox. Whether the production project has a scheduler set outside the repository can't be seen from here."
     },
     {
       "id": "near-market-guards",
       "section": "near",
       "source": "README.md",
-      "quote": "Guards cap what a stolen game key could do: listing prices within 50–400% of the vendor's, daily trade and fill caps, and at most 20 items a call.",
+      "quote": "The contract's guards bound that: listing prices within 50–400% of the vendor's, at most 20 items a call, 3 open listings, and per day 40 vendor trades, 10 listings and 10 fills worth 3,000 Bits.",
       "status": "proven on chain",
       "code": [
         {
@@ -2455,11 +2609,90 @@
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/engine.test.ts",
           "name": "count per UTC day and reset at midnight"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the documents state those bounds with the contract's own caps, and no longer say it can never move assets"
         }
       ],
       "chain": [
         "market-state"
       ]
+    },
+    {
+      "id": "near-stolen-key",
+      "section": "near",
+      "source": "README.md",
+      "quote": "A thief therefore can't send a player's tokens to themselves, but could trade them badly, for example list an item at the lowest allowed price for an accomplice to buy.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/near/policy.ts",
+          "anchor": "export const SESSION_KEY_METHODS: string[] = [];"
+        },
+        {
+          "path": "apps/wgp/src/server/near/relay.ts",
+          "anchor": "export function validateGameDelegate("
+        },
+        {
+          "path": "contracts/wgp/src/market.rs",
+          "anchor": "pub fn list_item(&mut self, item: String, amount: u32, price_bits: U128) -> Listing {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "can call exactly the game's deposit-free methods; transfers, owner and operator methods need a deposit or a role"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the documents state those bounds with the contract's own caps, and no longer say it can never move assets"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/tests.rs",
+          "name": "every_transfer_method_needs_one_yocto"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "market_calls_work_with_no_deposit"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "listings_are_guarded"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "open_listings_are_capped_per_account_and_overall"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "daily_caps_reset_at_midnight_utc"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/near/relay.test.ts",
+          "name": "rejects a delegate from another account than the signed-in one"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/near/relay.test.ts",
+          "name": "rejects unknown, foreign and revoked keys"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/near/relay.test.ts",
+          "name": "still refuses a deposit, even a single yocto"
+        }
+      ],
+      "note": "The README used to say a game key can never move a player's assets. It can't transfer them, but it can trade them: the tests show which methods it can reach (the deposit-free ones), that transfers and owner calls are out of reach, and the caps that bound a bad trade. That a function-call key can't attach a deposit is a NEAR protocol rule, not this repository's code."
     },
     {
       "id": "near-relay",
@@ -2518,7 +2751,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/server/auth/privy.ts"
+          "path": "apps/wgp/src/server/auth/privy.ts",
+          "anchor": "export class PrivyConfigError extends Error {"
         }
       ],
       "tests": [
@@ -2676,7 +2910,7 @@
       "id": "status-season",
       "section": "status",
       "source": "README.md",
-      "quote": "until then get_season(\"s1\") answers null and no trophy:s1:* exists. Proven by the contract's unit tests and the server's season tests, not by a mainnet transaction.",
+      "quote": "Before the record lands, get_season(\"s1\") answers null, no trophy:s1:* exists, and /api/seasons/s1/results is a 404 until the freeze",
       "status": "proven by test",
       "code": [
         {
@@ -2704,11 +2938,63 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/db/season-view.test.ts",
           "name": "says where the record stands, honestly, before and after the contract is live"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "before the close: passes on null and a 404, and fails if anything is recorded or published early"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "between the close and the record: passes on the frozen board with the contract still null"
         }
       ],
       "chain": [
-        "season-not-recorded"
+        "season-s1"
       ]
+    },
+    {
+      "id": "status-season-after",
+      "section": "status",
+      "source": "README.md",
+      "quote": "After it lands, get_season(\"s1\") holds the root, the digest and the top of the board, each of those accounts holds trophy:s1:<rank>, and the sha256 of /api/seasons/s1/results is that digest.",
+      "status": "built, off on mainnet",
+      "code": [
+        {
+          "path": "contracts/wgp/src/lib.rs",
+          "anchor": "pub fn record_season("
+        },
+        {
+          "path": "apps/wgp/src/server/near/season.ts",
+          "anchor": "export function commitSeason("
+        },
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function seasonState(input) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/tests.rs",
+          "name": "a_season_is_recorded_once_with_trophies"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "after the record: passes only if the root, the digest, the board and every trophy match"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "is wired to Season 1 with its end date, and every claim about the record uses it"
+        }
+      ],
+      "chain": [
+        "season-s1"
+      ],
+      "note": "Not triggered until Season 1 closes (Nov 15, 00:00 UTC). The status stays as it is afterwards; the check then asserts the recorded state in full, and fails if any part of it doesn't match."
     },
     {
       "id": "status-near-auth",
@@ -2718,10 +3004,12 @@
       "status": "owner action needed",
       "code": [
         {
-          "path": "apps/wgp/src/server/near/near-auth.ts"
+          "path": "apps/wgp/src/server/near/near-auth.ts",
+          "anchor": "export interface NearAuthIdentity {"
         },
         {
-          "path": "docs/spikes/near-auth.md"
+          "path": "docs/spikes/near-auth.md",
+          "anchor": "# Spike S1: NEAR Auth on testnet"
         }
       ],
       "tests": [
@@ -2746,16 +3034,23 @@
       "status": "owner action needed",
       "code": [
         {
-          "path": "contracts/wgp/src/mt.rs",
-          "anchor": "pub fn mt_tokens_for_owner(",
-          "what": "(v2: what is deployed)"
+          "path": "docs/CONTRACT-V3-REVIEW.md",
+          "anchor": "## What v3 adds"
         }
       ],
       "chain": [
+        "v3-branch",
         "no-metadata",
         "no-enumeration"
       ],
-      "note": "Not on this branch (draft PR #59). The checks prove only that it is not deployed."
+      "note": "Not on main (branch review/contract-v3). The checks show the branch exists with its commits and that v3 is not deployed.",
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the review summary is on main, names the branch's commits, and the check looks for them in git"
+        }
+      ]
     },
     {
       "id": "proven-deploy",
@@ -2795,7 +3090,7 @@
       "id": "proven-factory",
       "section": "proven",
       "source": "README.md",
-      "quote": "The factory creates a Google player's account with their Privy key and a session key",
+      "quote": "The factory creates a Google player's account, 9a_z53.wgpnear.near, with their Privy key and a session key",
       "status": "proven on chain",
       "chain": [
         "tx-factory-account"
@@ -2828,7 +3123,7 @@
       "id": "proven-register",
       "section": "proven",
       "source": "README.md",
-      "quote": "A player's register_hero",
+      "quote": "A wallet player's register_hero",
       "status": "proven on chain",
       "chain": [
         "tx-register-hero"
@@ -2909,7 +3204,7 @@
       "id": "proven-list",
       "section": "proven",
       "source": "README.md",
-      "quote": "A player list_item (escrowed in the contract)",
+      "quote": "A player list_item, escrowed in the contract",
       "status": "proven on chain",
       "chain": [
         "tx-list-item"
@@ -2925,7 +3220,7 @@
       "id": "proven-fill",
       "section": "proven",
       "source": "README.md",
-      "quote": "Another player's buy_listing: a player-to-player trade",
+      "quote": "A buy_listing of another player's listing: a player-to-player trade",
       "status": "proven on chain",
       "chain": [
         "tx-buy-listing"
@@ -2936,6 +3231,32 @@
           "anchor": "pub fn buy_listing(&mut self, listing_id: u64) -> Listing {"
         }
       ]
+    },
+    {
+      "id": "proven-not-author",
+      "section": "proven",
+      "source": "README.md",
+      "quote": "The player transactions are from five different players' accounts, named in each row. None is from the author's own account, sele.wgpnear.near.",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "scripts/stats.mjs",
+          "anchor": "async function tallyChain("
+        }
+      ],
+      "chain": [
+        "tx-factory-account",
+        "tx-register-hero",
+        "tx-craft-suit",
+        "tx-equip-suit",
+        "tx-market-buy",
+        "tx-market-sell",
+        "tx-list-item",
+        "tx-buy-listing",
+        "tx-relayed-buy",
+        "player-tokens"
+      ],
+      "note": "Each of these transaction checks asserts its sender is not sele.wgpnear.near. The judge's commands B and E use other players' accounts too. Accounts were picked from the contract's public transaction list (README command D), nothing from the game's database."
     },
     {
       "id": "proven-npc-account",
@@ -3001,7 +3322,8 @@
           "anchor": "export const SIM_HZ"
         },
         {
-          "path": "packages/game-core/src/sim3d/dmath.ts"
+          "path": "packages/game-core/src/sim3d/dmath.ts",
+          "anchor": "export const PI ="
         }
       ],
       "tests": [
@@ -3030,7 +3352,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/test/determinism-scan.test.ts"
+          "path": "packages/game-core/test/determinism-scan.test.ts",
+          "anchor": "export function codeOnly("
         }
       ],
       "tests": [
@@ -3054,7 +3377,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/input/log.ts"
+          "path": "packages/game-core/src/input/log.ts",
+          "anchor": "export const LOG_VERSION ="
         },
         {
           "path": "apps/wgp/src/server/verify.ts",
@@ -3242,7 +3566,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/test/golden/hashes.json"
+          "path": "packages/game-core/test/golden/hashes.json",
+          "anchor": "\"hash\": \"cc529d56\","
         },
         {
           "path": "packages/game-core/src/golden.ts",
@@ -3275,7 +3600,8 @@
       "status": "live check",
       "code": [
         {
-          "path": "apps/wgp/src/app/api/runs/[id]/replay/route.ts"
+          "path": "apps/wgp/src/app/api/runs/[id]/replay/route.ts",
+          "anchor": "export const GET ="
         },
         {
           "path": "apps/wgp/src/server/db/runs.ts",
@@ -3336,7 +3662,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/server/db/client.ts"
+          "path": "apps/wgp/src/server/db/client.ts",
+          "anchor": "export type Schema ="
         },
         {
           "path": ".github/workflows/ci.yml",
@@ -3361,7 +3688,7 @@
       "id": "local-links",
       "section": "local",
       "source": "README.md",
-      "quote": "Checks every claim in this README and the docs against its code and tests",
+      "quote": "Checks each row of docs/EVIDENCE.md against its code and tests",
       "status": "proven by test",
       "code": [
         {
@@ -3369,7 +3696,8 @@
           "anchor": "export function staticProblems(claim) {"
         },
         {
-          "path": "docs/evidence.json"
+          "path": "docs/evidence.json",
+          "anchor": "\"contract\": \"game.wgpnear.near\","
         }
       ],
       "tests": [
@@ -3515,11 +3843,19 @@
       "status": "live check",
       "code": [
         {
-          "path": "apps/wgp/src/server/db/stats.ts"
+          "path": "apps/wgp/src/server/db/stats.ts",
+          "anchor": "export const STAT_MODES ="
         }
       ],
       "chain": [
         "site-stats"
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the live-count checks read their numbers from the README's text, not from a second copy"
+        }
       ]
     },
     {
@@ -3527,7 +3863,7 @@
       "section": "gameloop",
       "source": "docs/GAME-LOOP.md",
       "quote": "it documents the loop as built and does not predate the code",
-      "status": "proven by test",
+      "status": "checked in git",
       "code": [
         {
           "path": "docs/ARCHITECTURE.md",
@@ -3538,7 +3874,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-evidence.test.ts",
-          "name": "says plainly that GAME-LOOP.md documents the loop as built, and that the Nov 2 plan came first"
+          "name": "states the real order: the 2D prototype, then the 3D plan, then the 3D code, with GAME-LOOP.md written last"
         }
       ],
       "chain": [
@@ -3629,7 +3965,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "apps/wgp/src/lib/market/prompts.ts"
+          "path": "apps/wgp/src/lib/market/prompts.ts",
+          "anchor": "export interface Holdings {"
         },
         {
           "path": "apps/wgp/src/server/market/quest.ts",
@@ -3659,7 +3996,7 @@
       "id": "gameloop-session-key",
       "section": "gameloop",
       "source": "docs/GAME-LOOP.md",
-      "quote": "The key can only call the game contract and can't attach a deposit, so it can't move assets; the relayer pays the gas.",
+      "quote": "The key can only call the game contract and can't attach a deposit, so it can't transfer a token out of the account; the relayer pays the gas.",
       "status": "proven by test",
       "code": [
         {
@@ -3682,6 +4019,11 @@
           "pkg": "contract",
           "file": "contracts/wgp/src/tests.rs",
           "name": "every_transfer_method_needs_one_yocto"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the documents state those bounds with the contract's own caps, and no longer say it can never move assets"
         }
       ]
     },
@@ -3689,12 +4031,16 @@
       "id": "gameloop-sources-sinks",
       "section": "gameloop",
       "source": "docs/GAME-LOOP.md",
-      "quote": "Bits enter only through verified nights and leave through the 2% fee; items enter as loot and leave through crafting.",
-      "status": "proven by test",
+      "quote": "Bits have entered the contract three ways, and only one of them repeats.",
+      "status": "proven on chain",
       "code": [
         {
           "path": "contracts/wgp/src/lib.rs",
           "anchor": "pub fn mint_rewards(&mut self, batch: Vec<RewardMint>) -> Vec<RewardStatus> {"
+        },
+        {
+          "path": "contracts/wgp/src/market.rs",
+          "anchor": "pub fn set_market_params(&mut self, params: MarketParams, pools: Vec<PoolConfig>) {"
         }
       ],
       "tests": [
@@ -3712,9 +4058,24 @@
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
           "name": "splits what was minted and burned by cause without losing a Bit"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "names all three sources: verified nights, the market's opening and the NPC's one-off seed"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "seeding_a_pool_mints_to_the_vendor"
         }
       ],
-      "note": "One exception, disclosed in the docs: opening the market minted Gwei's starting till and stock once (proven-open-market)."
+      "note": "This line used to say Bits enter only through verified nights. The three transactions are looked up: the market's opening (which minted Gwei's tills and stock), the NPC's one-off seed, and a night's reward mint. The test shows these are the only two contract methods that can mint Bits.",
+      "chain": [
+        "tx-open-market",
+        "tx-npc-seed",
+        "tx-mint-rewards"
+      ]
     },
     {
       "id": "gameloop-badges",
@@ -4017,7 +4378,8 @@
       "status": "owner action needed",
       "code": [
         {
-          "path": "scripts/near/market-args.ts"
+          "path": "scripts/near/market-args.ts",
+          "anchor": "const args ="
         }
       ],
       "chain": [
@@ -4434,7 +4796,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/sim3d/trial.ts"
+          "path": "packages/game-core/src/sim3d/trial.ts",
+          "anchor": "export const TRIAL_COURSE_IDS: readonly TrialCourseId[] ="
         }
       ],
       "tests": [
@@ -4458,7 +4821,8 @@
       "status": "proven by test",
       "code": [
         {
-          "path": "packages/game-core/src/ghost.ts"
+          "path": "packages/game-core/src/ghost.ts",
+          "anchor": "export const GHOST_ACTIONS: readonly HeroAction[] ="
         }
       ],
       "tests": [
@@ -4579,7 +4943,7 @@
       "id": "arch-status",
       "section": "arch",
       "source": "docs/ARCHITECTURE.md",
-      "quote": "Two things here are built and not yet on mainnet: record_season and its trophies first run when Season 1 closes, and NEAR Auth waits for its mainnet client.",
+      "quote": "Two things here are built and were not on mainnet on Nov 13: record_season and its trophies first run when Season 1 closes",
       "status": "proven on chain",
       "code": [
         {
@@ -4588,7 +4952,7 @@
         }
       ],
       "chain": [
-        "season-not-recorded",
+        "season-s1",
         "contract-account"
       ]
     },
@@ -5021,6 +5385,757 @@
           "name": "in a till players funded, state her stock and till plainly and say whose Bits keep her buying"
         }
       ]
+    },
+    {
+      "id": "evidence-scope",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "It does not cover every sentence.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function coverage(data) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the README's coverage block is what the script generates, and its summary lines are the script's"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "every row whose status promises a test cites one, and every code pointer is anchored"
+        }
+      ],
+      "note": "The README used to say every claim was paired with a test. The coverage block under this sentence is generated from this file and gives the real counts."
+    },
+    {
+      "id": "evidence-pass-means",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "PASS is mechanical and means no more than this: the claim's words are still in the document, each code pointer's anchor text is still in its file, and each cited test ran and passed just now",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function staticProblems(claim) {"
+        },
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function resolveAnchor(rel, anchor) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-evidence.test.ts",
+          "name": "every claim's quote, code pointers and tests still match the repository"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "every row whose status promises a test cites one, and every code pointer is anchored"
+        }
+      ]
+    },
+    {
+      "id": "evidence-statuses",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "proven by test, simulation only and built, off on mainnet rows always cite a test.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export const TEST_STATUSES ="
+        },
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function loadEvidence() {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "every row whose status promises a test cites one, and every code pointer is anchored"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-evidence.test.ts",
+          "name": "is honest about reach: a claim whose only proof is on chain or on the live site doesn't say proven by test"
+        }
+      ],
+      "note": "The script refuses an evidence.json that breaks this (exit 2), and the guard test fails on it."
+    },
+    {
+      "id": "evidence-output",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "It prints one line per claim, then one summary line.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export const summaryLine ="
+        },
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function renderCoverage(data) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the README's coverage block is what the script generates, and its summary lines are the script's"
+        }
+      ],
+      "note": "The README used to promise one PASS line per claim. Offline, the rows that rest on the chain or the site are SKIP. The exact summary line for each command is generated into the README's coverage block by the function that prints it."
+    },
+    {
+      "id": "evidence-numbers-bound",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "pnpm evidence --chain reads the numbers from the two tables below and fails if a live count is below one of them.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export function resolveExpect(e, readDoc = read) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the live-count checks read their numbers from the README's text, not from a second copy"
+        }
+      ],
+      "chain": [
+        "site-stats",
+        "chain-tally"
+      ]
+    },
+    {
+      "id": "evidence-rate-limit",
+      "section": "evidence",
+      "source": "README.md",
+      "quote": "A rate-limited endpoint is retried, then its rows are SKIP (never FAIL)",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export async function fetchJson(url, init = {}, opts = {}) {"
+        },
+        {
+          "path": "scripts/evidence.mjs",
+          "anchor": "export const rateLimitLine ="
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "a rate-limited endpoint is retried with a growing wait, then skipped as rate limited, never failed"
+        }
+      ]
+    },
+    {
+      "id": "problem-guest-night",
+      "section": "problem",
+      "source": "README.md",
+      "quote": "It's a full 3D action game you can finish a night of as a guest, with no account.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/components/first-minute/quick-start.tsx",
+          "anchor": "export function QuickStart() {"
+        },
+        {
+          "path": "apps/wgp/src/game3d/session/night.ts",
+          "anchor": "export interface NightSession {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-flow.test.ts",
+          "name": "a first visit is the quick start: /play and Play now lead to /play/start, which makes The Node and opens the night"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/first-minute/quick-hero.test.ts",
+          "name": "can start its first night straight away"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/game3d/session/loop3d.test.ts",
+          "name": "plays a bot night through uneven frames into the same log and hash as game-core"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/first-minute/guest-night-next.test.ts",
+          "name": "says the hero keeps its level and bag when both fit the import"
+        }
+      ],
+      "chain": [
+        "site-play"
+      ],
+      "note": "Walked by hand on Nov 13: a first visit to /play as a guest reached the Banked card with an Unranked score, with no sign-in."
+    },
+    {
+      "id": "problem-chain-out",
+      "section": "problem",
+      "source": "README.md",
+      "quote": "A player signs in once. After that a game-only key signs their game actions and our relayer pays the gas.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/near/relay.ts",
+          "anchor": "export async function submitSignedDelegate("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/near/relay.test.ts",
+          "name": "accepts a session-key call to an allowlisted game method"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/near/relay.test.ts",
+          "name": "relays every market method from a session key with no deposit"
+        }
+      ],
+      "chain": [
+        "tx-relayed-buy"
+      ]
+    },
+    {
+      "id": "problem-reproducible",
+      "section": "problem",
+      "source": "README.md",
+      "quote": "The server replays each ranked night's inputs through the same deterministic simulation the browser ran, and ranks only what reproduces.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": "export async function submitRun("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/real-replay.test.ts",
+          "name": "verifies a bot-played night, saves it and ranks it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/real-replay.test.ts",
+          "name": "rejects a log that was tampered with"
+        }
+      ],
+      "chain": [
+        "replay-top"
+      ]
+    },
+    {
+      "id": "loop-night-length",
+      "section": "gameloop",
+      "source": "README.md",
+      "quote": "the three recorded nights in this repository that clear all four stops replay in 63, 67 and 81 seconds of game time",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "packages/game-core/src/golden.ts",
+          "anchor": "export function replayGolden(c: GoldenCase): ReplayResult {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "a night that clears all four stops replays in one to two minutes, and the documents say so"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/bot-nights.test.ts",
+          "name": "clears every night with no NaN, every encounter finished, sensible durations, and replays to the same hash"
+        }
+      ],
+      "chain": [
+        "site-night-length"
+      ],
+      "note": "The README and GAME-LOOP.md used to say a night takes five minutes (or 2 to 5). The test replays the recorded nights and derives the seconds the documents quote; the chain check derives verified seconds per verified run from /api/stats and fails outside 45 to 180."
+    },
+    {
+      "id": "gameloop-night-length",
+      "section": "gameloop",
+      "source": "docs/GAME-LOOP.md",
+      "quote": "A night is four stops, two villain fights and two errands for neighbours, and takes one to two minutes.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "packages/game-core/src/sim3d/constants.ts",
+          "anchor": "export const RULESET_VERSION = 4;"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "a night that clears all four stops replays in one to two minutes, and the documents say so"
+        }
+      ],
+      "chain": [
+        "site-night-length"
+      ]
+    },
+    {
+      "id": "local-no-network",
+      "section": "local",
+      "source": "README.md",
+      "quote": "The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/test/no-network.ts",
+          "anchor": "export function guardedFetch(real: typeof fetch): typeof fetch {"
+        },
+        {
+          "path": "apps/wgp/vitest.config.ts",
+          "anchor": "setupFiles: [\"./src/test/no-network.ts\"]"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/test/no-network.test.ts",
+          "name": "refuses a fetch to a real host and records it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/test/no-network.test.ts",
+          "name": "still records the request when the code under test swallows the error"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/test/no-network.test.ts",
+          "name": "refuses a raw https or http connection to a real host"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/test/no-network.test.ts",
+          "name": "game-core has no network API to guard: its source never names fetch, a socket or an http module"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/invest.test.ts",
+          "name": "is treated as v2 when the version can't be read, without remembering that"
+        }
+      ],
+      "note": "A cold run's log showed one test reaching for mainnet's RPC (the contract-version read) and carrying on when it failed. That test now uses a fake reader, and the guard fails any test whose code makes a real request, even when the code swallows the error."
+    },
+    {
+      "id": "sustain-session-key",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "A stolen one could still trade as the player: buy from and sell to Gwei, list items, buy listings, craft and equip.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/near/policy.ts",
+          "anchor": "export const RELAY_METHODS ="
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "can call exactly the game's deposit-free methods; transfers, owner and operator methods need a deposit or a role"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the documents state those bounds with the contract's own caps, and no longer say it can never move assets"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "listings_are_guarded"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "daily_caps_reset_at_midnight_utc"
+        }
+      ]
+    },
+    {
+      "id": "disclosures-first-commit",
+      "section": "disclosures",
+      "source": "README.md",
+      "quote": "The repository's first commit is 2026-11-01",
+      "status": "checked in git",
+      "code": [
+        {
+          "path": "package.json",
+          "anchor": "\"evidence\": "
+        }
+      ],
+      "chain": [
+        "repo-history"
+      ]
+    },
+    {
+      "id": "disclosures-ai-trailer",
+      "section": "disclosures",
+      "source": "README.md",
+      "quote": "One early commit (0d28b18) carries a Co-Authored-By trailer and no other commit does, so this paragraph is the disclosure.",
+      "status": "checked in git",
+      "code": [
+        {
+          "path": "README.md",
+          "anchor": "## Credits and disclosure"
+        }
+      ],
+      "chain": [
+        "repo-history"
+      ],
+      "note": "The README used to say no commit carries an AI trailer. One does."
+    },
+    {
+      "id": "disclosures-libraries",
+      "section": "disclosures",
+      "source": "README.md",
+      "quote": "Next.js 16 (with the React Compiler), React 19, three.js 0.187, React Three Fiber 9 and drei 10",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/package.json",
+          "anchor": "\"@react-three/fiber\": "
+        },
+        {
+          "path": "contracts/wgp/Cargo.toml",
+          "anchor": "near-sdk = \"5.30\""
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the libraries the README credits are the versions the lockfiles pin"
+        }
+      ]
+    },
+    {
+      "id": "disclosures-no-auto-deploy",
+      "section": "disclosures",
+      "source": "README.md",
+      "quote": "pushes to main don't deploy by themselves",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/vercel.json",
+          "anchor": "\"main\": false"
+        },
+        {
+          "path": "scripts/deploy-prod.sh",
+          "anchor": "#!/usr/bin/env bash"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "every file the disclosures and credits name is in the repository"
+        }
+      ],
+      "note": "The same test checks that every file the disclosures and credits name exists. Which earlier project a file was adapted from is the author's statement and has no check."
+    },
+    {
+      "id": "arch-routes",
+      "section": "arch",
+      "source": "docs/ARCHITECTURE.md",
+      "quote": "Idempotent. Decodes and replays the log, then checks the ruleset, at least 20 s of game time, game time ≤ wall time + 5 s, and the client's final state hash.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/verify.ts",
+          "anchor": "export const VERIFY_RULES ="
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "ARCHITECTURE.md's route table names routes that exist, and its limits are the code's"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "a night that clears all four stops replays in one to two minutes, and the documents say so"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/real-replay.test.ts",
+          "name": "rejects a log that was tampered with"
+        }
+      ],
+      "note": "This row used to read wall time + 60 s, and the input-log line a 6-minute night; both now match the code. The test also checks every route in the table has a route file."
+    },
+    {
+      "id": "arch-no-schedule",
+      "section": "arch",
+      "source": "docs/ARCHITECTURE.md",
+      "quote": "The three /api/cron/* routes (mint, sweep, market-snapshot) remain as manual fallbacks behind CRON_SECRET; nothing in the repository calls them except scripts/near/e2e-sandbox.ts, the local sandbox test.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/background.ts",
+          "anchor": "export async function claimWindow("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "the three /api/cron routes are bearer-protected manual fallbacks, and only the sandbox script calls one"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/background.test.ts",
+          "name": "lets one caller per window run a job, across callers"
+        }
+      ]
+    },
+    {
+      "id": "arch-session-key",
+      "section": "arch",
+      "source": "docs/ARCHITECTURE.md",
+      "quote": "so a session key can never transfer a token. It can trade as the player through the market's deposit-free calls, within the abuse guards below.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "contracts/wgp/src/mt.rs",
+          "anchor": "pub fn mt_transfer("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "can call exactly the game's deposit-free methods; transfers, owner and operator methods need a deposit or a role"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/tests.rs",
+          "name": "every_transfer_method_needs_one_yocto"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "moving_bits_still_needs_one_yocto"
+        }
+      ]
+    },
+    {
+      "id": "arch-abuse-guards",
+      "section": "arch",
+      "source": "docs/ARCHITECTURE.md",
+      "quote": "daily caps per account (40 vendor trades, 10 listings, 10 fills, 3,000 Bits of fills), 3 open listings each, 300 overall, 20 items a call",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "contracts/wgp/src/market.rs",
+          "anchor": "impl Default for MarketParams {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "ARCHITECTURE.md's route table names routes that exist, and its limits are the code's"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "the app's market defaults are the contract's MarketParams::default()"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "daily_caps_reset_at_midnight_utc"
+        },
+        {
+          "pkg": "contract",
+          "file": "contracts/wgp/src/market_tests.rs",
+          "name": "open_listings_are_capped_per_account_and_overall"
+        }
+      ],
+      "chain": [
+        "market-state"
+      ]
+    },
+    {
+      "id": "arch-determinism-scan",
+      "section": "arch",
+      "source": "docs/ARCHITECTURE.md",
+      "quote": "Banned in the core, enforced by a source scan in the tests",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "packages/game-core/test/determinism-scan.test.ts",
+          "anchor": "export function codeOnly("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/determinism-scan.test.ts",
+          "name": "catches each banned form and ignores comments and strings"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/determinism-scan.test.ts",
+          "name": "finds none of them in src/rules, src/sim3d or src/input"
+        }
+      ]
+    },
+    {
+      "id": "v3-commits",
+      "section": "v3",
+      "source": "docs/CONTRACT-V3-REVIEW.md",
+      "quote": "Thirteen commits on Nov 12, 2026, on top of main at e88271f. The branch head is 718423d.",
+      "status": "owner action needed",
+      "code": [
+        {
+          "path": "docs/CONTRACT-V3-REVIEW.md",
+          "anchor": "## The commits"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the review summary is on main, names the branch's commits, and the check looks for them in git"
+        }
+      ],
+      "chain": [
+        "v3-branch"
+      ],
+      "note": "The git check finds each of the thirteen commits on the branch. In a clone without the branch it is skipped, and says how to fetch it."
+    },
+    {
+      "id": "v3-not-on-main",
+      "section": "v3",
+      "source": "docs/CONTRACT-V3-REVIEW.md",
+      "quote": "It is not deployed, and its source is not on main.",
+      "status": "owner action needed",
+      "code": [
+        {
+          "path": "contracts/wgp/src/lib.rs",
+          "anchor": "pub fn migrate() -> Self {",
+          "what": "(v2: what main holds and mainnet runs)"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the review summary is on main, names the branch's commits, and the check looks for them in git"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
+          "name": "has no metadata extension, no global enumeration and no approval methods anywhere in the contract"
+        }
+      ],
+      "chain": [
+        "v3-branch",
+        "no-metadata",
+        "no-enumeration",
+        "no-invest-views"
+      ]
+    },
+    {
+      "id": "v3-review-findings",
+      "section": "v3",
+      "source": "docs/CONTRACT-V3-REVIEW.md",
+      "quote": "The branch's write-up lists the findings without grading them. The severities below are the owner's reading of that list.",
+      "status": "owner action needed",
+      "code": [
+        {
+          "path": "docs/CONTRACT-V3-REVIEW.md",
+          "anchor": "## The independent review (Nov 12)"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/coverage.test.ts",
+          "name": "the review summary is on main, names the branch's commits, and the check looks for them in git"
+        }
+      ],
+      "chain": [
+        "v3-branch"
+      ],
+      "note": "The test holds the summary's figures (117 unit tests, 9 sandbox tests, 62 of 63 entries, 17.1 Tgas, the fix in a1af2e5, the rollback's condition) to the text; the check confirms the review's files and commits are on the branch. Nobody re-ran v3's tests for this row."
+    },
+    {
+      "id": "story-chapter-rulesets",
+      "section": "story",
+      "source": "docs/chapters/case-002.md",
+      "quote": "CASE_002_RULESET = \"c002-1\"",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "packages/game-core/src/rules/chapters.ts",
+          "anchor": "export const CASE_002_RULESET = \"c002-1\";"
+        },
+        {
+          "path": "packages/game-core/src/rules/case-003.ts",
+          "anchor": "export const FEE_STRIKE_RULESET = \"c003-1\";"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "each chapter document states the ruleset tag the code uses, and the story bible has a section for every cast member"
+        }
+      ],
+      "note": "One row for the three chapter documents: each states the ruleset tag its case's runs carry, and the three differ."
+    },
+    {
+      "id": "story-cast",
+      "section": "story",
+      "source": "docs/story/bible.md",
+      "quote": "## 3. The cast",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "packages/game-core/src/rules/cast.ts",
+          "anchor": "export const CAST: CastMember[] = ["
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/claims-precise.test.ts",
+          "name": "each chapter document states the ruleset tag the code uses, and the story bible has a section for every cast member"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/landing/copy.test.ts",
+          "name": "labels Gwei Stacy the vendor, the player's hero the only hero, and every villain a villain"
+        }
+      ],
+      "note": "The bible has a section for each of the game's ten cast members. Its prose is design, not a checkable claim."
     }
   ],
   "checks": {
@@ -5114,14 +6229,14 @@
       "kind": "view",
       "method": "get_player",
       "args": {
-        "account_id": "sele.wgpnear.near"
+        "account_id": "9a_z53.wgpnear.near"
       },
-      "about": "A Google player's tokens in the contract: a hero, Bits, a suit and a soulbound badge.",
+      "about": "A Google player's tokens in the contract (not the author's account): a hero, Bits, crafted suits and soulbound badges.",
       "expect": [
         {
           "path": "tokens.*.0",
-          "op": "anyMatch",
-          "value": "^hero:sele\\.wgpnear\\.near$"
+          "op": "includes",
+          "value": "hero:9a_z53.wgpnear.near"
         },
         {
           "path": "tokens.*.0",
@@ -5130,8 +6245,8 @@
         },
         {
           "path": "tokens.*.0",
-          "op": "anyMatch",
-          "value": "^suit:"
+          "op": "includes",
+          "value": "suit:stealth"
         },
         {
           "path": "tokens.*.0",
@@ -5141,12 +6256,12 @@
         {
           "path": "reward_nonce",
           "op": "gte",
-          "value": 5
+          "value": 45
         },
         {
           "path": "level",
           "op": "gte",
-          "value": 4
+          "value": 21
         }
       ]
     },
@@ -5154,7 +6269,7 @@
       "kind": "view",
       "method": "mt_tokens_for_owner",
       "args": {
-        "account_id": "sele.wgpnear.near"
+        "account_id": "9a_z53.wgpnear.near"
       },
       "about": "NEP-245's per-owner enumeration, which the deployed contract has.",
       "expect": [
@@ -5270,7 +6385,7 @@
         {
           "path": "amount",
           "op": "gte",
-          "value": 10000000000000000000000
+          "value": 1e+22
         },
         {
           "path": "keys.length",
@@ -5336,22 +6451,6 @@
       ],
       "whenFails": "If reward_nonce is over 1, something was minted to him after the seed: the docs' \"one-off seed\" needs a second look."
     },
-    "season-not-recorded": {
-      "kind": "view",
-      "method": "get_season",
-      "args": {
-        "season_id": "s1"
-      },
-      "about": "Season 1 has not been recorded on chain.",
-      "expect": [
-        {
-          "path": "",
-          "op": "eq",
-          "value": null
-        }
-      ],
-      "whenFails": "Season 1 was recorded: update the README's status table, and make its transaction a proven-on-chain claim."
-    },
     "site-market": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market",
@@ -5387,17 +6486,17 @@
     "site-stats": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/stats",
-      "about": "The game's own counts, each at least the number the README quotes (as of Nov 12, 17:35 UTC).",
+      "about": "The game's own counts, each at least the number the README's table gives (the check reads the table).",
       "expect": [
         {
           "path": "runs.started",
           "op": "gte",
-          "value": 262
+          "doc": "Matches started / finished and verified \\| ([\\d,]+) /"
         },
         {
           "path": "runs.verified",
           "op": "gte",
-          "value": 233
+          "doc": "finished and verified \\| [\\d,]+ / ([\\d,]+)"
         },
         {
           "path": "runs.rejected",
@@ -5407,102 +6506,97 @@
         {
           "path": "runs.hoursVerified",
           "op": "gte",
-          "value": 6.2
+          "doc": "Verified play time \\| ([\\d.]+) hours"
         },
         {
           "path": "runs.byMode.patrol.verified",
           "op": "gte",
-          "value": 130
+          "doc": "Ranked nights ([\\d,]+) ·"
         },
         {
           "path": "runs.byMode.daily.verified",
           "op": "gte",
-          "value": 63
+          "doc": "Daily Run ([\\d,]+) ·"
+        },
+        {
+          "path": "derived.caseVerified",
+          "op": "gte",
+          "doc": "Case files ([\\d,]+) ·"
         },
         {
           "path": "runs.byMode.trial.verified",
           "op": "gte",
-          "value": 15
+          "doc": "Time trials ([\\d,]+) ·"
         },
         {
-          "path": "runs.byMode.case-001.verified",
+          "path": "runs.byMode.duel.verified",
           "op": "gte",
-          "value": 9
-        },
-        {
-          "path": "runs.byMode.case-002.verified",
-          "op": "gte",
-          "value": 7
-        },
-        {
-          "path": "runs.byMode.case-003.verified",
-          "op": "gte",
-          "value": 9
+          "doc": "Duels ([\\d,]+) \\|"
         },
         {
           "path": "players.total",
           "op": "gte",
-          "value": 26
+          "doc": "\\| Heroes \\| ([\\d,]+) \\("
         },
         {
           "path": "players.withVerifiedRun",
           "op": "gte",
-          "value": 23
+          "doc": "\\| Heroes \\| [\\d,]+ \\(([\\d,]+) have a verified match"
         },
         {
           "path": "city.outings",
           "op": "gte",
-          "value": 291
+          "doc": "Free-roam City outings \\| ([\\d,]+),"
         },
         {
           "path": "city.tasksDone",
           "op": "gte",
-          "value": 19
+          "doc": "with ([\\d,]+) side tasks finished"
         },
         {
           "path": "referrals.invited",
           "op": "gte",
-          "value": 7
+          "doc": "\\| Invites \\| ([\\d,]+) friends invited"
         },
         {
           "path": "referrals.qualified",
           "op": "gte",
-          "value": 4
+          "doc": "friends invited, ([\\d,]+) count"
         },
         {
           "path": "referrals.rewards",
           "op": "gte",
-          "value": 1
+          "doc": "count, ([\\d,]+) Recruiter badge earned"
         },
         {
           "path": "chain.rewardMints.queued",
           "op": "gte",
-          "value": 170
+          "doc": "sent to the contract \\| ([\\d,]+) /"
         },
         {
           "path": "chain.rewardMints.sent",
           "op": "gte",
-          "value": 170
+          "doc": "sent to the contract \\| [\\d,]+ / ([\\d,]+)"
         },
         {
           "path": "chain.contractId",
           "op": "eq",
           "value": "game.wgpnear.near"
         }
-      ]
+      ],
+      "derive": "stats"
     },
     "site-duels": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/stats",
-      "about": "No duel has been verified yet.",
+      "about": "The live count of verified duels (any count passes: the README gives a dated figure and points here for the current one).",
       "expect": [
         {
           "path": "runs.byMode.duel.verified",
-          "op": "eq",
-          "value": 0
+          "op": "type",
+          "value": "number"
         }
-      ],
-      "whenFails": "A player finished a verified duel: update the README's Ways to play row and its by-mode counts."
+      ]
     },
     "site-npc": {
       "kind": "http",
@@ -5589,12 +6683,12 @@
     "nearblocks-count": {
       "kind": "http",
       "url": "https://api.nearblocks.io/v1/account/game.wgpnear.near/txns/count",
-      "about": "NearBlocks' count of the contract's transactions, at least the README's.",
+      "about": "NearBlocks answers with its own count of the contract's transactions (a second reading of the same index; pnpm stats' tally is the one compared with the README).",
       "expect": [
         {
           "path": "txns.0.count",
-          "op": "gte",
-          "value": 232
+          "op": "anyMatch",
+          "value": "^[1-9]\\d*$"
         }
       ]
     },
@@ -5609,62 +6703,62 @@
       "json": true,
       "skipUnless": "json.chain.complete",
       "timeoutMs": 420000,
-      "about": "pnpm stats' own tally of every call the contract received (about two minutes): each count at least the README's, with the NPC trader's calls counted apart from players'.",
+      "about": "pnpm stats' own tally of every call the contract received (30 seconds to two minutes): each count at least the README's table (the check reads the table), with the NPC trader's calls counted apart from players'.",
       "expect": [
         {
           "path": "json.chain.calls",
           "op": "gte",
-          "value": 245
+          "doc": "Calls to `game\\.wgpnear\\.near` \\| ([\\d,]+)"
         },
         {
           "path": "json.chain.playerAccounts",
           "op": "gte",
-          "value": 18
+          "doc": "\\(Sandwich Man is not one\\) \\| ([\\d,]+)"
         },
         {
           "path": "json.chain.byMethod.mint_rewards",
           "op": "gte",
-          "value": 168
+          "doc": "one is Sandwich Man's seed\\) \\| ([\\d,]+)"
         },
         {
           "path": "json.chain.byMethod.register_hero",
           "op": "gte",
-          "value": 19
+          "doc": "\\| `register_hero` \\| ([\\d,]+)"
         },
         {
           "path": "json.chain.byMethod.craft_suit",
           "op": "gte",
-          "value": 16
+          "doc": "`craft_suit` / `equip_suit` \\| ([\\d,]+) /"
         },
         {
           "path": "json.chain.byMethod.equip_suit",
           "op": "gte",
-          "value": 7
+          "doc": "`craft_suit` / `equip_suit` \\| [\\d,]+ / ([\\d,]+)"
         },
         {
           "path": "json.chain.byMethod.market_buy",
           "op": "gte",
-          "value": 11
+          "doc": "`buy_listing` \\| ([\\d,]+),"
         },
         {
           "path": "json.chain.byMethod.market_sell",
           "op": "gte",
-          "value": 5
+          "doc": "`buy_listing` \\| [\\d,]+, ([\\d,]+),"
         },
         {
           "path": "json.chain.byMethod.list_item",
           "op": "gte",
-          "value": 7
+          "doc": "`buy_listing` \\| [\\d,]+, [\\d,]+, ([\\d,]+),"
         },
         {
           "path": "json.chain.byMethod.buy_listing",
           "op": "gte",
-          "value": 4
+          "doc": "`buy_listing` \\| [\\d,]+, [\\d,]+, [\\d,]+, ([\\d,]+)"
         },
         {
           "path": "json.chain.npcCalls",
           "op": "gte",
-          "value": 1
+          "doc": "not a player\\) \\| ([\\d,]+),"
         }
       ]
     },
@@ -5693,27 +6787,53 @@
     },
     "loop-on-paper": {
       "kind": "git",
-      "first": "94c8d1945c5c7c6f727aa346a1ec916fb9cae931",
-      "then": "143b12e9e02604c5269890c85f3b23b10cf882b6",
-      "about": "The plan (docs/ARCHITECTURE.md) was committed before the first 3D simulation commit. Local: needs this clone's history, no network.",
+      "order": [
+        "699457df76321bde00f9420f67725834dafac16d",
+        "94c8d1945c5c7c6f727aa346a1ec916fb9cae931",
+        "143b12e9e02604c5269890c85f3b23b10cf882b6",
+        "0134541a52a4eb30d49ba70a43115400d30405b5"
+      ],
+      "about": "The order the loop was written in: the 2D real-time prototype (699457d, Nov 1), then the 3D plan docs/ARCHITECTURE.md (94c8d19, Nov 2), then the first 3D simulation code (143b12e, its types; 0134541, the simulation). Local: needs this clone's history, no network.",
       "expect": [
         {
-          "path": "ancestor",
+          "path": "inOrder",
           "op": "eq",
           "value": true
         },
         {
-          "path": "added",
+          "path": "dates.0",
+          "op": "anyMatch",
+          "value": "^2026-11-01 "
+        },
+        {
+          "path": "dates.1",
+          "op": "anyMatch",
+          "value": "^2026-11-02 "
+        },
+        {
+          "path": "added.0",
           "op": "includes",
-          "value": "docs/ARCHITECTURE.md"
+          "value": "apps/wgp/src/sim/core/sim.ts"
+        },
+        {
+          "path": "added.1",
+          "op": "eq",
+          "value": [
+            "docs/ARCHITECTURE.md"
+          ]
+        },
+        {
+          "path": "added.2",
+          "op": "includes",
+          "value": "packages/game-core/src/sim3d/contract.ts"
         }
       ]
     },
     "tx-relayed-buy": {
       "kind": "tx",
-      "hash": "GxuFQYCX7DzCFRXenpQuhfxz1hUekf9t2FapLjCUeMXn",
+      "hash": "GJXrKe2oNjbTvxG2HyMt4DeTBXNPxGVRBbXsUrzv2TPJ",
       "sender": "relayer.wgpnear.near",
-      "about": "README command E: a market_buy signed by a player's session key and sent by the relayer, with no deposit, the fee burned.",
+      "about": "README command E: a market_buy by the player azalleaxyz.wgpnear.near (not the author's account), signed by their session key and sent by the relayer, with no deposit, the fee burned.",
       "expect": [
         {
           "path": "succeeded",
@@ -5733,7 +6853,7 @@
         {
           "path": "sender",
           "op": "eq",
-          "value": "sele.wgpnear.near"
+          "value": "azalleaxyz.wgpnear.near"
         },
         {
           "path": "receiver",
@@ -5768,6 +6888,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "market_trade"
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -5834,9 +6959,9 @@
     },
     "tx-factory-account": {
       "kind": "tx",
-      "hash": "CY6esX2ALc9qoDqSVBkuHP29ovDSZpH32C7cLaYL48iT",
-      "sender": "relayer.wgpnear.near",
-      "about": "The factory creating a player's account with two keys.",
+      "hash": "DFF1SsPjKPto6Kxa3TfpdX2pSMNC9GftnbJuz9PRWcV8",
+      "sender": "wgpnear.near",
+      "about": "The factory creating a player's account (9a_z53.wgpnear.near, not the author's) with two keys.",
       "expect": [
         {
           "path": "succeeded",
@@ -5851,7 +6976,7 @@
         {
           "path": "receiver",
           "op": "eq",
-          "value": "sele.wgpnear.near"
+          "value": "9a_z53.wgpnear.near"
         },
         {
           "path": "actions",
@@ -5937,6 +7062,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "\"token_ids\":\\[\"hero:"
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -5977,6 +7107,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "\"event\":\"mt_mint\".*suit:stealth"
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -6007,6 +7142,11 @@
           "value": [
             "equip_suit"
           ]
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -6049,6 +7189,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "\"side\":\"buy\""
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -6086,6 +7231,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "\"side\":\"sell\""
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -6121,6 +7271,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "market_list"
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -6161,6 +7316,11 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "market_fill"
+        },
+        {
+          "path": "sender",
+          "op": "ne",
+          "value": "sele.wgpnear.near"
         }
       ]
     },
@@ -6343,6 +7503,100 @@
           "value": [
             "Transfer"
           ]
+        }
+      ]
+    },
+    "season-s1": {
+      "kind": "season",
+      "season": "s1",
+      "endsAt": "2026-11-15T00:00:00.000Z",
+      "about": "Season 1's record, in whichever state it is: open (nothing recorded, no results file), closed (the board frozen, the record not landed yet) or recorded (root, digest, board and trophies all matching the results file).",
+      "whenFails": "The record and the site disagree, or something was recorded before the season's end."
+    },
+    "v3-branch": {
+      "kind": "git",
+      "ref": "review/contract-v3",
+      "commits": [
+        "e404807e22c1c00581138a5f25d810f19d80144f",
+        "04d3c36dd4a129e4763dc93c573dfa0c468a1560",
+        "fa3a59d61ee0d2e9aef7f9c2e55db1cac4d5520b",
+        "f1bf68107aa9d0a1ac7be4e883758df710cb597a",
+        "cdb71f71e2b5dee13b08567c2416ad481c29f498",
+        "00b2fbdf4d952afd9a68e5ee6ac7271c4198104f",
+        "f7076e891292f8909653687a68c790c45a4bd539",
+        "b795f7fa06ccb7b77d8f5e511dbf5a01d71d5982",
+        "19385eca968877eb057b615c9d1a43ca9a682e6a",
+        "d13a8f76d9f55941ab3f67c85d75b7d535633a15",
+        "7aff71292f47fba3443eaa543da3efbc1cb1789e",
+        "a1af2e5c897ce690563fc6105b1f2f2598223a78",
+        "718423dc205f83b263ad38122b5ae9c0a64c17c0"
+      ],
+      "files": [
+        "docs/CONTRACT-V3.md",
+        "contracts/wgp/src/invest.rs",
+        "contracts/wgp/src/meta.rs",
+        "contracts/wgp/src/v3_tests/review.rs",
+        "contracts/wgp/sandbox/tests/mainnet_rehearsal.rs",
+        "contracts/wgp/sandbox/tests/review_v3.rs",
+        "contracts/wgp/rollback/build.sh"
+      ],
+      "about": "The branch review/contract-v3 holds the thirteen commits docs/CONTRACT-V3-REVIEW.md names, with v3's source, its review tests, the mainnet rehearsal and the rollback build, and it is not merged into this checkout. Local: needs the branch in this clone; skipped, with a note, in a clone that doesn't have it.",
+      "expect": [
+        {
+          "path": "missing",
+          "op": "eq",
+          "value": []
+        },
+        {
+          "path": "files.length",
+          "op": "eq",
+          "value": 7
+        },
+        {
+          "path": "merged",
+          "op": "eq",
+          "value": false
+        }
+      ],
+      "whenFails": "If merged is true, v3's source is now on this branch: the README must stop saying it is not on main."
+    },
+    "repo-history": {
+      "kind": "git",
+      "history": true,
+      "about": "This clone's history: the date of its first commit, and the commits that carry an AI trailer. Local, no network.",
+      "expect": [
+        {
+          "path": "firstCommit",
+          "op": "eq",
+          "value": "2026-11-01"
+        },
+        {
+          "path": "aiTrailers.length",
+          "op": "eq",
+          "value": 1
+        },
+        {
+          "path": "aiTrailers.0",
+          "op": "anyMatch",
+          "value": "^0d28b18"
+        }
+      ]
+    },
+    "site-night-length": {
+      "kind": "http",
+      "url": "https://www.wgponnear.fun/api/stats",
+      "derive": "stats",
+      "about": "On the live site, verified play time divided by verified runs (all modes together) stays between 45 seconds and 3 minutes: a night is about a minute and a half, not five.",
+      "expect": [
+        {
+          "path": "derived.secondsPerVerifiedRun",
+          "op": "gte",
+          "value": 45
+        },
+        {
+          "path": "derived.secondsPerVerifiedRun",
+          "op": "lte",
+          "value": 180
         }
       ]
     }

@@ -5,5 +5,6 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   // PGlite-backed tests are slow when many files run at once; give them room.
-  test: { include: ["src/**/*.test.ts"], environment: "node", testTimeout: 30_000, hookTimeout: 30_000 },
+  // src/test/no-network.ts fails any test that makes a real network request.
+  test: { include: ["src/**/*.test.ts"], environment: "node", testTimeout: 30_000, hookTimeout: 30_000, setupFiles: ["./src/test/no-network.ts"] },
 });

@@ -72,7 +72,7 @@ describe("the README's evidence", () => {
     expect(at).toBeGreaterThan(0);
     expect(at, "the Evidence section comes before the track table").toBeLessThan(readme.indexOf("\n## How it meets the track\n"));
     const section = readme.slice(at, readme.indexOf("\n## How it meets the track\n"));
-    for (const text of ["pnpm evidence", "pnpm evidence --chain", "[docs/EVIDENCE.md](docs/EVIDENCE.md)", "`PASS` means", "Any `FAIL` exits 1"]) expect(section).toContain(text);
+    for (const text of ["pnpm evidence", "pnpm evidence --chain", "[docs/EVIDENCE.md](docs/EVIDENCE.md)", "`PASS` is mechanical and means no more than this", "Any `FAIL` exits 1", "It does not cover every sentence."]) expect(section).toContain(text);
     expect((JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts.evidence).toBe("node scripts/evidence.mjs");
     expect(read(".github/workflows/ci.yml")).toContain("pnpm evidence --check");
   });
@@ -113,7 +113,10 @@ describe("docs/evidence.json", () => {
     }
     // His closed shop has not happened on mainnet, so it stays a claim about the simulation.
     for (const id of ["track-fast-forward", "track-npc-broke", "tryit-sim-market"]) expect(byId.get(id)?.status, id).toBe("simulation only");
-    for (const id of ["modes-season", "status-season"]) expect(byId.get(id)?.note ?? byId.get(id)?.quote, id).toMatch(/null|not run|Not run/);
+    // The season rows pass before and after the record: both use the check that asserts each state.
+    for (const id of ["modes-season", "status-season", "status-season-after"]) expect(byId.get(id)?.chain, id).toEqual(["season-s1"]);
+    // A claim about commit history rests on a git check.
+    for (const c of data.claims.filter((x) => x.status === "checked in git")) expect((c.chain ?? []).some((id) => (data.checks[id] as { kind: string }).kind === "git"), c.id).toBe(true);
   });
 
   it("docs/EVIDENCE.md is what the script generates from docs/evidence.json", async () => {
@@ -123,13 +126,19 @@ describe("docs/evidence.json", () => {
 });
 
 describe("what the docs say about themselves", () => {
-  it("says plainly that GAME-LOOP.md documents the loop as built, and that the Nov 2 plan came first", () => {
+  it("states the real order: the 2D prototype, then the 3D plan, then the 3D code, with GAME-LOOP.md written last", () => {
     const loop = plainDoc("docs/GAME-LOOP.md");
     expect(loop).toContain("written up on Nov 12 from the live build: it documents the loop as built and does not predate the code");
-    expect(loop).toContain("committed on Nov 2 (commit 94c8d19) just before the first 3D simulation code (commit 143b12e)");
+    expect(loop).toContain("a 2D real-time prototype of the night was committed first, on Nov 1 (commit 699457d)");
+    expect(loop).toContain("committed on Nov 2 (commit 94c8d19), three minutes before the first 3D simulation code (commit 143b12e)");
+    expect(loop).toContain("So the 3D game was planned on paper before its code, and the first playable loop was not.");
     const readme = plainDoc("README.md");
-    expect(readme).toContain("docs/GAME-LOOP.md was written on Nov 12 and documents the loop as built.");
-    expect(readme).not.toMatch(/designed on paper first/i);
+    expect(readme).toContain("a 2D real-time prototype of the night came first (Nov 1, commit 699457d)");
+    expect(readme).toContain("docs/GAME-LOOP.md was written on Nov 12 and documents the loop as built; it was not a design written before the code.");
+    // Neither document claims the loop was designed on paper before any code, and the check reads the commits in that order.
+    for (const doc of [readme, loop]) expect(doc).not.toMatch(/designed on paper first|On paper: the plan|before the first 3D simulation code\. docs/i);
+    const order = (data.checks as unknown as Record<string, { order?: string[] }>)["loop-on-paper"]!.order!;
+    expect(order.map((c) => c.slice(0, 7))).toEqual(["699457d", "94c8d19", "143b12e", "0134541"]);
   });
 
   it("says in every place that Sandwich Man is live on mainnet from his own account, and that he is rule-based", () => {
@@ -167,7 +176,7 @@ describe("what the docs say about themselves", () => {
   it("dates the live counts and says they are lower bounds", () => {
     const readme = plainDoc("README.md");
     expect(readme).toContain("The chain counts are as of Nov 13, 2026, 07:23 UTC and the game's as of Nov 12, 2026, 17:35 UTC. Both only grow");
-    expect(readme).toContain("pnpm evidence --chain fails if a live count is below a number here");
+    expect(readme).toContain("pnpm evidence --chain reads the numbers from the two tables below and fails if a live count is below one of them.");
     expect(readme).not.toMatch(/went from \d+ on Nov/);
   });
 });

@@ -32,7 +32,7 @@ describe("the deployed contract's NEP-245 surface (contracts/wgp, v2)", () => {
   it("says so in the README, and names v3 as built and not deployed", () => {
     const readme = read("README.md");
     expect(readme).toContain("It has no metadata extension, no global enumeration (`mt_tokens`) and no approvals.");
-    expect(readme).toContain("it is not deployed ([draft PR #59]");
+    expect(readme).toContain("and it is not deployed. Its source is on the branch `review/contract-v3`, not on `main`; the review's findings, test counts and commits are in [docs/CONTRACT-V3-REVIEW.md](docs/CONTRACT-V3-REVIEW.md).");
     expect(readme).toContain("The deployed contract (v2) has no way to invest in her to reopen; investing is in v3, which is not deployed.");
   });
 });
@@ -64,7 +64,7 @@ describe("the faucet taper is written and not wired in", () => {
  */
 describe("Sandwich Man runs only where the owner turned him on", () => {
   it("the chain checks expect him on mainnet: his account with its key, the live site on chain, and his calls as a lower bound", () => {
-    type Check = { kind: string; account?: string; keys?: boolean; expect: { path: string; op: string; value: unknown }[] };
+    type Check = { kind: string; account?: string; keys?: boolean; expect: { path: string; op: string; value?: unknown; doc?: string }[] };
     const checks = evidence().checks as unknown as Record<string, Check>;
     const expects = (id: string) => checks[id]!.expect.map((e) => `${e.path} ${e.op} ${JSON.stringify(e.value)}`);
 
@@ -75,7 +75,9 @@ describe("Sandwich Man runs only where the owner turned him on", () => {
     // A lower bound, never zero: the tally must find at least the one call the README cites.
     const npcCalls = checks["chain-tally"]!.expect.find((e) => e.path === "json.chain.npcCalls");
     expect(npcCalls?.op).toBe("gte");
-    expect(npcCalls?.value).toBeGreaterThanOrEqual(1);
+    // The bound is the README's own count of his calls, read from its table.
+    const quoted = new RegExp(npcCalls!.doc!).exec(read("README.md"))?.[1];
+    expect(Number(quoted)).toBeGreaterThanOrEqual(1);
     // No claim is left saying he is built and off.
     const off = evidence().claims.filter((c) => c.status === "built, off on mainnet").map((c) => c.id);
     expect(off.filter((id) => id.includes("npc"))).toEqual([]);

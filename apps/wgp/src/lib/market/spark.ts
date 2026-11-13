@@ -72,6 +72,27 @@ export function thinSteps(steps: SparkStep[], max = SPARK_MAX_STEPS): SparkStep[
   return out;
 }
 
+/**
+ * A day's two headline numbers from one list of price rows, so the change pill and Gwei's
+ * "Why this price?" can't tell different stories: the change is from the day's opening
+ * price to the price now, and `moves` counts the times the price changed on the way (the
+ * rows in the window that differ from the price before them, plus one when the price now
+ * differs from the last row's). A change other than zero therefore always has a move.
+ * `rows` are [Unix ms, spot × 1000], oldest first; `before` is the last price before the window.
+ */
+export function dayFacts(rows: readonly (readonly [at: number, priceMilli: number])[], before: number | undefined, now: number, from: number): { change24h: number | null; moves: number } {
+  const day = rows.filter(([at]) => at >= from);
+  const open = before ?? day[0]?.[1] ?? now;
+  let last = before;
+  let moves = 0;
+  for (const [, price] of day) {
+    if (last !== undefined && price !== last) moves += 1;
+    last = price;
+  }
+  if (last !== undefined && last !== now) moves += 1;
+  return { change24h: open > 0 ? (now - open) / open : null, moves };
+}
+
 /** True when the series never changes price: nothing traded (or nothing is known). */
 export const sparkQuiet = (steps: SparkStep[]) => steps.every((s) => s[1] === steps[0]![1]);
 

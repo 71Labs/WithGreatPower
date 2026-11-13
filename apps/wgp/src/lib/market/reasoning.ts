@@ -134,7 +134,12 @@ export interface PriceReasoning {
 function demand({ change24h, trades24h }: PriceFacts): string | null {
   const moved = change24h === null || change24h === undefined ? null : Math.round(change24h * 100);
   if (trades24h !== undefined) {
-    if (trades24h === 0) return "Nobody’s traded these with me in the last 24 hours, so the price hasn’t moved.";
+    if (trades24h === 0) {
+      // No trade on record and yet a different price (a trade the history missed, or the owner retuned
+      // the curve): say both, never "hasn't moved" beside a pill that says it did.
+      if (moved !== null && moved !== 0) return `No trades with me on record in the last 24 hours, but the price is ${moved > 0 ? "up" : "down"} ${Math.abs(moved)}% on a day ago.`;
+      return "Nobody’s traded these with me in the last 24 hours, so the price hasn’t moved.";
+    }
     const trades = plural(trades24h, "trade");
     if (moved === null) return `${trades} with me in the last 24 hours. Every one moved the price.`;
     if (moved === 0) return `${trades} with me in the last 24 hours, and the price is back where it was.`;
