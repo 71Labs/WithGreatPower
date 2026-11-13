@@ -12,7 +12,7 @@ import { DISTRICTS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import { ALWAYS, GROUPS, countLabel, howToGet, isVillain } from "./entries";
 import { CastFrame, LockedFrame, Slot, GRID_SIZE } from "./slots";
 
-/** The cast in album order: heroes, allies, press, villains. */
+/** The cast in album order: heroes, the vendor, allies, press, villains. */
 const ORDER = GROUPS.flatMap((g) => CAST.filter((c) => c.role === g.role));
 
 type Open = { kind: "you" } | { kind: "cast"; id: CastId };

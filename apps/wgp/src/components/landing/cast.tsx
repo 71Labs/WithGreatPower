@@ -5,6 +5,8 @@ import { Chip, InlineTwoTone, Section } from "@/components/frame";
 import { ArrowRight } from "@/components/icons";
 import { castById, type CastId, type Role } from "@wgp/game-core/cast";
 
+import { CAST_INTRO } from "./copy";
+
 /**
  * Stills of the 3D cast, captured from /lab/cast: the hero, the four villains, then the
  * neighbors. The file is the body's name in the game's model folder.
@@ -25,6 +27,7 @@ const STILLS: { id: CastId; file: string; alt: string }[] = [
 /** Role is said in words, never by color alone; villains also get the accent. */
 const roleTone: Record<Role, string> = {
   Hero: "text-ink-strong",
+  Vendor: "text-ink-subtle",
   Ally: "text-ink-subtle",
   Press: "text-ink-subtle",
   Villain: "text-accent",
@@ -38,8 +41,7 @@ export function Cast() {
           <Chip>The cast</Chip>
           <InlineTwoTone id="cast-title" className="mt-6 max-w-[20ch]" lead="Real bodies," point="comic-book ink." />
           <p className="mt-5 max-w-[60ch] text-[17px] leading-7 text-ink-subtle">
-            Every character is a MakeHuman body moved by CC0 motion capture, cel-shaded in hard bands and outlined in
-            ink like the rest of the city. All ten are original parodies.
+            {CAST_INTRO}
           </p>
         </div>
         <Link

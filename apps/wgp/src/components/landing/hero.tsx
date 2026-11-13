@@ -3,6 +3,7 @@ import { StickerChip, StickerLink } from "@/components/game/kit";
 import { ArrowRight } from "@/components/icons";
 import { START_URL } from "@/lib/site";
 
+import { HERO_PITCH } from "./copy";
 import { HeroLoop } from "./hero-loop";
 import { LiveProof } from "./live-proof";
 
@@ -41,8 +42,8 @@ export function Hero() {
             <span className="text-(--night-ink)">comes great physics.</span>
           </h1>
           <p className="mt-4 max-w-[46ch] text-[17px] leading-7 text-pretty sm:mt-6 sm:text-[18px] sm:leading-[30px]">
-            A 3D web-swinging game in a comic-book city. Swing on real rope physics and web up four villains
-            <span className="max-sm:hidden">, help the neighbors, and bank a night the server replays before it ranks you</span>.
+            {HERO_PITCH.lead}
+            <span className="max-sm:hidden">{HERO_PITCH.more}</span>.
           </p>
           <div className="mt-6 flex w-full flex-col gap-3 sm:mt-9 sm:w-auto sm:flex-row">
             <StickerLink href={START_URL} variant="hero" size="lg" className="w-full sm:w-auto">

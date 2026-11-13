@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { SHARE_DESCRIPTION, SITE_DESCRIPTION } from "@/components/landing/copy";
 import { SITE_URL } from "@/lib/site";
 
 import { FontPreload } from "./font-preload";
@@ -8,7 +9,6 @@ import "./globals.css";
 
 const TITLE = "With Great Power — a friendly neighborhood parody on NEAR";
 const SHARE_TITLE = "With Great Power: free 3D web-swinging in your browser";
-const SHARE_DESCRIPTION = "Swing a comic-book city on real rope physics and web up four parody villains. Free, in your browser, no wallet needed. Every ranked run is replay-verified, on NEAR.";
 
 /**
  * Every page shares as a large card: the image is src/app/opengraph-image.jpg (1200×630, a
@@ -18,8 +18,7 @@ const SHARE_DESCRIPTION = "Swing a comic-book city on real rope physics and web 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: TITLE, template: "%s · With Great Power" },
-  description:
-    "With Great Power (WGP) is a 3D web-swinging superhero parody game on NEAR. Swing across a comic-book city at night, stop four parody villains, and climb leaderboards where every ranked night is replayed on the server.",
+  description: SITE_DESCRIPTION,
   applicationName: "With Great Power",
   openGraph: { type: "website", siteName: "With Great Power", title: SHARE_TITLE, description: SHARE_DESCRIPTION },
   twitter: { card: "summary_large_image", site: "@wgponnear", title: SHARE_TITLE, description: SHARE_DESCRIPTION },
