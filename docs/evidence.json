@@ -1552,6 +1552,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/coverage.test.ts",
           "name": "the live-count checks read their numbers from the README's text, not from a second copy"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "the same holds for the game's table: every number is read by the check on /api/stats"
         }
       ],
       "chain": [
@@ -1585,6 +1590,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/db/stats.test.ts",
           "name": "counts every field"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/stats-tally.test.ts",
+          "name": "the same holds for the game's table: every number is read by the check on /api/stats"
         }
       ],
       "chain": [
@@ -6825,8 +6835,8 @@
         },
         {
           "path": "runs.rejected",
-          "op": "type",
-          "value": "number"
+          "op": "gte",
+          "doc": "Runs rejected by the verifier \\| ([\\d,]+)"
         },
         {
           "path": "runs.hoursVerified",

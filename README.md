@@ -46,7 +46,7 @@ Each claim carries a status that says how far its proof reaches. `proven by test
 |---|---|
 | Claims with a row | 205, quoted from this README and 11 files under `docs/` |
 | By status | 100 `proven by test` · 8 `pinned by test` · 41 `proven on chain` · 17 `live check` · 4 `checked in git` · 24 `simulation only` · 3 `built, off on mainnet` · 8 `owner action needed` |
-| Rows that cite a test | 181 of 205 (348 different tests). All 135 rows with the status `proven by test`, `pinned by test`, `simulation only`, `built, off on mainnet` have one; a guard test fails otherwise. |
+| Rows that cite a test | 181 of 205 (349 different tests). All 135 rows with the status `proven by test`, `pinned by test`, `simulation only`, `built, off on mainnet` have one; a guard test fails otherwise. |
 | Rows with a read-only chain or site check | 99 of 205 (45 different checks) |
 | Rows with neither (a code pointer only) | 0 |
 | Code pointers | 304, each anchored to a piece of text that appears once in its file |
@@ -403,7 +403,7 @@ pnpm dev                                         # http://localhost:3000/play  (
 
 | Command | What it does | Expect |
 |---|---|---|
-| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries. | game-core 284 passed, app 1,629 passed |
+| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries. | game-core 284 passed, app 1,630 passed |
 | `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | Exit 0, no errors |
 | `pnpm build` | The production build of the app; needs no environment variables | The route list |
 | `pnpm verify` | Replays the live All-time top 5 | `5/5 runs reproduced` |

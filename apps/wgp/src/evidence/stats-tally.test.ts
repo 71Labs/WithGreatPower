@@ -139,28 +139,48 @@ describe("the README's on-chain table is bound to that tally", () => {
     doc?: string;
     source?: string;
   }
-  const expects = (evidence().checks as unknown as Record<string, { expect: Expect[] }>)["chain-tally"]!.expect;
+  const allChecks = evidence().checks as unknown as Record<string, { expect: Expect[] }>;
+  const expects = allChecks["chain-tally"]!.expect;
   const readme = read("README.md");
   const table = readme.slice(readme.indexOf("**On NEAR mainnet**"), readme.indexOf("**In the game**"));
+  const gameTable = readme.slice(readme.indexOf("**In the game**"), readme.indexOf("\n## Screenshots"));
 
-  it("every number in the table, the ones in brackets included, is read by a check on a named field of the tally", () => {
-    // Each pattern the check uses, applied to the table: the digits it captures.
+  /** Every number in a table's right-hand cells that no expectation's pattern captures. */
+  function unboundNumbers(tableText: string, bounds: Expect[]): { count: number; unbound: string[] } {
+    // Each pattern a check uses, applied to the README: where the digits it captures start.
     const bound = new Set<number>();
-    for (const e of expects.filter((x) => x.doc && (x.source ?? "README.md") === "README.md")) {
+    for (const e of bounds.filter((x) => x.doc && (x.source ?? "README.md") === "README.md")) {
       const m = new RegExp(e.doc!, "d").exec(readme) as (RegExpExecArray & { indices: [number, number][] }) | null;
       expect(m, `${e.path}: /${e.doc}/ finds nothing in the README`).not.toBeNull();
       bound.add(m!.indices[1]![0]);
     }
-    const start = readme.indexOf(table);
-    const numbers = [...table.matchAll(/\| [^|\n]*\| ([^|\n]*) \|\n/g)].flatMap((rowMatch) => {
+    const start = readme.indexOf(tableText);
+    const numbers = [...tableText.matchAll(/\| [^|\n]*\| ([^|\n]*) \|\n/g)].flatMap((rowMatch) => {
       const cellAt = start + rowMatch.index! + rowMatch[0].lastIndexOf(rowMatch[1]!);
-      return [...rowMatch[1]!.matchAll(/\d[\d,]*/g)].map((d) => ({ at: cellAt + d.index!, text: d[0], row: rowMatch[0].trim() }));
+      return [...rowMatch[1]!.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((d) => ({ at: cellAt + d.index!, text: d[0], row: rowMatch[0].trim() }));
     });
-    expect(numbers.length).toBeGreaterThanOrEqual(15);
-    // One number is arithmetic on two bound ones (the accounts that made exactly one call); the next test checks it.
+    return { count: numbers.length, unbound: numbers.filter((x) => !bound.has(x.at)).map((x) => `${x.text} in ${x.row}`) };
+  }
+
+  it("every number in the table, the ones in brackets included, is read by a check on a named field of the tally", () => {
+    const { count, unbound } = unboundNumbers(table, expects);
+    expect(count).toBeGreaterThanOrEqual(15);
+    // One number is arithmetic on two bound ones (the accounts that made exactly one call); a test below checks it.
     const derived = /so (\d+) made exactly one/.exec(table)!;
-    const unbound = numbers.filter((x) => !bound.has(x.at) && x.text !== derived[1]);
-    expect(unbound.map((x) => `${x.text} in ${x.row}`), "numbers in the table that no check reads").toEqual([]);
+    expect(unbound.filter((x) => !x.startsWith(`${derived[1]} in `)), "numbers in the table that no check reads").toEqual([]);
+  });
+
+  it("the same holds for the game's table: every number is read by the check on /api/stats", () => {
+    const { count, unbound } = unboundNumbers(gameTable, [...allChecks["site-stats"]!.expect, ...allChecks["site-duels"]!.expect]);
+    expect(count).toBeGreaterThanOrEqual(18);
+    expect(unbound, "numbers in the table that no check reads").toEqual([]);
+    // Heroes are one thing everywhere: players who have started a match, the landing page's count.
+    const heroes = allChecks["site-stats"]!.expect.filter((e) => e.path === "players.played");
+    expect(heroes.map((e) => e.doc)).toEqual(["the count the landing page shows\\) \\| ([\\d,]+) \\(", "\\*\\*Scale:\\*\\* ([\\d,]+) heroes as of"]);
+    const inTable = Number(new RegExp(heroes[0]!.doc!).exec(readme)![1]);
+    const inLimits = Number(new RegExp(heroes[1]!.doc!).exec(readme)![1]);
+    expect(inLimits).toBe(inTable);
+    expect(read("apps/wgp/src/components/landing/live-proof.tsx")).toContain("const heroes = Math.floor(stats.players.played);");
   });
 
   it("names the fields a reader would expect for the rows that changed meaning", () => {
