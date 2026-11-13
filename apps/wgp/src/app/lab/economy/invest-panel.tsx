@@ -60,7 +60,7 @@ export function InvestPanel({ history, hover, headingId }: { history: DaySnapsho
         </h2>
         <p className="num max-w-[76ch] text-[13px] leading-[18px] text-game-muted [text-wrap:pretty]">
           {LAB_INVESTORS.count} investor bots start with {bitsText(LAB_INVESTORS.bits)} each. The morning after one of her tills can’t pay for an item, one of them puts up to {bitsText(LAB_INVESTORS.lot)} into it, on the investing rules of
-          contract v3 (built and reviewed, not live on mainnet). Her price doesn’t move; she just buys again. They earn half the gas fee on those items’ trades.
+          contract v3 (built, not live on mainnet). Her price doesn’t move; she just buys again. They earn half the gas fee on those items’ trades.
         </p>
       </div>
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">

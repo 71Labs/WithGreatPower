@@ -380,12 +380,12 @@
       "id": "track-nep245-v3",
       "section": "track",
       "source": "README.md",
-      "quote": "v3 adds metadata, enumeration and merchant investing. It is built, independently reviewed and rehearsed on a copy of mainnet state, and it is not deployed",
+      "quote": "v3 adds metadata, enumeration and merchant investing. It is built, reviewed by a second AI agent that did not write it (not an audit) and rehearsed on a copy of mainnet state, and it is not deployed",
       "status": "owner action needed",
       "code": [
         {
           "path": "docs/CONTRACT-V3-REVIEW.md",
-          "anchor": "## The independent review (Nov 12)"
+          "anchor": "## The review (Nov 12): a second AI agent, not an audit"
         },
         {
           "path": "contracts/wgp/src/mt.rs",
@@ -4244,7 +4244,7 @@
       "id": "npc-no-powers",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "He can call only the five market methods every player's session key can call",
+      "quote": "The server only ever sends these five calls from his account; his key is a full-access key.",
       "status": "proven by test",
       "code": [
         {
@@ -6071,7 +6071,7 @@
       "code": [
         {
           "path": "docs/CONTRACT-V3-REVIEW.md",
-          "anchor": "## The independent review (Nov 12)"
+          "anchor": "## The review (Nov 12): a second AI agent, not an audit"
         }
       ],
       "tests": [

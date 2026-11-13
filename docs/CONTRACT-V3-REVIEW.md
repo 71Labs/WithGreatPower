@@ -2,7 +2,7 @@
 
 Contract v3 is the next version of `contracts/wgp`. **It is not deployed, and its source is not on `main`.** `game.wgpnear.near` runs v2, and `main` holds exactly the v2 source that is deployed. v3 lives on the branch `review/contract-v3`. Upgrading is the owner's decision.
 
-This page is a summary, on `main`, of that branch's own write-up (`docs/CONTRACT-V3.md` on the branch), so the README's claim that v3 is "built, independently reviewed and rehearsed on a copy of mainnet state" can be checked without the branch being merged. Every figure here is copied from that write-up or counted from the branch's files; nothing here was re-run for this page. To read the original:
+This page is a summary, on `main`, of that branch's own write-up (`docs/CONTRACT-V3.md` on the branch), so the README's claim that v3 is "built, reviewed by a second AI agent that did not write it (not an audit) and rehearsed on a copy of mainnet state" can be checked without the branch being merged. Every figure here is copied from that write-up or counted from the branch's files; nothing here was re-run for this page. To read the original:
 
 ```bash
 git fetch origin review/contract-v3:review/contract-v3
@@ -38,7 +38,7 @@ Thirteen commits on Nov 12, 2026, on top of `main` at `e88271f`. The branch head
 | `d13a8f7` | Review tests for fee shares, refund logs, a fresh migration and random v2 states |
 | `7aff712` | A season and a full reward batch right after the upgrade, at the server's gas |
 | `a1af2e5` | Fix: a v1 state arrives with investing off and crafting free, like a v2 one |
-| `718423d` | The independent review, gas for players with heroes, storage headroom |
+| `718423d` | The review's write-up (the commit calls it "the independent review"), gas for players with heroes, storage headroom |
 
 The last four are the review's.
 
@@ -51,15 +51,15 @@ The last four are the review's.
 
 Two of the sandbox tests copy mainnet's contract and state with read-only queries and run only with `WGP_MAINNET_REHEARSAL=1`. The write-up records them as passing on Nov 12. They were not re-run for this page.
 
-## The independent review (Nov 12)
+## The review (Nov 12): a second AI agent, not an audit
 
-A second pass by someone who did not write the code: every new line read, the tests re-run, and new tests written (`src/v3_tests/review.rs`, `sandbox/tests/review_v3.rs`).
+The review was done by a second AI coding agent that did not write the code, in one day. No person outside the team and no audit firm reviewed v3; it is not an audit. What the second agent did: every new line read, the tests re-run, and new tests written (`src/v3_tests/review.rs`, `sandbox/tests/review_v3.rs`).
 
 The branch's write-up lists the findings without grading them. The severities below are the owner's reading of that list.
 
 | Severity | Finding | State |
 |---|---|---|
-| None found | No way was found to lose, mint or move a player's tokens, with investing off or on. No path was found to corrupt v2 state, or to reach the investing code while `invest_open` is false: on a freshly migrated state none of the new entry points moves a Bit (`nothing_new_moves_bits_on_a_freshly_migrated_state`), and randomly generated v2 states migrate with every view unchanged (`random_v2_states_migrate_with_every_view_unchanged`). | A review of one day by one reviewer. Not an audit. |
+| None found | No way was found to lose, mint or move a player's tokens, with investing off or on. No path was found to corrupt v2 state, or to reach the investing code while `invest_open` is false: on a freshly migrated state none of the new entry points moves a Bit (`nothing_new_moves_bits_on_a_freshly_migrated_state`), and randomly generated v2 states migrate with every view unchanged (`random_v2_states_migrate_with_every_view_unchanged`). | A review of one day by one reviewer, a second AI agent that did not write the code. Not an audit. |
 | Low | A v1 state upgraded straight to v3 got the fresh-deploy rules: investing open, and a 50-Bit crafting cost. Mainnet is v2 and was never affected. | Fixed in `a1af2e5`: a v1 state now arrives like a v2 one. |
 | Medium | Free storage balance is a precondition of every operator call, not just of the upgrade. The contract pays for storage. `record_season` needs about 0.04 NEAR free and a full reward batch up to 0.035; with less, the call fails whole, and works once the account is topped up. | Open by design. The owner checks the balance before the season's call. |
 | Medium | `register_hero` is open to any account and costs the contract storage (about 0.003 NEAR each on v3, 0.0014 on v2), so the free balance can be run down from outside. | Open. The mitigation is keeping headroom on the contract account. |
