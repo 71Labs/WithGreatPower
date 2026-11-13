@@ -48,6 +48,20 @@ describe("no cron jobs", () => {
   });
 });
 
+describe("pushes to main don't deploy", () => {
+  it("vercel.json turns git deployments off for main, so a push to main deploys nothing", () => {
+    const config = JSON.parse(read("apps/wgp/vercel.json")) as { git?: { deploymentEnabled?: Record<string, boolean> | boolean } };
+    const enabled = config.git?.deploymentEnabled;
+    expect(typeof enabled).toBe("object");
+    expect((enabled as Record<string, boolean>).main).toBe(false);
+    // There is one vercel.json, the app's: no second file at the root could turn it back on.
+    expect(() => read("vercel.json")).toThrow();
+    // Production goes out through the script the README names.
+    expect(read("scripts/deploy-prod.sh")).toMatch(/vercel\b[^\n]*--prod/);
+    expect(read("README.md")).toContain("pushes to `main` don't deploy by themselves (`apps/wgp/vercel.json`)");
+  });
+});
+
 describe("the faucet taper is written and not wired in", () => {
   it("the ranked submit path pays nightBits, and never calls taperedNightBits", () => {
     const runs = read("apps/wgp/src/server/db/runs.ts");
@@ -91,9 +105,7 @@ describe("Sandwich Man runs only where the owner turned him on", () => {
     expect(key).toEqual(["# NPC_TRADER_PRIVATE_KEY="]);
   });
 
-  it("the stats script counts his calls apart from players'", () => {
-    const stats = read("scripts/stats.mjs");
-    expect(stats).toContain('const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];');
-    expect(stats).toMatch(/if \(NPC_ACCOUNTS\.includes\(sender\)\) npcCalls \+= 1;\s*else if \(played/);
+  it("the stats script names his account as the NPC's (stats-tally.test.ts runs the count itself)", () => {
+    expect(read("scripts/stats.mjs")).toContain('const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];');
   });
 });

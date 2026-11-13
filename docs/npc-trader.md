@@ -104,7 +104,7 @@ curl -s https://www.wgponnear.fun/api/market/npc | jq '{mode, accountId, bits, i
 
 Each line of his ledger in the game links to its transaction. A transaction's events show the same thing the game says: `market_fill` (he bought a listing), `market_trade` (he traded with Gwei), `market_list` or `market_cancel`, with `mt_transfer` and the burned gas fee. To check a decision, read the rule it names in `npc-rules.ts` against the market state in the block before.
 
-The sandbox test `contracts/wgp/sandbox/tests/npc_trader.rs` proves an ordinary account can do all of it against the real wasm, and that the contract refuses him where it refuses anyone.
+The sandbox test `contracts/wgp/sandbox/tests/npc_trader.rs` has an ordinary account do all of it against the real wasm, and checks that the contract refuses him where it refuses anyone. `pnpm evidence` does not run it (it needs cargo-near and a built wasm); CI's `sandbox` job does, and the README's sandbox command runs it by hand. It passed locally on Nov 13, 2026.
 
 ## What the owner ran (mainnet, Nov 13, 2026)
 

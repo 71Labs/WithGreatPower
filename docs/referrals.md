@@ -2,7 +2,7 @@
 
 A player shares their invite link. A friend who arrives through it, signs up, adds their X handle and plays one verified run counts toward the referrer's three. At three, the referrer gets the soulbound **Recruiter** badge (`trophy:badge:recruiter`) and **300 XP**, once ever.
 
-The game never pays money and never promises it. Any USDC sent to referrers is the owner's own payout through Uprail, by hand, from the admin list (see [The owner's payout](#the-owners-payout)).
+The game and its referral rewards never pay money and never promise it: an invite earns XP and a soulbound badge, nothing else. Separately, and outside the game, the owner may send USDC to referrers through Uprail, by hand, from the admin list (see [The owner's payout](#the-owners-payout)); the README discloses the same airdrops under Credits and disclosure. No player-facing page mentions that payout.
 
 This file is the contract between the server (`src/server/db/referrals.ts`, the routes below) and the UI (`/play/invite`, `/invite/[code]`, the account sheet). Where it differs from the first brief, the [Changes from the brief](#changes-from-the-brief) section says so.
 

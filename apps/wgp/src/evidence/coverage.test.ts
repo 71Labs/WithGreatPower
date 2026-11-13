@@ -69,7 +69,7 @@ const data = evidence() as ReturnType<typeof evidence> & { checks: Record<string
 describe("the evidence layer's own promises", () => {
   it("every row whose status promises a test cites one, and every code pointer is anchored", async () => {
     const s = await script();
-    expect(s.TEST_STATUSES).toEqual(["proven by test", "simulation only", "built, off on mainnet"]);
+    expect(s.TEST_STATUSES).toEqual(["proven by test", "pinned by test", "simulation only", "built, off on mainnet"]);
     const untested = data.claims.filter((c) => s.TEST_STATUSES.includes(c.status) && !(c.tests ?? []).length).map((c) => c.id);
     expect(untested, "these rows say a test proves them and cite none").toEqual([]);
     const unchecked = data.claims.filter((c) => s.CHAIN_STATUSES.includes(c.status) && !(c.chain ?? []).length).map((c) => c.id);
@@ -211,10 +211,13 @@ describe("the season check asserts the right thing in each state", () => {
     for (const doc of ["README.md", "docs/GAME-LOOP.md", "docs/SUSTAINABILITY.md", "docs/ARCHITECTURE.md"]) {
       expect(read(doc), doc).not.toMatch(/Season 1 has not closed yet|not run on mainnet yet|never run on mainnet yet|Not run on mainnet yet/);
     }
-    // Duels: the README gives a dated count and where the live one is; the check takes any count.
-    expect(readme).toContain("The count of verified duels is `runs.byMode.duel` in `/api/stats`; it was 0 on Nov 13.");
+    // Duels: the README gives a dated count and where the live one is; the check holds the live count to that figure.
+    expect(readme).toMatch(/The count of verified duels is `runs\.byMode\.duel` in `\/api\/stats`; it was \d+ on Nov 13\./);
     expect(readme).not.toMatch(/no player has finished a verified duel yet|duels have no verified run yet/);
-    expect(data.checks["site-duels"]!.expect).toEqual([{ path: "runs.byMode.duel.verified", op: "type", value: "number" }]);
+    const duels = data.checks["site-duels"]!.expect!;
+    expect(duels.length).toBeGreaterThan(0);
+    for (const e of duels) expect(e).toMatchObject({ path: "runs.byMode.duel.verified", op: "gte" });
+    for (const e of duels) expect(e.doc, "a hand-copied number").toBeDefined();
   });
 });
 
