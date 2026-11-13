@@ -59,7 +59,7 @@ Two smaller ones, from the contract's own notes: an investor who arrives just be
 4. Buy some of that item. **Your stakes in Gwei** shows the fee share coming in.
 5. After 30 seconds, press **Withdraw or claim**.
 
-Sandwich Man trades in the practice market too, by his own rules, labelled **NPC** and **Practice**.
+Sandwich Man trades in the practice market too, by his own rules, labelled **NPC** and **Practice**. (On mainnet he trades from his own NEAR account, by the same rules: [npc-trader.md](npc-trader.md).)
 
 **Signed in, on a local checkout** (the simulated market): the same buttons, without the banner; the server holds the book and checks every move. The lock is an hour, as in the contract; `SIM_MARKET_INVEST_LOCK_MS=5000` shortens it for local play (ignored in production).
 

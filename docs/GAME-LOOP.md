@@ -35,6 +35,7 @@ A session is a few nights plus a visit to the market and the boards.
 |---|---|
 | Opens the Mempool Market and reads Gwei Stacy's prices | Each item's price sits on its own curve in the contract. It rose if players bought it and fell if they sold it. Gwei says why in her own words. |
 | Sells spare loot to Gwei, or lists it for other players | Selling pays from her till and lowers her price; a listing escrows the items in the contract at the seller's price (within 50–400% of hers) |
+| Sees **Other traders** on the market: Sandwich Man, labelled NPC | He is a rule-based trader, not a player and not an AI agent, with his own NEAR account (`sandwich.wgpnear.near`, on mainnet since Nov 13, 2026). He may buy a cheap listing (the seller gets their asking price), buy a dip from Gwei or list under her price. Each move shows his reason and links to its transaction ([npc-trader.md](npc-trader.md)). |
 | Buys the missing part for a suit | Buying raises her price; 2% of every trade's Bits is burned |
 | Crafts a suit and equips it | The recipe's items are burned; the suit is a token the player owns |
 | Checks Tonight, Season and All-time boards, the Daily board and trial medals | Every score on them is a replayed run; at the Season's close the final board is written to the contract once, and the top 10 get soulbound trophies (built and tested; Season 1 has not closed yet) |

@@ -1,21 +1,30 @@
 # Sustainability
 
-What it costs to run With Great Power, who a player has to trust today, and how both change after the hackathon. Figures are from NEAR mainnet on Nov 12, 2026 and can be re-read with the commands in the README.
+What it costs to run With Great Power, who a player has to trust today, and how both change after the hackathon. Figures are from NEAR mainnet on Nov 13, 2026 (07:23 UTC) and can be re-read with the commands in the README.
 
 ## What it costs to run
 
 | Cost | Today | Who pays |
 |---|---|---|
-| Contract storage | 374 KB of code and state on `game.wgpnear.near`, which NEAR holds 3.74 NEAR against (returned if the state is deleted) | The contract account |
-| Reward mints | One `mint_rewards` call covers up to 20 verified nights. 160 calls as of Nov 12, 2026 (re-run `pnpm stats`). | `operator.wgpnear.near` |
+| Contract storage | 375 KB of code and state on `game.wgpnear.near`, which NEAR holds 3.75 NEAR against (returned if the state is deleted) | The contract account |
+| Reward mints | One `mint_rewards` call covers up to 20 verified nights. 168 calls as of Nov 13, 2026 (re-run `pnpm stats`). | `operator.wgpnear.near` |
 | Player actions | Each relayed call (a trade, a craft, an equip) is one meta-transaction, a fraction of a cent of gas | `relayer.wgpnear.near`, within a daily gas budget |
+| The NPC trader | Sandwich Man signs and pays for his own market calls; they are not relayed. A call burns about 3 Tgas (his first trade burned 0.00031 NEAR), and his rules cap him at 10 actions a day, so at most about 0.003 NEAR a day. His one-off seed mint cost the operator 0.0003 NEAR. | `sandwich.wgpnear.near`, from the 0.3 NEAR the owner created it with on Nov 13, 2026 |
 | New player accounts | `<name>.wgpnear.near` is created with no balance; with two keys and no contract it fits NEAR's zero-balance allowance | `wgpnear.near` |
 | Hosting | Vercel and Neon Postgres; the game's 3D runs in the player's browser | The team |
 | Sign-in | Privy's embedded wallets for Google players | The team |
 
 Gas is the only cost that grows with play, and the limits on it are in code: batched mints, a per-player cap of 20 ranked nights a day, daily caps on trades and listings in the contract, and the relayer's daily gas budget.
 
-**Runway:** the accounts hold about 8 NEAR, about 4.2 of it spendable. At current traffic that lasts months. The first thing to run short is the contract's storage balance, which grows with each new player and token kind; it's the one balance to top up.
+**Runway:** the five accounts hold about 7.7 NEAR, about 4.0 of it spendable. At current traffic that lasts months. The first thing to run short is the contract's storage balance, which grows with each new player and token kind; it's the one balance to top up. On Nov 13, 2026 the owner topped it up with 1 NEAR from the relayer's account ([`FH2tpfkz…`](https://nearblocks.io/txns/FH2tpfkzDkY8MtEX6fWCmMc7E7RRndGA8nibM1ZYEjuB)), which left the contract about 1.75 NEAR free.
+
+| Account | Holds (NEAR) | Free to spend (NEAR) |
+|---|---|---|
+| `game.wgpnear.near` (the contract) | 5.49 | 1.75, after the 3.75 held against storage |
+| `relayer.wgpnear.near` | 0.97 | 0.97 |
+| `operator.wgpnear.near` | 0.54 | 0.54 |
+| `wgpnear.near` (the owner; creates player accounts) | 0.41 | 0.41 |
+| `sandwich.wgpnear.near` (the NPC trader) | 0.30 | 0.30 |
 
 ## Who a player has to trust
 

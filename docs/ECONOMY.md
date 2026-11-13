@@ -209,7 +209,7 @@ In `/lab/economy`, **Drain Gwei** runs 30 days of 60 heroes on mainnet's setting
 - **A guest's imported save keeps its suits.** A guest can't craft a recipe suit while the cost is on (no Bits), but a first sign-in still imports the suits a local save claims, up to level 3, as it always has. Suits are cosmetic, and the import is capped (`src/game/import-caps.ts`), so this was left alone.
 - **The bots are an assumption.** Their mix, one night a day, and a hoarder who never spends are choices, not observations. Mainnet has 23 players and a handful of trades, too few to fit behaviour to.
 - **Vendor limits are read at each day's close.** A sell-out that refills the same day isn't counted.
-- **Sandwich Man is measured separately.** Every table above runs without him, because he is off on mainnet until his account is funded. The next section turns him on.
+- **Sandwich Man is measured separately.** Every table above runs without him: he was off on mainnet when they were measured, and started trading there on Nov 13, 2026. The next section turns him on.
 
 ## With Sandwich Man
 
