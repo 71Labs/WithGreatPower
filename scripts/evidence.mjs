@@ -542,7 +542,11 @@ async function runChainCheck(check, meta) {
       }
       if (check.history) {
         value.firstCommit = git("log", "--max-parents=0", "--format=%ad", "--date=short", "HEAD").stdout.trim().split("\n").sort()[0];
-        value.aiTrailers = git("log", "-i", "--grep=co-authored-by:", "--grep=generated with", "--format=%h", "HEAD").stdout.split("\n").filter(Boolean);
+        // An AI trailer is a real git trailer (Co-authored-by, matched case-insensitively by git) or a
+        // "Generated with Claude" line. Words in a commit's body, such as "generated with ElevenLabs", are not one.
+        const coAuthored = git("log", "--format=%h%x09%(trailers:key=co-authored-by,valueonly,separator=%x2C)", "HEAD").stdout.split("\n").filter((l) => /\t\S/.test(l)).map((l) => l.split("\t")[0]);
+        const generated = git("log", "-i", "-E", "--grep=generated with \\[?claude", "--grep=noreply@anthropic\\.com", "--format=%h", "HEAD").stdout.split("\n").filter(Boolean);
+        value.aiTrailers = [...new Set([...coAuthored, ...generated])];
       }
     } else if (check.kind === "command") {
       const res = run(check.command[0], check.command.slice(1), ROOT, check.timeoutMs ?? 180_000);
@@ -607,7 +611,7 @@ function curlFor(check, meta) {
     const lines = [];
     if (check.order) lines.push(`git log --no-walk --date=iso --format='%h %ad %s' ${check.order.map((c) => c.slice(0, 7)).join(" ")}`, ...check.order.slice(1).map((c, i) => `git merge-base --is-ancestor ${check.order[i].slice(0, 7)} ${c.slice(0, 7)} && echo "${check.order[i].slice(0, 7)} came before ${c.slice(0, 7)}"`));
     if (check.ref) lines.push(`git fetch origin ${check.ref}:${check.ref}   # once, if the branch isn't in your clone`, ...(check.commits ?? []).map((c) => `git merge-base --is-ancestor ${c.slice(0, 7)} ${check.ref} && echo "${c.slice(0, 7)} is on ${check.ref}"`), `git merge-base --is-ancestor ${check.ref} HEAD || echo "${check.ref} is not merged into this branch"`);
-    if (check.history) lines.push("git log --max-parents=0 --format=%ad --date=short", "git log -i --grep='co-authored-by:' --grep='generated with' --format='%h %s'");
+    if (check.history) lines.push("git log --max-parents=0 --format=%ad --date=short", "git log --format='%h %(trailers:key=co-authored-by,valueonly,separator=%x2C)' | awk 'NF > 1'", "git log -i -E --grep='generated with \\[?claude' --grep='noreply@anthropic\\.com' --format='%h %s'");
     return lines.join("\n");
   }
   if (check.kind === "season") {

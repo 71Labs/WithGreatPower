@@ -52,7 +52,7 @@ const E = "apps/wgp/src/evidence/";
  */
 const TEXT_ONLY: Record<string, string[]> = {
   [`${E}readme-flow.test.ts`]: ["every button and label", "every page the README names", "the keys the README gives", "the market step is in two labelled parts"],
-  [`${E}readme-numbers.test.ts`]: ["the market: fee, pools", "the app's market defaults", "the Bits a night earns", "the ways to play: how many", "the verifier's limits", "rewards, the relayer", "Sandwich Man's limits", "the other docs:", "the starting prices", "the contract's unit-test count"],
+  [`${E}readme-numbers.test.ts`]: ["the market: fee, pools", "the app's market defaults", "the Bits a night earns", "the ways to play: how many", "the verifier's limits", "rewards, the relayer", "Sandwich Man's limits", "the other docs:", "the starting prices", "the contract's unit-test count", "the bot's scores under Limits", "the deployed code hash", "suits are cosmetic, as the README says"],
   [`${E}built-not-live.test.ts`]: ["*"],
   [`${E}claims-precise.test.ts`]: ["pnpm stats' duration", "the documents state those bounds", "names all three sources", "the three /api/cron routes", "the libraries the README credits", "every file the disclosures", "each chapter document", "ARCHITECTURE.md's route table"],
   [`${E}readme-evidence.test.ts`]: ["states the real order", "says in every place", "discloses his seed", "dates the live counts", "every row of", "every transaction the README lists", "every evidence link", "the README has the Evidence section"],
@@ -245,27 +245,47 @@ describe("wording that has to be the same everywhere", () => {
     expect(plainDoc("README.md")).toContain("Sandwich Man's key is a full-access key of his own account: the server only ever sends his five market calls, and a function-call key is the planned swap");
   });
 
-  it("the README opens with ten lines, each backed by a row that exists and still passes its static checks", () => {
+  it("the README opens with the game: a plain pitch, one screenshot, the Play link and a status table whose rows each link an evidence row", () => {
     const readme = read("README.md");
-    const at = readme.indexOf("\n## In one minute\n");
-    expect(at).toBeGreaterThan(0);
-    // Above everything else: only the title comes first.
-    expect(readme.slice(0, at).trim()).toBe("# With Great Power (WGP)");
-    const end = readme.indexOf("\nA 3D web-swinging superhero parody game", at);
-    const lines = readme.slice(at, end).split("\n").filter((l) => /^\d+\. /.test(l));
-    expect(lines).toHaveLength(10);
-    const ids = lines.map((l) => /\[`([a-z0-9-]+)`\]\(docs\/EVIDENCE\.md#([a-z0-9-]+)\)$/.exec(l));
+    const title = "# With Great Power (WGP)\n";
+    expect(readme.startsWith(title)).toBe(true);
+    const opening = readme.slice(title.length, readme.indexOf("\n## "));
+    // The pitch comes first, in plain words: what it is, what is different, and no popups after Google sign-in.
+    const pitch = opening.trim().split("\n\n")[0]!;
+    expect(pitch.startsWith("With Great Power is a 3D web-swinging game you play free in a browser")).toBe(true);
+    for (const words of ["**Every ranked score is replayed and verified by the server**", "anyone can re-run that replay with one command", "a NEP-245 token in one contract on NEAR mainnet", "after a Google sign-in there are no wallet popups"]) expect(pitch).toContain(words);
+    expect(pitch).not.toMatch(/EVIDENCE\.md|pnpm/);
+    // One screenshot that the Screenshots section also shows, then the Play link.
+    const shot = /!\[[^\]]+\]\((docs\/screenshots\/[^)]+)\)/.exec(opening)?.[1];
+    expect(shot).toBeDefined();
+    expect(readme.slice(readme.indexOf("\n## Screenshots\n"), readme.indexOf("\n## The problem\n"))).toContain(`(${shot})`);
+    expect(opening).toContain("**Play:** https://www.wgponnear.fun/play");
+    // The status table keeps the old ten lines' honesty: what is live, practice, simulated or only built.
+    const LABELS = ["Live on NEAR mainnet", "Practice only", "Simulation only", "Built, not deployed"];
+    const rows = opening
+      .split("\n")
+      .filter((l) => l.startsWith("| **"))
+      .map((l) => l.split(/(?<!\\)\|/).slice(1, -1).map((c) => c.trim()))
+      .filter((cells) => LABELS.some((label) => cells[0] === `**${label}**`));
+    expect(new Set(rows.map((r) => r[0]))).toEqual(new Set(LABELS.map((label) => `**${label}**`)));
+    expect(rows.filter((r) => r[0] === "**Live on NEAR mainnet**").length).toBeGreaterThanOrEqual(4);
+    const ids = rows.map((r) => /^\[`([a-z0-9-]+)`\]\(docs\/EVIDENCE\.md#([a-z0-9-]+)\)$/.exec(r[2] ?? ""));
     for (const [i, m] of ids.entries()) {
-      expect(m, `line ${i + 1} doesn't end with its evidence row`).not.toBeNull();
+      expect(m, `status row ${i + 1} doesn't end with its evidence row`).not.toBeNull();
       expect(m![1]).toBe(m![2]);
-      expect(data.claims.some((c) => c.id === m![1]), `line ${i + 1}: no row ${m![1]}`).toBe(true);
+      expect(data.claims.some((c) => c.id === m![1]), `status row ${i + 1}: no row ${m![1]}`).toBe(true);
     }
-    expect(new Set(ids.map((m) => m![1])).size).toBe(10);
-    // It says what is live, what is practice only, and gives the one command.
-    const text = lines.join("\n");
-    expect(text.match(/Live on (NEAR )?mainnet/g)!.length).toBeGreaterThanOrEqual(4);
-    expect(text).toContain("Practice only, not on NEAR");
-    expect(text).toContain("`pnpm install --frozen-lockfile && pnpm evidence --chain`");
+    expect(new Set(ids.map((m) => m![1])).size).toBe(rows.length);
+    const what = (label: string) => rows.find((r) => r[0] === `**${label}**`)![1]!;
+    expect(what("Practice only")).toContain("not on NEAR");
+    expect(what("Simulation only")).toContain("Nothing in it is on chain.");
+    expect(what("Built, not deployed")).toMatch(/reviewed by a second AI agent that did not write it; not an audit/);
+    expect(rows.find((r) => r[1]!.includes("Sandwich Man"))![1]).toContain("He is rule-based, not an AI agent.");
+    // The one command, and a pointer to what isn't proven; the evidence system no longer leads.
+    expect(opening).toContain("`pnpm install --frozen-lockfile && pnpm evidence --chain`");
+    expect(opening).toContain("[Limits](#limits-and-whats-next)");
+    expect(readme).not.toContain("\n## In one minute\n");
+    expect(readme.indexOf("\n## Evidence\n")).toBeGreaterThan(readme.indexOf("\n## For judges: 5-minute check\n"));
   });
 });
 
