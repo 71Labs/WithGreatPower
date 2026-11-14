@@ -81,7 +81,7 @@ export function Ranked() {
             </ul>
             <div className="px-1 pb-1 pt-4">
               <StickerLink href="/play/leaderboard" variant="ink" size="md" className="w-full">
-                See tonight’s board
+                See the leaderboard
                 <ArrowRight aria-hidden strokeWidth={2.25} className="size-[18px]" />
               </StickerLink>
             </div>
