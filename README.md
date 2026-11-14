@@ -1,6 +1,6 @@
 # With Great Power (WGP)
 
-With Great Power is a 3D web-swinging game you play free in a browser: you swing through a comic-book city at night, fight parody villains, run errands for your neighbours and trade what you win with an NPC vendor whose prices move with every trade. **Every ranked score is replayed and verified by the server** before it counts, and anyone can re-run that replay with one command. Everything you earn is a NEP-245 token in one contract on NEAR mainnet, and after a Google sign-in there are no wallet popups, seed phrases or gas prompts: a game-only key in your browser signs your game actions and the game's relayer pays the gas.
+With Great Power is a 3D web-swinging game you play free in a browser: you swing through a comic-book city at night, fight parody villains, run errands for your neighbours and trade what you win with an NPC vendor whose prices move with every trade. **Every ranked score is replayed and verified by the server** before it counts, and anyone can re-run that replay with one command. Everything you earn is a NEP-245 token in one contract on NEAR mainnet, and after a Google sign-in there are no wallet popups, seed phrases or gas prompts: a game-only key in your browser signs your game actions and the game's relayer pays the gas. When that gas runs low, anyone can refill it from Ethereum, Base, Arbitrum, Solana or Bitcoin through NEAR Intents, at [wgponnear.fun/gas](https://www.wgponnear.fun/gas).
 
 [![The hero swinging between rooftops at night](docs/screenshots/swing.jpg)](https://www.wgponnear.fun/play)
 
@@ -12,6 +12,7 @@ With Great Power is a 3D web-swinging game you play free in a browser: you swing
 | **Live on NEAR mainnet** | Gwei Stacy, a vendor inside the contract, prices each item on a curve that moves with every trade. | [`judge-3`](docs/EVIDENCE.md#judge-3) |
 | **Live on NEAR mainnet** | Player accounts call the contract themselves. How many, and how few accounts make most of the calls, is under [By the numbers](#by-the-numbers). | [`judge-2`](docs/EVIDENCE.md#judge-2) |
 | **Live on NEAR mainnet** | Sandwich Man, an NPC trader, trades from his own account, `sandwich.wgpnear.near`, by fixed rules. He is rule-based, not an AI agent. | [`track-agent-npc`](docs/EVIDENCE.md#track-agent-npc) |
+| **Live, first refill pending** | The Gas tank at [`/gas`](https://www.wgponnear.fun/gas): anyone can refill `relayer.wgpnear.near`, the account that pays players' gas, from Ethereum, Base, Arbitrum, Solana or Bitcoin through NEAR Intents' 1Click API. Live quotes work today; no real refill has landed on chain yet. | [`track-intents`](docs/EVIDENCE.md#track-intents) |
 | **Practice only** | Signed out, `/play/market` is a practice market in your browser, not on NEAR. Investing in the vendor runs only there and in a local checkout. | [`track-invest-practice`](docs/EVIDENCE.md#track-invest-practice) |
 | **Simulation only** | `/lab/economy` fast-forwards bot players on the same pricing code. Nothing in it is on chain. | [`track-fast-forward`](docs/EVIDENCE.md#track-fast-forward) |
 | **Built, not deployed** | Contract v3 (metadata, enumeration and investing in the vendor) is on the branch `review/contract-v3`, reviewed by a second AI agent that did not write it; not an audit. | [`track-nep245-v3`](docs/EVIDENCE.md#track-nep245-v3) |
@@ -299,6 +300,10 @@ flowchart LR
     C[game.wgpnear.near<br/>NEP-245 tokens]
     M[Mempool Market<br/>price curves]
     T[Seasons<br/>root + trophies]
+    W[relayer.wgpnear.near<br/>the gas tank]
+  end
+  subgraph Chains["Other chains"]
+    X[USDC · ETH · SOL · BTC<br/>Ethereum, Base, Arbitrum,<br/>Solana, Bitcoin]
   end
   S -- input log --> V
   V -- verified run --> O
@@ -306,6 +311,8 @@ flowchart LR
   K -- NEP-366 delegate --> R
   R -- relayed call<br/>relayer pays gas --> M
   V -- season close --> T
+  X -- NEAR Intents 1Click<br/>swapped to NEAR --> W
+  W -. pays the gas .-> R
 ```
 
 | Piece | How |
@@ -317,6 +324,7 @@ flowchart LR
 | **No popups in play** | After sign-in, players hold a game-only function-call key. Our relayer submits their signed actions as NEP-366 meta-transactions and pays the gas. `/api/relay/meta` accepts exactly one function call to an allowlisted method, with zero deposit, at most 30 Tgas and within budgets. |
 | **Sign-in** | NEAR wallets go through near-connect with a NEP-413 signed message. Google goes through Privy: the server verifies Privy's access token and reads the player's verified email and NEAR key from Privy's API. |
 | **Seasons** | The first player request after a season's end, plus 50 minutes for runs in flight, closes it once. The final standings are frozen with their Merkle root, and `record_season` (root, results digest, top 10) is queued. The contract stores it for good and mints a soulbound `trophy:<season>:<rank>` to each of the top 10. The results file, with every leaf's proof, is at `/api/seasons/<id>/results`. |
+| **Gas tank (NEAR Intents)** | `/gas` asks NEAR Intents' 1Click API for a quote that turns a deposit on Ethereum, Base, Arbitrum, Solana or Bitcoin into NEAR delivered to `relayer.wgpnear.near`, the account that pays players' gas. The server sets the recipient: a recipient sent by the browser is ignored, and a quote that names anyone else is refused. It takes only 9 listed tokens worth $1–$50, quotes dry until the giver asks for a deposit address, rate-limits deposit addresses per IP, and polls 1Click for the status. 1Click takes a 0.2% fee. Deliveries arrive as wNEAR on `wrap.near`, where the relayer is registered; the owner unwraps them into its balance with one call ([docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md)). Code: `apps/wgp/src/server/intents/one-click.ts`. |
 | **Safe upgrades** | near-sdk's `Promise` links host functions mainnet doesn't have yet, which failed our first deploy. `upgrade` uses low-level `env::promise_*` calls, and `scripts/near/check-wasm-imports.mjs` refuses a wasm that imports them. |
 
 ### Status on mainnet (checked Nov 13, 2026)
