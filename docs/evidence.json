@@ -156,7 +156,7 @@
       "id": "intro-one-contract",
       "section": "intro",
       "source": "README.md",
-      "quote": "everything you earn is a NEP-245 token in one contract",
+      "quote": "Everything you earn is a NEP-245 token in one contract",
       "status": "proven by test",
       "code": [
         {
@@ -188,7 +188,7 @@
       "id": "intro-no-popups",
       "section": "intro",
       "source": "README.md",
-      "quote": "after that you never see a wallet popup, a seed phrase or a gas prompt",
+      "quote": "a game-only key in your browser signs your game actions and the game's relayer pays the gas",
       "status": "proven by test",
       "code": [
         {
@@ -212,7 +212,10 @@
           "name": "relays every market method from a session key with no deposit"
         }
       ],
-      "note": "The test proves the mechanism (a browser-held key signs, the relayer pays). That no popup shows is seen by playing: Try it, steps 2 to 5."
+      "note": "The row quotes the mechanism, which is what the tests prove: a key the browser holds signs a delegate the relayer accepts, and the relayer relays a market call that attaches no deposit. The chain check is one such relayed trade on mainnet. That no wallet popup, seed phrase or gas prompt then appears follows from it and is seen by playing (Try it, steps 2 to 5); no test drives a browser through Google sign-in, so that part of the sentence has no row.",
+      "chain": [
+        "tx-relayed-buy"
+      ]
     },
     {
       "id": "track-game-loop",
@@ -5809,10 +5812,10 @@
       "note": "The README used to promise one PASS line per claim. Offline, the rows that rest on the chain or the site are SKIP. The exact summary line for each command is generated into the README's coverage block by the function that prints it."
     },
     {
-      "id": "evidence-one-minute",
+      "id": "evidence-opening",
       "section": "evidence",
       "source": "README.md",
-      "quote": "Each line ends with the id of its row in docs/EVIDENCE.md, which names the test or the read-only check behind it.",
+      "quote": "Each row links its entry in docs/EVIDENCE.md, which names the test or the read-only mainnet check behind it.",
       "status": "pinned by test",
       "code": [
         {
@@ -5824,9 +5827,10 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
-          "name": "the README opens with ten lines, each backed by a row that exists and still passes its static checks"
+          "name": "the README opens with the game: a plain pitch, one screenshot, the Play link and a status table whose rows each link an evidence row"
         }
-      ]
+      ],
+      "note": "The README used to open with ten numbered lines, each ending in its row's id. It now opens with the pitch and a status table (live on mainnet, practice only, simulation only, built and not deployed); the test checks each row of that table links a row that exists, and that the Evidence section comes after the 5-minute check."
     },
     {
       "id": "evidence-numbers-bound",

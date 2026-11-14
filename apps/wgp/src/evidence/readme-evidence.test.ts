@@ -70,8 +70,9 @@ describe("the README's evidence", () => {
     const readme = read("README.md");
     const at = readme.indexOf("\n## Evidence\n");
     expect(at).toBeGreaterThan(0);
-    expect(at, "the Evidence section comes before the track table").toBeLessThan(readme.indexOf("\n## How it meets the track\n"));
-    const section = readme.slice(at, readme.indexOf("\n## How it meets the track\n"));
+    // It comes after the 5-minute check: the game and its checks lead, the evidence layer's own workings follow.
+    expect(at, "the Evidence section comes after the 5-minute check").toBeGreaterThan(readme.indexOf("\n## For judges: 5-minute check\n"));
+    const section = readme.slice(at, readme.indexOf("\n## ", at + 1));
     for (const text of ["pnpm evidence", "pnpm evidence --chain", "[docs/EVIDENCE.md](docs/EVIDENCE.md)", "`PASS` is mechanical and means no more than this", "Any `FAIL` exits 1", "It does not cover every sentence."]) expect(section).toContain(text);
     expect((JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts.evidence).toBe("node scripts/evidence.mjs");
     expect(read(".github/workflows/ci.yml")).toContain("pnpm evidence --check");

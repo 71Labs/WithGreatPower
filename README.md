@@ -1,58 +1,31 @@
 # With Great Power (WGP)
 
-## In one minute
+With Great Power is a 3D web-swinging game you play free in a browser: you swing through a comic-book city at night, fight parody villains, run errands for your neighbours and trade what you win with an NPC vendor whose prices move with every trade. **Every ranked score is replayed and verified by the server** before it counts, and anyone can re-run that replay with one command. Everything you earn is a NEP-245 token in one contract on NEAR mainnet, and after a Google sign-in there are no wallet popups, seed phrases or gas prompts: a game-only key in your browser signs your game actions and the game's relayer pays the gas.
 
-Each line ends with the id of its row in [docs/EVIDENCE.md](docs/EVIDENCE.md), which names the test or the read-only check behind it.
+[![The hero swinging between rooftops at night](docs/screenshots/swing.jpg)](https://www.wgponnear.fun/play)
 
-1. **What it is:** a 3D web-swinging game you play in a browser, free, with no install, at https://www.wgponnear.fun/play. [`judge-1`](docs/EVIDENCE.md#judge-1)
-2. **Scores are replayed:** the server replays each ranked night's inputs and ranks only what reproduces. [`intro-replayed`](docs/EVIDENCE.md#intro-replayed)
-3. **Live on NEAR mainnet, the contract:** `game.wgpnear.near` holds every hero, item, suit, badge and Bit as a NEP-245 token (v2: the standard's core, no metadata extension). [`track-nep245`](docs/EVIDENCE.md#track-nep245)
-4. **Live on mainnet, the market:** a vendor inside the contract prices each item on a curve that moves with every trade. [`judge-3`](docs/EVIDENCE.md#judge-3)
-5. **Live on mainnet, players:** player accounts call the contract themselves. How many, and how concentrated the activity is, are under [By the numbers](#by-the-numbers). [`judge-2`](docs/EVIDENCE.md#judge-2)
-6. **Live on mainnet, an NPC with its own wallet:** Sandwich Man trades from `sandwich.wgpnear.near` by fixed rules; he is rule-based, not an AI agent. [`track-agent-npc`](docs/EVIDENCE.md#track-agent-npc)
-7. **Practice only, not on NEAR:** signed out, `/play/market` is a practice market in your browser, and investing in the vendor runs only there and in a local checkout. [`track-invest-practice`](docs/EVIDENCE.md#track-invest-practice)
-8. **Simulation only:** `/lab/economy` fast-forwards bot players on the same pricing code; nothing in it is on chain. [`track-fast-forward`](docs/EVIDENCE.md#track-fast-forward)
-9. **Built, not deployed:** contract v3 (metadata, enumeration, investing) is on a branch, reviewed by a second AI agent that did not write it; not an audit. [`track-nep245-v3`](docs/EVIDENCE.md#track-nep245-v3)
-10. **Check the claims:** `pnpm install --frozen-lockfile && pnpm evidence --chain` prints one PASS, FAIL or SKIP line per claim. [`evidence-output`](docs/EVIDENCE.md#evidence-output)
+**Play:** https://www.wgponnear.fun/play (free, no install). A first visit puts you straight into a night as a guest; sign in to be ranked and to earn on NEAR.
 
-A 3D web-swinging superhero parody game on NEAR mainnet. You swing through a comic-book city at night, fight parody villains, run errands for your neighbours and trade what you win with an NPC vendor whose prices move with every trade. **Every ranked score is replayed and verified by the server**, and everything you earn is a NEP-245 token in one contract. You sign in with Google, and after that you never see a wallet popup, a seed phrase or a gas prompt.
+| Where it runs | What | Evidence |
+|---|---|---|
+| **Live on NEAR mainnet** | The contract [`game.wgpnear.near`](https://nearblocks.io/address/game.wgpnear.near) holds every hero, item, suit, badge and Bit as a NEP-245 token: the standard's core, without its metadata extension. | [`track-nep245`](docs/EVIDENCE.md#track-nep245) |
+| **Live on NEAR mainnet** | Gwei Stacy, a vendor inside the contract, prices each item on a curve that moves with every trade. | [`judge-3`](docs/EVIDENCE.md#judge-3) |
+| **Live on NEAR mainnet** | Player accounts call the contract themselves. How many, and how few accounts make most of the calls, is under [By the numbers](#by-the-numbers). | [`judge-2`](docs/EVIDENCE.md#judge-2) |
+| **Live on NEAR mainnet** | Sandwich Man, an NPC trader, trades from his own account, `sandwich.wgpnear.near`, by fixed rules. He is rule-based, not an AI agent. | [`track-agent-npc`](docs/EVIDENCE.md#track-agent-npc) |
+| **Practice only** | Signed out, `/play/market` is a practice market in your browser, not on NEAR. Investing in the vendor runs only there and in a local checkout. | [`track-invest-practice`](docs/EVIDENCE.md#track-invest-practice) |
+| **Simulation only** | `/lab/economy` fast-forwards bot players on the same pricing code. Nothing in it is on chain. | [`track-fast-forward`](docs/EVIDENCE.md#track-fast-forward) |
+| **Built, not deployed** | Contract v3 (metadata, enumeration and investing in the vendor) is on the branch `review/contract-v3`, reviewed by a second AI agent that did not write it; not an audit. | [`track-nep245-v3`](docs/EVIDENCE.md#track-nep245-v3) |
+
+Each row links its entry in [docs/EVIDENCE.md](docs/EVIDENCE.md), which names the test or the read-only mainnet check behind it. `pnpm install --frozen-lockfile && pnpm evidence --chain` runs them all and prints one PASS, FAIL or SKIP line per claim. What the evidence does not show, and what to weigh against it (a bot can rank, seeds can be re-rolled, the owner key is a hot key, and Season 1 is a small playtest with airdrops), is under [Limits](#limits-and-whats-next) and [By the numbers](#by-the-numbers).
 
 | | |
 |---|---|
-| **Play** | https://www.wgponnear.fun (free, in the browser, no install) |
 | **Contract** | [`game.wgpnear.near`](https://nearblocks.io/address/game.wgpnear.near) on NEAR mainnet |
 | **Live numbers** | https://www.wgponnear.fun/stats, or `GET /api/stats` |
 | **Track** | NEAR HACKATHON, Nov 1–14, 2026: Games With Real Economies (`games`) |
 | **License** | MIT ([LICENSE](LICENSE)) |
 
-**Contents:** [Evidence](#evidence) · [Track fit](#how-it-meets-the-track) · [5-minute check](#for-judges-5-minute-check) · [Numbers](#by-the-numbers) · [Screenshots](#screenshots) · [Game loop](#the-game-loop) · [Economy](#the-economy-loop) · [Ways to play](#ways-to-play) · [Try it](#try-it-do-x-see-y) · [NEAR](#what-near-does-here) · [Verification](#how-verification-works) · [Run locally](#run-it-locally) · [Layout](#layout) · [Disclosures](#built-during-the-hackathon)
-
-## Evidence
-
-[docs/EVIDENCE.md](docs/EVIDENCE.md) lists the claims in this README and in `docs/` that a script can check. Each is quoted word for word and paired with the code that does it and with what checks it: a test in this repository, a read-only call to NEAR mainnet or the live site, or both. The list is generated from [docs/evidence.json](docs/evidence.json). It does not cover every sentence. Design intent, the story and the chapters' prose have no rows; the problem statement, the disclosures and the credits have rows only where there is something to check (a file, a version, a commit).
-
-```bash
-pnpm install --frozen-lockfile
-pnpm evidence            # every row's pointers and tests: no network, no keys, no environment variables
-pnpm evidence --chain    # also the read-only checks against NEAR mainnet and the live site
-```
-
-It prints one line per claim, then one summary line. `PASS` is mechanical and means no more than this: the claim's words are still in the document, each code pointer's anchor text is still in its file, and each cited test ran and passed just now (with `--chain`, each read-only check also answered as expected). Whether a test is a good proof of its sentence is for a reader to judge; each row names its test. `SKIP` names what couldn't run here and why: offline, that is every row whose proof is on chain or on the live site. Any `FAIL` exits 1.
-
-Each claim carries a status that says how far its proof reaches. `proven by test`, `pinned by test`, `simulation only` and `built, off on mainnet` rows always cite a test. A `proven by test` row cites at least one test that runs the code; a `pinned by test` row's tests only compare the document's words with source text, a constant or a config file, so they catch drift and do not show the code works. `proven on chain` and `live check` rows rest on a read-only check, and cite a test as well where there is one. `checked in git` rows rest on this clone's own commit history. `owner action needed` rows point at what is ready. Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.
-
-<!-- evidence:coverage:start (generated by `pnpm evidence --write`; edit scripts/evidence.mjs, not this block) -->
-| | |
-|---|---|
-| Claims with a row | 205, quoted from this README and 11 files under `docs/` |
-| By status | 100 `proven by test` · 8 `pinned by test` · 41 `proven on chain` · 17 `live check` · 4 `checked in git` · 24 `simulation only` · 3 `built, off on mainnet` · 8 `owner action needed` |
-| Rows that cite a test | 181 of 205 (349 different tests). All 135 rows with the status `proven by test`, `pinned by test`, `simulation only`, `built, off on mainnet` have one; a guard test fails otherwise. |
-| Rows with a read-only chain or site check | 99 of 205 (45 different checks) |
-| Rows with neither (a code pointer only) | 0 |
-| Code pointers | 304, each anchored to a piece of text that appears once in its file |
-| `pnpm evidence` prints | `205 claims: 147 PASS, 0 FAIL, 58 SKIP.` The 58 SKIP rows are the `proven on chain` and `live check` rows, whose proof needs `--chain`. In a clone without the branch `review/contract-v3`, the rows that check it are SKIP as well. Without Rust installed, the 39 rows that cite a contract test are SKIP too. |
-| `pnpm evidence --chain` prints | `205 claims: 205 PASS, 0 FAIL, 0 SKIP.` when every endpoint answers. A rate-limited endpoint is retried, then its rows are SKIP (never FAIL), with the line `N rows skipped: rate limited, re-run.` |
-<!-- evidence:coverage:end -->
+**Contents:** [Track fit](#how-it-meets-the-track) · [5-minute check](#for-judges-5-minute-check) · [Numbers](#by-the-numbers) · [Screenshots](#screenshots) · [Game loop](#the-game-loop) · [Economy](#the-economy-loop) · [Ways to play](#ways-to-play) · [Try it](#try-it-do-x-see-y) · [NEAR](#what-near-does-here) · [Verification](#how-verification-works) · [Evidence](#evidence) · [Run locally](#run-it-locally) · [Layout](#layout) · [Limits](#limits-and-whats-next) · [Disclosures](#built-during-the-hackathon)
 
 ## How it meets the track
 
@@ -386,6 +359,33 @@ flowchart LR
 6. **Anyone can re-check.** Every verified run's replay is public at `GET /api/runs/<id>/replay` (`seed`, `startSave`, `log`, `score`, `ticks`, `hash`).
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Evidence
+
+[docs/EVIDENCE.md](docs/EVIDENCE.md) lists the claims in this README and in `docs/` that a script can check. Each is quoted word for word and paired with the code that does it and with what checks it: a test in this repository, a read-only call to NEAR mainnet or the live site, or both. The list is generated from [docs/evidence.json](docs/evidence.json). It does not cover every sentence. Design intent, the story and the chapters' prose have no rows; the problem statement, the disclosures and the credits have rows only where there is something to check (a file, a version, a commit).
+
+```bash
+pnpm install --frozen-lockfile
+pnpm evidence            # every row's pointers and tests: no network, no keys, no environment variables
+pnpm evidence --chain    # also the read-only checks against NEAR mainnet and the live site
+```
+
+It prints one line per claim, then one summary line. `PASS` is mechanical and means no more than this: the claim's words are still in the document, each code pointer's anchor text is still in its file, and each cited test ran and passed just now (with `--chain`, each read-only check also answered as expected). Whether a test is a good proof of its sentence is for a reader to judge; each row names its test. `SKIP` names what couldn't run here and why: offline, that is every row whose proof is on chain or on the live site. Any `FAIL` exits 1.
+
+Each claim carries a status that says how far its proof reaches. `proven by test`, `pinned by test`, `simulation only` and `built, off on mainnet` rows always cite a test. A `proven by test` row cites at least one test that runs the code; a `pinned by test` row's tests only compare the document's words with source text, a constant or a config file, so they catch drift and do not show the code works. `proven on chain` and `live check` rows rest on a read-only check, and cite a test as well where there is one. `checked in git` rows rest on this clone's own commit history. `owner action needed` rows point at what is ready. Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.
+
+<!-- evidence:coverage:start (generated by `pnpm evidence --write`; edit scripts/evidence.mjs, not this block) -->
+| | |
+|---|---|
+| Claims with a row | 212, quoted from this README and 11 files under `docs/` |
+| By status | 102 `proven by test` · 9 `pinned by test` · 45 `proven on chain` · 17 `live check` · 4 `checked in git` · 24 `simulation only` · 3 `built, off on mainnet` · 8 `owner action needed` |
+| Rows that cite a test | 185 of 212 (357 different tests). All 138 rows with the status `proven by test`, `pinned by test`, `simulation only`, `built, off on mainnet` have one; a guard test fails otherwise. |
+| Rows with a read-only chain or site check | 104 of 212 (47 different checks) |
+| Rows with neither (a code pointer only) | 0 |
+| Code pointers | 311, each anchored to a piece of text that appears once in its file |
+| `pnpm evidence` prints | `212 claims: 150 PASS, 0 FAIL, 62 SKIP.` The 62 SKIP rows are the `proven on chain` and `live check` rows, whose proof needs `--chain`. In a clone without the branch `review/contract-v3`, the rows that check it are SKIP as well. Without Rust installed, the 39 rows that cite a contract test are SKIP too. |
+| `pnpm evidence --chain` prints | `212 claims: 212 PASS, 0 FAIL, 0 SKIP.` when every endpoint answers. A rate-limited endpoint is retried, then its rows are SKIP (never FAIL), with the line `N rows skipped: rate limited, re-run.` |
+<!-- evidence:coverage:end -->
 
 ## Run it locally
 
