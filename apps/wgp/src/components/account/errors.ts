@@ -5,6 +5,10 @@
 
 export interface SignInProblem {
   text: string;
+  /** Where the player can fix it ("/gas" when the gas tank is empty), shown as a link after the text. */
+  href?: string;
+  /** The link's words. */
+  action?: string;
   /** Google can't work here right now: point at the wallet instead. */
   googleUnavailable?: boolean;
   /** The handle field is at fault (shown next to it). */
@@ -121,8 +125,9 @@ export function quickPlayProblem(error: unknown): SignInProblem {
     case "privy_timeout":
       return { text: "Google needs you to sign in again here. Sign out, sign back in with Google, then choose Enable quick play." };
     case "budget_exhausted":
-    case "relayer_empty":
       return { text: "The game can’t pay for new keys right now. Try again later." };
+    case "relayer_empty":
+      return { text: "The game’s gas tank is empty, so it can’t pay for new keys right now. Anyone can refill it; then try again.", href: "/gas", action: "Refill the gas tank" };
     case "network":
       return { text: "Couldn’t reach the server. Check your connection and try again." };
   }

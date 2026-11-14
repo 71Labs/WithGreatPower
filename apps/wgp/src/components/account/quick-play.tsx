@@ -68,7 +68,17 @@ function Problem({ problem }: { problem: SignInProblem | null }) {
       {problem ? (
         <p className="flex items-start gap-2 rounded-[12px] border-2 border-game-ink bg-game-paper px-3 py-2 text-[13px] leading-5 text-game-ink">
           <CircleAlert aria-hidden className="mt-px size-4 shrink-0 text-game-hero" strokeWidth={2} />
-          <span className="[text-wrap:pretty]">{problem.text}</span>
+          <span className="[text-wrap:pretty]">
+            {problem.text}
+            {problem.href ? (
+              <>
+                {" "}
+                <a href={problem.href} className="font-semibold underline decoration-game-ink/40 underline-offset-4 [text-decoration-skip-ink:auto] [text-underline-position:from-font] pointer-fine:hover:decoration-game-ink">
+                  {problem.action ?? "Learn more"}
+                </a>
+              </>
+            ) : null}
+          </span>
         </p>
       ) : null}
     </div>
