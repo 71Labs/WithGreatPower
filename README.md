@@ -91,7 +91,6 @@ curl -s https://archival-rpc.mainnet.fastnear.com -H 'Content-Type: application/
   | jq -r '.result.receipts_outcome[].outcome.logs[]'
 
 # F. Replay the All-time top 5 yourself (downloads each run's seed, start save and input log)
-#    If the clone answers 404, the repository is not public yet: use the copy you were given and start at pnpm install.
 git clone https://github.com/71Labs/WithGreatPower && cd WithGreatPower
 pnpm install --frozen-lockfile
 pnpm verify
@@ -202,7 +201,7 @@ A round trip never profits, because a buy rounds up and a sell rounds down.
 
 ## Ways to play
 
-Every mode's runs are replayed by the server. The right-hand column is what each puts on NEAR. [Evidence](docs/EVIDENCE.md#ways-to-play)
+Every mode's runs are replayed by the server. The right-hand column is what each puts on NEAR. In a fresh browser, start at https://www.wgponnear.fun/play: it makes you a guest hero first. The paths in brackets open a mode once you have one (after step 1 of [Try it](#try-it-do-x-see-y), in the same browser). [Evidence](docs/EVIDENCE.md#ways-to-play)
 
 | Mode | What it is | On NEAR |
 |---|---|---|
@@ -213,7 +212,7 @@ Every mode's runs are replayed by the server. The right-hand column is what each
 | **Case files** (`/play/cases`) | Three story chapters: Missing: Mary Jpeg, The Sybil Vote, Fee Strike | `trophy:badge:case-00N` on your first verified clear |
 | **The City** (`/play/city`) | Free roam: run, sprint, climb, wall-run, swing, dodge traffic, six side tasks | Nothing: XP, saved with your hero |
 | **Invite 3 friends** (`/play/invite`) | Friends who add their X and play a verified night count | `trophy:badge:recruiter` |
-| **Season 1** (Nov 5–14) | Nightly bests add up on the Season board | At the close: the final board's root and digest, recorded once, and `trophy:s1:1…10` for the top 10. Season 1 closes Nov 14, 23:59 UTC; after that the record is `get_season("s1")` on the contract and the results file is `/api/seasons/s1/results` (the status table says what to expect before and after). |
+| **Season 1** (Nov 5–14) | Nightly bests add up on the Season board | At the close: the final board's root and digest, recorded once, and `trophy:s1:1…10` for the top 10. Season 1 ends Nov 15, 00:00 UTC (the end of Nov 14); after that the record is `get_season("s1")` on the contract and the results file is `/api/seasons/s1/results` (the status table says what to expect before and after). |
 
 Design docs: [chapters](docs/chapters/) · [the story bible](docs/story/bible.md) · [competitive modes](docs/compete.md) · [referrals](docs/referrals.md).
 
@@ -268,10 +267,10 @@ All steps work on the live site, with no install.
    - **The inflation, and the fix:** with mainnet's settings about 3% of the Bits earned are burned. Tick **Recommended settings** (crafting burns 250 Bits, 5% gas fee) and run again: about 28%. Those settings are not on mainnet yet; [docs/ECONOMY.md](docs/ECONOMY.md) has the measurements, the owner's command and what stays unfixed.
    - **Gwei's limits:** press **Drain Gwei** and run 30 days. A crowd of hoarders and dumpers leaves her sold out of rares and unable to buy the rest, and the page counts the item-days.
 7. **Roam the City.**
-   - **Do:** open https://www.wgponnear.fun/play/city. Shift sprints, F webs while held, Q zips, E talks or interacts, M opens the map.
+   - **Do:** after step 1, in the same browser, open the **City** tab or https://www.wgponnear.fun/play/city (it needs a hero). Shift sprints, F webs while held, Q zips, E talks or interacts, M opens the map.
    - **See:** a free-roam city where walls are climbable, barriers and cars are solid (a car at speed knocks you down), and six people have tasks, such as racing Sandwich Man over the roofs with Gwei's order, or unplugging Doc Octochain's relays from the city's highest points.
 8. **Open a case file, race the Daily, invite a friend.**
-   - **Do:** `/play/cases`, `/play/compete`, `/play/invite`.
+   - **Do:** after step 1, in the same browser: `/play/cases`, `/play/compete`, `/play/invite`.
    - **See:** three story chapters with their own rules and bosses; today's Daily Run with other players' ghosts; your invite link and its 0/3 progress (signed in).
 9. **Check it on NEAR.**
    - **Do:** open https://nearblocks.io/address/game.wgpnear.near.
@@ -323,7 +322,7 @@ flowchart LR
 |---|---|
 | **Used by players on mainnet** (transactions below) | The contract and its market (8 pools, 2% fee); reward mints, Bits and badges included; player accounts created by the factory with session keys; `register_hero`, `craft_suit` and `equip_suit`; `market_buy`, `market_sell`, `list_item` and `buy_listing`, all signed by session keys and relayed (NEP-366) |
 | **NPC trader on mainnet** (since Nov 13, 2026) | Sandwich Man trades from his own account, `sandwich.wgpnear.near`, by fixed rules: rule-based, not an AI agent, and never counted as a player. The owner created the account with 0.3 NEAR and the operator seeded it once with 300 Bits; his first trade landed the same day (transactions below). |
-| **The season record: first run on mainnet when Season 1 closes** | `record_season` and its trophies. Season 1 closes Nov 14, 23:59 UTC. The first player request after 00:50 UTC on Nov 15 freezes the board and queues the record. **Before the record lands,** `get_season("s1")` answers `null`, no `trophy:s1:*` exists, and `/api/seasons/s1/results` is a 404 until the freeze; the proof is the contract's unit tests and the server's season tests, not a mainnet transaction. **After it lands,** `get_season("s1")` holds the root, the digest and the top of the board, each of those accounts holds `trophy:s1:<rank>`, and the sha256 of `/api/seasons/s1/results` is that digest. `pnpm evidence --chain` checks whichever of these it finds, in full. |
+| **The season record: first run on mainnet when Season 1 closes** | `record_season` and its trophies. Season 1 ends Nov 15, 00:00 UTC; runs started before then still count. The first player request after 00:50 UTC on Nov 15 freezes the board and queues the record. **Before the record lands,** `get_season("s1")` answers `null`, no `trophy:s1:*` exists, and `/api/seasons/s1/results` is a 404 until the freeze; the proof is the contract's unit tests and the server's season tests, not a mainnet transaction. **After it lands,** `get_season("s1")` holds the root, the digest and the top of the board, each of those accounts holds `trophy:s1:<rank>`, and the sha256 of `/api/seasons/s1/results` is that digest. `pnpm evidence --chain` checks whichever of these it finds, in full. |
 | **Live off chain** | The game and all its modes, runs verified by replay, the boards, Google sign-in (Privy), NEAR wallet sign-in (NEP-413), referrals, classic mode and the soundtrack |
 | **Simulation only** | `/lab/economy`, which fast-forwards bot players on the same pricing code |
 | **Built, not deployed** | Contract v3: NEP-245 metadata and enumeration, and investing in the merchant. Branch `review/contract-v3`; its review (by a second AI agent that did not write it; not an audit) is summarised in [docs/CONTRACT-V3-REVIEW.md](docs/CONTRACT-V3-REVIEW.md). |
@@ -349,6 +348,8 @@ flowchart LR
 | Sandwich Man's account, `sandwich.wgpnear.near`: created by `wgpnear.near` with 0.3 NEAR and one full-access key (Nov 13) | [`Hx32N4dy…`](https://nearblocks.io/txns/Hx32N4dymGnQXUoD1cY36w3kekY2WqKbfvLpvd84W4rm) |
 | His one-off seed: a `mint_rewards` of 300 Bits from the operator, with the digest `sha256("npc-seed:sandwich.wgpnear.near:v1")` | [`Hjvobzmd…`](https://nearblocks.io/txns/HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7) |
 | His first trade: a `market_buy` of 2 Sybil goo from Gwei for 72 Bits, 2 of them the burned fee, signed by his own key and not relayed | [`AcmNAmHr…`](https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf) |
+
+**From this source to the deployed code.** The code hash above is the base58 form of the deployed wasm's sha256, `4c25745400717004ab5c18521bf6454a21c6f093d6deff353f8784dcd15df84d`. Building `contracts/wgp` from `main` with `cargo near build non-reproducible-wasm --locked` gives that sha256 on the author's machine. On another machine it gives a different one, because the wasm embeds the builder's absolute cargo registry paths; a reproducible (container) build is not set up. So the link from this source to the deployed code rests on the author's build, and the contract's tests prove the source, not the bytes on chain.
 
 ## How verification works
 

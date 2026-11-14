@@ -3596,6 +3596,30 @@
       "note": "Rule 5, buy the dip: the reason he gave was \"17% under the opening price. First in line for the dip.\""
     },
     {
+      "id": "proven-source-wasm",
+      "section": "proven",
+      "source": "README.md",
+      "quote": "The code hash above is the base58 form of the deployed wasm's sha256, 4c25745400717004ab5c18521bf6454a21c6f093d6deff353f8784dcd15df84d.",
+      "status": "proven on chain",
+      "note": "The chain check reads the deployed code hash; the test decodes it from base58 to that sha256. What it does not show is that this source builds those bytes: a build of main with cargo near build non-reproducible-wasm --locked matched it on the author's machine only, because the wasm embeds the builder's absolute cargo registry paths. Nothing here rebuilds the wasm.",
+      "code": [
+        {
+          "path": "contracts/wgp/Cargo.toml",
+          "anchor": "container_build_command = [\"cargo\", \"near\", \"build\", \"non-reproducible-wasm\", \"--locked\"]"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "the deployed code hash the README gives is the base58 form of the sha256 it gives"
+        }
+      ],
+      "chain": [
+        "contract-account"
+      ]
+    },
+    {
       "id": "verify-one-sim",
       "section": "verify",
       "source": "README.md",
