@@ -156,7 +156,7 @@
       "id": "intro-one-contract",
       "section": "intro",
       "source": "README.md",
-      "quote": "everything you earn is a NEP-245 token in one contract",
+      "quote": "Everything you earn is a NEP-245 token in one contract",
       "status": "proven by test",
       "code": [
         {
@@ -188,7 +188,7 @@
       "id": "intro-no-popups",
       "section": "intro",
       "source": "README.md",
-      "quote": "after that you never see a wallet popup, a seed phrase or a gas prompt",
+      "quote": "a game-only key in your browser signs your game actions and the game's relayer pays the gas",
       "status": "proven by test",
       "code": [
         {
@@ -212,7 +212,10 @@
           "name": "relays every market method from a session key with no deposit"
         }
       ],
-      "note": "The test proves the mechanism (a browser-held key signs, the relayer pays). That no popup shows is seen by playing: Try it, steps 2 to 5."
+      "note": "The row quotes the mechanism, which is what the tests prove: a key the browser holds signs a delegate the relayer accepts, and the relayer relays a market call that attaches no deposit. The chain check is one such relayed trade on mainnet. That no wallet popup, seed phrase or gas prompt then appears follows from it and is seen by playing (Try it, steps 2 to 5); no test drives a browser through Google sign-in, so that part of the sentence has no row.",
+      "chain": [
+        "tx-relayed-buy"
+      ]
     },
     {
       "id": "track-game-loop",
@@ -302,7 +305,7 @@
       "id": "track-chain-unnoticed",
       "section": "track",
       "source": "README.md",
-      "quote": "Google sign-in, a game-only session key, a relayer that pays gas. No popup after sign-in.",
+      "quote": "Google sign-in, a game-only session key, a relayer that pays gas.",
       "status": "proven by test",
       "code": [
         {
@@ -337,7 +340,8 @@
       ],
       "chain": [
         "tx-relayed-buy"
-      ]
+      ],
+      "note": "The row quotes the mechanism the tests run: the factory creates a Google player's account with a game-only session key, and the relayer carries that key's calls and refuses a deposit. The chain check is one relayed session-key trade on mainnet. The row's next sentence, \"No popup after sign-in\", follows from this and is seen by playing (Try it, steps 2, 3 and 5); no test drives a browser through sign-in, so it has no row of its own."
     },
     {
       "id": "track-nep245",
@@ -467,10 +471,31 @@
       "note": "Privy's own service is not called in tests: the token checks run against keys the test makes. The live sign-in is step 2 of Try it."
     },
     {
+      "id": "track-intents",
+      "section": "track",
+      "source": "README.md",
+      "quote": "Not used. The game's economy lives on one chain, in one contract: items and Bits are NEP-245 balances in game.wgpnear.near, and a player never moves value to or from another chain or token.",
+      "status": "pinned by test",
+      "note": "An absence, so the test reads code: no source file in the app, game-core, the contract or the scripts names intents.near, an Intents package or defuse outside comments, and no package.json depends on one. The one mention, in contracts/wgp/src/events.rs, is a comment saying the contract's NEP-245 events copy the Intents contract's event fields. The relayer's own tests use intents.near as a foreign receiver it refuses.",
+      "code": [
+        {
+          "path": "contracts/wgp/src/events.rs",
+          "anchor": "`MtEvent` mirrors `defuse_nep245::MtEvent` field for field"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
+          "name": "nothing in the app, the scripts or the contract names intents.near or an Intents SDK, and the README says so"
+        }
+      ]
+    },
+    {
       "id": "track-npc-wallets",
       "section": "track",
       "source": "README.md",
-      "quote": "Live on mainnet: Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain; her wallet is the contract's own account, not a separate one.",
+      "quote": "Live on mainnet: Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain, held by the contract's own account, game.wgpnear.near: she has no account or key of her own.",
       "status": "proven on chain",
       "code": [
         {
@@ -1299,7 +1324,7 @@
       "id": "judge-7",
       "section": "judge",
       "source": "README.md",
-      "quote": "Prices move without a patch",
+      "quote": "A simulation fast-forwards the economy (not mainnet)",
       "status": "simulation only",
       "code": [
         {
@@ -1317,7 +1342,7 @@
       "chain": [
         "site-lab-economy"
       ],
-      "note": "This check is the simulation. Real prices moving on mainnet is track-no-dev-patch."
+      "note": "This check is the simulation: bot players on the same pricing code, in the browser. The README used to call it \"Prices move without a patch\", which reads as a claim about mainnet. Real prices moving on mainnet is check 3 and track-no-dev-patch."
     },
     {
       "id": "judge-8",
@@ -1628,6 +1653,17 @@
       "note": "A dated lower bound like the row's other counts: the check reads the figure from the README and fails if the live count is below it."
     },
     {
+      "id": "numbers-author-wallet",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "The author also plays from a NEAR wallet account, sele71.near (9th on the All-time board on Nov 14). It has never called a game method itself, only received reward mints, so it is in the game's counts and not in the chain's player count.",
+      "status": "proven on chain",
+      "note": "A wallet player's first call of their own is register_hero, so get_player answering with no hero means sele71.near has never made one, while a reward nonce above zero means the operator has minted to it. The board position is dated and has no check; the live board is GET /api/leaderboard?board=alltime.",
+      "chain": [
+        "author-wallet"
+      ]
+    },
+    {
       "id": "economy-earn",
       "section": "economy",
       "source": "README.md",
@@ -1853,8 +1889,14 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
           "name": "suits are cosmetic, as the README says: a suit is colours, a recipe and a level, and no stat"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "a suit changes nothing in play: each recorded night replays to the same score, ticks and hash in every suit"
         }
-      ]
+      ],
+      "note": "The first test only reads the suit table (no stat on any suit). The second runs the simulation: each recorded night replays to the same score, ticks, checkpoints and hash in every suit. Before Nov 14 the row cited only the first, which reads data and runs nothing."
     },
     {
       "id": "modes-all-replayed",
@@ -3561,6 +3603,30 @@
       "note": "Rule 5, buy the dip: the reason he gave was \"17% under the opening price. First in line for the dip.\""
     },
     {
+      "id": "proven-source-wasm",
+      "section": "proven",
+      "source": "README.md",
+      "quote": "The code hash above is the base58 form of the deployed wasm's sha256, 4c25745400717004ab5c18521bf6454a21c6f093d6deff353f8784dcd15df84d.",
+      "status": "proven on chain",
+      "note": "The chain check reads the deployed code hash; the test decodes it from base58 to that sha256. What it does not show is that this source builds those bytes: a build of main with cargo near build non-reproducible-wasm --locked matched it on the author's machine only, because the wasm embeds the builder's absolute cargo registry paths. Nothing here rebuilds the wasm.",
+      "code": [
+        {
+          "path": "contracts/wgp/Cargo.toml",
+          "anchor": "container_build_command = [\"cargo\", \"near\", \"build\", \"non-reproducible-wasm\", \"--locked\"]"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "the deployed code hash the README gives is the base58 form of the sha256 it gives"
+        }
+      ],
+      "chain": [
+        "contract-account"
+      ]
+    },
+    {
       "id": "verify-one-sim",
       "section": "verify",
       "source": "README.md",
@@ -4002,7 +4068,7 @@
       "id": "limits-bots",
       "section": "limits",
       "source": "README.md",
-      "quote": "The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player, but a patient bot can still play.",
+      "quote": "The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player; within that cap, nothing stops a bot or a player re-rolling seeds.",
       "status": "proven by test",
       "code": [
         {
@@ -4022,6 +4088,110 @@
           "name": "caps a player at 20 runs a UTC day",
           "nameInSource": "caps a player at ${RUNS_PER_DAY} runs a UTC day"
         }
+      ],
+      "note": "The two tests show the two limits: game time ahead of the wall clock is refused, and a 21st ranked start in a UTC day is refused. The README used to end \"but a patient bot can still play\", which understated it: the next two rows show the shipped bot outscores most players and a seed can be re-rolled."
+    },
+    {
+      "id": "limits-bot-scores",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "The bot that ships in this repository (packages/game-core/src/sim3d/bot.ts) scores 8,245, 8,350 and 8,870 on the three recorded nights it clears",
+      "status": "proven by test",
+      "note": "The golden tests replay the bot's recorded nights to those scores (packages/game-core/test/golden/hashes.json), and the app's replay test has the server verify and rank a bot-played night. The pin test holds the README's three numbers to hashes.json. The comparison beside it (on Nov 14, only two players had an All-time best above the lowest of those) is dated, read from GET /api/leaderboard?board=alltime, and has no check.",
+      "code": [
+        {
+          "path": "packages/game-core/src/sim3d/bot.ts",
+          "anchor": "export function botFrame"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/golden.test.ts",
+          "name": "night-1-standard: a first night with the starter powers",
+          "nameInSource": "${c.name}: ${c.note}"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/golden.test.ts",
+          "name": "night-4-heavy: level-2 villains, web bomb, validator slam and front-run",
+          "nameInSource": "${c.name}: ${c.note}"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/golden.test.ts",
+          "name": "night-9-mixed: level-5 villains, Fork, ZK cloak and gas refund",
+          "nameInSource": "${c.name}: ${c.note}"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/real-replay.test.ts",
+          "name": "verifies a bot-played night, saves it and ranks it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "the bot's scores under Limits are the recorded nights' own, the ones the bot clears"
+        }
+      ]
+    },
+    {
+      "id": "limits-reroll",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "A player can also abandon a ranked night and start again on a new seed, and the seed decides the night's stops.",
+      "status": "proven by test",
+      "note": "Abandoning expires the run in flight and issues a new run, whose seed is an HMAC of its new id; the patrol is a function of that seed alone. Each start counts against the 20 a day.",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": ".set({ status: \"expired\", rejectReason: \"abandoned\", submittedAt: now })"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "allows one run in flight, unless the old one is abandoned"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "issues a run with an HMAC seed, the ruleset and the save revision"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "caps a player at 20 runs a UTC day",
+          "nameInSource": "caps a player at ${RUNS_PER_DAY} runs a UTC day"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/engine-seed.test.ts",
+          "name": "with a seed, the patrol is a function of that seed alone"
+        }
+      ]
+    },
+    {
+      "id": "limits-owner-key",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "the contract's owner, wgpnear.near, has one key, a full-access key, and that key is in the production server's environment, because the same account is the factory that creates player accounts",
+      "status": "proven on chain",
+      "note": "The chain checks show the contract's owner_id is wgpnear.near and that this account has exactly one key, with full access. That the key is in the production environment is what scripts/near/setup-mainnet.sh does (it puts the factory account's key into Vercel as FACTORY_PRIVATE_KEY) and what the server's env reader needs; the production environment itself can't be read from here, and no key value appears anywhere in this repository. When the owner calls set_owner to move ownership to a cold account, contract-config and this row change.",
+      "code": [
+        {
+          "path": "scripts/near/setup-mainnet.sh",
+          "anchor": "put FACTORY_PRIVATE_KEY \"$(key_of \"$PARENT\")\" sensitive"
+        },
+        {
+          "path": "apps/wgp/src/server/near/env.ts",
+          "anchor": "need(env, [\"FACTORY_ACCOUNT_ID\", \"FACTORY_PRIVATE_KEY\"]);"
+        }
+      ],
+      "chain": [
+        "contract-config",
+        "owner-account"
       ]
     },
     {
@@ -4882,6 +5052,24 @@
           "file": "contracts/wgp/src/market_tests.rs",
           "name": "market_params_need_the_owner_and_one_yocto"
         }
+      ]
+    },
+    {
+      "id": "sustain-owner-key",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "Today the owner key lives in the production environment, not in cold storage.",
+      "status": "proven on chain",
+      "note": "Same proof as the README's limits-owner-key: the owner is wgpnear.near, whose one key has full access, and scripts/near/setup-mainnet.sh puts that account's key into the production environment as FACTORY_PRIVATE_KEY. This page used to say the plan was to move ownership off the build machine, which implied it was not on a server.",
+      "code": [
+        {
+          "path": "scripts/near/setup-mainnet.sh",
+          "anchor": "put FACTORY_PRIVATE_KEY \"$(key_of \"$PARENT\")\" sensitive"
+        }
+      ],
+      "chain": [
+        "contract-config",
+        "owner-account"
       ]
     },
     {
@@ -5809,10 +5997,10 @@
       "note": "The README used to promise one PASS line per claim. Offline, the rows that rest on the chain or the site are SKIP. The exact summary line for each command is generated into the README's coverage block by the function that prints it."
     },
     {
-      "id": "evidence-one-minute",
+      "id": "evidence-opening",
       "section": "evidence",
       "source": "README.md",
-      "quote": "Each line ends with the id of its row in docs/EVIDENCE.md, which names the test or the read-only check behind it.",
+      "quote": "Each row links its entry in docs/EVIDENCE.md, which names the test or the read-only mainnet check behind it.",
       "status": "pinned by test",
       "code": [
         {
@@ -5824,9 +6012,10 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
-          "name": "the README opens with ten lines, each backed by a row that exists and still passes its static checks"
+          "name": "the README opens with the game: a plain pitch, one screenshot, the Play link and a status table whose rows each link an evidence row"
         }
-      ]
+      ],
+      "note": "The README used to open with ten numbered lines, each ending in its row's id. It now opens with the pitch and a status table (live on mainnet, practice only, simulation only, built and not deployed); the test checks each row of that table links a row that exists, and that the Evidence section comes after the 5-minute check."
     },
     {
       "id": "evidence-numbers-bound",
@@ -6127,7 +6316,7 @@
       "id": "disclosures-ai-trailer",
       "section": "disclosures",
       "source": "README.md",
-      "quote": "One early commit (0d28b18) carries a Co-Authored-By trailer and no other commit does, so this paragraph is the disclosure.",
+      "quote": "No commit carries a Co-Authored-By trailer or a \"Generated with Claude Code\" line, so this paragraph is the disclosure.",
       "status": "checked in git",
       "code": [
         {
@@ -6138,7 +6327,7 @@
       "chain": [
         "repo-history"
       ],
-      "note": "The README used to say no commit carries an AI trailer. One does."
+      "note": "The README used to say commit 0d28b18 carries a Co-Authored-By trailer. It carries none: its body says the soundtrack was \"generated with ElevenLabs\", which the old check's text search for \"generated with\" matched. The check now reads git's own trailers (Co-authored-by, matched case-insensitively) and searches for \"Generated with Claude\" lines and Anthropic's noreply address, and expects none."
     },
     {
       "id": "disclosures-libraries",
@@ -6679,6 +6868,51 @@
           "value": 8
         }
       ]
+    },
+    "owner-account": {
+      "kind": "account",
+      "account": "wgpnear.near",
+      "keys": true,
+      "about": "The contract's owner account, wgpnear.near (also the factory that creates player accounts), exists and has exactly one key, with full access.",
+      "expect": [
+        {
+          "path": "exists",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "keys.length",
+          "op": "eq",
+          "value": 1
+        },
+        {
+          "path": "fullAccessKeys.length",
+          "op": "eq",
+          "value": 1
+        }
+      ],
+      "whenFails": "If the account has another key now, or the contract's owner moved to a cold account (set_owner), update the README's Limits and docs/SUSTAINABILITY.md."
+    },
+    "author-wallet": {
+      "kind": "view",
+      "method": "get_player",
+      "args": {
+        "account_id": "sele71.near"
+      },
+      "about": "The author's NEAR wallet account, sele71.near: no hero registered by itself, and at least one reward mint received.",
+      "expect": [
+        {
+          "path": "hero",
+          "op": "type",
+          "value": "null"
+        },
+        {
+          "path": "reward_nonce",
+          "op": "gte",
+          "value": 1
+        }
+      ],
+      "whenFails": "If sele71.near now has a hero, it called register_hero itself and is in the chain's player count: update the README's By the numbers."
     },
     "contract-account": {
       "kind": "account",
@@ -7969,7 +8203,7 @@
     "repo-history": {
       "kind": "git",
       "history": true,
-      "about": "This clone's history: the date of its first commit, and the commits that carry an AI trailer. Local, no network.",
+      "about": "This clone's history: the date of its first commit, and the commits that carry an AI trailer, read as git trailers (Co-authored-by) and as \"Generated with Claude\" lines. Local, no network.",
       "expect": [
         {
           "path": "firstCommit",
@@ -7977,14 +8211,9 @@
           "value": "2026-11-01"
         },
         {
-          "path": "aiTrailers.length",
+          "path": "aiTrailers",
           "op": "eq",
-          "value": 1
-        },
-        {
-          "path": "aiTrailers.0",
-          "op": "anyMatch",
-          "value": "^0d28b18"
+          "value": []
         }
       ]
     },

@@ -1,58 +1,31 @@
 # With Great Power (WGP)
 
-## In one minute
+With Great Power is a 3D web-swinging game you play free in a browser: you swing through a comic-book city at night, fight parody villains, run errands for your neighbours and trade what you win with an NPC vendor whose prices move with every trade. **Every ranked score is replayed and verified by the server** before it counts, and anyone can re-run that replay with one command. Everything you earn is a NEP-245 token in one contract on NEAR mainnet, and after a Google sign-in there are no wallet popups, seed phrases or gas prompts: a game-only key in your browser signs your game actions and the game's relayer pays the gas.
 
-Each line ends with the id of its row in [docs/EVIDENCE.md](docs/EVIDENCE.md), which names the test or the read-only check behind it.
+[![The hero swinging between rooftops at night](docs/screenshots/swing.jpg)](https://www.wgponnear.fun/play)
 
-1. **What it is:** a 3D web-swinging game you play in a browser, free, with no install, at https://www.wgponnear.fun/play. [`judge-1`](docs/EVIDENCE.md#judge-1)
-2. **Scores are replayed:** the server replays each ranked night's inputs and ranks only what reproduces. [`intro-replayed`](docs/EVIDENCE.md#intro-replayed)
-3. **Live on NEAR mainnet, the contract:** `game.wgpnear.near` holds every hero, item, suit, badge and Bit as a NEP-245 token (v2: the standard's core, no metadata extension). [`track-nep245`](docs/EVIDENCE.md#track-nep245)
-4. **Live on mainnet, the market:** a vendor inside the contract prices each item on a curve that moves with every trade. [`judge-3`](docs/EVIDENCE.md#judge-3)
-5. **Live on mainnet, players:** player accounts call the contract themselves. How many, and how concentrated the activity is, are under [By the numbers](#by-the-numbers). [`judge-2`](docs/EVIDENCE.md#judge-2)
-6. **Live on mainnet, an NPC with its own wallet:** Sandwich Man trades from `sandwich.wgpnear.near` by fixed rules; he is rule-based, not an AI agent. [`track-agent-npc`](docs/EVIDENCE.md#track-agent-npc)
-7. **Practice only, not on NEAR:** signed out, `/play/market` is a practice market in your browser, and investing in the vendor runs only there and in a local checkout. [`track-invest-practice`](docs/EVIDENCE.md#track-invest-practice)
-8. **Simulation only:** `/lab/economy` fast-forwards bot players on the same pricing code; nothing in it is on chain. [`track-fast-forward`](docs/EVIDENCE.md#track-fast-forward)
-9. **Built, not deployed:** contract v3 (metadata, enumeration, investing) is on a branch, reviewed by a second AI agent that did not write it; not an audit. [`track-nep245-v3`](docs/EVIDENCE.md#track-nep245-v3)
-10. **Check the claims:** `pnpm install --frozen-lockfile && pnpm evidence --chain` prints one PASS, FAIL or SKIP line per claim. [`evidence-output`](docs/EVIDENCE.md#evidence-output)
+**Play:** https://www.wgponnear.fun/play (free, no install). A first visit puts you straight into a night as a guest; sign in to be ranked and to earn on NEAR.
 
-A 3D web-swinging superhero parody game on NEAR mainnet. You swing through a comic-book city at night, fight parody villains, run errands for your neighbours and trade what you win with an NPC vendor whose prices move with every trade. **Every ranked score is replayed and verified by the server**, and everything you earn is a NEP-245 token in one contract. You sign in with Google, and after that you never see a wallet popup, a seed phrase or a gas prompt.
+| Where it runs | What | Evidence |
+|---|---|---|
+| **Live on NEAR mainnet** | The contract [`game.wgpnear.near`](https://nearblocks.io/address/game.wgpnear.near) holds every hero, item, suit, badge and Bit as a NEP-245 token: the standard's core, without its metadata extension. | [`track-nep245`](docs/EVIDENCE.md#track-nep245) |
+| **Live on NEAR mainnet** | Gwei Stacy, a vendor inside the contract, prices each item on a curve that moves with every trade. | [`judge-3`](docs/EVIDENCE.md#judge-3) |
+| **Live on NEAR mainnet** | Player accounts call the contract themselves. How many, and how few accounts make most of the calls, is under [By the numbers](#by-the-numbers). | [`judge-2`](docs/EVIDENCE.md#judge-2) |
+| **Live on NEAR mainnet** | Sandwich Man, an NPC trader, trades from his own account, `sandwich.wgpnear.near`, by fixed rules. He is rule-based, not an AI agent. | [`track-agent-npc`](docs/EVIDENCE.md#track-agent-npc) |
+| **Practice only** | Signed out, `/play/market` is a practice market in your browser, not on NEAR. Investing in the vendor runs only there and in a local checkout. | [`track-invest-practice`](docs/EVIDENCE.md#track-invest-practice) |
+| **Simulation only** | `/lab/economy` fast-forwards bot players on the same pricing code. Nothing in it is on chain. | [`track-fast-forward`](docs/EVIDENCE.md#track-fast-forward) |
+| **Built, not deployed** | Contract v3 (metadata, enumeration and investing in the vendor) is on the branch `review/contract-v3`, reviewed by a second AI agent that did not write it; not an audit. | [`track-nep245-v3`](docs/EVIDENCE.md#track-nep245-v3) |
+
+Each row links its entry in [docs/EVIDENCE.md](docs/EVIDENCE.md), which names the test or the read-only mainnet check behind it. `pnpm install --frozen-lockfile && pnpm evidence --chain` runs them all and prints one PASS, FAIL or SKIP line per claim. What the evidence does not show, and what to weigh against it (a bot can rank, seeds can be re-rolled, the owner key is a hot key, and Season 1 is a small playtest with airdrops), is under [Limits](#limits-and-whats-next) and [By the numbers](#by-the-numbers).
 
 | | |
 |---|---|
-| **Play** | https://www.wgponnear.fun (free, in the browser, no install) |
 | **Contract** | [`game.wgpnear.near`](https://nearblocks.io/address/game.wgpnear.near) on NEAR mainnet |
 | **Live numbers** | https://www.wgponnear.fun/stats, or `GET /api/stats` |
 | **Track** | NEAR HACKATHON, Nov 1–14, 2026: Games With Real Economies (`games`) |
 | **License** | MIT ([LICENSE](LICENSE)) |
 
-**Contents:** [Evidence](#evidence) · [Track fit](#how-it-meets-the-track) · [5-minute check](#for-judges-5-minute-check) · [Numbers](#by-the-numbers) · [Screenshots](#screenshots) · [Game loop](#the-game-loop) · [Economy](#the-economy-loop) · [Ways to play](#ways-to-play) · [Try it](#try-it-do-x-see-y) · [NEAR](#what-near-does-here) · [Verification](#how-verification-works) · [Run locally](#run-it-locally) · [Layout](#layout) · [Disclosures](#built-during-the-hackathon)
-
-## Evidence
-
-[docs/EVIDENCE.md](docs/EVIDENCE.md) lists the claims in this README and in `docs/` that a script can check. Each is quoted word for word and paired with the code that does it and with what checks it: a test in this repository, a read-only call to NEAR mainnet or the live site, or both. The list is generated from [docs/evidence.json](docs/evidence.json). It does not cover every sentence. Design intent, the story and the chapters' prose have no rows; the problem statement, the disclosures and the credits have rows only where there is something to check (a file, a version, a commit).
-
-```bash
-pnpm install --frozen-lockfile
-pnpm evidence            # every row's pointers and tests: no network, no keys, no environment variables
-pnpm evidence --chain    # also the read-only checks against NEAR mainnet and the live site
-```
-
-It prints one line per claim, then one summary line. `PASS` is mechanical and means no more than this: the claim's words are still in the document, each code pointer's anchor text is still in its file, and each cited test ran and passed just now (with `--chain`, each read-only check also answered as expected). Whether a test is a good proof of its sentence is for a reader to judge; each row names its test. `SKIP` names what couldn't run here and why: offline, that is every row whose proof is on chain or on the live site. Any `FAIL` exits 1.
-
-Each claim carries a status that says how far its proof reaches. `proven by test`, `pinned by test`, `simulation only` and `built, off on mainnet` rows always cite a test. A `proven by test` row cites at least one test that runs the code; a `pinned by test` row's tests only compare the document's words with source text, a constant or a config file, so they catch drift and do not show the code works. `proven on chain` and `live check` rows rest on a read-only check, and cite a test as well where there is one. `checked in git` rows rest on this clone's own commit history. `owner action needed` rows point at what is ready. Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.
-
-<!-- evidence:coverage:start (generated by `pnpm evidence --write`; edit scripts/evidence.mjs, not this block) -->
-| | |
-|---|---|
-| Claims with a row | 205, quoted from this README and 11 files under `docs/` |
-| By status | 100 `proven by test` · 8 `pinned by test` · 41 `proven on chain` · 17 `live check` · 4 `checked in git` · 24 `simulation only` · 3 `built, off on mainnet` · 8 `owner action needed` |
-| Rows that cite a test | 181 of 205 (349 different tests). All 135 rows with the status `proven by test`, `pinned by test`, `simulation only`, `built, off on mainnet` have one; a guard test fails otherwise. |
-| Rows with a read-only chain or site check | 99 of 205 (45 different checks) |
-| Rows with neither (a code pointer only) | 0 |
-| Code pointers | 304, each anchored to a piece of text that appears once in its file |
-| `pnpm evidence` prints | `205 claims: 147 PASS, 0 FAIL, 58 SKIP.` The 58 SKIP rows are the `proven on chain` and `live check` rows, whose proof needs `--chain`. In a clone without the branch `review/contract-v3`, the rows that check it are SKIP as well. Without Rust installed, the 39 rows that cite a contract test are SKIP too. |
-| `pnpm evidence --chain` prints | `205 claims: 205 PASS, 0 FAIL, 0 SKIP.` when every endpoint answers. A rate-limited endpoint is retried, then its rows are SKIP (never FAIL), with the line `N rows skipped: rate limited, re-run.` |
-<!-- evidence:coverage:end -->
+**Contents:** [Track fit](#how-it-meets-the-track) · [5-minute check](#for-judges-5-minute-check) · [Numbers](#by-the-numbers) · [Screenshots](#screenshots) · [Game loop](#the-game-loop) · [Economy](#the-economy-loop) · [Ways to play](#ways-to-play) · [Try it](#try-it-do-x-see-y) · [NEAR](#what-near-does-here) · [Verification](#how-verification-works) · [Evidence](#evidence) · [Run locally](#run-it-locally) · [Layout](#layout) · [Limits](#limits-and-whats-next) · [Disclosures](#built-during-the-hackathon)
 
 ## How it meets the track
 
@@ -64,12 +37,13 @@ The track's prompt (["Games With Real Economies"](https://github.com/nearai/near
 | Bonus if players never notice the chain | Google sign-in, a game-only session key, a relayer that pays gas. No popup after sign-in. | [Try it](#try-it-do-x-see-y), steps 2, 3 and 5. [Evidence](docs/EVIDENCE.md#track-chain-unnoticed) |
 | Items are NEP-245 multi tokens, one contract for every item type | Heroes, suits, loot, Bits, badges and trophies are all token ids in `game.wgpnear.near`. The deployed contract (v2) has NEP-245's core: transfers and batch transfers, balance and supply views, `mt_tokens_for_owner` and the standard's events. It has no metadata extension, no global enumeration (`mt_tokens`) and no approvals. v3 adds metadata, enumeration and merchant investing. It is built, reviewed by a second AI agent that did not write it (not an audit) and rehearsed on a copy of mainnet state, and it is not deployed. Its source is on the branch `review/contract-v3`, not on `main`; the review's findings, test counts and commits are in [docs/CONTRACT-V3-REVIEW.md](docs/CONTRACT-V3-REVIEW.md). | Check 4 (command B). [Evidence](docs/EVIDENCE.md#track-nep245) |
 | Social or email login, no seed phrases, popups or gas prompts in the loop | Google through Privy; NEAR wallets also work with one signed message | Step 2. [Evidence](docs/EVIDENCE.md#track-social-login) |
-| NPCs with wallets | Two, of different kinds. **Live on mainnet:** Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain; her wallet is the contract's own account, not a separate one. **Live on mainnet since Nov 13, 2026:** Sandwich Man, a trader with a NEAR account of his own, [`sandwich.wgpnear.near`](https://nearblocks.io/address/sandwich.wgpnear.near), which holds his Bits and items and signs his trades (next row). Both are rule-based, not AI agents. | Gwei: check 3 (command A) shows each pool's `stock` and `bits`. Sandwich Man: his account and transactions under [Proven on mainnet](#proven-on-mainnet), and [docs/npc-trader.md](docs/npc-trader.md). [Evidence](docs/EVIDENCE.md#track-npc-wallets) |
+| NEAR Intents (on the track's "lean on" list) | **Not used.** The game's economy lives on one chain, in one contract: items and Bits are NEP-245 balances in `game.wgpnear.near`, and a player never moves value to or from another chain or token. Intents would matter for cross-chain deposits and withdrawals (paying in another chain's token for Bits, or taking value out), which is future work and not built. The contract's NEP-245 events copy the fields of the Intents contract's own, so an indexer reads both alike; that is a shared format, not a use. | No code in the app, the scripts or the contract names `intents.near` ([`contracts/wgp/src/events.rs`](contracts/wgp/src/events.rs) mentions it in a comment, for the event format). [Evidence](docs/EVIDENCE.md#track-intents) |
+| NPCs with wallets | Two, of different kinds. **Live on mainnet:** Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain, held by the contract's own account, `game.wgpnear.near`: she has no account or key of her own. **Live on mainnet since Nov 13, 2026:** Sandwich Man, a trader with a NEAR account of his own, [`sandwich.wgpnear.near`](https://nearblocks.io/address/sandwich.wgpnear.near), which holds his Bits and items and signs his trades (next row). Both are rule-based, not AI agents. | Gwei: check 3 (command A) shows each pool's `stock` and `bits`. Sandwich Man: his account and transactions under [Proven on mainnet](#proven-on-mainnet), and [docs/npc-trader.md](docs/npc-trader.md). [Evidence](docs/EVIDENCE.md#track-npc-wallets) |
 | Agent NPCs | Sandwich Man, the arbitrageur. **Live on mainnet since Nov 13, 2026: he trades from his own account, [`sandwich.wgpnear.near`](https://nearblocks.io/address/sandwich.wgpnear.near).** He is rule-based, not an LLM or any other AI agent: he flips cheap listings, buys dips and undercuts Gwei by fixed rules in one file, [`apps/wgp/src/lib/market/npc-rules.ts`](apps/wgp/src/lib/market/npc-rules.ts), and closes shop when he's broke. He uses only the market calls players use, signs them with his own key and pays his own gas. His first trade on chain was a `market_buy` of 2 Sybil goo from Gwei for 72 Bits ([`AcmNAmHr…`](https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf)); the market page shows each move with his reason and its transaction. He takes a turn only after real activity (a player's trade or listing, or someone opening the market, at most once every 5 minutes), one action a turn and at most 10 a day. Disclosed: he starts from a one-off seed of 300 Bits minted by the operator, is always labelled NPC, is never counted as a player (`pnpm stats` counts his calls apart from players') and his trades complete nobody's market quest. He also trades in the practice market (in a visitor's browser), the simulated market (a local checkout) and `/lab/economy`. | `curl -s https://www.wgponnear.fun/api/market/npc \| jq '{mode, accountId, bits, log}'`; his transactions under [Proven on mainnet](#proven-on-mainnet); [docs/npc-trader.md](docs/npc-trader.md); `/lab/economy`, **Load a run where he goes broke** (seed 270: he closes shop three times and reopens). [Evidence](docs/EVIDENCE.md#track-agent-npc) |
 | Merchant sets prices from stock and demand | A constant-product curve per item: buying raises the price, selling lowers it | [`contracts/wgp/src/market.rs`](contracts/wgp/src/market.rs). [Evidence](docs/EVIDENCE.md#track-merchant-prices) |
 | Pricing rules in one readable file | [`apps/wgp/src/lib/market/math.ts`](apps/wgp/src/lib/market/math.ts) mirrors the contract's maths with the same integers and rounding; both test against the same vectors | Read the file's first 15 lines. [Evidence](docs/EVIDENCE.md#track-pricing-file) |
 | A merchant's reasoning appears in a tooltip | **Why this price?** on every item in the market: Gwei explains the price from her real stock and till | `/play/market`, press **Why this price?** [Evidence](docs/EVIDENCE.md#track-reasoning-tooltip) |
-| A merchant that goes broke stops trading until someone invests in it | **Stops when broke: live on mainnet.** Gwei sells only what she holds and pays only from her till, item by item. With an empty till for an item she stops buying it until a player buys from her; sold out, she stops selling it until a player sells to her. Her shop for that item shows closed, with the reason. **Invest to reopen: not on mainnet until the v3 upgrade.** The deployed contract (v2) has no way to invest in her to reopen; investing is in v3, which is not deployed. On mainnet the market says so on a closed shop and sends no investing call. v3's calls are `market_invest`, `market_withdraw` and `market_claim`; the relayer has them on its allow-list and refuses them until the live contract is v3. **Where investing runs today:** the app runs v3's investing rules in the practice market (any guest, in the browser, practice Bits, not on NEAR) and in the simulated market (a local checkout, server-side). There a player funds a broke till, the shop reopens at the same price, they earn half that item's gas fees and can withdraw, and the sheet states what they risk before they confirm. Sandwich Man closes shop under 60 Bits and reopens at 120 by selling what he holds; that is proven in tests and the lab, not yet by a mainnet transaction, and `/api/market/npc` says whether his shop is closed right now. | The rules: `contracts/wgp/src/market.rs` (`buy_cost`, `sell_payout`) and [`apps/wgp/src/lib/market/invest.ts`](apps/wgp/src/lib/market/invest.ts), tested against vectors the v3 Rust printed; her words: `apps/wgp/src/lib/market/reasoning.ts`. Practice: `/play/market` signed out, **Empty Gwei's … till**, then **Invest in Gwei**. Fast-forward: `/lab/economy`, **Drain Gwei, then invest in her**, run 30 days; **Drain Gwei** alone counts the item-days she ended sold out and unable to buy. For him, **Load a run where he goes broke**. What is live where, the maths and the risks: [docs/INVESTING.md](docs/INVESTING.md). [Evidence](docs/EVIDENCE.md#track-merchant-broke) |
+| A merchant that goes broke stops trading until someone invests in it | **Stops when broke: live on mainnet.** Gwei sells only what she holds and pays only from her till, item by item. With an empty till for an item she stops buying it until a player buys from her; sold out, she stops selling it until a player sells to her. Her shop for that item shows closed, with the reason. **Invest to reopen: practice market and lab only, not on mainnet (v3 is not deployed).** The deployed contract (v2) has no way to invest in her to reopen; investing is in v3, which is not deployed. On mainnet the market says so on a closed shop and sends no investing call. v3's calls are `market_invest`, `market_withdraw` and `market_claim`; the relayer has them on its allow-list and refuses them until the live contract is v3. **Where investing runs today:** the app runs v3's investing rules in the practice market (any guest, in the browser, practice Bits, not on NEAR) and in the simulated market (a local checkout, server-side). There a player funds a broke till, the shop reopens at the same price, they earn half that item's gas fees and can withdraw, and the sheet states what they risk before they confirm. Sandwich Man closes shop under 60 Bits and reopens at 120 by selling what he holds; that is proven in tests and the lab, not yet by a mainnet transaction, and `/api/market/npc` says whether his shop is closed right now. | The rules: `contracts/wgp/src/market.rs` (`buy_cost`, `sell_payout`) and [`apps/wgp/src/lib/market/invest.ts`](apps/wgp/src/lib/market/invest.ts), tested against vectors the v3 Rust printed; her words: `apps/wgp/src/lib/market/reasoning.ts`. Practice: `/play/market` signed out, **Empty Gwei's … till**, then **Invest in Gwei**. Fast-forward: `/lab/economy`, **Drain Gwei, then invest in her**, run 30 days; **Drain Gwei** alone counts the item-days she ended sold out and unable to buy. For him, **Load a run where he goes broke**. What is live where, the maths and the risks: [docs/INVESTING.md](docs/INVESTING.md). [Evidence](docs/EVIDENCE.md#track-merchant-broke) |
 | Player-owned markets | Players list items for each other; the contract holds them in escrow | `list_item` and `buy_listing` transactions (command D). [Evidence](docs/EVIDENCE.md#track-player-markets) |
 | Economies that evolve without a dev patch | Prices are contract state and move with every trade. No deploy, no cron job. | Command A: prices have moved off their starting values. [Evidence](docs/EVIDENCE.md#track-no-dev-patch) |
 | A fast-forward mode | `/lab/economy` runs 60 bot players for 21 days on the same pricing code | Check 7. [Evidence](docs/EVIDENCE.md#track-fast-forward) |
@@ -86,7 +60,7 @@ Every check is read-only: no sign-in, no wallet, no transaction. Commands A–E 
 | 4 | Players hold their items on chain | Run command B | A player's NEP-245 tokens: `hero:…`, `item:bits`, loot such as `item:fee-bomb`, a crafted `suit:…`, and soulbound badges such as `trophy:badge:daily-podium` | [Evidence](docs/EVIDENCE.md#judge-4) |
 | 5 | The game reads the market from the chain | Run command C | `{"onChain":true,"network":"mainnet","contractId":"game.wgpnear.near",…}` | [Evidence](docs/EVIDENCE.md#judge-5) |
 | 6 | Ranked scores are reproducible | Run command F | One `OK` line per run, then `5/5 runs reproduced from https://www.wgponnear.fun.` | [Evidence](docs/EVIDENCE.md#judge-6) |
-| 7 | Prices move without a patch | Open https://www.wgponnear.fun/lab/economy, choose **Instant** and press **Run 21 days** | **Day 21 / 21**, the counters (Bits in play, Gwei's till, Bits burned, suits crafted, trades), a price chart per item and Gwei's reasoning for each price | [Evidence](docs/EVIDENCE.md#judge-7) |
+| 7 | A simulation fast-forwards the economy (not mainnet) | Open https://www.wgponnear.fun/lab/economy, choose **Instant** and press **Run 21 days** | **Day 21 / 21**, the counters (Bits in play, Gwei's till, Bits burned, suits crafted, trades), a price chart per item and Gwei's reasoning for each price. Bot players, not real ones; prices moving on mainnet is check 3. | [Evidence](docs/EVIDENCE.md#judge-7) |
 | 8 | The simulation is deterministic | Open https://www.wgponnear.fun/lab/determinism | **✓ All 4 replays match Node**: your browser replays four recorded nights and gets the same state hashes as Node | [Evidence](docs/EVIDENCE.md#judge-8) |
 | 9 | The numbers in this README are real | Run command G (30 seconds to two minutes, depending on NearBlocks rate limits), or open https://www.wgponnear.fun/stats | The live counts from the game's database, then the contract's function calls counted by method from NearBlocks, apart from its other receipts | [Evidence](docs/EVIDENCE.md#judge-9) |
 
@@ -117,7 +91,6 @@ curl -s https://archival-rpc.mainnet.fastnear.com -H 'Content-Type: application/
   | jq -r '.result.receipts_outcome[].outcome.logs[]'
 
 # F. Replay the All-time top 5 yourself (downloads each run's seed, start save and input log)
-#    If the clone answers 404, the repository is not public yet: use the copy you were given and start at pnpm install.
 git clone https://github.com/71Labs/WithGreatPower && cd WithGreatPower
 pnpm install --frozen-lockfile
 pnpm verify
@@ -141,7 +114,9 @@ A `SKIP` line marks a run played under an older ruleset. To replay one, check ou
 
 ## By the numbers
 
-Real players, counted two ways. The first is the public chain, which anyone can recount. The second is the game's own database, served by a public endpoint: those figures can be re-read but not checked independently. The chain counts are as of Nov 13, 2026, 11:56 UTC and the game's as of Nov 13, 2026, 11:54 UTC. Both only grow; `pnpm stats` prints the current ones. The player accounts include the author's own, `sele.wgpnear.near`, and most of the activity comes from a few accounts: the first table gives the split, and `pnpm stats` derives every figure in it. `pnpm evidence --chain` reads the numbers from the two tables below and fails if a live count is below one of them. [Evidence](docs/EVIDENCE.md#by-the-numbers)
+**Season 1 (Nov 5–14) is a playtest season, and play in it was incentivised.** During it the team offered players daily airdrops, sent by hand through Uprail, outside the game (the game itself never pays and its copy promises no money). Read the counts below as a small, incentivised playtest, not organic demand.
+
+Real players, counted two ways. The first is the public chain, which anyone can recount. The second is the game's own database, served by a public endpoint: those figures can be re-read but not checked independently. The chain counts are as of Nov 13, 2026, 11:56 UTC and the game's as of Nov 13, 2026, 11:54 UTC. Both only grow; `pnpm stats` prints the current ones. The player accounts include the author's own, `sele.wgpnear.near`, and most of the activity comes from a few accounts: the first table gives the split, and `pnpm stats` derives every figure in it. The author also plays from a NEAR wallet account, `sele71.near` (9th on the All-time board on Nov 14). It has never called a game method itself, only received reward mints, so it is in the game's counts and not in the chain's player count. `pnpm evidence --chain` reads the numbers from the two tables below and fails if a live count is below one of them. [Evidence](docs/EVIDENCE.md#by-the-numbers)
 
 **On NEAR mainnet** (counted from NearBlocks; re-run `pnpm stats`, 30 seconds to two minutes, depending on NearBlocks rate limits):
 
@@ -226,7 +201,7 @@ A round trip never profits, because a buy rounds up and a sell rounds down.
 
 ## Ways to play
 
-Every mode's runs are replayed by the server. The right-hand column is what each puts on NEAR. [Evidence](docs/EVIDENCE.md#ways-to-play)
+Every mode's runs are replayed by the server. The right-hand column is what each puts on NEAR. In a fresh browser, start at https://www.wgponnear.fun/play: it makes you a guest hero first. The paths in brackets open a mode once you have one (after step 1 of [Try it](#try-it-do-x-see-y), in the same browser). [Evidence](docs/EVIDENCE.md#ways-to-play)
 
 | Mode | What it is | On NEAR |
 |---|---|---|
@@ -237,7 +212,7 @@ Every mode's runs are replayed by the server. The right-hand column is what each
 | **Case files** (`/play/cases`) | Three story chapters: Missing: Mary Jpeg, The Sybil Vote, Fee Strike | `trophy:badge:case-00N` on your first verified clear |
 | **The City** (`/play/city`) | Free roam: run, sprint, climb, wall-run, swing, dodge traffic, six side tasks | Nothing: XP, saved with your hero |
 | **Invite 3 friends** (`/play/invite`) | Friends who add their X and play a verified night count | `trophy:badge:recruiter` |
-| **Season 1** (Nov 5–14) | Nightly bests add up on the Season board | At the close: the final board's root and digest, recorded once, and `trophy:s1:1…10` for the top 10. Season 1 closes Nov 14, 23:59 UTC; after that the record is `get_season("s1")` on the contract and the results file is `/api/seasons/s1/results` (the status table says what to expect before and after). |
+| **Season 1** (Nov 5–14) | Nightly bests add up on the Season board | At the close: the final board's root and digest, recorded once, and `trophy:s1:1…10` for the top 10. Season 1 ends Nov 15, 00:00 UTC (the end of Nov 14); after that the record is `get_season("s1")` on the contract and the results file is `/api/seasons/s1/results` (the status table says what to expect before and after). |
 
 Design docs: [chapters](docs/chapters/) · [the story bible](docs/story/bible.md) · [competitive modes](docs/compete.md) · [referrals](docs/referrals.md).
 
@@ -292,10 +267,10 @@ All steps work on the live site, with no install.
    - **The inflation, and the fix:** with mainnet's settings about 3% of the Bits earned are burned. Tick **Recommended settings** (crafting burns 250 Bits, 5% gas fee) and run again: about 28%. Those settings are not on mainnet yet; [docs/ECONOMY.md](docs/ECONOMY.md) has the measurements, the owner's command and what stays unfixed.
    - **Gwei's limits:** press **Drain Gwei** and run 30 days. A crowd of hoarders and dumpers leaves her sold out of rares and unable to buy the rest, and the page counts the item-days.
 7. **Roam the City.**
-   - **Do:** open https://www.wgponnear.fun/play/city. Shift sprints, F webs while held, Q zips, E talks or interacts, M opens the map.
+   - **Do:** after step 1, in the same browser, open the **City** tab or https://www.wgponnear.fun/play/city (it needs a hero). Shift sprints, F webs while held, Q zips, E talks or interacts, M opens the map.
    - **See:** a free-roam city where walls are climbable, barriers and cars are solid (a car at speed knocks you down), and six people have tasks, such as racing Sandwich Man over the roofs with Gwei's order, or unplugging Doc Octochain's relays from the city's highest points.
 8. **Open a case file, race the Daily, invite a friend.**
-   - **Do:** `/play/cases`, `/play/compete`, `/play/invite`.
+   - **Do:** after step 1, in the same browser: `/play/cases`, `/play/compete`, `/play/invite`.
    - **See:** three story chapters with their own rules and bosses; today's Daily Run with other players' ghosts; your invite link and its 0/3 progress (signed in).
 9. **Check it on NEAR.**
    - **Do:** open https://nearblocks.io/address/game.wgpnear.near.
@@ -347,7 +322,7 @@ flowchart LR
 |---|---|
 | **Used by players on mainnet** (transactions below) | The contract and its market (8 pools, 2% fee); reward mints, Bits and badges included; player accounts created by the factory with session keys; `register_hero`, `craft_suit` and `equip_suit`; `market_buy`, `market_sell`, `list_item` and `buy_listing`, all signed by session keys and relayed (NEP-366) |
 | **NPC trader on mainnet** (since Nov 13, 2026) | Sandwich Man trades from his own account, `sandwich.wgpnear.near`, by fixed rules: rule-based, not an AI agent, and never counted as a player. The owner created the account with 0.3 NEAR and the operator seeded it once with 300 Bits; his first trade landed the same day (transactions below). |
-| **The season record: first run on mainnet when Season 1 closes** | `record_season` and its trophies. Season 1 closes Nov 14, 23:59 UTC. The first player request after 00:50 UTC on Nov 15 freezes the board and queues the record. **Before the record lands,** `get_season("s1")` answers `null`, no `trophy:s1:*` exists, and `/api/seasons/s1/results` is a 404 until the freeze; the proof is the contract's unit tests and the server's season tests, not a mainnet transaction. **After it lands,** `get_season("s1")` holds the root, the digest and the top of the board, each of those accounts holds `trophy:s1:<rank>`, and the sha256 of `/api/seasons/s1/results` is that digest. `pnpm evidence --chain` checks whichever of these it finds, in full. |
+| **The season record: first run on mainnet when Season 1 closes** | `record_season` and its trophies. Season 1 ends Nov 15, 00:00 UTC; runs started before then still count. The first player request after 00:50 UTC on Nov 15 freezes the board and queues the record. **Before the record lands,** `get_season("s1")` answers `null`, no `trophy:s1:*` exists, and `/api/seasons/s1/results` is a 404 until the freeze; the proof is the contract's unit tests and the server's season tests, not a mainnet transaction. **After it lands,** `get_season("s1")` holds the root, the digest and the top of the board, each of those accounts holds `trophy:s1:<rank>`, and the sha256 of `/api/seasons/s1/results` is that digest. `pnpm evidence --chain` checks whichever of these it finds, in full. |
 | **Live off chain** | The game and all its modes, runs verified by replay, the boards, Google sign-in (Privy), NEAR wallet sign-in (NEP-413), referrals, classic mode and the soundtrack |
 | **Simulation only** | `/lab/economy`, which fast-forwards bot players on the same pricing code |
 | **Built, not deployed** | Contract v3: NEP-245 metadata and enumeration, and investing in the merchant. Branch `review/contract-v3`; its review (by a second AI agent that did not write it; not an audit) is summarised in [docs/CONTRACT-V3-REVIEW.md](docs/CONTRACT-V3-REVIEW.md). |
@@ -374,6 +349,8 @@ flowchart LR
 | His one-off seed: a `mint_rewards` of 300 Bits from the operator, with the digest `sha256("npc-seed:sandwich.wgpnear.near:v1")` | [`Hjvobzmd…`](https://nearblocks.io/txns/HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7) |
 | His first trade: a `market_buy` of 2 Sybil goo from Gwei for 72 Bits, 2 of them the burned fee, signed by his own key and not relayed | [`AcmNAmHr…`](https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf) |
 
+**From this source to the deployed code.** The code hash above is the base58 form of the deployed wasm's sha256, `4c25745400717004ab5c18521bf6454a21c6f093d6deff353f8784dcd15df84d`. Building `contracts/wgp` from `main` with `cargo near build non-reproducible-wasm --locked` gives that sha256 on the author's machine. On another machine it gives a different one, because the wasm embeds the builder's absolute cargo registry paths; a reproducible (container) build is not set up. So the link from this source to the deployed code rests on the author's build, and the contract's tests prove the source, not the bytes on chain.
+
 ## How verification works
 
 [Evidence](docs/EVIDENCE.md#how-verification-works) for each step.
@@ -386,6 +363,33 @@ flowchart LR
 6. **Anyone can re-check.** Every verified run's replay is public at `GET /api/runs/<id>/replay` (`seed`, `startSave`, `log`, `score`, `ticks`, `hash`).
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Evidence
+
+[docs/EVIDENCE.md](docs/EVIDENCE.md) lists the claims in this README and in `docs/` that a script can check. Each is quoted word for word and paired with the code that does it and with what checks it: a test in this repository, a read-only call to NEAR mainnet or the live site, or both. The list is generated from [docs/evidence.json](docs/evidence.json). It does not cover every sentence. Design intent, the story and the chapters' prose have no rows; the problem statement, the disclosures and the credits have rows only where there is something to check (a file, a version, a commit).
+
+```bash
+pnpm install --frozen-lockfile
+pnpm evidence            # every row's pointers and tests: no network, no keys, no environment variables
+pnpm evidence --chain    # also the read-only checks against NEAR mainnet and the live site
+```
+
+It prints one line per claim, then one summary line. `PASS` is mechanical and means no more than this: the claim's words are still in the document, each code pointer's anchor text is still in its file, and each cited test ran and passed just now (with `--chain`, each read-only check also answered as expected). Whether a test is a good proof of its sentence is for a reader to judge; each row names its test. `SKIP` names what couldn't run here and why: offline, that is every row whose proof is on chain or on the live site. Any `FAIL` exits 1.
+
+Each claim carries a status that says how far its proof reaches. `proven by test`, `pinned by test`, `simulation only` and `built, off on mainnet` rows always cite a test. A `proven by test` row cites at least one test that runs the code; a `pinned by test` row's tests only compare the document's words with source text, a constant or a config file, so they catch drift and do not show the code works. `proven on chain` and `live check` rows rest on a read-only check, and cite a test as well where there is one. `checked in git` rows rest on this clone's own commit history. `owner action needed` rows point at what is ready. Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.
+
+<!-- evidence:coverage:start (generated by `pnpm evidence --write`; edit scripts/evidence.mjs, not this block) -->
+| | |
+|---|---|
+| Claims with a row | 212, quoted from this README and 11 files under `docs/` |
+| By status | 102 `proven by test` · 9 `pinned by test` · 45 `proven on chain` · 17 `live check` · 4 `checked in git` · 24 `simulation only` · 3 `built, off on mainnet` · 8 `owner action needed` |
+| Rows that cite a test | 185 of 212 (357 different tests). All 138 rows with the status `proven by test`, `pinned by test`, `simulation only`, `built, off on mainnet` have one; a guard test fails otherwise. |
+| Rows with a read-only chain or site check | 104 of 212 (47 different checks) |
+| Rows with neither (a code pointer only) | 0 |
+| Code pointers | 311, each anchored to a piece of text that appears once in its file |
+| `pnpm evidence` prints | `212 claims: 150 PASS, 0 FAIL, 62 SKIP.` The 62 SKIP rows are the `proven on chain` and `live check` rows, whose proof needs `--chain`. In a clone without the branch `review/contract-v3`, the rows that check it are SKIP as well. Without Rust installed, the 39 rows that cite a contract test are SKIP too. |
+| `pnpm evidence --chain` prints | `212 claims: 212 PASS, 0 FAIL, 0 SKIP.` when every endpoint answers. A rate-limited endpoint is retried, then its rows are SKIP (never FAIL), with the line `N rows skipped: rate limited, re-run.` |
+<!-- evidence:coverage:end -->
 
 ## Run it locally
 
@@ -403,7 +407,7 @@ pnpm dev                                         # http://localhost:3000/play  (
 
 | Command | What it does | Expect |
 |---|---|---|
-| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries. | game-core 284 passed, app 1,630 passed |
+| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries. | game-core 284 passed, app 1,634 passed |
 | `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | Exit 0, no errors |
 | `pnpm build` | The production build of the app; needs no environment variables | The route list |
 | `pnpm verify` | Replays the live All-time top 5 | `5/5 runs reproduced` |
@@ -439,11 +443,13 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 
 ## Limits and what's next
 
-- **Bots:** a replay proves a score is reproducible, not that a person played it. The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player, but a patient bot can still play.
+- **Bots and re-rolled seeds:** replay verification proves a score came from legal inputs, not that a human played it. The bot that ships in this repository (`packages/game-core/src/sim3d/bot.ts`) scores 8,245, 8,350 and 8,870 on the three recorded nights it clears (`packages/game-core/test/golden/hashes.json`); on Nov 14, only two players had an All-time best above the lowest of those. A bot-played night passes the server's verifier like any other. A player can also abandon a ranked night and start again on a new seed, and the seed decides the night's stops. The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player; within that cap, nothing stops a bot or a player re-rolling seeds. Season 1's airdrops (see [By the numbers](#by-the-numbers)) are reviewed by hand before they are sent.
+- **The owner key is a hot server key:** the contract's owner, `wgpnear.near`, has one key, a full-access key, and that key is in the production server's environment, because the same account is the factory that creates player accounts (`FACTORY_PRIVATE_KEY`, set by `scripts/near/setup-mainnet.sh`). Whoever gets that key can upgrade the contract, change its market settings or hand over its ownership. The plan is `set_owner` to a cold account after judging, then a delay on upgrades ([docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md)).
 - **Currency:** more Bits are earned than burned (in the lab's default run, on mainnet's settings, 99,022 earned and 2,847 burned). The sinks are the trade fee (2% today) and crafting. A Bits cost for crafting exists in the contract (`craft_bits`) and is off on mainnet; the Suit lab shows and checks it once it's on, and [docs/ECONOMY.md](docs/ECONOMY.md) measures what turning it on would do (about 29% of a season's Bits burned, still not parity).
 - **Trust:** the operator key mints rewards and the server decides which runs verify. Anyone can re-run a run's replay, but the mint itself trusts our server. The contract's owner can upgrade it. Sandwich Man's key is a full-access key of his own account: the server only ever sends his five market calls, and a function-call key is the planned swap ([docs/npc-trader.md](docs/npc-trader.md#limits)).
 - **Scale:** 26 heroes as of Nov 13. The relayer and operator are single accounts with daily budgets.
-- **Market depth:** most on-chain activity is rewards and crafting; trades are still few.
+- **Market depth:** most on-chain activity is rewards and crafting; trades are still few, from a few accounts (the market row under [By the numbers](#by-the-numbers)). As of Nov 14, 02:00 UTC, the last player market call was on Nov 12 at 18:42 UTC, and Sandwich Man had traded once.
+- **Build reproducibility:** only the author's machine reproduces the deployed wasm's hash from this source ([Proven on mainnet](#proven-on-mainnet) has the hash and why).
 - **The plan:** costs, who players have to trust today and how that shrinks are in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md).
 - **Next:** ranked nights get the City's movement (sprint, climbing) after Season 1, since ranked rules are frozen while a season runs; Season 2; NEAR Auth as a second sign-in.
 
@@ -458,7 +464,7 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 
 ## Credits and disclosure
 
-- **AI-written code:** Claude Code (Anthropic) wrote much of this repository's code, tests, art-pipeline scripts, docs and copy under the team's direction. The team set the design and the rules, reviewed the changes, and playtested every build. One early commit (`0d28b18`) carries a Co-Authored-By trailer and no other commit does, so this paragraph is the disclosure.
+- **AI-written code:** Claude Code (Anthropic) wrote much of this repository's code, tests, art-pipeline scripts, docs and copy under the team's direction. The team set the design and the rules, reviewed the changes, and playtested every build. No commit carries a Co-Authored-By trailer or a "Generated with Claude Code" line, so this paragraph is the disclosure.
 - **AI-generated audio:** the soundtrack, sound effects and character voices were generated with ElevenLabs on the owner's paid plan (`apps/wgp/public/audio/CREDITS.md`).
 - **Main libraries:**
   - App: Next.js 16 (with the React Compiler), React 19, three.js 0.187, React Three Fiber 9 and drei 10, Drizzle ORM and drizzle-kit, Neon serverless and PGlite, zod 4, Tailwind CSS 4 and Hugeicons.

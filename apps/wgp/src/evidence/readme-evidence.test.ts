@@ -70,8 +70,9 @@ describe("the README's evidence", () => {
     const readme = read("README.md");
     const at = readme.indexOf("\n## Evidence\n");
     expect(at).toBeGreaterThan(0);
-    expect(at, "the Evidence section comes before the track table").toBeLessThan(readme.indexOf("\n## How it meets the track\n"));
-    const section = readme.slice(at, readme.indexOf("\n## How it meets the track\n"));
+    // It comes after the 5-minute check: the game and its checks lead, the evidence layer's own workings follow.
+    expect(at, "the Evidence section comes after the 5-minute check").toBeGreaterThan(readme.indexOf("\n## For judges: 5-minute check\n"));
+    const section = readme.slice(at, readme.indexOf("\n## ", at + 1));
     for (const text of ["pnpm evidence", "pnpm evidence --chain", "[docs/EVIDENCE.md](docs/EVIDENCE.md)", "`PASS` is mechanical and means no more than this", "Any `FAIL` exits 1", "It does not cover every sentence."]) expect(section).toContain(text);
     expect((JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts.evidence).toBe("node scripts/evidence.mjs");
     expect(read(".github/workflows/ci.yml")).toContain("pnpm evidence --check");
@@ -178,5 +179,10 @@ describe("what the docs say about themselves", () => {
     expect(readme).toContain("The chain counts are as of Nov 13, 2026, 11:56 UTC and the game's as of Nov 13, 2026, 11:54 UTC. Both only grow");
     expect(readme).toContain("pnpm evidence --chain reads the numbers from the two tables below and fails if a live count is below one of them.");
     expect(readme).not.toMatch(/went from \d+ on Nov/);
+    // Season 1's incentive and both of the author's accounts are disclosed beside the counts.
+    const numbers = readme.slice(readme.indexOf("\n## By the numbers\n"), readme.indexOf("On NEAR mainnet (counted from NearBlocks"));
+    expect(numbers).toContain("Season 1 (Nov 5–14) is a playtest season, and play in it was incentivised.");
+    expect(numbers).toContain("the team offered players daily airdrops, sent by hand through Uprail, outside the game");
+    for (const account of ["sele.wgpnear.near", "sele71.near"]) expect(numbers).toContain(account);
   });
 });

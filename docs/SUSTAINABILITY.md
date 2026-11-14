@@ -32,7 +32,7 @@ Gas is the only cost that grows with play, and the limits on it are in code: bat
 |---|---|---|
 | The server decides which runs verify | Yes | Every verified run's seed, start save and input log are public. Anyone can replay one (`pnpm verify`) and catch a score the server shouldn't have accepted. |
 | The operator key mints rewards | Yes | In the contract, the operator role can only call `mint_rewards` and `record_season`. Each mint carries the run's digest, and a per-account nonce means a replayed batch mints nothing. |
-| The owner can upgrade the contract and change market settings | Yes | `upgrade` and `set_market_params` are owner-only and visible on chain. |
+| The owner can upgrade the contract and change market settings | Yes, and its key is a hot key | `upgrade` and `set_market_params` are owner-only and visible on chain. The owner account, `wgpnear.near`, has one key, a full-access key, and today that key is in the production server's environment (`FACTORY_PRIVATE_KEY`), because the same account is the factory that creates player accounts. Whoever gets the server's secrets gets the owner's powers. |
 | The session key in the browser | Limited | It can only call the game contract and can't attach a deposit, so it can't transfer any token or call an owner method. A stolen one could still trade as the player: buy from and sell to Gwei, list items, buy listings, craft and equip. So a thief can't take tokens directly but could trade them badly, for example to an accomplice's listing. Listing bounds (50–400% of the vendor's price) and the contract's caps (20 items a call, 3 open listings, and per day 40 vendor trades, 10 listings and 10 fills worth 3,000 Bits) limit that loss. The relayer carries the key's calls only for its signed-in player. |
 | A player's tokens | No trust in us to hold them | They are balances under the player's own NEAR account in the game contract. Only the player's full-access key can transfer them; the session key can trade them within the caps above. |
 
@@ -40,11 +40,11 @@ Gas is the only cost that grows with play, and the limits on it are in code: bat
 
 In order:
 
-1. **Owner key to cold storage, then a timelock.** Move ownership of `game.wgpnear.near` off the build machine, then put upgrades behind a delay so players can see a change before it lands.
+1. **Owner key to cold storage, then a timelock.** Today the owner key lives in the production environment, not in cold storage. After judging, the owner calls `set_owner` to hand `game.wgpnear.near` to a cold account whose key is on no server, and `wgpnear.near` stays the factory only. Then upgrades go behind a delay, so players can see a change before it lands. The evidence check `contract-config` asserts `owner_id` is `wgpnear.near` today and changes with that call.
 2. **Run digests on chain.** Mints already carry each run's digest. Recording a daily Merkle root of verified runs, as seasons do for their final board, lets anyone prove a reward maps to a public replay.
 3. **Independent verifiers.** The replay verifier is a pure function in `packages/game-core`. Anyone can run it; the next step is a second, independently run verifier whose agreement is required before a season is recorded.
 4. **Fees that pay for the game.** Today the 2% trade fee is burned. A split, part burned and part to the contract's storage balance, would let trading pay for the state it creates.
-5. **Seasons as the content loop.** Season 1 ends Nov 14; at its close the board is recorded on chain with soulbound trophies for the top 10 (built and tested; the record first runs on mainnet when Season 1 closes, and is then `get_season("s1")`). Each new season can ship a ruleset, a case file and a suit set without touching earlier seasons' records, because every mode's rules are versioned and old replays stay verifiable from their git tags.
+5. **Seasons as the content loop.** Season 1 ends Nov 15, 00:00 UTC; at its close the board is recorded on chain with soulbound trophies for the top 10 (built and tested; the record first runs on mainnet when Season 1 closes, and is then `get_season("s1")`). Each new season can ship a ruleset, a case file and a suit set without touching earlier seasons' records, because every mode's rules are versioned and old replays stay verifiable from their git tags.
 
 ## What keeps players coming back
 

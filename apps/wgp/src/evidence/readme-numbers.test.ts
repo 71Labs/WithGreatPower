@@ -12,7 +12,8 @@ import { CHAPTER_IDS, CHAPTER_RULESET } from "@wgp/game-core/chapters";
 import { TASK_IDS } from "@wgp/game-core/city";
 import { DAILY_ATTEMPTS, DAILY_RULESET, TRIAL_COURSE_IDS, TRIAL_RULESET } from "@wgp/game-core/compete";
 import { ITEMS, STOPS_PER_PATROL, SUITS } from "@wgp/game-core/data";
-import { GOLDEN_CASES } from "@wgp/game-core/golden";
+import { GOLDEN_CASES, GOLDEN_EXPECT, goldenLog, goldenSave } from "@wgp/game-core/golden";
+import { replayRun } from "@wgp/game-core/replay";
 import { RULESET_VERSION, SIM_HZ } from "@wgp/game-core/sim3d/constants";
 import { describe, expect, it } from "vitest";
 
@@ -231,6 +232,42 @@ describe("the README's numbers equal the code's", () => {
   it("suits are cosmetic, as the README says: a suit is colours, a recipe and a level, and no stat", () => {
     says(README, "Suits are cosmetic: a suit changes how the hero looks, not how they fight.");
     for (const suit of Object.values(SUITS)) expect(Object.keys(suit).sort()).toEqual(["blurb", "colors", "id", "minLevel", "name", "recipe", "starter"]);
+  });
+
+  it("a suit changes nothing in play: each recorded night replays to the same score, ticks and hash in every suit", () => {
+    for (const c of GOLDEN_CASES) {
+      const want = GOLDEN_EXPECT[c.name]!;
+      const save = goldenSave(c);
+      for (const suit of Object.keys(SUITS)) {
+        const res = replayRun({ save: { ...save, hero: { ...save.hero!, suit } }, seed: c.seed, log: goldenLog(c) });
+        expect({ score: res.score, ticks: res.ticks, hash: res.hash, checkpoints: res.checkpoints }, `${c.name} in ${suit}`).toEqual({ score: want.score, ticks: want.ticks, hash: want.hash, checkpoints: want.checkpoints });
+      }
+    }
+  });
+
+  it("the bot's scores under Limits are the recorded nights' own, the ones the bot clears", () => {
+    const file = JSON.parse(read("packages/game-core/test/golden/hashes.json")) as { ruleset: number; cases: Record<string, { ok: boolean; score: number }> };
+    expect(file.ruleset).toBe(RULESET_VERSION);
+    // The nights the bot plays throughout (not the knockout, where it stands still in a fight).
+    const cleared = GOLDEN_CASES.filter((c) => c.policy === "bot").map((c) => file.cases[c.name]!);
+    expect(cleared).toHaveLength(3);
+    for (const c of cleared) expect(c.ok).toBe(true);
+    const scores = cleared.map((c) => c.score).sort((a, b) => a - b).map(fmt);
+    says(README, `scores ${scores[0]}, ${scores[1]} and ${scores[2]} on the ${word(cleared.length)} recorded nights it clears`);
+    says(README, "replay verification proves a score came from legal inputs, not that a human played it");
+  });
+
+  it("the deployed code hash the README gives is the base58 form of the sha256 it gives", () => {
+    const raw = read("README.md");
+    const hash = /code hash `([1-9A-HJ-NP-Za-km-z]{43,44})`/.exec(raw)![1]!;
+    const sha = /the deployed wasm's sha256, `([0-9a-f]{64})`/.exec(raw)![1]!;
+    const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    let n = BigInt(0);
+    for (const ch of hash) n = n * BigInt(58) + BigInt(ALPHABET.indexOf(ch));
+    expect(n.toString(16).padStart(64, "0")).toBe(sha);
+    // The chain check holds the deployed account to the same code hash.
+    const check = (JSON.parse(read("docs/evidence.json")) as { checks: Record<string, { expect: { path: string; value: unknown }[] }> }).checks["contract-account"]!;
+    expect(check.expect.find((e) => e.path === "code_hash")!.value).toBe(hash);
   });
 
   it("the contract's unit-test count is the number of #[test] functions that aren't ignored", () => {

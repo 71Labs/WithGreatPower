@@ -205,7 +205,10 @@ describe("the season check asserts the right thing in each state", () => {
 
   it("the documents describe both states, so no edit is needed when the season closes", () => {
     const readme = read("README.md");
-    expect(readme).toContain("Season 1 closes Nov 14, 23:59 UTC; after that the record is `get_season(\"s1\")` on the contract and the results file is `/api/seasons/s1/results`");
+    expect(readme).toContain("Season 1 ends Nov 15, 00:00 UTC (the end of Nov 14); after that the record is `get_season(\"s1\")` on the contract and the results file is `/api/seasons/s1/results`");
+    // The end the documents give is the season's own, from the migration that creates it (ends_at is exclusive).
+    expect(read("apps/wgp/drizzle/0001_seed_season_1.sql")).toContain("('s1', 'Season 1', '2026-11-05T00:00:00Z', '2026-11-15T00:00:00Z', 'scheduled')");
+    for (const doc of ["README.md", "docs/GAME-LOOP.md", "docs/ARCHITECTURE.md", "docs/SUSTAINABILITY.md"]) expect(read(doc), doc).not.toMatch(/23:59/);
     expect(readme).toContain("**Before the record lands,** `get_season(\"s1\")` answers `null`");
     expect(readme).toContain("**After it lands,** `get_season(\"s1\")` holds the root, the digest and the top of the board");
     for (const doc of ["README.md", "docs/GAME-LOOP.md", "docs/SUSTAINABILITY.md", "docs/ARCHITECTURE.md"]) {

@@ -2,9 +2,12 @@
  * Claims about what this repository does NOT do, or has built but not switched on. Each is
  * checked against the source that would have to change for the claim to stop being true.
  */
+import { readdirSync, statSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { evidence, read } from "./repo";
+import { ROOT, evidence, plainDoc, read } from "./repo";
 
 /** Every `pub fn` in a Rust file, by name. */
 const pubFns = (file: string) => [...read(file).matchAll(/^\s*pub fn (\w+)/gm)].map((m) => m[1]!);
@@ -34,6 +37,32 @@ describe("the deployed contract's NEP-245 surface (contracts/wgp, v2)", () => {
     expect(readme).toContain("It has no metadata extension, no global enumeration (`mt_tokens`) and no approvals.");
     expect(readme).toContain("and it is not deployed. Its source is on the branch `review/contract-v3`, not on `main`; the review's findings, test counts and commits are in [docs/CONTRACT-V3-REVIEW.md](docs/CONTRACT-V3-REVIEW.md).");
     expect(readme).toContain("The deployed contract (v2) has no way to invest in her to reopen; investing is in v3, which is not deployed.");
+  });
+});
+
+describe("NEAR Intents are not used", () => {
+  /** Every source file under a directory (tests and generated files left out), as repository paths. */
+  const sources = (rel: string): string[] =>
+    readdirSync(path.join(ROOT, rel)).flatMap((name) => {
+      const child = `${rel}/${name}`;
+      if (["node_modules", ".next", "target", ".data"].includes(name)) return [];
+      if (statSync(path.join(ROOT, child)).isDirectory()) return sources(child);
+      return /\.(ts|tsx|mjs|js|rs|sh|json)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [child] : [];
+    });
+
+  it("nothing in the app, the scripts or the contract names intents.near or an Intents SDK, and the README says so", () => {
+    const files = ["apps/wgp/src", "packages/game-core/src", "contracts/wgp/src", "scripts"].flatMap(sources);
+    expect(files.length).toBeGreaterThan(100);
+    // Code only: comments may compare (events.rs says its events copy intents.near's fields), and the
+    // relayer's tests use intents.near as a foreign receiver it must refuse. Neither is a use.
+    const code = (f: string) => read(f).split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|#)/.test(l)).join("\n");
+    const naming = files.filter((f) => /intents\.near|near-intents|\bdefuse(?:[_-]|\b)/i.test(code(f)));
+    expect(naming, "these files name NEAR Intents in code: the README's Intents row is out of date").toEqual([]);
+    expect(read("contracts/wgp/src/events.rs")).toContain("`MtEvent` mirrors `defuse_nep245::MtEvent` field for field");
+    for (const pkg of ["apps/wgp/package.json", "packages/game-core/package.json", "package.json"]) expect(read(pkg), pkg).not.toMatch(/intents|defuse/i);
+    const row = plainDoc("README.md").split("\n").find((l) => l.startsWith("| NEAR Intents"));
+    expect(row).toContain("Not used.");
+    expect(row).toContain("which is future work and not built");
   });
 });
 
