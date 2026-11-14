@@ -55,6 +55,12 @@ export const RATE_LIMITS = {
   invitePerIp: { limit: 60, windowMs: 60_000 },
   /** GET /api/stats (public; the counts themselves are cached for a minute). */
   statsPerIp: { limit: 60, windowMs: 60_000 },
+  /** The Gas tank (/gas): token list, dry quotes as the amount is typed, status polls. */
+  intentsTokensPerIp: { limit: 60, windowMs: 60_000 },
+  intentsQuotePerIp: { limit: 30, windowMs: 60_000 },
+  /** A real quote opens a deposit address at 1Click: a few per IP is plenty. */
+  intentsDepositPerIp: { limit: 5, windowMs: 10 * 60_000 },
+  intentsStatusPerIp: { limit: 60, windowMs: 60_000 },
 } satisfies Record<string, RateLimit>;
 
 const MAX_KEYS = 50_000;
