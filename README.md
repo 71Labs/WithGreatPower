@@ -53,6 +53,8 @@ The track's prompt (["Games With Real Economies"](https://github.com/nearai/near
 
 Every check is read-only: no sign-in, no wallet, no transaction. Commands A–E need `curl` and `jq`. F and G need git, Node ≥ 22 and pnpm 10 (`corepack enable`).
 
+Coding agents: [AGENTS.md](AGENTS.md) lists every command with what it should print and how long it takes.
+
 | # | Claim | Do | See | Proof |
 |---|---|---|---|---|
 | 1 | The game runs in a browser, no install | Open https://www.wgponnear.fun/play, or press **Play now** on the home page. A first visit puts you straight into a night as a ready-made hero, The Node; there is no form first. | A 3D night of four stops (two fights, two errands). It ends on a card saying **Banked. Get some sleep.** with an **Unranked score**. Guest nights stay in your browser and are never ranked. | [Evidence](docs/EVIDENCE.md#judge-1) |
@@ -419,7 +421,7 @@ pnpm dev                                         # http://localhost:3000/play  (
 
 | Command | What it does | Expect |
 |---|---|---|
-| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries. | game-core 284 passed, app 1,690 passed |
+| `pnpm test` | Unit and integration tests: the simulation and its golden replays, the server, verifier, market, relayer abuse cases, reward outbox, season close and referrals. The app's tests run on in-memory PGlite and make no network request: a guard fails any test that tries. | game-core 284 passed, app 1,691 passed |
 | `pnpm typecheck` / `pnpm lint` | TypeScript across the workspace, and ESLint for the app | Exit 0, no errors |
 | `pnpm build` | The production build of the app; needs no environment variables | The route list |
 | `pnpm verify` | Replays the live All-time top 5 | `5/5 runs reproduced` |

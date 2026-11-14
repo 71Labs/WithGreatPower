@@ -4050,7 +4050,7 @@
       "code": [
         {
           "path": "package.json",
-          "anchor": "\"test\": \"pnpm -r --if-present test\""
+          "anchor": "\"test\": \"pnpm -r --workspace-concurrency=1 --if-present test\""
         }
       ],
       "counts": [

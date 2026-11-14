@@ -60,6 +60,7 @@ interface Script {
   expectProblem(value: unknown, e: Expect): string | null;
   fetchJson(url: string, init?: object, opts?: { fetch?: (url: string) => Promise<{ status: number }>; waits?: number[]; sleep?: (ms: number) => Promise<void> }): Promise<{ status: number }>;
   seasonState(input: SeasonInput): { state: string; problems: string[] };
+  isTimeout(e: unknown): boolean;
   loadEvidence(): unknown;
 }
 
@@ -149,6 +150,20 @@ describe("the evidence layer's own promises", () => {
     const source = read("scripts/evidence.mjs");
     expect(source).toContain("if (e instanceof Offline) return { skip: e.message, rateLimited: e.rateLimited };");
     expect(source).toContain("const failed = tally.FAIL > 0 || markdownStale || readmeStale;");
+  });
+});
+
+describe("a slow endpoint is never a failed claim", () => {
+  it("a request that times out, even mid-answer, is a SKIP, never a FAIL", async () => {
+    const s = await script();
+    // What fetch throws when AbortSignal.timeout fires while the body is still arriving.
+    expect(s.isTimeout(new DOMException("The operation was aborted due to timeout", "TimeoutError"))).toBe(true);
+    expect(s.isTimeout(new DOMException("This operation was aborted", "AbortError"))).toBe(true);
+    expect(s.isTimeout(new Error("expected 200, got 404"))).toBe(false);
+    expect(s.isTimeout(undefined)).toBe(false);
+    const source = read("scripts/evidence.mjs");
+    expect(source).toContain("const err = isTimeout(e) ? new Offline(");
+    expect(source).toContain("if (isTimeout(e)) return { skip: `a request timed out (${e.message})` };");
   });
 });
 
