@@ -25,6 +25,77 @@ Each row names the code, a command or test that exercises it, and its row in [do
 | Safe upgrades | `upgrade` uses low-level promise calls, and a script refuses a wasm that imports host functions mainnet lacks | `contracts/wgp/src/lib.rs` (`upgrade`), `scripts/near/check-wasm-imports.mjs` | `apps/wgp/src/evidence/wasm-imports.test.ts` | `near-upgrades` |
 | The evidence ledger | Every quoted README sentence maps to a test or a read-only check | `scripts/evidence.mjs`, `docs/evidence.json` | `pnpm evidence --chain` | `evidence-output` |
 
+## Mainnet facts, each re-checked by `pnpm evidence --chain`
+
+| Account | Role |
+|---|---|
+| `game.wgpnear.near` | The contract: NEP-245 tokens, the market, seasons. Code hash `68F7NhEjUtKweyLU7WNvT183apacLQegfB1DXUoQ2hjJ` (sha256 `4c25745400717004ab5c18521bf6454a21c6f093d6deff353f8784dcd15df84d`) |
+| `wgpnear.near` | The contract's owner, and the factory that creates `<name>.wgpnear.near` player accounts |
+| `operator.wgpnear.near` | Sends `mint_rewards` for verified runs and `record_season` |
+| `relayer.wgpnear.near` | Pays gas for players' NEP-366 meta-transactions; the NEAR Intents gas tank refills it |
+| `sandwich.wgpnear.near` | Sandwich Man, the NPC trader, signing with his own key |
+
+Transactions the evidence ledger looks up again on every `--chain` run (check ids are in `docs/evidence.json`):
+
+| What | Transaction | Check |
+|---|---|---|
+| The deploy and new | [`8nyXGMNuFm…`](https://nearblocks.io/txns/8nyXGMNuFmQkvwJyC9PZv1JVM54Go45QZ69HXXppC1JR) | `tx-deploy` |
+| The owner's set_market_params, which minted Gwei's stock and till to the contract's own account | [`FdQxVNyziV…`](https://nearblocks.io/txns/FdQxVNyziV7ioNWPAfL9yAWJ8u2wDN3kRKpEX4JSVcCR) | `tx-open-market` |
+| The factory creating a player's account (9a_z53.wgpnear.near, not the author's) with two keys | [`DFF1SsPjKP…`](https://nearblocks.io/txns/DFF1SsPjKPto6Kxa3TfpdX2pSMNC9GftnbJuz9PRWcV8) | `tx-factory-account` |
+| A player's register_hero, relayed | [`7dnP8eU7W8…`](https://nearblocks.io/txns/7dnP8eU7W8b9LdQeZztnttzai5uUc7gHAea4hEeoXnnq) | `tx-register-hero` |
+| A reward mint from the operator | [`CsnUWQDWSX…`](https://nearblocks.io/txns/CsnUWQDWSXGwNaapB9iFGH3idEqzQWGbWmrH7pbJegZh) | `tx-mint-rewards` |
+| A player's craft_suit of Stealth, burning the recipe's Sybil goo and minting the suit | [`3ttQYUBrA8…`](https://nearblocks.io/txns/3ttQYUBrA8CbKu1s7VuvNA8QAxMMfHsTJGHrKi4AZqjc) | `tx-craft-suit` |
+| A player's equip_suit, relayed | [`C2WwQsHyHN…`](https://nearblocks.io/txns/C2WwQsHyHNBZLrkN1JaVDGZuuf9aYaBJGqvyMSLvRvRp) | `tx-equip-suit` |
+| A market_buy from Gwei, with the fee burned | [`ASmRJdKZy3…`](https://nearblocks.io/txns/ASmRJdKZy3fMPAPNNogcABL4Wdr7CiPPasAxRjXr5xRq) | `tx-market-buy` |
+| A market_sell to Gwei | [`GDATLg4Qr2…`](https://nearblocks.io/txns/GDATLg4Qr2cqQZ9S5uaRwZJTup4Y54P7uPyzJzFGaqXE) | `tx-market-sell` |
+| A player's list_item: the items move to the contract, in escrow | [`GhK2jtPKtN…`](https://nearblocks.io/txns/GhK2jtPKtNpHgjcn93eYRiFjF72mcMcFzbfHqYbnM9tx) | `tx-list-item` |
+| Another player's buy_listing: Bits go from the buyer to the seller | [`Heu9ZTQvWm…`](https://nearblocks.io/txns/Heu9ZTQvWmriDngtPQ37defMDZMJSecgBNpdAuLnMdu9) | `tx-buy-listing` |
+| A relayed market_buy by the player azalleaxyz.wgpnear.near (not the author's account), signed by their session key and sent by the relayer, with no deposit, the fee burned | [`GJXrKe2oNj…`](https://nearblocks.io/txns/GJXrKe2oNjbTvxG2HyMt4DeTBXNPxGVRBbXsUrzv2TPJ) | `tx-relayed-buy` |
+| The owner's account, wgpnear.near, created sandwich.wgpnear.near with a transfer and one key (Nov 13, 2026) | [`Hx32N4dymG…`](https://nearblocks.io/txns/Hx32N4dymGnQXUoD1cY36w3kekY2WqKbfvLpvd84W4rm) | `tx-npc-create` |
+| The one-off seed: the operator's mint_rewards of 300 Bits to Sandwich Man, nonce 1, with the digest sha256("npc-seed:sandwich.wgpnear.near:v1") | [`Hjvobzmddf…`](https://nearblocks.io/txns/HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7) | `tx-npc-seed` |
+| Sandwich Man's first trade: a market_buy of 2 Sybil goo from Gwei for 72 Bits, signed by his own key (not relayed), with no deposit and the fee burned | [`AcmNAmHr1F…`](https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf) | `tx-npc-first-trade` |
+| The Nov 13, 2026 top-up of the contract's storage balance: a transfer from the relayer's account to game.wgpnear.near | [`FH2tpfkzDk…`](https://nearblocks.io/txns/FH2tpfkzDkY8MtEX6fWCmMc7E7RRndGA8nibM1ZYEjuB) | `tx-contract-topup` |
+
+The player transactions above come from five different accounts, none of them the author's (check `player-senders`).
+
+## The evidence ledger at a glance
+
+`docs/evidence.json` holds 214 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
+
+| Status | Claims |
+|---|---|
+| `proven by test` | 103 |
+| `proven on chain` | 45 |
+| `live check` | 18 |
+| `pinned by test` | 8 |
+| `simulation only` | 24 |
+| `built, off on mainnet` | 3 |
+| `checked in git` | 4 |
+| `owner action needed` | 9 |
+
+What is not live, so a review doesn't have to dig for it (details in the README's opening table and "Limits and what's next"):
+
+- Investing in a broke vendor runs only in the signed-out practice market and `/lab/economy`; on chain it is contract v3, built on the branch `review/contract-v3` and not deployed.
+- `/lab/economy` is a simulation of bot players, not mainnet.
+- The NEAR Intents gas tank's quotes are live; its first real refill had not landed when this was written.
+- NEAR Auth is built and waits on NEAR adding the site to its mainnet client.
+- Season 1's on-chain record is written at its close (Nov 15, 2026, 00:50 UTC); check `season-s1` follows it through open, closed and recorded.
+- Traffic is a small, incentivised playtest (daily airdrops, sent outside the game); "By the numbers" in the README has the counts and their caveats.
+- Trust: the owner key is in the production environment, and `game.wgpnear.near` has a full-access key held by the owner; both are disclosed under Limits, with the plan to remove them after judging.
+
+## NEAR HACKATHON rules, and where each is met
+
+| Rule (HACKATHON.md) | Where |
+|---|---|
+| Built in the window (Q-001) | The first commit is 2026-11-01; README "Built during the hackathon" |
+| New repo or separated diff (Q-003) | The whole repository is the submission |
+| Libraries, templates and AI code listed (Q-005) | README "Credits and disclosure", including AI-written code |
+| Own contract on NEAR fits the track (Q-011) | `contracts/wgp`, deployed as `game.wgpnear.near` |
+| Hosted demo (Q-012) | https://www.wgponnear.fun, kept up through judging |
+| License (Q-014) | `LICENSE` (MIT) |
+| One submission per person, or both READMEs name each other (Q-015) | README "Built during the hackathon" |
+| Track hints: agent NPCs, social login, NEAR Intents, NEP-245 | README "How it meets the track", one row each |
+
 ## Layout
 
 | Path | What |
