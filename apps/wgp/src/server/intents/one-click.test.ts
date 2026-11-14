@@ -177,9 +177,12 @@ describe("amounts and bounds", () => {
   });
 
   it("writes bounds in token units, rounded inward", () => {
-    expect(tokenAmount(1, 150, 9, "up")).toBe("0.00666667");
-    expect(tokenAmount(50, 150, 9, "down")).toBe("0.33333333");
+    expect(tokenAmount(1, 150, 9, "up")).toBe("0.006667");
+    expect(tokenAmount(50, 150, 9, "down")).toBe("0.3333");
     expect(tokenAmount(1, 1, 6, "up")).toBe("1");
+    expect(tokenAmount(1, 0.999606, 6, "up")).toBe("1.001");
+    expect(tokenAmount(50, 0.999606, 6, "down")).toBe("50.01");
+    expect(tokenAmount(1, 65641, 8, "up")).toBe("0.00001524");
   });
 });
 
@@ -220,7 +223,8 @@ describe("quoteRefill", () => {
     const sent = calls.find((c) => c.url.endsWith("/v0/quote"))!;
     expect(sent.body).toMatchObject({ dry: false });
     expect(new Headers(sent.init.headers).get("authorization")).toBe("Bearer jwt-token");
-    expect(quote).toMatchObject({ dry: false, depositAddress: "0x76b4c56085ED136a8744D52bE956396624a730E8", deadline: "2026-11-14T21:00:00.000Z" });
+    // Our deadline (refunds start) is an hour out; 1Click's is when the address stops watching.
+    expect(quote).toMatchObject({ dry: false, depositAddress: "0x76b4c56085ED136a8744D52bE956396624a730E8", deadline: new Date(NOW + QUOTE_DEADLINE_MS).toISOString(), inactiveAt: "2026-11-14T21:00:00.000Z" });
   });
 
   it("refuses a real quote that came back without a deposit address", async () => {

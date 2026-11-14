@@ -417,11 +417,11 @@ function DepositPanel({ quote, onDone }: { quote: Quote; onDone: () => void }) {
           {deadline ? (
             <>
               {" "}
-              The address is open until{" "}
+              Send before{" "}
               <time dateTime={quote.deadline!} className="num font-semibold text-game-ink">
                 {clock.format(deadline)} UTC
               </time>
-              ; after that, an unfinished swap is refunded.
+              : a swap that hasn’t run by then is refunded. Don’t reuse this address for another refill.
             </>
           ) : null}
         </p>

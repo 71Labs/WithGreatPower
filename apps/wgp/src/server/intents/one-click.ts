@@ -210,11 +210,15 @@ export interface GasToken extends OriginAsset {
   max: string | null;
 }
 
-/** Shortest decimal string for a token amount, rounded up for a minimum and down for a maximum. */
+/**
+ * A dollar bound in token units to four significant digits, rounded up for a minimum and
+ * down for a maximum, so the amount shown is always inside the bounds.
+ */
 export function tokenAmount(usd: number, price: number, decimals: number, round: "up" | "down"): string {
-  const places = Math.min(decimals, 8);
+  const value = usd / price;
+  const places = Math.max(0, Math.min(decimals, 3 - Math.floor(Math.log10(value))));
   const scale = 10 ** places;
-  const raw = (usd / price) * scale;
+  const raw = value * scale;
   const units = round === "up" ? Math.ceil(raw - 1e-9) : Math.floor(raw + 1e-9);
   return (units / scale).toFixed(places).replace(/\.?0+$/, "");
 }
@@ -356,7 +360,10 @@ export interface GasQuote {
   /** Only on a real quote. */
   depositAddress: string | null;
   depositMemo: string | null;
+  /** The deadline we asked for: if the swap hasn't run by then, the deposit is refunded. */
   deadline: string | null;
+  /** 1Click's `quote.deadline`: when the deposit address stops watching (days later); funds sent after may be lost. */
+  inactiveAt: string | null;
 }
 
 /**
@@ -398,7 +405,8 @@ export async function quoteRefill(input: QuoteInput, config: GasTankConfig, deps
     timeEstimate: quote.timeEstimate ?? null,
     depositAddress: input.dry ? null : (quote.depositAddress ?? null),
     depositMemo: input.dry ? null : (quote.depositMemo ?? null),
-    deadline: input.dry ? null : (quote.deadline ?? request.deadline),
+    deadline: input.dry ? null : request.deadline,
+    inactiveAt: input.dry ? null : (quote.deadline ?? null),
   };
 }
 
