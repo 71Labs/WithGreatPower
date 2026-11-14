@@ -20,7 +20,12 @@ export interface MarketProblem {
   text: string;
   /** The trade may have landed: the screen reloads the wallet before anyone tries again. */
   unsure?: boolean;
+  /** Where the player can fix it ("/gas" when the gas tank is empty). */
+  href?: string;
 }
+
+/** The relayer is under its cut-off: the gas tank (/gas) is where anyone can refill it. */
+export const GAS_TANK_EMPTY = "The game’s gas tank is empty, so trades are paused. Your Bits and items are safe. Refill the gas tank at wgponnear.fun/gas, or try again later.";
 
 /** The contract's words from a relayed failure ("Smart contract panicked: …"), or null. */
 export function panicText(message: string | undefined): string | null {
@@ -107,7 +112,8 @@ export function marketProblem(status: number, code: string, message?: string): M
   if (code === "budget_exhausted" && status === 429) return { code, text: "That’s all the market moves for today. It resets at midnight UTC." };
   if (status === 429) return { code, text: "That’s a lot of trades at once. Wait a moment, then try again." };
   if (code === "expired" || code === "too_far_ahead") return { code, text: "That took too long to send. Try again." };
-  if (status === 503 || code === "relayer_empty" || code === "near_not_configured" || code === "market_unavailable") {
+  if (code === "relayer_empty") return { code, text: GAS_TANK_EMPTY, href: "/gas" };
+  if (status === 503 || code === "near_not_configured" || code === "market_unavailable") {
     return { code, text: "The market can’t take trades right now. Your Bits and items are safe; try again in a few minutes." };
   }
   if (status >= 500) return { code, unsure: true, text: "Something went wrong on our side, so we can’t tell if that went through. Your wallet is reloading: check it before you try again." };

@@ -89,15 +89,15 @@ describe("what a status may rest on", () => {
     const rows = data.claims.filter((c) => c.status === "owner action needed");
     const without = rows.filter((c) => !(c.chain ?? []).length).map((c) => c.id);
     expect(without).toEqual(["status-near-auth"]);
-    // Each check is a not-live check: a method the contract lacks, a branch not merged, or a setting at its old value.
+    // Each check is a not-live check: a method the contract lacks, a branch not merged, or a setting or balance at its old value (notYet).
     for (const c of rows.filter((x) => (x.chain ?? []).length)) {
       const notLive = c.chain!.some((id) => {
-        const check = checks[id]! as Check & { absent?: boolean };
-        return check.absent === true || (check.kind === "git" && (check.expect ?? []).some((e) => e.path === "merged" && e.value === false)) || id === "market-state";
+        const check = checks[id]! as Check & { absent?: boolean; notYet?: boolean };
+        return check.absent === true || check.notYet === true || (check.kind === "git" && (check.expect ?? []).some((e) => e.path === "merged" && e.value === false)) || id === "market-state";
       });
       expect(notLive, `${c.id} has no check that it is not live`).toBe(true);
     }
-    expect(read("README.md")).toContain("Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.");
+    expect(read("README.md")).toContain("Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting or balance still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.");
     // The sandbox test is not something only the owner can make true: it is a test, and CI runs it.
     expect(claim("npc-sandbox").status).toBe("pinned by test");
   });

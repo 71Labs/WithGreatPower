@@ -102,6 +102,8 @@ describe("market refusals", () => {
     expect(marketProblem(429, "budget_exhausted", "Daily limit reached").text).toMatch(/midnight UTC/);
     expect(marketProblem(503, "budget_exhausted", "The relayer is out of budget for today; try again tomorrow").text).toMatch(/safe/);
     expect(marketProblem(503, "relayer_empty", "The relayer is out of funds").text).not.toMatch(/relayer|funds/i);
+    expect(marketProblem(503, "relayer_empty", "The relayer is out of funds")).toMatchObject({ code: "relayer_empty", href: "/gas", text: expect.stringMatching(/Refill the gas tank at wgponnear\.fun\/gas/) });
+    expect(marketProblem(503, "relayer_empty").text).toMatch(/safe/);
     expect(marketProblem(401, "unauthorized", "Sign in first").code).toBe("signed_out");
     expect(marketProblem(403, "unknown_key", "Unknown session key").code).toBe("quick_play");
     expect(marketProblem(409, "run_active").text).toMatch(/patrol/);

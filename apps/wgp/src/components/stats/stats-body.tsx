@@ -249,6 +249,13 @@ export function StatsBody({ stats }: { stats: PublicStats | null }) {
               <Tile label="Reward mints queued" value={count(chain?.rewardMints.queued)} />
               <Tile label="Reward mints sent" value={count(chain?.rewardMints.sent)} />
             </Tiles>
+            <p className="max-w-[65ch] text-[13px] leading-5 text-game-muted [text-wrap:pretty]">
+              Signed-in players never pay gas: the game’s relayer pays it.{" "}
+              <Link href="/gas" className={textLink}>
+                See the gas tank
+              </Link>{" "}
+              and refill it from another chain.
+            </p>
           </Group>
         </>
       )}

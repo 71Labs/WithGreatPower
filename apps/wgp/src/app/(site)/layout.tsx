@@ -46,6 +46,11 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
                   </Link>
                 </li>
                 <li>
+                  <Link href="/gas" className={footerLink}>
+                    Gas tank
+                  </Link>
+                </li>
+                <li>
                   <a href={REPO_URL} className={footerLink}>
                     <Github aria-hidden className="size-4" />
                     Source on GitHub

@@ -8,11 +8,18 @@ What it costs to run With Great Power, who a player has to trust today, and how 
 |---|---|---|
 | Contract storage | 375 KB of code and state on `game.wgpnear.near`, which NEAR holds 3.75 NEAR against (returned if the state is deleted) | The contract account |
 | Reward mints | One `mint_rewards` call covers up to 20 verified nights. 168 calls as of Nov 13, 2026 (re-run `pnpm stats`). | `operator.wgpnear.near` |
-| Player actions | Each relayed call (a trade, a craft, an equip) is one meta-transaction, a fraction of a cent of gas | `relayer.wgpnear.near`, within a daily gas budget |
+| Player actions | Each relayed call (a trade, a craft, an equip) is one meta-transaction, a fraction of a cent of gas | `relayer.wgpnear.near`, within a daily gas budget. The team funds it, and so can anyone: the Gas tank (`/gas`) refills it from Ethereum, Base, Arbitrum, Solana or Bitcoin through NEAR Intents' 1Click API ($1 to $50 at a time, 0.2% fee to 1Click, a donation that returns nothing) |
 | The NPC trader | Sandwich Man signs and pays for his own market calls; they are not relayed. A call burns about 3 Tgas (his first trade burned 0.00031 NEAR), and his rules cap him at 10 actions a day, so at most about 0.003 NEAR a day. His one-off seed mint cost the operator 0.0003 NEAR. | `sandwich.wgpnear.near`, from the 0.3 NEAR the owner created it with on Nov 13, 2026 |
 | New player accounts | `<name>.wgpnear.near` is created with no balance; with two keys and no contract it fits NEAR's zero-balance allowance | `wgpnear.near` |
 | Hosting | Vercel and Neon Postgres; the game's 3D runs in the player's browser | The team |
 | Sign-in | Privy's embedded wallets for Google players | The team |
+
+When the relayer's available balance falls under `RELAYER_MIN_BALANCE_NEAR` (1 NEAR by default), the relay answers 503 and signed-in trades pause; players are pointed at `/gas`. 1Click delivers NEAR as wNEAR (`wrap.near`), so after a refill the owner unwraps it into the relayer's balance:
+
+```bash
+near contract call-function as-transaction wrap.near near_withdraw json-args '{"amount":"<yocto from ft_balance_of>"}' \
+  prepaid-gas '10.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as relayer.wgpnear.near network-config mainnet sign-with-legacy-keychain send
+```
 
 Gas is the only cost that grows with play, and the limits on it are in code: batched mints, a per-player cap of 20 ranked nights a day, daily caps on trades and listings in the contract, and the relayer's daily gas budget.
 

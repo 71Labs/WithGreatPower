@@ -511,7 +511,11 @@ async function runChainCheck(check, meta) {
         logs: j.result.receipts_outcome.flatMap((o) => o.outcome.logs),
       };
     } else if (check.kind === "http") {
-      const res = await fetchJson(check.url, { headers: { accept: check.text ? "text/html" : "application/json" } });
+      // A check with a `body` POSTs it as JSON (the Gas tank's dry quote); every other http check is a GET.
+      const init = check.body
+        ? { method: "POST", headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify(check.body) }
+        : { headers: { accept: check.text ? "text/html" : "application/json" } };
+      const res = await fetchJson(check.url, init);
       if (res.status !== (check.status ?? 200)) return { ok: false, why: `${check.url} answered HTTP ${res.status}` };
       value = check.text ? { text: await res.text() } : await res.json();
       if (check.derive === "stats") value = { ...value, derived: statsDerived(value) };
@@ -605,6 +609,7 @@ function curlFor(check, meta) {
   if (check.kind === "tx") {
     return `${rpcCall(meta.archivalRpc[0], "tx", { tx_hash: check.hash, sender_account_id: check.sender, wait_until: "FINAL" })} \\\n  | jq '{signer: .result.transaction.signer_id, status: .result.status, actions: .result.transaction.actions, logs: [.result.receipts_outcome[].outcome.logs[]]}'`;
   }
+  if (check.kind === "http" && check.body) return `curl -s -X POST -H 'content-type: application/json' -d '${JSON.stringify(check.body)}' '${check.url}' | jq .`;
   if (check.kind === "http") return check.text ? `curl -s -o /dev/null -w '%{http_code}\\n' '${check.url}'` : `curl -s '${check.url}' | jq .`;
   if (check.kind === "command") return check.command.join(" ");
   if (check.kind === "git") {
