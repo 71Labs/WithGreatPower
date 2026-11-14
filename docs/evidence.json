@@ -1707,6 +1707,51 @@
       ]
     },
     {
+      "id": "numbers-traction",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "Day by day, the same chain data shows who came back and how concentrated the calls are: docs/TRACTION.md has the tables by UTC day, with retention and the relayer outage marked, and the author's accounts and Sandwich Man left out.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/traction.mjs",
+          "anchor": "export function traction(rows"
+        },
+        {
+          "path": "scripts/traction.mjs",
+          "anchor": "export const CONTEXT_WINDOWS = ["
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "counts only players' calls: not the team's, the contract's, the author's or Sandwich Man's"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "buckets by UTC day from the first call, keeps empty days and counts an account as new only on its first day"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "marks the relayer outage and Season 1's airdrops on the days they touch"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "counts retention by distinct active days, with the median"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "works out the share of calls from the busiest 1 and 3 accounts"
+        }
+      ],
+      "note": "The tests hold the report's maths on fixtures: who counts as a player, the day buckets, retention and concentration. The tables in docs/TRACTION.md are that maths run on NearBlocks' rows on Nov 14, 2026; they are dated and have no live check, and pnpm traction prints the current ones."
+    },
+    {
       "id": "economy-earn",
       "section": "economy",
       "source": "README.md",
