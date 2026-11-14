@@ -145,7 +145,6 @@ export function RefillForm() {
   }, [quoteKey, deposit]);
 
   const current = preview && preview.key === quoteKey ? preview : null;
-  const fieldProblem = problem ?? (current?.problem?.field ? current.problem : null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -172,7 +171,7 @@ export function RefillForm() {
         const p = await readProblem(res);
         setProblem(p);
         if (p.field === "amount") amountRef.current?.focus();
-        else if (p.field === "refundTo" || /refund/i.test(p.message)) refundRef.current?.focus();
+        else if (isRefundProblem(p)) refundRef.current?.focus();
         return;
       }
       setDeposit((await res.json()) as Quote);
@@ -185,9 +184,13 @@ export function RefillForm() {
 
   if (deposit) return <DepositPanel quote={deposit} onDone={() => setDeposit(null)} />;
 
-  const amountError = fieldProblem?.field === "amount" ? fieldProblem.message : null;
-  const refundError = fieldProblem?.field === "refundTo" || (fieldProblem && /refundTo/i.test(fieldProblem.message)) ? fieldProblem.message : null;
+  // A refusal from the submit wins; otherwise the live quote's refusal is shown where it belongs.
+  const live = current?.problem ?? null;
+  const shown = problem ?? live;
+  const amountError = shown?.field === "amount" ? shown.message : null;
+  const refundError = shown && isRefundProblem(shown) ? shown.message : null;
   const formError = problem && !amountError && !refundError ? problem.message : null;
+  const previewProblem = live && !problem && live.field !== "amount" && !isRefundProblem(live) ? live : null;
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-5" aria-describedby="gas-terms">
@@ -282,7 +285,7 @@ export function RefillForm() {
             value={refundTo}
             onChange={(e) => {
               setRefundTo(e.target.value);
-              if (problem?.field === "refundTo" || (problem && /refund/i.test(problem.message))) setProblem(null);
+              if (problem && isRefundProblem(problem)) setProblem(null);
             }}
             aria-invalid={refundError ? true : undefined}
             aria-describedby={`${id}-refund-hint`}
@@ -294,7 +297,7 @@ export function RefillForm() {
         </p>
       </div>
 
-      <QuotePreview quote={current?.quote ?? null} problem={current?.problem && !current.problem.field && !/refundTo/i.test(current.problem.message) ? current.problem : null} waiting={Boolean(quoteKey) && !current} ready={Boolean(quoteKey)} />
+      <QuotePreview quote={current?.quote ?? null} problem={previewProblem} ready={Boolean(quoteKey)} />
 
       {formError ? (
         <p role="alert" className="flex items-start gap-2 text-[14px] font-semibold leading-5 text-game-hero-press">
@@ -313,7 +316,12 @@ export function RefillForm() {
   );
 }
 
-function QuotePreview({ quote, problem, waiting, ready }: { quote: Quote | null; problem: Problem | null; waiting: boolean; ready: boolean }) {
+/** 1Click says "refundTo is not valid"; our own checks name the field. */
+function isRefundProblem(p: Problem): boolean {
+  return p.field === "refundTo" || /refund/i.test(p.message);
+}
+
+function QuotePreview({ quote, problem, ready }: { quote: Quote | null; problem: Problem | null; ready: boolean }) {
   return (
     <div role="status" className="flex min-h-[84px] flex-col justify-center gap-1 rounded-[14px] border-2 border-dashed border-game-ink/40 bg-game-paper-2 px-4 py-3">
       <StickerEyebrow as="span">Quote</StickerEyebrow>
@@ -336,7 +344,7 @@ function QuotePreview({ quote, problem, waiting, ready }: { quote: Quote | null;
           </p>
         </>
       ) : (
-        <p className="text-[15px] leading-[22px] text-game-muted">{waiting ? "Asking NEAR Intents…" : ready ? "Asking NEAR Intents…" : "Enter an amount and a refund address to see how much NEAR reaches the tank."}</p>
+        <p className="text-[15px] leading-[22px] text-game-muted">{ready ? "Asking NEAR Intents…" : "Enter an amount and a refund address to see how much NEAR reaches the tank."}</p>
       )}
     </div>
   );
@@ -460,7 +468,7 @@ function DepositPanel({ quote, onDone }: { quote: Quote; onDone: () => void }) {
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <a href={nearblocksAccount(quote.recipient)} className={`${textLink} inline-flex items-center gap-1 text-[14px]`}>
+        <a href={nearblocksAccount(quote.recipient)} className={`${textLink} inline-flex min-h-11 items-center gap-1 self-start text-[14px]`}>
           See the relayer on NearBlocks
           <ExternalLink aria-hidden className="size-3.5" />
         </a>
