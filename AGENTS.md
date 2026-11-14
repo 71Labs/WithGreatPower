@@ -60,11 +60,11 @@ The player transactions above come from five different accounts, none of them th
 
 ## The evidence ledger at a glance
 
-`docs/evidence.json` holds 214 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
+`docs/evidence.json` holds 216 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
 
 | Status | Claims |
 |---|---|
-| `proven by test` | 103 |
+| `proven by test` | 105 |
 | `proven on chain` | 45 |
 | `live check` | 18 |
 | `pinned by test` | 8 |
@@ -80,7 +80,8 @@ What is not live, so a review doesn't have to dig for it (details in the README'
 - The NEAR Intents gas tank's quotes are live; its first real refill had not landed when this was written.
 - NEAR Auth is built and waits on NEAR adding the site to its mainnet client.
 - Season 1's on-chain record is written at its close (Nov 15, 2026, 00:50 UTC); check `season-s1` follows it through open, closed and recorded.
-- Traffic is a small, incentivised playtest (daily airdrops, sent outside the game); "By the numbers" in the README has the counts and their caveats.
+- Traffic is a small, incentivised playtest (daily airdrops, sent outside the game); "By the numbers" in the README has the counts and their caveats, and [docs/TRACTION.md](docs/TRACTION.md) breaks them down by day (`pnpm traction`).
+- Costs and runway are measured from mainnet history in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md) under "Measured costs" (`pnpm costs`); there is no revenue yet.
 - Trust: the owner key is in the production environment, and `game.wgpnear.near` has a full-access key held by the owner; both are disclosed under Limits, with the plan to remove them after judging.
 
 ## NEAR HACKATHON rules, and where each is met
@@ -117,13 +118,15 @@ Times are from a fresh anonymous clone on Nov 14, 2026 (Apple silicon laptop).
 | Command | Expect | Time |
 |---|---|---|
 | `pnpm install --frozen-lockfile` | Exit 0 | about 25 s |
-| `pnpm test` | game-core `284 passed`, app `1691 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
+| `pnpm test` | game-core `284 passed`, app `1709 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
 | `pnpm verify` | `5/5 runs reproduced from https://www.wgponnear.fun.` (replays the All-time top 5 from the live site) | about 5 s |
-| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `214 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
-| `pnpm evidence --chain` | `214 claims: 214 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
+| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `216 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
+| `pnpm evidence --chain` | `216 claims: 216 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
 | `pnpm evidence --chain --only <id>,<id>` | Re-runs single claims (ids are in `docs/EVIDENCE.md`) | seconds |
 | `pnpm typecheck` / `pnpm lint` / `pnpm build` | Exit 0; the build needs no database URL | under 1 min each |
 | `pnpm stats` | Counts from NearBlocks and `/api/stats`; NearBlocks rate-limits, so it can take a couple of minutes | 1–3 min |
+| `pnpm traction` | Day-by-day mainnet usage: daily active and new player accounts, calls by method, retention, concentration, reward mints, and the `/api/stats` snapshot. Read-only; tonight's run is in `docs/TRACTION.md` | a few min (NearBlocks) |
+| `pnpm costs` | Measured costs from mainnet history: NEAR per relayed action and per reward mint, cost per player, relayer and operator runway, what a Gas tank refill buys. Read-only; tonight's run is in `docs/SUSTAINABILITY.md` ("Measured costs") | a few min (NearBlocks) |
 
 Nothing above signs a transaction, needs a wallet or needs secrets.
 

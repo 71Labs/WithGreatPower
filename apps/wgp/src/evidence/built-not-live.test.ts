@@ -57,7 +57,9 @@ describe("NEAR Intents: only the Gas tank, only to the relayer", () => {
     // relayer's tests use intents.near as a foreign receiver it must refuse. Neither is a use.
     const code = (f: string) => read(f).split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|#)/.test(l)).join("\n");
     const naming = files.filter((f) => /intents\.near|near-intents|chaindefuser|\bdefuse(?:[_-]|\b)/i.test(code(f)));
-    expect(naming, "only the Gas tank's 1Click client may name NEAR Intents in code").toEqual(["apps/wgp/src/server/intents/one-click.ts"]);
+    // pnpm costs reads 1Click's public token list for NEAR's price, the one a refill is priced at; it asks for no quote or deposit address.
+    expect(naming, "only the Gas tank's 1Click client may name NEAR Intents in code").toEqual(["apps/wgp/src/server/intents/one-click.ts", "scripts/costs.mjs"]);
+    expect(code("scripts/costs.mjs").match(/https:\/\/1click\.chaindefuser\.com\S*/g)).toEqual(['https://1click.chaindefuser.com/v0/tokens";']);
     expect(read("contracts/wgp/src/events.rs")).toContain("`MtEvent` mirrors `defuse_nep245::MtEvent` field for field");
     for (const pkg of ["apps/wgp/package.json", "packages/game-core/package.json", "package.json"]) expect(read(pkg), pkg).not.toMatch(/intents|defuse/i);
     const row = plainDoc("README.md").split("\n").find((l) => l.startsWith("| NEAR Intents"));
