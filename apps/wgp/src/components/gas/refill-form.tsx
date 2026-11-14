@@ -188,7 +188,8 @@ export function RefillForm() {
   const live = current?.problem ?? null;
   const shown = problem ?? live;
   const amountError = shown?.field === "amount" ? shown.message : null;
-  const refundError = shown && isRefundProblem(shown) ? shown.message : null;
+  // 1Click's own words stay visible; the sentence around them says what to do.
+  const refundError = shown && isRefundProblem(shown) ? (shown.field === "refundTo" ? shown.message : `That refund address isn’t valid on ${token?.chainName ?? "this chain"}. NEAR Intents said: “${shown.message}”.`) : null;
   const formError = problem && !amountError && !refundError ? problem.message : null;
   const previewProblem = live && !problem && live.field !== "amount" && !isRefundProblem(live) ? live : null;
 
@@ -297,7 +298,7 @@ export function RefillForm() {
         </p>
       </div>
 
-      <QuotePreview quote={current?.quote ?? null} problem={previewProblem} ready={Boolean(quoteKey)} />
+      <QuotePreview quote={current?.quote ?? null} problem={previewProblem} ready={Boolean(quoteKey)} answered={Boolean(current)} />
 
       {formError ? (
         <p role="alert" className="flex items-start gap-2 text-[14px] font-semibold leading-5 text-game-hero-press">
@@ -321,7 +322,7 @@ function isRefundProblem(p: Problem): boolean {
   return p.field === "refundTo" || /refund/i.test(p.message);
 }
 
-function QuotePreview({ quote, problem, ready }: { quote: Quote | null; problem: Problem | null; ready: boolean }) {
+function QuotePreview({ quote, problem, ready, answered }: { quote: Quote | null; problem: Problem | null; ready: boolean; answered: boolean }) {
   return (
     <div role="status" className="flex min-h-[84px] flex-col justify-center gap-1 rounded-[14px] border-2 border-dashed border-game-ink/40 bg-game-paper-2 px-4 py-3">
       <StickerEyebrow as="span">Quote</StickerEyebrow>
@@ -344,7 +345,7 @@ function QuotePreview({ quote, problem, ready }: { quote: Quote | null; problem:
           </p>
         </>
       ) : (
-        <p className="text-[15px] leading-[22px] text-game-muted">{ready ? "Asking NEAR Intents…" : "Enter an amount and a refund address to see how much NEAR reaches the tank."}</p>
+        <p className="text-[15px] leading-[22px] text-game-muted">{answered ? "Fix the field marked above to see a quote." : ready ? "Asking NEAR Intents…" : "Enter an amount and a refund address to see how much NEAR reaches the tank."}</p>
       )}
     </div>
   );
