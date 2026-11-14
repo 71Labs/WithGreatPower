@@ -13,6 +13,7 @@
     "test": "pnpm -r --workspace-concurrency=1 --if-present test",
     "verify": "pnpm --filter wgp exec tsx ../../scripts/verify-run.ts",
     "stats": "node scripts/stats.mjs",
+    "costs": "node scripts/costs.mjs",
     "evidence": "node scripts/evidence.mjs"
   }
 }
