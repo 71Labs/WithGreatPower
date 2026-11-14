@@ -6403,6 +6403,37 @@
       ]
     },
     {
+      "id": "sustain-measured",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "The relayer's runway counts only what it can spend before its 1 NEAR cut-off, and the 7-day average includes the idle days.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/costs.mjs",
+          "anchor": "export function measure({ rows, views, nearUsd, now, relayerWrappedNear = null }) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/costs.test.ts",
+          "name": "measures the whole report from rows and views: the relayer's runway ends at its 1 NEAR cut-off"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/costs.test.ts",
+          "name": "buckets spend into the last 7 days, and averages over all 7, idle days included"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/costs.test.ts",
+          "name": "counts each transaction the relayer signed once, at its whole fee, and never a refund"
+        }
+      ],
+      "note": "The test proves the arithmetic behind the section, on fixtures. The section's figures are one dated reading of mainnet history (Nov 14, 21:40 UTC) and change as play goes on; pnpm costs prints the current ones."
+    },
+    {
       "id": "disclosures-first-commit",
       "section": "disclosures",
       "source": "README.md",
