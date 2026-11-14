@@ -20,6 +20,7 @@ import { buyQuote, sellQuote, spotMilli, type Pool } from "@/lib/market/math";
 import { PRACTICE_INVEST_RULES, PRACTICE_LABEL, practiceBase, practiceScreen, seedPractice } from "@/lib/market/practice";
 import { INVEST_NOT_LIVE } from "@/lib/market/refusal";
 
+import { doneText, vendorLine } from "./copy";
 import { investingOf, InvestSheet, PracticeBanner, ShopLine, shopFor, StakesPanel } from "./invest";
 import { TraderStrip } from "./other-traders";
 import { QuestStrip } from "./quest-strip";
@@ -240,6 +241,39 @@ describe("the practice market's labels", () => {
     const screen = readFileSync(new URL("./market-screen.tsx", import.meta.url), "utf8");
     expect(screen).toContain("note={practiceNote}");
     expect(screen).not.toMatch(/showToast\([^)]*(crowd sold|[Ss]tarted over)/);
+  });
+
+  it("on a phone, says it's practice and not on NEAR in about 25 words", () => {
+    const out = html(createElement(PracticeBanner, { seededFrom: "near", signedIn: false, drainName: "Crumbs", onDrain: noop, onReset: noop, onLeave: noop }));
+    const phone = out.match(/<p data-copy="phone"[^>]*>(.*?)<\/p>/)![1]!;
+    const said = `${PRACTICE_LABEL} ${text(phone)}`;
+    expect(said).toContain("Practice market: not on NEAR.");
+    expect(said).toContain("practice Bits");
+    expect(said.split(/\s+/).length).toBeLessThanOrEqual(26);
+    // The long version is for wider screens only, and each is hidden where the other shows.
+    expect(out).toMatch(/<p data-copy="phone" class="[^"]*\bsm:hidden\b/);
+    expect(out).toMatch(/<p data-copy="wide" class="[^"]*\bmax-sm:hidden\b/);
+  });
+
+  it("Gwei and the toasts say practice, never that practice Bits are real", () => {
+    // Her line about the stall: real stock and till, and in practice, not on chain.
+    const lines = (practice: boolean) => Array.from({ length: 12 }, (_, day) => vendorLine(day, 200, practice)).join(" ");
+    expect(lines(true)).toContain("Stock's real, till's real, chain's not: this stall is practice.");
+    expect(lines(true)).not.toContain("the vibes are virtual");
+    expect(lines(false)).toContain("Stock's real, till's real, the vibes are virtual.");
+    // Every toast in practice says so, and the Bits it names are practice Bits.
+    for (const action of ["buy", "sell", "list", "fill", "cancel", "invest", "withdraw", "claim"] as const) {
+      const done = doneText(action, true);
+      expect(done, action).toMatch(/^Practice: /);
+      expect(done, action).not.toMatch(/(?<!practice )Bits/);
+    }
+    expect(doneText("sell", true)).toBe("Practice: sold. The practice Bits are yours.");
+    expect(doneText("sell", false)).toBe("Sold. The Bits are yours.");
+    // The screen sends every trade and stake toast through it.
+    const screen = readFileSync(new URL("./market-screen.tsx", import.meta.url), "utf8");
+    expect(screen).toContain("showToast(doneText(req.action, practice.on), \"success\");");
+    expect(screen).toContain("const done = doneText(req.action, practice.on);");
+    expect(screen).toContain("vendorLine(day, view.params.feeBps, practice.on)");
   });
 
   it("says practice trades earn no XP on the quest strip", () => {

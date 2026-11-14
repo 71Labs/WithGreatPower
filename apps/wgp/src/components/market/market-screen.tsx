@@ -41,7 +41,7 @@ import { EXPLORER_URL } from "@/lib/near/config";
 import { isUnclaimed } from "@/lib/near/policy";
 
 import { COACH_RING, CoachCard, coachSteps, markCoachSeen, useCoachSeen } from "./coach";
-import { ITEM_SOURCE, vendorAfter, vendorLine } from "./copy";
+import { doneText, ITEM_SOURCE, vendorAfter, vendorLine } from "./copy";
 import { investingOf, InvestSheet, PracticeBanner, ShopLine, shopFor, StakesPanel, type Investing } from "./invest";
 import { OtherTraders, TraderStrip } from "./other-traders";
 import { QuestStrip } from "./quest-strip";
@@ -529,8 +529,7 @@ export function MarketScreen() {
       else if (res.ok || (res.code !== "busy" && res.code !== "network")) void refresh();
     }
     if (res.ok) {
-      const done = req.action === "invest" ? "Invested. Gwei’s till is funded, and your stake starts earning from its fees." : req.action === "withdraw" ? "Withdrawn. The Bits are back with you." : "Claimed. The earnings are yours.";
-      showToast(practice.on ? `Practice: ${done}` : done, "success");
+      showToast(doneText(req.action, practice.on), "success");
     } else if (res.code === "quick_play") {
       askToSignIn();
     }
@@ -551,9 +550,8 @@ export function MarketScreen() {
       markCoachSeen();
       // The server completes today's quest when a trade lands; look, and say so in the same breath.
       const q = countsForQuest(req.action) && !quest?.done ? await refreshQuest() : null;
-      const done =
-        req.action === "buy" ? "Bought. It’s in your pocket." : req.action === "sell" ? "Sold. The Bits are yours." : req.action === "list" ? "Listed. It’s in escrow until someone buys it." : req.action === "fill" ? "Bought from a player. It’s in your pocket." : "Taken down. Your items are back.";
-      showToast(practice.on ? `Practice: ${done}` : q?.done ? `${done} Market quest done: +${q.xp} XP.` : done, "success");
+      const done = doneText(req.action, practice.on);
+      showToast(!practice.on && q?.done ? `${done} Market quest done: +${q.xp} XP.` : done, "success");
     } else if (res.code === "quick_play") {
       askToSignIn();
     }
@@ -621,7 +619,7 @@ export function MarketScreen() {
       {view ? (
         <>
           {coachTarget === "bits" ? coach : null}
-          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day, view.params.feeBps)} guestBits={guestBits} coached={coachTarget === "bits"} practice={practice.on} />
+          <Vendor view={view} me={me} signedIn={signedIn} unclaimed={unclaimed} quickPlay={quickPlay} line={after ?? vendorLine(day, view.params.feeBps, practice.on)} guestBits={guestBits} coached={coachTarget === "bits"} practice={practice.on} />
           <StakesPanel view={view} me={me} now={clock || Date.parse(view.updatedAt)} onManage={(item) => setInvestIn({ item, tab: "withdraw" })} />
           <div className={`grid gap-3 ${prompt ? "lg:grid-cols-2" : ""}`}>
             <QuestStrip
