@@ -458,7 +458,7 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 
 ## Credits and disclosure
 
-- **AI-written code:** Claude Code (Anthropic) wrote much of this repository's code, tests, art-pipeline scripts, docs and copy under the team's direction. The team set the design and the rules, reviewed the changes, and playtested every build. One early commit (`0d28b18`) carries a Co-Authored-By trailer and no other commit does, so this paragraph is the disclosure.
+- **AI-written code:** Claude Code (Anthropic) wrote much of this repository's code, tests, art-pipeline scripts, docs and copy under the team's direction. The team set the design and the rules, reviewed the changes, and playtested every build. No commit carries a Co-Authored-By trailer or a "Generated with Claude Code" line, so this paragraph is the disclosure.
 - **AI-generated audio:** the soundtrack, sound effects and character voices were generated with ElevenLabs on the owner's paid plan (`apps/wgp/public/audio/CREDITS.md`).
 - **Main libraries:**
   - App: Next.js 16 (with the React Compiler), React 19, three.js 0.187, React Three Fiber 9 and drei 10, Drizzle ORM and drizzle-kit, Neon serverless and PGlite, zod 4, Tailwind CSS 4 and Hugeicons.

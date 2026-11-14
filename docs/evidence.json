@@ -6127,7 +6127,7 @@
       "id": "disclosures-ai-trailer",
       "section": "disclosures",
       "source": "README.md",
-      "quote": "One early commit (0d28b18) carries a Co-Authored-By trailer and no other commit does, so this paragraph is the disclosure.",
+      "quote": "No commit carries a Co-Authored-By trailer or a \"Generated with Claude Code\" line, so this paragraph is the disclosure.",
       "status": "checked in git",
       "code": [
         {
@@ -6138,7 +6138,7 @@
       "chain": [
         "repo-history"
       ],
-      "note": "The README used to say no commit carries an AI trailer. One does."
+      "note": "The README used to say commit 0d28b18 carries a Co-Authored-By trailer. It carries none: its body says the soundtrack was \"generated with ElevenLabs\", which the old check's text search for \"generated with\" matched. The check now reads git's own trailers (Co-authored-by, matched case-insensitively) and searches for \"Generated with Claude\" lines and Anthropic's noreply address, and expects none."
     },
     {
       "id": "disclosures-libraries",
@@ -7969,7 +7969,7 @@
     "repo-history": {
       "kind": "git",
       "history": true,
-      "about": "This clone's history: the date of its first commit, and the commits that carry an AI trailer. Local, no network.",
+      "about": "This clone's history: the date of its first commit, and the commits that carry an AI trailer, read as git trailers (Co-authored-by) and as \"Generated with Claude\" lines. Local, no network.",
       "expect": [
         {
           "path": "firstCommit",
@@ -7977,14 +7977,9 @@
           "value": "2026-11-01"
         },
         {
-          "path": "aiTrailers.length",
+          "path": "aiTrailers",
           "op": "eq",
-          "value": 1
-        },
-        {
-          "path": "aiTrailers.0",
-          "op": "anyMatch",
-          "value": "^0d28b18"
+          "value": []
         }
       ]
     },
