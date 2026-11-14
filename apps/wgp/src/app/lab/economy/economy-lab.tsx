@@ -205,10 +205,10 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 function Slider({ id, label, value, min, max, step = 1, onChange, disabled }: { id: string; label: string; value: number; min: number; max: number; step?: number; onChange(v: number): void; disabled?: boolean }) {
   return (
     <div className="flex min-w-[150px] flex-1 flex-col gap-1">
-      <label htmlFor={id} className="flex justify-between text-[13px] font-semibold leading-4">
-        {label}
-        <span className="num">{value}</span>
-      </label>
+      <div className="flex justify-between text-[13px] font-semibold leading-4">
+        <label htmlFor={id}>{label}</label>
+        <span aria-hidden className="num">{value}</span>
+      </div>
       <input
         id={id}
         type="range"
@@ -251,6 +251,8 @@ export function EconomyLab() {
   const [hover, setHover] = useState<number | null>(null);
   const [econ, setEcon] = useState(() => build(setup));
   const [history, setHistory] = useState<DaySnapshot[]>(() => econ.history.slice());
+  // Run waits for the page to hydrate: before that its click would be lost, so it says Loading and can't be pressed.
+  const ready = useSyncExternalStore(noop, () => true, () => false);
   const { days, bots, seed, recommended, drain, invest } = setup;
   const setting = settingOf(setup);
 
@@ -370,6 +372,8 @@ export function EconomyLab() {
                 id={`${ids}-seed`}
                 type="number"
                 inputMode="numeric"
+                min={0}
+                step={1}
                 value={seed}
                 onChange={(e) => change({ seed: Math.max(0, Math.floor(Number(e.target.value)) || 0) })}
                 className="num h-11 w-24 rounded-[12px] border-2 border-game-ink bg-game-paper px-2 text-[15px] font-semibold focus-visible:outline-offset-2"
@@ -381,9 +385,9 @@ export function EconomyLab() {
             </StickerButton>
           </div>
           <div className="ml-auto flex gap-2 max-sm:w-full">
-            <StickerButton variant="hero" onClick={toggle} className="max-sm:flex-1">
+            <StickerButton variant="hero" onClick={toggle} disabled={!ready} aria-busy={!ready || undefined} className="max-sm:flex-1">
               {running ? <Pause aria-hidden className="size-5" strokeWidth={2.25} /> : <Play aria-hidden className="size-5" strokeWidth={2.25} />}
-              {running ? "Pause" : done ? `Run ${plural(days, "day")} again` : last.day > 0 ? "Resume" : `Run ${plural(days, "day")}`}
+              {!ready ? "Loading…" : running ? "Pause" : done ? `Run ${plural(days, "day")} again` : last.day > 0 ? "Resume" : `Run ${plural(days, "day")}`}
             </StickerButton>
             <StickerButton onClick={() => fresh()} disabled={last.day === 0}>
               Reset
