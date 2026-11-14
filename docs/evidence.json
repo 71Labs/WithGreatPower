@@ -470,10 +470,31 @@
       "note": "Privy's own service is not called in tests: the token checks run against keys the test makes. The live sign-in is step 2 of Try it."
     },
     {
+      "id": "track-intents",
+      "section": "track",
+      "source": "README.md",
+      "quote": "Not used. The game's economy lives on one chain, in one contract: items and Bits are NEP-245 balances in game.wgpnear.near, and a player never moves value to or from another chain or token.",
+      "status": "pinned by test",
+      "note": "An absence, so the test reads code: no source file in the app, game-core, the contract or the scripts names intents.near, an Intents package or defuse outside comments, and no package.json depends on one. The one mention, in contracts/wgp/src/events.rs, is a comment saying the contract's NEP-245 events copy the Intents contract's event fields. The relayer's own tests use intents.near as a foreign receiver it refuses.",
+      "code": [
+        {
+          "path": "contracts/wgp/src/events.rs",
+          "anchor": "`MtEvent` mirrors `defuse_nep245::MtEvent` field for field"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
+          "name": "nothing in the app, the scripts or the contract names intents.near or an Intents SDK, and the README says so"
+        }
+      ]
+    },
+    {
       "id": "track-npc-wallets",
       "section": "track",
       "source": "README.md",
-      "quote": "Live on mainnet: Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain; her wallet is the contract's own account, not a separate one.",
+      "quote": "Live on mainnet: Gwei Stacy, the vendor. Her stock and her till are NEP-245 balances on chain, held by the contract's own account, game.wgpnear.near: she has no account or key of her own.",
       "status": "proven on chain",
       "code": [
         {
