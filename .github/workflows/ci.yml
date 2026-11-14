@@ -48,7 +48,7 @@ jobs:
       # docs/EVIDENCE.md is up to date with docs/evidence.json. No tests run here (seconds).
       - run: pnpm evidence --check
 
-      - run: pnpm -r test
+      - run: pnpm -r --workspace-concurrency=1 test
 
       - run: pnpm --filter wgp build
 

@@ -3399,7 +3399,7 @@
       "source": "README.md",
       "quote": "The Gas tank's first real refill through NEAR Intents: the page and its dry quotes are live, and no real refill has landed on chain yet",
       "status": "owner action needed",
-      "note": "A real refill needs someone to send funds to a one-time deposit address from their own wallet; nothing in this repository sends funds. Until one lands, the proof is the tests and the live dry quote. 1Click delivers NEAR as wNEAR, which the owner unwraps with wrap.near's near_withdraw (docs/SUSTAINABILITY.md). The check reads the relayer's wNEAR balance: 0 means no refill is waiting. An unwrapped refill leaves 0 again, so this row is rewritten when the first refill lands.",
+      "note": "A real refill needs someone to send funds to a one-time deposit address from their own wallet; nothing in this repository sends funds. Until one lands, the proof is the tests and the live dry quote. 1Click delivers NEAR as wNEAR, which the owner unwraps with wrap.near's near_withdraw (docs/SUSTAINABILITY.md). The check reads the relayer's wNEAR balance: 0 means no refill is waiting. An unwrapped refill leaves 0 again, so this row is rewritten when the first refill lands. It has no chain check: anyone can send wNEAR to the relayer, so a balance check could be flipped by a stranger. When the first refill lands, this row becomes proven on chain with the refill's transaction.",
       "code": [
         {
           "path": "apps/wgp/src/server/intents/one-click.ts",
@@ -3421,9 +3421,6 @@
           "file": "apps/wgp/src/server/intents/one-click.test.ts",
           "name": "maps every 1Click status to words, and only SUCCESS, REFUNDED and FAILED are final"
         }
-      ],
-      "chain": [
-        "relayer-no-wnear"
       ]
     },
     {
@@ -7351,12 +7348,12 @@
       "kind": "http",
       "url": "https://www.wgponnear.fun/lab/economy",
       "text": true,
-      "about": "The economy lab is served, with its Run 21 days button.",
+      "about": "The economy lab is served, with its presets in the server's HTML (the Run 21 days button reads Loading… until the page has loaded).",
       "expect": [
         {
           "path": "text",
           "op": "anyMatch",
-          "value": "Run 21 days"
+          "value": "Drain Gwei"
         }
       ]
     },
@@ -8423,24 +8420,6 @@
         }
       ],
       "whenFails": "A 404 means the feature isn't deployed yet; a 503 intents_not_configured means RELAYER_ACCOUNT_ID or NEAR_NETWORK isn't set on the site; a 502 means 1Click didn't answer."
-    },
-    "relayer-no-wnear": {
-      "kind": "view",
-      "contract": "wrap.near",
-      "method": "ft_balance_of",
-      "args": {
-        "account_id": "relayer.wgpnear.near"
-      },
-      "notYet": true,
-      "about": "Not live yet: the relayer holds no wNEAR. 1Click delivers a Gas tank refill as wNEAR on wrap.near, so the first refill shows up here until the owner unwraps it.",
-      "expect": [
-        {
-          "path": "",
-          "op": "eq",
-          "value": "0"
-        }
-      ],
-      "whenFails": "The relayer holds wNEAR: a refill has landed (or someone sent wNEAR). Unwrap it (docs/SUSTAINABILITY.md) and rewrite status-gas-refill as proven on chain with the refill's transaction."
     }
   }
 }
