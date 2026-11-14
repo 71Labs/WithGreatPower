@@ -14,6 +14,11 @@ const dateOnly = (iso: string) => utc(iso, { month: "short", day: "numeric" });
 const dateTime = (iso: string) => `${utc(iso, { month: "short", day: "numeric" })}, ${utc(iso, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })} UTC`;
 /** ends_at is exclusive: the last day is the one before. */
 const lastDay = (endsAt: string) => new Date(Date.parse(endsAt) - 1).toISOString();
+/**
+ * The season's last minute, inclusive: "Nov 14, 23:59 UTC" for an ends_at of Nov 15 00:00 UTC.
+ * The same words as the dates over the board ("Nov 5 – Nov 14") and the README, for the same instant.
+ */
+const lastMinute = (endsAt: string) => dateTime(lastDay(endsAt));
 
 /** The server's clock, ticking once a second. `serverNow` is the server's answer time, `receivedAt` the device's. */
 export function useServerNow(serverNow: string, receivedAt: number, ticking: boolean): number {
@@ -34,10 +39,10 @@ const CHIP: Record<SeasonPhase, { label: string; className: string }> = {
   final: { label: "Final", className: "bg-game-ink text-game-paper" },
 };
 
-/** What the countdown counts to, as a phrase for screen readers ("Ends Nov 15, 00:00 UTC"). */
+/** What the countdown counts to, as a phrase for screen readers ("Ends after Nov 14, 23:59 UTC"). */
 const TARGET: Record<Exclude<SeasonPhase, "final">, { label: string; spoken: string }> = {
   upcoming: { label: "Starts in", spoken: "Starts" },
-  live: { label: "Ends in", spoken: "Ends" },
+  live: { label: "Ends in", spoken: "Ends after" },
   closing: { label: "Final standings in", spoken: "The standings freeze" },
 };
 
@@ -173,7 +178,7 @@ export function SeasonCard({ season, serverNow, receivedAt }: { season: SeasonVi
         {target && words ? (
           <span role="timer" className="num font-display text-[30px] font-semibold leading-8 tracking-[-0.02em] sm:text-[34px] sm:leading-9">
             <span aria-hidden>{formatLeft(Date.parse(target) - now)}</span>
-            <span className="sr-only">{`${words.spoken} ${dateTime(target)}`}</span>
+            <span className="sr-only">{`${words.spoken} ${phase === "live" ? lastMinute(target) : dateTime(target)}`}</span>
           </span>
         ) : (
           <span className="font-display text-[22px] font-semibold leading-7 tracking-[-0.02em] [text-wrap:balance]">
@@ -187,9 +192,9 @@ export function SeasonCard({ season, serverNow, receivedAt }: { season: SeasonVi
           {phase === "upcoming"
             ? `Starts ${dateTime(season.startsAt)}. Your nightly bests through ${dateOnly(lastDay(season.endsAt))} add up.`
             : phase === "live"
-              ? `Your nightly bests add up until ${dateTime(season.endsAt)}.`
+              ? `Your nightly bests add up through ${lastMinute(season.endsAt)}.`
               : phase === "closing"
-                ? `Ended ${dateTime(season.endsAt)}. Runs started before then still count until ${dateTime(season.freezesAt)}.`
+                ? `Ended ${lastMinute(season.endsAt)}. Runs started by then still count until ${dateTime(season.freezesAt)}.`
                 : "Nightly bests added up, ranked by points, then the faster nights."}
         </p>
         <p className="flex items-center gap-2 text-[13px] font-semibold leading-[18px]">
