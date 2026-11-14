@@ -8,7 +8,7 @@ import { ArrowRight, Replay } from "@/components/icons";
 const steps = [
   {
     title: "The server deals the night",
-    body: "A ranked run starts from a seed the server issues, so nobody can shop for an easy city.",
+    body: "A ranked run starts from a seed the server issues and keeps, and ranked starts are capped each day. Your score has to come from the city you were dealt.",
   },
   {
     title: "Your inputs, not your score",
