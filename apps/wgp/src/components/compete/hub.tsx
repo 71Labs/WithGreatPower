@@ -124,7 +124,7 @@ function DailyPanel({ view, now }: { view: CompeteView | null; now: number | nul
         <Fact label="Your best" sub={d?.best ? raceClock(d.best.ticks) : undefined}>
           {d?.best ? formatScore(d.best.score) : "—"}
         </Fact>
-        <Fact label="Rank" sub={d ? (d.best?.rank ? `of ${d.total}` : `${d.total} ${d.total === 1 ? "runner" : "runners"} today`) : undefined}>
+        <Fact label="Rank" sub={d ? (d.best?.rank ? `of ${d.total}` : d.total > 0 ? `${d.total} ${d.total === 1 ? "runner" : "runners"} today` : "Nobody yet today") : undefined}>
           {d?.best?.rank ? `#${d.best.rank}` : "—"}
         </Fact>
         <Fact label="Streak" sub={d && d.streak > 0 ? (d.streak === 1 ? "day" : "days in a row") : "Run today to start one"}>
@@ -164,7 +164,11 @@ function DailyPanel({ view, now }: { view: CompeteView | null; now: number | nul
   );
 }
 
-function DailyBoard({ view }: { view: CompeteView | null }) {
+/**
+ * Today's board: the top times, each with a Race. Empty (every day starts that way, at
+ * midnight UTC), it says why and offers the one thing to do: run today's city.
+ */
+export function DailyBoard({ view }: { view: CompeteView | null }) {
   const rows = view?.daily.top ?? [];
   return (
     <section aria-labelledby="daily-board-title" className="flex flex-col gap-2">
@@ -172,14 +176,22 @@ function DailyBoard({ view }: { view: CompeteView | null }) {
         <h3 id="daily-board-title" className="text-[13px] font-bold uppercase tracking-[0.08em] text-game-muted">
           Today’s board
         </h3>
-        {view ? (
+        {view && view.daily.total > 0 ? (
           <span className="num text-[12px] text-game-muted">
             {view.daily.total} {view.daily.total === 1 ? "runner" : "runners"}
           </span>
         ) : null}
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-[12px] border-2 border-dashed border-game-ink/40 px-3 py-3 text-[14px] leading-5">Nobody’s posted a time yet. Run it first and you’re the ghost everyone chases.</p>
+        <div className="flex flex-col items-start gap-3 rounded-[12px] border-2 border-dashed border-game-ink/40 px-3 py-3">
+          <p className="max-w-[56ch] text-[14px] leading-5 [text-wrap:pretty]">
+            Nobody has posted a time today. The board starts over at midnight UTC with a new city, and the first time posted becomes the ghost everyone races.
+          </p>
+          <StickerLink href="/play/compete/daily" size="sm" className="max-sm:w-full">
+            {view?.signedIn ? "Post the first time" : "Try today’s city"}
+            <ArrowRight aria-hidden className="size-4" strokeWidth={2.25} />
+          </StickerLink>
+        </div>
       ) : (
         <ol className="flex flex-col gap-1.5">
           {rows.map((r) => (
