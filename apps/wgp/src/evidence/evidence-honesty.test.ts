@@ -52,7 +52,7 @@ const E = "apps/wgp/src/evidence/";
  */
 const TEXT_ONLY: Record<string, string[]> = {
   [`${E}readme-flow.test.ts`]: ["every button and label", "every page the README names", "the keys the README gives", "the market step is in two labelled parts"],
-  [`${E}readme-numbers.test.ts`]: ["the market: fee, pools", "the app's market defaults", "the Bits a night earns", "the ways to play: how many", "the verifier's limits", "rewards, the relayer", "Sandwich Man's limits", "the other docs:", "the starting prices", "the contract's unit-test count"],
+  [`${E}readme-numbers.test.ts`]: ["the market: fee, pools", "the app's market defaults", "the Bits a night earns", "the ways to play: how many", "the verifier's limits", "rewards, the relayer", "Sandwich Man's limits", "the other docs:", "the starting prices", "the contract's unit-test count", "the bot's scores under Limits", "the deployed code hash", "suits are cosmetic, as the README says"],
   [`${E}built-not-live.test.ts`]: ["*"],
   [`${E}claims-precise.test.ts`]: ["pnpm stats' duration", "the documents state those bounds", "names all three sources", "the three /api/cron routes", "the libraries the README credits", "every file the disclosures", "each chapter document", "ARCHITECTURE.md's route table"],
   [`${E}readme-evidence.test.ts`]: ["states the real order", "says in every place", "discloses his seed", "dates the live counts", "every row of", "every transaction the README lists", "every evidence link", "the README has the Evidence section"],

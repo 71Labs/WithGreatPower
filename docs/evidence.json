@@ -305,7 +305,7 @@
       "id": "track-chain-unnoticed",
       "section": "track",
       "source": "README.md",
-      "quote": "Google sign-in, a game-only session key, a relayer that pays gas. No popup after sign-in.",
+      "quote": "Google sign-in, a game-only session key, a relayer that pays gas.",
       "status": "proven by test",
       "code": [
         {
@@ -340,7 +340,8 @@
       ],
       "chain": [
         "tx-relayed-buy"
-      ]
+      ],
+      "note": "The row quotes the mechanism the tests run: the factory creates a Google player's account with a game-only session key, and the relayer carries that key's calls and refuses a deposit. The chain check is one relayed session-key trade on mainnet. The row's next sentence, \"No popup after sign-in\", follows from this and is seen by playing (Try it, steps 2, 3 and 5); no test drives a browser through sign-in, so it has no row of its own."
     },
     {
       "id": "track-nep245",
@@ -1323,7 +1324,7 @@
       "id": "judge-7",
       "section": "judge",
       "source": "README.md",
-      "quote": "Prices move without a patch",
+      "quote": "A simulation fast-forwards the economy (not mainnet)",
       "status": "simulation only",
       "code": [
         {
@@ -1341,7 +1342,7 @@
       "chain": [
         "site-lab-economy"
       ],
-      "note": "This check is the simulation. Real prices moving on mainnet is track-no-dev-patch."
+      "note": "This check is the simulation: bot players on the same pricing code, in the browser. The README used to call it \"Prices move without a patch\", which reads as a claim about mainnet. Real prices moving on mainnet is check 3 and track-no-dev-patch."
     },
     {
       "id": "judge-8",
@@ -1888,8 +1889,14 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
           "name": "suits are cosmetic, as the README says: a suit is colours, a recipe and a level, and no stat"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "a suit changes nothing in play: each recorded night replays to the same score, ticks and hash in every suit"
         }
-      ]
+      ],
+      "note": "The first test only reads the suit table (no stat on any suit). The second runs the simulation: each recorded night replays to the same score, ticks, checkpoints and hash in every suit. Before Nov 14 the row cited only the first, which reads data and runs nothing."
     },
     {
       "id": "modes-all-replayed",
