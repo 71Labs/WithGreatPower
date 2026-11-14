@@ -239,6 +239,11 @@ class Offline extends Error {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** A request that ran out of time, including one whose answer stopped arriving mid-body. */
+export function isTimeout(e) {
+  return e?.name === "TimeoutError" || e?.name === "AbortError" || /aborted due to timeout/i.test(e?.message ?? "");
+}
+
 /**
  * One request to a public endpoint. A timeout, a rate limit (HTTP 429) or a server error is
  * retried with a growing wait; what still fails after that is an Offline error, which turns
@@ -271,8 +276,10 @@ async function rpc(urls, method, params) {
       const res = await fetchJson(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
       return await res.json();
     } catch (e) {
-      if (!(e instanceof Offline)) throw e;
-      last = e;
+      // The answer can stop arriving after its headers: that is the endpoint being slow, not a wrong answer.
+      const err = isTimeout(e) ? new Offline(`${new URL(url).host} timed out while sending its answer`) : e;
+      if (!(err instanceof Offline)) throw err;
+      last = err;
     }
   }
   throw last;
@@ -573,6 +580,7 @@ async function runChainCheck(check, meta) {
     return problems.length ? { ok: false, why: `${problems.join("; ")}${check.whenFails ? `. ${check.whenFails}` : ""}` } : { ok: true };
   } catch (e) {
     if (e instanceof Offline) return { skip: e.message, rateLimited: e.rateLimited };
+    if (isTimeout(e)) return { skip: `a request timed out (${e.message})` };
     return { ok: false, why: e.message };
   }
 }
