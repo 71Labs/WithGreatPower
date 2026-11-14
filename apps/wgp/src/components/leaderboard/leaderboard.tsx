@@ -12,7 +12,7 @@ import type { BoardRow } from "@/server/db/leaderboard";
 
 import { plural } from "@/lib/plural";
 
-import { BOARD_TOP, boardInvite, boardLines, msToUtcMidnight, placeNotice, type BoardInvite } from "./board-lines";
+import { BOARD_TOP, boardInvite, boardLines, msToUtcMidnight, openingBoard, placeNotice, type BoardInvite } from "./board-lines";
 import { SeasonCard, TrophyMark, useServerNow } from "./season-card";
 import { formatLeft } from "./season-clock";
 
@@ -43,7 +43,7 @@ function periodLabel(view: View): { title: string; detail: string } {
   // ends_at is exclusive: the last day is the one before.
   const last = day(new Date(new Date(view.season.endsAt).getTime() - 1).toISOString(), { month: "short", day: "numeric" });
   // The season card under it says where the season stands.
-  return { title: view.season.name, detail: `${start} – ${last}` };
+  return { title: view.season.name, detail: `${start} – ${last} (UTC)` };
 }
 
 /** On the Season board, the places that win a trophy, and whether it's won yet. */
@@ -273,15 +273,28 @@ function Board({ view, receivedAt }: { view: View; receivedAt: number }) {
 
 /* ------------------------------------------------------------------ screen */
 
+/** Each board's row count for `openingBoard`: undefined while loading, null if it failed. */
+function rowCounts(loads: Partial<Record<Board, Load>>): Partial<Record<Board, number | null>> {
+  const counts: Partial<Record<Board, number | null>> = {};
+  for (const [board, load] of Object.entries(loads) as [Board, Load][]) {
+    if (load.state === "ready") counts[board] = load.view.rows.length;
+    else if (load.state === "error") counts[board] = null;
+  }
+  return counts;
+}
+
 /**
  * Tonight, Season and All time, each a ranked list of verified runs: rank, the hero's
  * sticker in their suit, handle, NEAR account and score. The viewer's own row is drawn
- * once, where it ranks, and pinned above the dock while it's out of view.
+ * once, where it ranks, and pinned above the dock while it's out of view. It opens on
+ * Tonight, or on the first board that has anyone on it (openingBoard), until the viewer
+ * picks a tab; from then on their pick stands.
  */
 export function LeaderboardScreen() {
-  const [board, setBoard] = useState<Board>("tonight");
+  const [picked, setPicked] = useState<Board | null>(null);
   const [loads, setLoads] = useState<Partial<Record<Board, Load>>>({});
   const [attempt, setAttempt] = useState(0);
+  const board = picked ?? openingBoard(rowCounts(loads));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -312,7 +325,7 @@ export function LeaderboardScreen() {
         </p>
       </header>
 
-      <StickerTabs tabs={TABS} value={board} onChange={setBoard} label="Board" idPrefix={ID} className="self-stretch sm:self-start sm:min-w-[360px]" />
+      <StickerTabs tabs={TABS} value={board} onChange={setPicked} label="Board" idPrefix={ID} className="self-stretch sm:self-start sm:min-w-[360px]" />
 
       <StickerPanel {...tabPanelProps(ID, board)} className="flex flex-col gap-2 p-2 focus-visible:outline-offset-4">
         <div className="flex min-h-[52px] items-center justify-between gap-3 border-b-2 border-dashed border-game-ink/20 px-2.5 pb-3 pt-2 sm:px-3">

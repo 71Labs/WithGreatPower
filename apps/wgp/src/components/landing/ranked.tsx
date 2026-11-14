@@ -8,7 +8,7 @@ import { ArrowRight, Replay } from "@/components/icons";
 const steps = [
   {
     title: "The server deals the night",
-    body: "A ranked run starts from a seed the server issues, so nobody can shop for an easy city.",
+    body: "A ranked run starts from a seed the server issues and keeps, and ranked starts are capped each day. Your score has to come from the city you were dealt.",
   },
   {
     title: "Your inputs, not your score",
@@ -81,7 +81,7 @@ export function Ranked() {
             </ul>
             <div className="px-1 pb-1 pt-4">
               <StickerLink href="/play/leaderboard" variant="ink" size="md" className="w-full">
-                See tonight’s board
+                See the leaderboard
                 <ArrowRight aria-hidden strokeWidth={2.25} className="size-[18px]" />
               </StickerLink>
             </div>

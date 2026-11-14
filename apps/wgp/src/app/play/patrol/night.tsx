@@ -4,7 +4,10 @@
  * Which night to play, and what happens at the end of it.
  *
  * - Guests play the browser's save; a recording from before a reload resumes; a patrol
- *   the 2D game already took past its first stop goes back to the 2D game.
+ *   the 2D game already took past its first stop goes back to the 2D game. A guest who
+ *   opens this page with no hero (a deep link) gets the quick start's ready hero in place
+ *   first, as every game page does (useNoHeroStep); a signed-in player with none goes to
+ *   choose theirs.
  * - Signed in, the night is ranked: a recording of the run in flight resumes, else the
  *   server starts one (game3d/session/night.ts). A run already in flight, today's cap or
  *   an unreachable server each get a choice, with unranked play as the way through.
@@ -21,8 +24,9 @@ import { isChapterId } from "@wgp/game-core/chapters";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import { CaseClosed, type CaseFiling } from "@/components/cases/case-closed";
+import { useNoHeroStep } from "@/components/game/ui";
 import { badgeView } from "@/lib/cases/view";
-import { useAccount, useGame, type AccountState } from "@/game/store";
+import { useAccount, type AccountState } from "@/game/store";
 import {
   beginLocal,
   beginLocalChapter,
@@ -236,7 +240,9 @@ function useUrlFlag(name: string): boolean {
 
 export function Night3D() {
   const account = useAccount();
-  const { save } = useGame();
+  // No hero yet: a guest gets the ready one in place, a signed-in player goes to choose theirs. The night boots after.
+  const save = useNoHeroStep();
+  const heroless = !!save && !save.hero;
   const [phase, setPhase] = useState<Phase>({ kind: "boot" });
   const [ending, setEnding] = useState<Ending | null>(null);
   const [busy, setBusy] = useState(false);
@@ -248,7 +254,7 @@ export function Night3D() {
 
   const guestSave = account.status === "guest" ? save : null;
   useEffect(() => {
-    if (phase.kind !== "boot" || account.status === "loading") return;
+    if (phase.kind !== "boot" || account.status === "loading" || heroless) return;
     if (account.status === "guest" && !guestSave) return;
     const key = `${account.status === "signed-in" ? `in:${account.me.player.id}` : "guest"}${chapter ? `:${chapter}` : ""}`;
     if (boot.current?.key === key && boot.current.applied) return;
@@ -272,7 +278,7 @@ export function Night3D() {
     return () => {
       live = false;
     };
-  }, [phase.kind, account, guestSave, chapter]);
+  }, [phase.kind, account, guestSave, chapter, heroless]);
 
   const play = (session: NightSession | null) => setPhase(session ? { kind: "play", session } : chapter ? NO_CASE : { kind: "classic" });
 

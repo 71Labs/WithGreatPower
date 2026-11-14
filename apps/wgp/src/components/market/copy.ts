@@ -21,19 +21,50 @@ export const ITEM_SOURCE: Record<ItemId, CastId> = {
 /**
  * Gwei Stacy runs the stall. One line per visit, picked by the day. A line that names the
  * gas fee reads it from the market's live params (`fee_bps`), never a number written here.
+ * In the practice market she says what practice is: her stock and till are real there, but
+ * none of it is on chain.
  */
-const VENDOR_LINES: readonly (string | ((feeBps: number) => string))[] = [
+const VENDOR_LINES: readonly (string | ((feeBps: number, practice: boolean) => string))[] = [
   "Prices are set by the curve. The curve is set by you. I just invoice.",
   (feeBps) => `A ${feeText(feeBps)} gas fee on everything. It gets burned. Don't ask me where.`,
   "Buy high, sell low. That's what the last guy did. He's fine. Probably.",
   "Every trade moves the price. No patch notes, no committee, no refunds.",
   "I count in gwei. You count in Bits. We both count on Sandwich Man staying out.",
-  "Stock's real, till's real, the vibes are virtual. Welcome to the Mempool Market.",
+  (_, practice) =>
+    practice
+      ? "Stock's real, till's real, chain's not: this stall is practice. Welcome to the Mempool Market."
+      : "Stock's real, till's real, the vibes are virtual. Welcome to the Mempool Market.",
 ];
 
-export function vendorLine(seed: number, feeBps: number): string {
+export function vendorLine(seed: number, feeBps: number, practice = false): string {
   const line = VENDOR_LINES[Math.abs(Math.floor(seed)) % VENDOR_LINES.length]!;
-  return typeof line === "string" ? line : line(feeBps);
+  return typeof line === "string" ? line : line(feeBps, practice);
+}
+
+/**
+ * The toast after a trade or an investing move. In the practice market it says so, and the
+ * Bits it names are practice Bits: nothing there is on NEAR.
+ */
+export function doneText(action: "buy" | "sell" | "list" | "fill" | "cancel" | "invest" | "withdraw" | "claim", practice: boolean): string {
+  const bits = practice ? "practice Bits" : "Bits";
+  switch (action) {
+    case "buy":
+      return practice ? "Practice: bought. It’s in your practice loot." : "Bought. It’s in your pocket.";
+    case "sell":
+      return `${practice ? "Practice: sold" : "Sold"}. The ${bits} are yours.`;
+    case "list":
+      return `${practice ? "Practice: listed" : "Listed"}. It’s in escrow until someone buys it.`;
+    case "fill":
+      return practice ? "Practice: bought from a player. It’s in your practice loot." : "Bought from a player. It’s in your pocket.";
+    case "cancel":
+      return `${practice ? "Practice: taken down" : "Taken down"}. Your items are back.`;
+    case "invest":
+      return practice ? "Practice: invested. Gwei’s till is funded with practice Bits, and your stake starts earning from its fees." : "Invested. Gwei’s till is funded, and your stake starts earning from its fees.";
+    case "withdraw":
+      return `${practice ? "Practice: withdrawn" : "Withdrawn"}. The ${bits} are back with you.`;
+    case "claim":
+      return practice ? "Practice: claimed. The practice earnings are yours." : "Claimed. The earnings are yours.";
+  }
 }
 
 /** What Gwei says after a trade, at the market's live gas fee. */

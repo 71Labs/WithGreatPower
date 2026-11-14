@@ -497,7 +497,11 @@ export function PracticeBanner({
         <TestTube aria-hidden className="mt-0.5 size-5 shrink-0" strokeWidth={2.25} />
         <div className="flex min-w-0 flex-col gap-1">
           <p className="text-[15px] font-bold leading-5 [text-wrap:balance]">{PRACTICE_LABEL}</p>
-          <p className="num max-w-[72ch] text-[13px] font-medium leading-[18px] [text-wrap:pretty]">
+          {/* A phone gets the short version: the label above already says it's practice and not on NEAR. */}
+          <p data-copy="phone" className="num text-[13px] font-medium leading-[18px] [text-wrap:pretty] sm:hidden">
+            {formatBits(PRACTICE_START_BITS)} practice Bits and a copy of your loot. Your saved hero is never touched.
+          </p>
+          <p data-copy="wide" className="num max-w-[72ch] text-[13px] font-medium leading-[18px] [text-wrap:pretty] max-sm:hidden">
             Same rules, your own copy: prices started from {from}. You trade with {formatBits(PRACTICE_START_BITS)} practice Bits plus what your guest nights would have paid, and with a copy of your loot. Nothing here changes your saved hero, and
             nothing here can be minted. A stake unlocks after {lockText(PRACTICE_INVEST_RULES.lockMs)} here.
           </p>
