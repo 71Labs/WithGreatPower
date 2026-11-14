@@ -88,7 +88,7 @@ describe("what a status may rest on", () => {
   it("every owner action needed row checks that it is not live, except the one the README names", () => {
     const rows = data.claims.filter((c) => c.status === "owner action needed");
     const without = rows.filter((c) => !(c.chain ?? []).length).map((c) => c.id);
-    expect(without).toEqual(["status-near-auth"]);
+    expect([...without].sort()).toEqual(["status-gas-refill", "status-near-auth"]);
     // Each check is a not-live check: a method the contract lacks, a branch not merged, or a setting or balance at its old value (notYet).
     for (const c of rows.filter((x) => (x.chain ?? []).length)) {
       const notLive = c.chain!.some((id) => {
@@ -97,7 +97,7 @@ describe("what a status may rest on", () => {
       });
       expect(notLive, `${c.id} has no check that it is not live`).toBe(true);
     }
-    expect(read("README.md")).toContain("Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting or balance still at its old value), except NEAR Auth, whose approval is outside this repository and has no check.");
+    expect(read("README.md")).toContain("Each of them also checks that it is not live (a method the deployed contract lacks, a branch that is not merged, a setting or balance still at its old value), except NEAR Auth, whose approval is outside this repository, and the Gas tank's first refill, which anyone could make by sending wNEAR to the relayer; neither has a check.");
     // The sandbox test is not something only the owner can make true: it is a test, and CI runs it.
     expect(claim("npc-sandbox").status).toBe("pinned by test");
   });
