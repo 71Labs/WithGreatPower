@@ -40,7 +40,7 @@ describe("the deployed contract's NEP-245 surface (contracts/wgp, v2)", () => {
   });
 });
 
-describe("NEAR Intents are not used", () => {
+describe("NEAR Intents: only the Gas tank, only to the relayer", () => {
   /** Every source file under a directory (tests and generated files left out), as repository paths. */
   const sources = (rel: string): string[] =>
     readdirSync(path.join(ROOT, rel)).flatMap((name) => {
@@ -50,19 +50,26 @@ describe("NEAR Intents are not used", () => {
       return /\.(ts|tsx|mjs|js|rs|sh|json)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [child] : [];
     });
 
-  it("nothing in the app, the scripts or the contract names intents.near or an Intents SDK, and the README says so", () => {
+  it("only the Gas tank's client talks to 1Click, the contract names no Intents code, and the README says so", () => {
     const files = ["apps/wgp/src", "packages/game-core/src", "contracts/wgp/src", "scripts"].flatMap(sources);
     expect(files.length).toBeGreaterThan(100);
     // Code only: comments may compare (events.rs says its events copy intents.near's fields), and the
     // relayer's tests use intents.near as a foreign receiver it must refuse. Neither is a use.
     const code = (f: string) => read(f).split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|#)/.test(l)).join("\n");
-    const naming = files.filter((f) => /intents\.near|near-intents|\bdefuse(?:[_-]|\b)/i.test(code(f)));
-    expect(naming, "these files name NEAR Intents in code: the README's Intents row is out of date").toEqual([]);
+    const naming = files.filter((f) => /intents\.near|near-intents|chaindefuser|\bdefuse(?:[_-]|\b)/i.test(code(f)));
+    expect(naming, "only the Gas tank's 1Click client may name NEAR Intents in code").toEqual(["apps/wgp/src/server/intents/one-click.ts"]);
     expect(read("contracts/wgp/src/events.rs")).toContain("`MtEvent` mirrors `defuse_nep245::MtEvent` field for field");
     for (const pkg of ["apps/wgp/package.json", "packages/game-core/package.json", "package.json"]) expect(read(pkg), pkg).not.toMatch(/intents|defuse/i);
     const row = plainDoc("README.md").split("\n").find((l) => l.startsWith("| NEAR Intents"));
-    expect(row).toContain("Not used.");
-    expect(row).toContain("which is future work and not built");
+    expect(row).toContain("The Gas tank refills the relayer from 5 chains through NEAR Intents' 1Click API.");
+    expect(row).toContain("A real refill is owner action needed until one lands on chain.");
+  });
+
+  it("the Gas tank's quotes always name the relayer from the server's settings", () => {
+    const client = read("apps/wgp/src/server/intents/one-click.ts");
+    expect(client).toContain("recipient: args.recipient,");
+    expect(client).toContain('const recipient = env.RELAYER_ACCOUNT_ID?.trim() ?? "";');
+    expect(read("apps/wgp/src/app/api/intents/quote/route.ts")).toContain("return json(await quoteRefill(parsed.data, config));");
   });
 });
 

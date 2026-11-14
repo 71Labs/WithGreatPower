@@ -474,20 +474,63 @@
       "id": "track-intents",
       "section": "track",
       "source": "README.md",
-      "quote": "Not used. The game's economy lives on one chain, in one contract: items and Bits are NEP-245 balances in game.wgpnear.near, and a player never moves value to or from another chain or token.",
-      "status": "pinned by test",
-      "note": "An absence, so the test reads code: no source file in the app, game-core, the contract or the scripts names intents.near, an Intents package or defuse outside comments, and no package.json depends on one. The one mention, in contracts/wgp/src/events.rs, is a comment saying the contract's NEP-245 events copy the Intents contract's event fields. The relayer's own tests use intents.near as a foreign receiver it refuses.",
+      "quote": "The Gas tank refills the relayer from 5 chains through NEAR Intents' 1Click API.",
+      "status": "proven by test",
+      "note": "What the tests prove: every quote names the relayer from RELAYER_ACCOUNT_ID (a recipient in the request body is dropped, and a quote whose echoed request names anyone else is refused), only the nine curated origin tokens are accepted, the amount must be worth $1 to $50 at the live price, refund addresses are checked, 1Click's own refusals pass through in its words, quotes are dry unless a deposit address is asked for, and deposit addresses are rate-limited per IP. The live dry quote is the tryit-gas row; the first real refill is status-gas-refill.",
       "code": [
         {
-          "path": "contracts/wgp/src/events.rs",
-          "anchor": "`MtEvent` mirrors `defuse_nep245::MtEvent` field for field"
+          "path": "apps/wgp/src/server/intents/one-click.ts",
+          "anchor": "export function buildQuoteRequest("
+        },
+        {
+          "path": "apps/wgp/src/server/intents/one-click.ts",
+          "anchor": "export function gasTankConfig("
+        },
+        {
+          "path": "apps/wgp/src/app/api/intents/quote/route.ts",
+          "anchor": "export const POST = handle(\"intents/quote\""
         }
       ],
       "tests": [
         {
           "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "fixes the recipient, destination, slippage, types and a one-hour deadline"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "refuses a quote whose echoed request names another recipient"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "refuses unknown assets, bad amounts and unsafe or missing refund addresses"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "keeps the input between $1 and $50 at the live price"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "passes 1Click's refusal through in its own words"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/app/api/intents/routes.test.ts",
+          "name": "answers a dry quote by default, always to the relayer"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/app/api/intents/routes.test.ts",
+          "name": "allows only a few deposit addresses per IP"
+        },
+        {
+          "pkg": "app",
           "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "nothing in the app, the scripts or the contract names intents.near or an Intents SDK, and the README says so"
+          "name": "only the Gas tank's client talks to 1Click, the contract names no Intents code, and the README says so"
         }
       ]
     },
@@ -2656,6 +2699,39 @@
       ]
     },
     {
+      "id": "tryit-gas",
+      "section": "tryit",
+      "source": "README.md",
+      "quote": "the relayer's available NEAR against its cut-off, and a live dry quote from NEAR Intents",
+      "status": "live check",
+      "note": "The check asks the live site for a dry quote (2 USDC on Base) with a different recipient in the body, and expects the answer to name the relayer anyway and to carry no deposit address. A dry quote moves no funds. It passes once this feature is deployed to the live site.",
+      "code": [
+        {
+          "path": "apps/wgp/src/app/gas/page.tsx",
+          "anchor": "export default function GasPage()"
+        },
+        {
+          "path": "apps/wgp/src/components/gas/refill-form.tsx",
+          "anchor": "export function RefillForm()"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "sends a dry quote to the relayer and returns the estimate"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/tank.test.ts",
+          "name": "compares available NEAR with the cut-off, and shows wNEAR beside it"
+        }
+      ],
+      "chain": [
+        "site-gas-quote"
+      ]
+    },
+    {
       "id": "near-soulbound",
       "section": "near",
       "source": "README.md",
@@ -3316,6 +3392,39 @@
         }
       ],
       "note": "The code path is built and tested; it stays off until NEAR Auth approves a mainnet client, which is outside this repository."
+    },
+    {
+      "id": "status-gas-refill",
+      "section": "status",
+      "source": "README.md",
+      "quote": "The Gas tank's first real refill through NEAR Intents: the page and its dry quotes are live, and no real refill has landed on chain yet",
+      "status": "owner action needed",
+      "note": "A real refill needs someone to send funds to a one-time deposit address from their own wallet; nothing in this repository sends funds. Until one lands, the proof is the tests and the live dry quote. 1Click delivers NEAR as wNEAR, which the owner unwraps with wrap.near's near_withdraw (docs/SUSTAINABILITY.md). The check reads the relayer's wNEAR balance: 0 means no refill is waiting. An unwrapped refill leaves 0 again, so this row is rewritten when the first refill lands.",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/intents/one-click.ts",
+          "anchor": "export async function refillStatus("
+        },
+        {
+          "path": "apps/wgp/src/server/intents/tank.ts",
+          "anchor": "export async function readGasTank("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "asks for a deposit address only when dry is false, and sends the JWT when set"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/intents/one-click.test.ts",
+          "name": "maps every 1Click status to words, and only SUCCESS, REFUNDED and FAILED are final"
+        }
+      ],
+      "chain": [
+        "relayer-no-wnear"
+      ]
     },
     {
       "id": "status-v3",
@@ -8275,6 +8384,63 @@
           "value": "operator.wgpnear.near"
         }
       ]
+    },
+    "site-gas-quote": {
+      "kind": "http",
+      "url": "https://www.wgponnear.fun/api/intents/quote",
+      "body": {
+        "assetId": "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near",
+        "amount": "2",
+        "refundTo": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        "recipient": "someone-else.near"
+      },
+      "about": "A dry quote from the live Gas tank: 2 USDC on Base into NEAR. The body names another recipient; the answer still names the relayer, and a dry quote has no deposit address, so nothing can be sent.",
+      "expect": [
+        {
+          "path": "dry",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "recipient",
+          "op": "eq",
+          "value": "relayer.wgpnear.near"
+        },
+        {
+          "path": "depositAddress",
+          "op": "eq",
+          "value": null
+        },
+        {
+          "path": "amountOutFormatted",
+          "op": "type",
+          "value": "string"
+        },
+        {
+          "path": "amountOut",
+          "op": "anyMatch",
+          "value": "^[1-9][0-9]{20,}$"
+        }
+      ],
+      "whenFails": "A 404 means the feature isn't deployed yet; a 503 intents_not_configured means RELAYER_ACCOUNT_ID or NEAR_NETWORK isn't set on the site; a 502 means 1Click didn't answer."
+    },
+    "relayer-no-wnear": {
+      "kind": "view",
+      "contract": "wrap.near",
+      "method": "ft_balance_of",
+      "args": {
+        "account_id": "relayer.wgpnear.near"
+      },
+      "notYet": true,
+      "about": "Not live yet: the relayer holds no wNEAR. 1Click delivers a Gas tank refill as wNEAR on wrap.near, so the first refill shows up here until the owner unwraps it.",
+      "expect": [
+        {
+          "path": "",
+          "op": "eq",
+          "value": "0"
+        }
+      ],
+      "whenFails": "The relayer holds wNEAR: a refill has landed (or someone sent wNEAR). Unwrap it (docs/SUSTAINABILITY.md) and rewrite status-gas-refill as proven on chain with the refill's transaction."
     }
   }
 }
