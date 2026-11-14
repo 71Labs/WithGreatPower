@@ -337,7 +337,7 @@ flowchart LR
 | **Live off chain** | The game and all its modes, runs verified by replay, the boards, Google sign-in (Privy), NEAR wallet sign-in (NEP-413), referrals, classic mode and the soundtrack |
 | **Simulation only** | `/lab/economy`, which fast-forwards bot players on the same pricing code |
 | **Built, not deployed** | Contract v3: NEP-245 metadata and enumeration, and investing in the merchant. Branch `review/contract-v3`; its review (by a second AI agent that did not write it; not an audit) is summarised in [docs/CONTRACT-V3-REVIEW.md](docs/CONTRACT-V3-REVIEW.md). |
-| **Waiting on approval** | NEAR Auth as a second Google sign-in path (its mainnet client) |
+| **Waiting on approval** | NEAR Auth as a second Google sign-in path (its mainnet client). NEAR issued the mainnet client on Nov 14, but its allowed callback URLs don't include the site yet: `login.auth.near.org` answers "Callback URL mismatch" for every address of wgponnear.fun. The flow is built (`apps/wgp/src/lib/near/near-auth.ts`, `/api/auth/near-auth`, `/api/relay/fast-auth` and the test bench at `/lab/near-auth`) and stays off until NEAR adds the site; then it needs one setting, `NEXT_PUBLIC_NEAR_AUTH_CLIENT_ID`, and a deploy. |
 | **Live, first refill pending** | The Gas tank's first real refill through NEAR Intents: the page and its dry quotes are live, and no real refill has landed on chain yet |
 
 ### Proven on mainnet
@@ -464,7 +464,7 @@ launch/brand/hero/     Blender pipeline for the characters, and the headless-bro
 - **Market depth:** most on-chain activity is rewards and crafting; trades are still few, from a few accounts (the market row under [By the numbers](#by-the-numbers)). As of Nov 14, 02:00 UTC, the last player market call was on Nov 12 at 18:42 UTC, and Sandwich Man had traded once. Part of that silence is ours: from Nov 13, 07:00 UTC to Nov 14, 20:21 UTC the relayer sat under its 1 NEAR cut-off, after we moved 1 NEAR out of it to the contract, so signed-in trades and other relayed actions were refused. That outage is why the Gas tank exists.
 - **Build reproducibility:** only the author's machine reproduces the deployed wasm's hash from this source ([Proven on mainnet](#proven-on-mainnet) has the hash and why).
 - **The plan:** costs, who players have to trust today and how that shrinks are in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md).
-- **Next:** ranked nights get the City's movement (sprint, climbing) after Season 1, since ranked rules are frozen while a season runs; Season 2; NEAR Auth as a second sign-in.
+- **Next:** ranked nights get the City's movement (sprint, climbing) after Season 1, since ranked rules are frozen while a season runs; Season 2; NEAR Auth as a second sign-in, once NEAR adds the site to its mainnet client.
 
 ## Built during the hackathon
 
