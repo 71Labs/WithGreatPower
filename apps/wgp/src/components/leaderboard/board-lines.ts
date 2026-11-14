@@ -77,3 +77,19 @@ export function msToUtcMidnight(now: number): number {
   const day = 86_400_000;
   return day - (((now % day) + day) % day);
 }
+
+export type BoardId = "tonight" | "season" | "alltime";
+
+/**
+ * Where the page opens when the viewer hasn't picked a tab: Tonight, unless nobody is on it
+ * yet; then Season, unless that's empty too; then All time. `rows` holds each board's row
+ * count once it has answered (undefined while it loads, null if it failed): the page waits on
+ * a board's answer before passing it by, and stays on one that failed so it can say so.
+ */
+export function openingBoard(rows: Partial<Record<BoardId, number | null>>): BoardId {
+  for (const board of ["tonight", "season"] as const) {
+    const n = rows[board];
+    if (n === undefined || n === null || n > 0) return board;
+  }
+  return "alltime";
+}

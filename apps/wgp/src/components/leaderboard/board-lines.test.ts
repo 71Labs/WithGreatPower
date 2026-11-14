@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import type { BoardRow } from "@/server/db/leaderboard";
 
-import { BOARD_TOP, boardInvite, boardLines, msToUtcMidnight, placeNotice, type BoardLine } from "./board-lines";
+import { BOARD_TOP, boardInvite, boardLines, msToUtcMidnight, openingBoard, placeNotice, type BoardLine } from "./board-lines";
 
 const row = (rank: number, who = `p${rank}`): BoardRow => ({
   rank,
@@ -104,5 +106,33 @@ describe("a short board invites the next hero in", () => {
     expect(msToUtcMidnight(Date.UTC(2026, 10, 12, 18, 0, 0))).toBe(6 * 3_600_000);
     expect(msToUtcMidnight(Date.UTC(2026, 10, 12, 23, 59, 59))).toBe(1_000);
     expect(msToUtcMidnight(Date.UTC(2026, 10, 12, 0, 0, 0))).toBe(86_400_000);
+  });
+});
+
+describe("the page opens on a board with someone on it", () => {
+  it("opens on Tonight while it loads, and stays there when anyone finished a ranked night today", () => {
+    expect(openingBoard({})).toBe("tonight");
+    expect(openingBoard({ tonight: 3 })).toBe("tonight");
+  });
+
+  it("an empty Tonight (the judges' Nov 16–18) opens on the Season, once the Season has answered", () => {
+    expect(openingBoard({ tonight: 0 })).toBe("season");
+    expect(openingBoard({ tonight: 0, season: 14 })).toBe("season");
+  });
+
+  it("an empty Season too opens on All time, and All time is where it ends even when empty", () => {
+    expect(openingBoard({ tonight: 0, season: 0 })).toBe("alltime");
+    expect(openingBoard({ tonight: 0, season: 0, alltime: 0 })).toBe("alltime");
+  });
+
+  it("stays on a board that failed to load, so it can say so and offer Try again", () => {
+    expect(openingBoard({ tonight: null })).toBe("tonight");
+    expect(openingBoard({ tonight: 0, season: null })).toBe("season");
+  });
+
+  it("the screen only follows it until the viewer picks a tab", () => {
+    const screen = readFileSync(new URL("./leaderboard.tsx", import.meta.url), "utf8");
+    expect(screen).toContain("const board = picked ?? openingBoard(rowCounts(loads));");
+    expect(screen).toContain("onChange={setPicked}");
   });
 });
