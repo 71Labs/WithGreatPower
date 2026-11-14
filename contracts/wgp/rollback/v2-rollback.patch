@@ -1,0 +1,179 @@
+--- a/src/migrate.rs
++++ b/src/migrate.rs
+@@ -4,14 +4,22 @@
+ //! - v1: heroes, rewards, crafting and seasons (deployed Nov 2026).
+ //! - v2: v1 plus `market` (the Mempool Market), appended last, so a v1 state is a prefix
+ //!   of a v2 one and only the new field needs a value.
++//! - v3 (rollback build only): a v3 state is brought *back* to v2. It starts with a layout
++//!   tag; its market rules and pools carry investing fields v2 doesn't have; a token index
++//!   and a metadata table follow the market. The rollback drops the investing fields
++//!   (refusing while any Bits are invested, so nobody's stake is forgotten) and sets the
++//!   bytes after the market aside under `V3TAIL`, where a later upgrade to v3 finds them.
+ //!
+ //! Collections keep their storage prefixes, so nothing but the root entry is rewritten.
+ 
+ use near_sdk::borsh::BorshDeserialize;
+-use near_sdk::store::{IterableSet, LookupMap};
++use near_sdk::json_types::U128;
++use near_sdk::store::{IterableMap, IterableSet, LookupMap};
+ use near_sdk::{env, near, AccountId};
+ 
+-use crate::{Market, Player, Season, SuitRule, TokenId, Wgp};
++use crate::{
++    Listing, Market, MarketAccount, MarketParams, Player, Pool, Season, SuitRule, TokenId, Wgp,
++};
+ 
+ /// The v1 root state, field for field.
+ #[near(serializers = [borsh])]
+@@ -27,9 +35,150 @@
+     pub seasons: LookupMap<String, Season>,
+ }
+ 
+-/// The current state from raw state bytes in either layout. Borsh refuses trailing or
++/// The first four bytes of a v3 state. v1 and v2 start with the owner id's length (at most
++/// 64), so they can never be mistaken for it.
++const LAYOUT_V3: u32 = 0x5747_5003;
++/// Where the v3-only roots (token index, metadata) wait for an upgrade back to v3.
++const V3_TAIL_KEY: &[u8] = b"V3TAIL";
++
++/// v3's market rules, field for field.
++#[near(serializers = [borsh])]
++#[allow(dead_code)]
++struct MarketParamsV3 {
++    open: bool,
++    fee_bps: u32,
++    floor_bps: u32,
++    ceiling_bps: u32,
++    max_amount: u32,
++    max_open_listings: u32,
++    max_listings: u32,
++    daily_trades: u32,
++    daily_listings: u32,
++    daily_fills: u32,
++    daily_fill_bits: U128,
++    craft_bits: U128,
++    invest_open: bool,
++    invest_fee_bps: u32,
++    min_invest: U128,
++    max_invest: U128,
++    daily_invests: u32,
++    daily_invest_bits: U128,
++    invest_lock_ms: u64,
++}
++
++#[near(serializers = [borsh])]
++#[allow(dead_code)]
++struct PoolV3 {
++    item: String,
++    virtual_bits: U128,
++    virtual_items: U128,
++    bits: U128,
++    stock: U128,
++    escrow: U128,
++    invested: U128,
++    rewards: U128,
++    fee_acc: U128,
++    fee_carry: u32,
++}
++
++#[near(serializers = [borsh])]
++#[allow(dead_code)]
++struct MarketV3 {
++    params: MarketParamsV3,
++    pools: Vec<PoolV3>,
++    listings: IterableMap<u64, Listing>,
++    next_listing_id: u64,
++    accounts: LookupMap<AccountId, MarketAccount>,
++    /// Only the map's prefix is in the root; its entries (empty stakes) stay in storage.
++    investors: LookupMap<AccountId, u8>,
++}
++
++/// A v3 root state up to and including the market. The token index and the metadata root
++/// follow it.
++#[near(serializers = [borsh])]
++#[allow(dead_code)]
++struct WgpV3Head {
++    /// `LAYOUT_V3`, checked before this is parsed.
++    _layout: u32,
++    owner_id: AccountId,
++    operators: IterableSet<AccountId>,
++    paused: bool,
++    items: Vec<String>,
++    suits: Vec<SuitRule>,
++    starter_unlock_level: u32,
++    players: LookupMap<AccountId, Player>,
++    supply: LookupMap<TokenId, u128>,
++    seasons: LookupMap<String, Season>,
++    market: MarketV3,
++}
++
++/// A v3 state back in the v2 layout. Every player, pool, listing and season stays where it
++/// is; the live rules carry over; the investing rules are dropped.
++fn from_v3(bytes: &[u8]) -> Wgp {
++    let mut rest = bytes;
++    let v3 = WgpV3Head::deserialize(&mut rest)
++        .unwrap_or_else(|_| env::panic_str("The v3 contract state doesn't parse"));
++    for p in &v3.market.pools {
++        if p.invested.0 != 0 || p.rewards.0 != 0 {
++            env::panic_str(&format!(
++                "{} Bits are invested in {}: send the stakes home (market_refund) before rolling back",
++                p.invested.0, p.item
++            ));
++        }
++    }
++    env::storage_write(V3_TAIL_KEY, rest);
++    let p = v3.market.params;
++    Wgp {
++        owner_id: v3.owner_id,
++        operators: v3.operators,
++        paused: v3.paused,
++        items: v3.items,
++        suits: v3.suits,
++        starter_unlock_level: v3.starter_unlock_level,
++        players: v3.players,
++        supply: v3.supply,
++        seasons: v3.seasons,
++        market: Market {
++            params: MarketParams {
++                open: p.open,
++                fee_bps: p.fee_bps,
++                floor_bps: p.floor_bps,
++                ceiling_bps: p.ceiling_bps,
++                max_amount: p.max_amount,
++                max_open_listings: p.max_open_listings,
++                max_listings: p.max_listings,
++                daily_trades: p.daily_trades,
++                daily_listings: p.daily_listings,
++                daily_fills: p.daily_fills,
++                daily_fill_bits: p.daily_fill_bits,
++                craft_bits: p.craft_bits,
++            },
++            pools: v3
++                .market
++                .pools
++                .into_iter()
++                .map(|p| Pool {
++                    item: p.item,
++                    virtual_bits: p.virtual_bits,
++                    virtual_items: p.virtual_items,
++                    bits: p.bits,
++                    stock: p.stock,
++                    escrow: p.escrow,
++                })
++                .collect(),
++            listings: v3.market.listings,
++            next_listing_id: v3.market.next_listing_id,
++            accounts: v3.market.accounts,
++        },
++    }
++}
++
++/// The current state from raw state bytes in any layout. Borsh refuses trailing or
+ /// missing bytes, so a v2 state never parses as v1 and a v1 state never parses as v2.
+ pub(crate) fn upgrade_state(bytes: &[u8]) -> Wgp {
++    if bytes.len() >= 4 && bytes[..4] == LAYOUT_V3.to_le_bytes() {
++        return from_v3(bytes);
++    }
+     if let Ok(current) = Wgp::try_from_slice(bytes) {
+         return current;
+     }

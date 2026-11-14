@@ -104,7 +104,11 @@ pub(crate) fn setup() -> Wgp {
     });
     as_(owner(), 0);
     let (items, suits) = rules();
-    Wgp::new(owner(), vec![operator()], items, suits, 2)
+    let mut c = Wgp::new(owner(), vec![operator()], items, suits, 2);
+    // These tests are about recipes and levels; the crafting cost in Bits (on by default)
+    // has its own tests in market_tests.rs and v3_tests.rs.
+    c.market.params.craft_bits = U128(0);
+    c
 }
 
 pub(crate) fn with_hero(c: &mut Wgp, who: AccountId) {

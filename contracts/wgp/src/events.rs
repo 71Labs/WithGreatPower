@@ -80,6 +80,59 @@ pub enum WgpEvent {
     MarketFill(Vec<FillData>),
     #[event_version("1.0.0")]
     MarketCancel(Vec<Listing>),
+    // ---- v3 ----
+    /// Bits added to a pool's till by an investor.
+    #[event_version("1.0.0")]
+    MarketInvest(Vec<StakeData>),
+    /// Bits an investor took back out of a pool's till.
+    #[event_version("1.0.0")]
+    MarketWithdraw(Vec<StakeData>),
+    /// Fee earnings paid to an investor with no change to the stake.
+    #[event_version("1.0.0")]
+    MarketClaim(Vec<StakeData>),
+    /// A pool opened or closed for buying or selling: `closed` lists why it can't trade
+    /// now ("broke", "sold-out"); empty means open both ways.
+    #[event_version("1.0.0")]
+    MarketShop(Vec<ShopData>),
+    /// An owner action: pause, operators, ownership, rules, market or metadata settings.
+    #[event_version("1.0.0")]
+    Admin(Vec<AdminData>),
+}
+
+#[near(serializers = [json])]
+#[derive(Debug, Clone)]
+pub struct StakeData {
+    pub account_id: AccountId,
+    pub item: String,
+    /// Bits invested or withdrawn by this call (0 for a claim).
+    pub bits: U128,
+    /// Fee earnings paid out by this call.
+    pub earned: U128,
+    /// The account's stake in this pool afterwards.
+    pub stake: U128,
+    /// Every investor's Bits in this pool afterwards.
+    pub invested: U128,
+}
+
+#[near(serializers = [json])]
+#[derive(Debug, Clone)]
+pub struct ShopData {
+    pub item: String,
+    pub closed: Vec<String>,
+    /// What changed it: "buy", "sell", "invest" or "withdraw".
+    pub cause: String,
+    /// Bits in the till afterwards, and how many more it needs to buy one item.
+    pub till: U128,
+    pub needs: U128,
+}
+
+#[near(serializers = [json])]
+#[derive(Debug, Clone)]
+pub struct AdminData {
+    pub action: String,
+    pub by: AccountId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<AccountId>,
 }
 
 #[near(serializers = [json])]
