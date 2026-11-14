@@ -172,7 +172,7 @@ docs/                 ARCHITECTURE.md, spikes/, screenshots/
   - `@hot-labs/near-connect` for existing NEAR wallets (`src/lib/near/wallet.tsx`, ported from Vessel).
   - One `near-api-js` ≥7.4 on client and server for meta-transactions.
 - **Server accounts** (keys in Vercel env only; mainnet names, testnet uses `wgp.testnet` and so on):
-  - `wgpnear.near`, the factory, creates `<handle>.wgpnear.near` (made by `scripts/near/setup-mainnet.sh`).
+  - `wgpnear.near`, the factory, creates `<handle>.wgpnear.near` (made by `scripts/near/setup-mainnet.sh`). It is also the contract's owner, so the owner's only key, a full-access key, is in the production environment as `FACTORY_PRIVATE_KEY`; moving ownership to a cold account is the first step in [SUSTAINABILITY.md](SUSTAINABILITY.md#what-changes-after-the-hackathon).
   - The relayer, `relayer.wgpnear.near`, pays gas. `RELAYER_PRIVATE_KEYS` takes one or more keys (mainnet runs one today).
   - The operator, `operator.wgpnear.near`, mints and records seasons; the contract lists it in `get_config().operators`.
 - **Which Google service:** `NEXT_PUBLIC_GOOGLE_SIGN_IN=privy|near-auth`, defaulting to `privy` when `NEXT_PUBLIC_PRIVY_APP_ID` is set (`src/lib/privy/config.ts`). NEAR wallet sign-in is always offered.

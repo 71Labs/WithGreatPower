@@ -179,5 +179,10 @@ describe("what the docs say about themselves", () => {
     expect(readme).toContain("The chain counts are as of Nov 13, 2026, 11:56 UTC and the game's as of Nov 13, 2026, 11:54 UTC. Both only grow");
     expect(readme).toContain("pnpm evidence --chain reads the numbers from the two tables below and fails if a live count is below one of them.");
     expect(readme).not.toMatch(/went from \d+ on Nov/);
+    // Season 1's incentive and both of the author's accounts are disclosed beside the counts.
+    const numbers = readme.slice(readme.indexOf("\n## By the numbers\n"), readme.indexOf("On NEAR mainnet (counted from NearBlocks"));
+    expect(numbers).toContain("Season 1 (Nov 5–14) is a playtest season, and play in it was incentivised.");
+    expect(numbers).toContain("the team offered players daily airdrops, sent by hand through Uprail, outside the game");
+    for (const account of ["sele.wgpnear.near", "sele71.near"]) expect(numbers).toContain(account);
   });
 });

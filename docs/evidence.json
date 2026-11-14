@@ -1631,6 +1631,17 @@
       "note": "A dated lower bound like the row's other counts: the check reads the figure from the README and fails if the live count is below it."
     },
     {
+      "id": "numbers-author-wallet",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "The author also plays from a NEAR wallet account, sele71.near (9th on the All-time board on Nov 14). It has never called a game method itself, only received reward mints, so it is in the game's counts and not in the chain's player count.",
+      "status": "proven on chain",
+      "note": "A wallet player's first call of their own is register_hero, so get_player answering with no hero means sele71.near has never made one, while a reward nonce above zero means the operator has minted to it. The board position is dated and has no check; the live board is GET /api/leaderboard?board=alltime.",
+      "chain": [
+        "author-wallet"
+      ]
+    },
+    {
       "id": "economy-earn",
       "section": "economy",
       "source": "README.md",
@@ -4005,7 +4016,7 @@
       "id": "limits-bots",
       "section": "limits",
       "source": "README.md",
-      "quote": "The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player, but a patient bot can still play.",
+      "quote": "The server refuses a night handed in faster than real time and caps ranked nights at 20 a day per player; within that cap, nothing stops a bot or a player re-rolling seeds.",
       "status": "proven by test",
       "code": [
         {
@@ -4025,6 +4036,110 @@
           "name": "caps a player at 20 runs a UTC day",
           "nameInSource": "caps a player at ${RUNS_PER_DAY} runs a UTC day"
         }
+      ],
+      "note": "The two tests show the two limits: game time ahead of the wall clock is refused, and a 21st ranked start in a UTC day is refused. The README used to end \"but a patient bot can still play\", which understated it: the next two rows show the shipped bot outscores most players and a seed can be re-rolled."
+    },
+    {
+      "id": "limits-bot-scores",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "The bot that ships in this repository (packages/game-core/src/sim3d/bot.ts) scores 8,245, 8,350 and 8,870 on the three recorded nights it clears",
+      "status": "proven by test",
+      "note": "The golden tests replay the bot's recorded nights to those scores (packages/game-core/test/golden/hashes.json), and the app's replay test has the server verify and rank a bot-played night. The pin test holds the README's three numbers to hashes.json. The comparison beside it (on Nov 14, only two players had an All-time best above the lowest of those) is dated, read from GET /api/leaderboard?board=alltime, and has no check.",
+      "code": [
+        {
+          "path": "packages/game-core/src/sim3d/bot.ts",
+          "anchor": "export function botFrame"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/golden.test.ts",
+          "name": "night-1-standard: a first night with the starter powers",
+          "nameInSource": "${c.name}: ${c.note}"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/golden.test.ts",
+          "name": "night-4-heavy: level-2 villains, web bomb, validator slam and front-run",
+          "nameInSource": "${c.name}: ${c.note}"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/golden.test.ts",
+          "name": "night-9-mixed: level-5 villains, Fork, ZK cloak and gas refund",
+          "nameInSource": "${c.name}: ${c.note}"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/real-replay.test.ts",
+          "name": "verifies a bot-played night, saves it and ranks it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
+          "name": "the bot's scores under Limits are the recorded nights' own, the ones the bot clears"
+        }
+      ]
+    },
+    {
+      "id": "limits-reroll",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "A player can also abandon a ranked night and start again on a new seed, and the seed decides the night's stops.",
+      "status": "proven by test",
+      "note": "Abandoning expires the run in flight and issues a new run, whose seed is an HMAC of its new id; the patrol is a function of that seed alone. Each start counts against the 20 a day.",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": ".set({ status: \"expired\", rejectReason: \"abandoned\", submittedAt: now })"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "allows one run in flight, unless the old one is abandoned"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "issues a run with an HMAC seed, the ruleset and the save revision"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "caps a player at 20 runs a UTC day",
+          "nameInSource": "caps a player at ${RUNS_PER_DAY} runs a UTC day"
+        },
+        {
+          "pkg": "core",
+          "file": "packages/game-core/test/engine-seed.test.ts",
+          "name": "with a seed, the patrol is a function of that seed alone"
+        }
+      ]
+    },
+    {
+      "id": "limits-owner-key",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "the contract's owner, wgpnear.near, has one key, a full-access key, and that key is in the production server's environment, because the same account is the factory that creates player accounts",
+      "status": "proven on chain",
+      "note": "The chain checks show the contract's owner_id is wgpnear.near and that this account has exactly one key, with full access. That the key is in the production environment is what scripts/near/setup-mainnet.sh does (it puts the factory account's key into Vercel as FACTORY_PRIVATE_KEY) and what the server's env reader needs; the production environment itself can't be read from here, and no key value appears anywhere in this repository. When the owner calls set_owner to move ownership to a cold account, contract-config and this row change.",
+      "code": [
+        {
+          "path": "scripts/near/setup-mainnet.sh",
+          "anchor": "put FACTORY_PRIVATE_KEY \"$(key_of \"$PARENT\")\" sensitive"
+        },
+        {
+          "path": "apps/wgp/src/server/near/env.ts",
+          "anchor": "need(env, [\"FACTORY_ACCOUNT_ID\", \"FACTORY_PRIVATE_KEY\"]);"
+        }
+      ],
+      "chain": [
+        "contract-config",
+        "owner-account"
       ]
     },
     {
@@ -4885,6 +5000,24 @@
           "file": "contracts/wgp/src/market_tests.rs",
           "name": "market_params_need_the_owner_and_one_yocto"
         }
+      ]
+    },
+    {
+      "id": "sustain-owner-key",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "Today the owner key lives in the production environment, not in cold storage.",
+      "status": "proven on chain",
+      "note": "Same proof as the README's limits-owner-key: the owner is wgpnear.near, whose one key has full access, and scripts/near/setup-mainnet.sh puts that account's key into the production environment as FACTORY_PRIVATE_KEY. This page used to say the plan was to move ownership off the build machine, which implied it was not on a server.",
+      "code": [
+        {
+          "path": "scripts/near/setup-mainnet.sh",
+          "anchor": "put FACTORY_PRIVATE_KEY \"$(key_of \"$PARENT\")\" sensitive"
+        }
+      ],
+      "chain": [
+        "contract-config",
+        "owner-account"
       ]
     },
     {
@@ -6683,6 +6816,51 @@
           "value": 8
         }
       ]
+    },
+    "owner-account": {
+      "kind": "account",
+      "account": "wgpnear.near",
+      "keys": true,
+      "about": "The contract's owner account, wgpnear.near (also the factory that creates player accounts), exists and has exactly one key, with full access.",
+      "expect": [
+        {
+          "path": "exists",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "keys.length",
+          "op": "eq",
+          "value": 1
+        },
+        {
+          "path": "fullAccessKeys.length",
+          "op": "eq",
+          "value": 1
+        }
+      ],
+      "whenFails": "If the account has another key now, or the contract's owner moved to a cold account (set_owner), update the README's Limits and docs/SUSTAINABILITY.md."
+    },
+    "author-wallet": {
+      "kind": "view",
+      "method": "get_player",
+      "args": {
+        "account_id": "sele71.near"
+      },
+      "about": "The author's NEAR wallet account, sele71.near: no hero registered by itself, and at least one reward mint received.",
+      "expect": [
+        {
+          "path": "hero",
+          "op": "type",
+          "value": "null"
+        },
+        {
+          "path": "reward_nonce",
+          "op": "gte",
+          "value": 1
+        }
+      ],
+      "whenFails": "If sele71.near now has a hero, it called register_hero itself and is in the chain's player count: update the README's By the numbers."
     },
     "contract-account": {
       "kind": "account",
