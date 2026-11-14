@@ -4,6 +4,8 @@
  * decisions the pages act on (the pages themselves are client-rendered, so the live check
  * can only show that /play is served).
  */
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { newSave, reduce } from "@wgp/game-core/engine";
@@ -41,7 +43,27 @@ describe("a first visit goes straight into a night", () => {
   });
 
   it("gives a guest who deep-links to another game page the ready hero in place", () => {
-    for (const pathname of ["/play/market", "/play/suits", "/play/patrol"]) expect(noHeroStep({ status: "guest", saveLoaded: true, hasHero: false, pathname })).toEqual({ kind: "make-hero" });
+    for (const pathname of ["/play/market", "/play/suits", "/play/patrol", "/play/city"]) expect(noHeroStep({ status: "guest", saveLoaded: true, hasHero: false, pathname })).toEqual({ kind: "make-hero" });
+  });
+
+  it("starts a guest's deep link to the patrol or the city as the ready hero, not on a Get bitten notice", () => {
+    const src = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8").replace(/\s+/g, " ");
+    // Every game page acts on the same step: useHeroSave is useNoHeroStep plus "wait for the hero".
+    const ui = src("components/game/ui.tsx");
+    expect(ui).toContain("export function useNoHeroStep(): Save | null {");
+    expect(ui).toMatch(/export function useHeroSave\(\): HeroSave \| null \{ const save = useNoHeroStep\(\);/);
+    // The 3D patrol and the city boot from the save themselves, so they call it directly...
+    const night = src("app/play/patrol/night.tsx");
+    const city = src("app/play/city/city.tsx");
+    expect(night).toContain("const save = useNoHeroStep();");
+    expect(city).toContain("const save = useNoHeroStep();");
+    // ...and wait while it makes the hero (or sends a signed-in player to choose one) instead of saying "No hero yet".
+    expect(night).toContain("const heroless = !!save && !save.hero;");
+    expect(night).toContain('if (phase.kind !== "boot" || account.status === "loading" || heroless) return;');
+    expect(city).toContain('else if (!save?.hero) body = <Loading label="Heading into the city…" />;');
+    expect(city).not.toContain("Get bitten first");
+    // A signed-in player with no hero on either page still goes to choose one.
+    for (const pathname of [NIGHT_PATH, "/play/city"]) expect(noHeroStep({ status: "signed-in", saveLoaded: true, hasHero: false, pathname })).toEqual({ kind: "go", to: ORIGIN_PATH });
   });
 
   it("decides nothing while the account or the save is still loading", () => {

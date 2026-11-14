@@ -3,7 +3,9 @@
 /**
  * Free roam's page: which city to walk into. A guest plays from the browser's save (what the
  * city found is filed there); signed in, from the server's save (the server files each outing
- * from a replay of its log). Without WebGL 2 there's no city to roam, so it says so.
+ * from a replay of its log). Without WebGL 2 there's no city to roam, so it says so. Opened
+ * with no hero (a deep link), a guest gets the quick start's ready hero in place and a
+ * signed-in player goes to choose theirs, as on every game page (useNoHeroStep).
  */
 import { useState, useSyncExternalStore } from "react";
 
@@ -11,7 +13,8 @@ import { cityRecord } from "@wgp/game-core/city";
 import { SUITS } from "@wgp/game-core/data";
 import type { Save } from "@wgp/game-core/types";
 
-import { useAccount, useGame } from "@/game/store";
+import { useNoHeroStep } from "@/components/game/ui";
+import { useAccount } from "@/game/store";
 import { beginRoam, type RoamSession } from "@/game3d/session/roam";
 import { prefetchHero } from "@/game3d/scene/characters/files";
 import { hasWebGL2 } from "@/game3d/scene/quality";
@@ -37,7 +40,7 @@ const flag = (name: string) => typeof window !== "undefined" && new URLSearchPar
 export function City() {
   const ok = useSyncExternalStore(noop, canDraw3d, () => null);
   const account = useAccount();
-  const { save } = useGame();
+  const save = useNoHeroStep();
   const [flags] = useState(() => ({ autopilot: flag("autopilot"), debug: flag("debug") }));
   const ready = account.status !== "loading" && !!save;
   const player = account.status === "signed-in" ? account.me.player.id : null;
@@ -45,7 +48,8 @@ export function City() {
   let body;
   if (ok === null || !ready) body = <Loading label="Heading into the city…" />;
   else if (!ok) body = <Notice title="The city needs 3D" body="This browser can’t draw the 3D city, so there’s nowhere to roam. Nights still play in the classic 2D game." href="/play" action="Back to tonight" />;
-  else if (!save?.hero) body = <Notice title="No hero yet" body="The city needs someone to run it. Get bitten first, then come back." href="/play/bitten" action="Get bitten" />;
+  // No hero yet: useNoHeroStep is making a guest the ready one, or sending a signed-in player to choose theirs.
+  else if (!save?.hero) body = <Loading label="Heading into the city…" />;
   else body = <Outing key={player ?? "guest"} save={save} player={player} autopilot={flags.autopilot && process.env.NODE_ENV !== "production"} debug={flags.debug} />;
   return <div className="fixed inset-0 z-[60] overflow-hidden bg-game-night text-game-ink">{body}</div>;
 }

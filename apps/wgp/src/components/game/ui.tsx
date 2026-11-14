@@ -149,6 +149,17 @@ export function GameLoading() {
 export type HeroSave = Save & { hero: Hero };
 
 export function useHeroSave(): HeroSave | null {
+  const save = useNoHeroStep();
+  return save && save.hero ? (save as HeroSave) : null;
+}
+
+/**
+ * The same no-hero step for a page that boots from the save itself rather than through
+ * `useHeroSave` (the 3D patrol and the city, which have their own loading screens): a
+ * guest gets the ready hero in place, a signed-in player goes to choose theirs. Returns
+ * the save as it is, hero or not.
+ */
+export function useNoHeroStep(): Save | null {
   const { save, dispatch } = useGame();
   const status = useAccount().status;
   const router = useRouter();
@@ -163,7 +174,7 @@ export function useHeroSave(): HeroSave | null {
       dispatch({ type: "create-hero", ...QUICK_HERO });
     }
   }, [save, needsHero, status, pathname, router, dispatch]);
-  return save && save.hero ? (save as HeroSave) : null;
+  return save;
 }
 
 /* ------------------------------------------------------------------ sheets */
