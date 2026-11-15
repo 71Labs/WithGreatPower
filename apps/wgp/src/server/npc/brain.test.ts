@@ -27,7 +27,7 @@ const at = (seconds: number) => new Date(NOW.getTime() + seconds * 1_000);
 const KEY = `ed25519:${"1".repeat(60)}` as const;
 const NPC = { accountId: "sandwich.wgpnear.near", privateKey: KEY };
 const API_KEY = "sk-test-not-a-real-key";
-const LLM: BrainConfig = { apiKey: API_KEY, model: "kimi-k3", url: "https://api.moonshot.ai/v1/chat/completions" };
+const LLM: BrainConfig = { provider: "moonshot", apiKey: API_KEY, model: "kimi-k3", url: "https://api.moonshot.ai/v1/chat/completions", baseUrl: "https://api.moonshot.ai/v1" };
 
 let db: Db;
 
@@ -35,6 +35,7 @@ beforeEach(async () => {
   db = await freshDb();
   // Whatever the shell running the tests holds, these tests decide what the brain sees.
   vi.stubEnv("LLM_API_KEY", "");
+  vi.stubEnv("NEARAI_API_KEY", "");
   return () => vi.unstubAllEnvs();
 });
 
@@ -98,10 +99,10 @@ describe("which brain", () => {
     expect(npcBrainConfig({ LLM_API_KEY: API_KEY, LLM_MODEL: "kimi-k3.1-pro", LLM_BASE_URL: "https://api.moonshot.ai/v1/" })).toEqual({ ...LLM, model: "kimi-k3.1-pro" });
     // Only https, never a plain-http endpoint that would carry the key in the clear.
     expect(npcBrainConfig({ LLM_API_KEY: API_KEY, LLM_BASE_URL: "http://example.com/v1" })).toBeNull();
-    expect(npcBrainMode(true, {})).toEqual({ mode: "rules", model: null });
-    expect(npcBrainMode(true, { LLM_API_KEY: API_KEY })).toEqual({ mode: "llm", model: "kimi-k3" });
+    expect(npcBrainMode(true, {})).toEqual({ mode: "rules", model: null, provider: null });
+    expect(npcBrainMode(true, { LLM_API_KEY: API_KEY })).toEqual({ mode: "llm", model: "kimi-k3", provider: "moonshot" });
     // The simulated market always runs on the rules.
-    expect(npcBrainMode(false, { LLM_API_KEY: API_KEY })).toEqual({ mode: "rules", model: null });
+    expect(npcBrainMode(false, { LLM_API_KEY: API_KEY })).toEqual({ mode: "rules", model: null, provider: null });
 
     const { chain, sent } = fakeChain([listing(7, 13)]);
     const llm = fakeLlm(pick(1));
@@ -308,7 +309,7 @@ describe("the view", () => {
     // The simulated market runs on the rules, key or not.
     expect(view.mode).toBe("simulated");
     expect(view.accountId).toBe(NPC_SIM_ACCOUNT);
-    expect(view.brain).toMatchObject({ mode: "rules", model: null, maxCallsPerDay: NPC_BRAIN.maxCallsPerDay, callsLeft: NPC_BRAIN.maxCallsPerDay, last: null });
+    expect(view.brain).toMatchObject({ mode: "rules", model: null, provider: null, maxCallsPerDay: NPC_BRAIN.maxCallsPerDay, callsLeft: NPC_BRAIN.maxCallsPerDay, last: null, lastVerification: null });
     expect(view.signerKey).toBeNull();
   });
 });

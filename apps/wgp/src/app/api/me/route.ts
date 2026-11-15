@@ -4,6 +4,7 @@
  * DELETE /api/me → 200 { signedIn: false } (signs out)
  */
 import { destroySession, getSession } from "@/server/auth/session";
+import { npcVisitSoon } from "@/server/background";
 import { getDb } from "@/server/db/client";
 import { ensureSave } from "@/server/db/players";
 import { RUNS_PER_DAY, RUN_BUDGET_SCOPE, activeRun } from "@/server/db/runs";
@@ -13,6 +14,7 @@ import { getXProfile } from "@/server/social/players";
 
 export const GET = handle("me", async (request: Request) => {
   rateLimiter.enforce("me-ip", clientIp(request), RATE_LIMITS.mePerIp);
+  npcVisitSoon();
   const session = await getSession(request);
   if (!session) return json({ signedIn: false });
   const db = await getDb();

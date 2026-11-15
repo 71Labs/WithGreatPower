@@ -5,7 +5,7 @@
  */
 import { connection } from "next/server";
 
-import { closeSeasonsSoon } from "@/server/background";
+import { closeSeasonsSoon, npcVisitSoon } from "@/server/background";
 import { getDb } from "@/server/db/client";
 import { listSeasons, seasonAt } from "@/server/db/seasons";
 import { handle, json } from "@/server/http";
@@ -13,6 +13,7 @@ import { handle, json } from "@/server/http";
 export const GET = handle("seasons", async () => {
   await connection();
   closeSeasonsSoon();
+  npcVisitSoon();
   const db = await getDb();
   const [all, live] = await Promise.all([listSeasons(db), seasonAt(db, new Date())]);
   return json(
