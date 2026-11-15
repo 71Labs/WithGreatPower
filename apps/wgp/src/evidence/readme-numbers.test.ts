@@ -22,13 +22,14 @@ import { LAB_BROKE_SEED } from "@/lib/market/bots";
 import { CURVES, DEFAULT_PARAMS, PROPOSED_PARAMS, defaultPoolConfigs } from "@/lib/market/config";
 import { LAUNCH_ITEM_IDS, NEW_STOCK_IDS, NEW_STOCK_POOLS } from "@/lib/market/new-stock";
 import { NPC_RULES } from "@/lib/market/npc-rules";
-import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_NIGHT_BITS, MAX_PICKUP_BITS, NIGHT_TAPER } from "@/lib/market/rewards";
+import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_NIGHT_BITS, MAX_PICKUP_BITS, NIGHT_TAPER, nightBits, nightPay } from "@/lib/market/rewards";
 import { MARKET_METHODS, MAX_RELAY_GAS, RELAY_METHODS, TGAS } from "@/lib/near/policy";
 import { TRIAL_RUNS_PER_DAY } from "@/server/db/compete";
 import { REWARD_BATCH_SIZE } from "@/server/db/outbox";
 import { CLAIM_WINDOW_MS, REFERRAL_GOAL, REFERRAL_XP } from "@/server/db/referrals";
 import { RUNS_PER_DAY } from "@/server/db/runs";
 import { CLOSE_GRACE_MS, TROPHY_PLACES } from "@/server/db/season-close";
+import { NEAR_BUDGETS, NEAR_RATE_LIMITS } from "@/server/near/http";
 import { VERIFY_RULES } from "@/server/verify";
 
 import { ROOT, plainDoc, read, tableAfter } from "./repo";
@@ -108,6 +109,36 @@ describe("the README's numbers equal the code's", () => {
     says(README, `A hero who already holds over ${NIGHT_TAPER.fullBelow} Bits gets less, down to the ${BITS_FOR_SHOWING_UP} for showing up at ${NIGHT_TAPER.floorAt}`);
     says(plainDoc("docs/GAME-LOOP.md"), `(${rule}, +${BITS_FOR_LEVEL_UP} on a level-up, +1 per gold token up to ${MAX_PICKUP_BITS}, capped at ${fmt(MAX_NIGHT_BITS)} a night)`);
     says(plainDoc("docs/ECONOMY.md"), `${rule}, +${BITS_FOR_LEVEL_UP} on a level-up, +1 per Bits token collected (up to ${MAX_PICKUP_BITS}), at most ${fmt(MAX_NIGHT_BITS)}`);
+  });
+
+  it("the README's taper example is what nightPay pays", () => {
+    // A 100-Bit night: 9,500 points, no level-up, no tokens.
+    const night = { score: 9_500, levelledUp: false, pickups: 0 };
+    expect(nightBits(night)).toBe(100);
+    const at = (held: number) => nightPay(night, held, NIGHT_TAPER).bits;
+    expect([at(0), at(NIGHT_TAPER.fullBelow), at(275), at(NIGHT_TAPER.floorAt), at(1_000)]).toEqual([100, 100, 52, BITS_FOR_SHOWING_UP, BITS_FOR_SHOWING_UP]);
+    says(README, `| Up to ${NIGHT_TAPER.fullBelow} | All of it | ${at(0)} |`);
+    says(README, `| Between ${NIGHT_TAPER.fullBelow} and ${NIGHT_TAPER.floorAt} | ${BITS_FOR_SHOWING_UP}, plus the rest of the night scaled down in a straight line | ${at(275)} at 275 held |`);
+    says(README, `| ${NIGHT_TAPER.floorAt} or more | The ${BITS_FOR_SHOWING_UP} for showing up | ${at(NIGHT_TAPER.floorAt)} |`);
+  });
+
+  it("the relayer's budgets, the reward entry's limits and the contract's caps in the NEAR section", () => {
+    const lib = "contracts/wgp/src/lib.rs";
+    const market = "contracts/wgp/src/market.rs";
+    expect(NEAR_RATE_LIMITS.relayPerAccount.windowMs).toBe(60_000);
+    expect(NEAR_RATE_LIMITS.relayPerIp.windowMs).toBe(60_000);
+    says(README, `Per account ${NEAR_RATE_LIMITS.relayPerAccount.limit} relayed calls a minute and ${NEAR_BUDGETS.relayCallsPerAccountPerDay} a UTC day, per IP ${NEAR_RATE_LIMITS.relayPerIp.limit} a minute`);
+    const dailyTgas = Number(/env\.RELAYER_DAILY_TGAS \?\? "(\d+)"/.exec(read("apps/wgp/src/server/near/env.ts"))![1]);
+    says(README, `(RELAYER_DAILY_TGAS, ${fmt(dailyTgas)} Tgas by default)`);
+    says(README, `Up to ${rustConst(lib, "MAX_ITEMS_PER_REWARD")} item kinds (up to ${fmt(rustConst(lib, "MAX_ITEM_AMOUNT"))} each), up to ${rustConst(lib, "MAX_BADGES_PER_REWARD")} badges`);
+    says(README, `An account holds at most ${rustConst(lib, "MAX_KINDS")} token kinds`);
+    says(README, `At most ${rustConst(market, "MAX_POOLS")} pools`);
+    const feeCap = Number(/params\.fee_bps <= ([\d_]+)/.exec(read(market))![1]!.replace(/_/g, ""));
+    says(README, `At most ${feeCap} (${feeCap / 100}%)`);
+    says(README, `the contract caps it at ${feeCap / 100}%`);
+    says(README, `${DEFAULT_PARAMS.maxListings} open in all`);
+    const migrateTgas = Number(/GAS_FOR_MIGRATE: Gas = Gas::from_tgas\((\d+)\)/.exec(read(lib))![1]);
+    says(README, `calls migrate with ${migrateTgas} Tgas`);
   });
 
   it("the ways to play: how many, and each mode's counts", () => {
