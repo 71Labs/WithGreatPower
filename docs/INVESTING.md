@@ -30,7 +30,7 @@ Only the till is real. `virtual Bits` is the part of the curve nobody has funded
 
 - **A stake is a claim on its own principal**, 1 Bit for 1 Bit. It is not a share of the till. Nobody else's trade or investment changes what a stake is owed.
 - **A pool takes at most `virtual Bits − 1`.** With the live curves that is 479 Bits for a common item, 799 for an uncommon, 1,199 for a rare.
-- **Investors earn a share of the gas fee.** Every trade with Gwei pays a 10% fee. With no investors in that item's pool, all of it is burned. With investors, half of it (`invest_fee_bps`, 5000) goes to them, split by stake, and the rest is burned. Whole Bits only; the fraction carries to the next trade. Earnings sit apart from the till and can be claimed at any time.
+- **Investors earn a share of the gas fee.** Every trade with Gwei pays a 5% fee. With no investors in that item's pool, all of it is burned. With investors, half of it (`invest_fee_bps`, 5000) goes to them, split by stake, and the rest is burned. Whole Bits only; the fraction carries to the next trade. Earnings sit apart from the till and can be claimed at any time.
 - **A stake is locked for an hour after each top-up** (30 seconds in the practice market, so you can try the whole thing in one sitting).
 - **Caps:** 10 to 500 Bits per investment, 6 investments and 1,000 Bits per account per UTC day.
 - **Closed reasons:** `broke` (the till can't pay for one item), `sold-out` (no stock), and for the whole market `paused` and `market-closed`.

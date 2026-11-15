@@ -1832,7 +1832,7 @@
       "id": "economy-burn-fee",
       "section": "economy",
       "source": "README.md",
-      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 10% today.",
+      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 5% today.",
       "status": "proven on chain",
       "code": [
         {
@@ -1856,7 +1856,7 @@
         "market-state",
         "tx-market-buy"
       ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 500, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "economy-fee-live",
@@ -1935,7 +1935,7 @@
         "market-state",
         "tx-craft-suit"
       ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values. The loot burn is live (the transaction check); the Bits cost is tested and read live by the Suit lab."
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 500, craft_bits 250); until then the market-state check fails on those two values. The loot burn is live (the transaction check); the Bits cost is tested and read live by the Suit lab."
     },
     {
       "id": "economy-wanted-list",
@@ -2805,7 +2805,7 @@
       "id": "tryit-lab-inflation",
       "section": "tryit",
       "source": "README.md",
-      "quote": "the default run earns 59,230 Bits and burns 29,202 of them, about 49%. Tick Run the old settings (2% gas fee, crafting burns no Bits, no taper) and run again: 99,022 earned and 2,847 burned, about 3%.",
+      "quote": "the default run earns 58,859 Bits and burns 26,454 of them, about 45%. Tick Run the old settings (2% gas fee, crafting burns no Bits, no taper) and run again: 99,022 earned and 2,847 burned, about 3%.",
       "status": "simulation only",
       "code": [
         {
@@ -2834,7 +2834,7 @@
           "name": "burn about half of what a season earns, and close most of the gap (docs/ECONOMY.md)"
         }
       ],
-      "note": "Numbers from the bot model, not from mainnet. The lab opens on the proposal: the faucet taper (live with the deploy) and the owner's fee_bps 1000 and craft_bits 250 (econdoc-owner-settings)."
+      "note": "Numbers from the bot model, not from mainnet. The lab opens on the proposal: the faucet taper (live with the deploy) and the owner's fee_bps 500 and craft_bits 250 (econdoc-owner-settings)."
     },
     {
       "id": "tryit-drain",
@@ -3422,7 +3422,7 @@
       "id": "status-used",
       "section": "status",
       "source": "README.md",
-      "quote": "The contract and its market (8 pools, 10% fee)",
+      "quote": "The contract and its market (8 pools, 5% fee)",
       "status": "proven on chain",
       "chain": [
         "market-state",
@@ -3435,7 +3435,7 @@
           "anchor": "pub fn market_state(&self) -> MarketState {"
         }
       ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 500, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "status-npc",
@@ -4589,7 +4589,7 @@
       "id": "limits-currency",
       "section": "limits",
       "source": "README.md",
-      "quote": "In the lab's default run, on mainnet's settings, 59,230 are earned and 29,202 burned, about 49% (99,022 and 2,847 on the old settings).",
+      "quote": "In the lab's default run, on mainnet's settings, 58,859 are earned and 26,454 burned, about 45% (99,022 and 2,847 on the old settings).",
       "status": "simulation only",
       "code": [
         {
@@ -4609,13 +4609,13 @@
           "name": "balances to the Bit every day, for every setting and seed: seeded till + minted − burned = supply"
         }
       ],
-      "note": "Simulation. \"On mainnet's settings\": True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      "note": "Simulation. \"On mainnet's settings\": True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 500, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "limits-craft-bits",
       "section": "limits",
       "source": "README.md",
-      "quote": "The sinks are the trade fee (10%) and crafting, which burns 250 Bits a suit on top of the recipe.",
+      "quote": "The sinks are the trade fee (5%) and crafting, which burns 250 Bits a suit on top of the recipe.",
       "status": "proven on chain",
       "code": [
         {
@@ -4643,7 +4643,7 @@
       "chain": [
         "market-state"
       ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 500, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "limits-trust",
@@ -5225,7 +5225,7 @@
       "id": "econdoc-owner-settings",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "Gas fee fee_bps 200 → 1000 (2% → 10%, the contract's cap)",
+      "quote": "Gas fee fee_bps 200 → 500 (2% → 5%)",
       "status": "proven on chain",
       "code": [
         {
@@ -5240,7 +5240,7 @@
       "chain": [
         "market-state"
       ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values. market-args.ts --proposed prints the arguments: only fee_bps and craft_bits change, and the eight pools keep their on-chain virtual reserves.",
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 500, craft_bits 250); until then the market-state check fails on those two values. market-args.ts --proposed prints the arguments: only fee_bps and craft_bits change, and the eight pools keep their on-chain virtual reserves.",
       "tests": [
         {
           "pkg": "app",
@@ -5273,7 +5273,7 @@
       "id": "econdoc-recommendation",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "It passes the band: 49.6% of a season's Bits burned, first suit by night 5, Gwei down 9.6% of item-days over 60 days.",
+      "quote": "It passes the band: 45.7% of a season's Bits burned, first suit by night 5, Gwei down 9.1% of item-days over 60 days.",
       "status": "simulation only",
       "code": [
         {
@@ -5409,7 +5409,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "moves the season's burn share by under a point; over 60 days with him Gwei is unable to buy on just over 10% of item-days (docs/ECONOMY.md)"
+          "name": "moves the season's burn share by under a point, and keeps Gwei inside the band over 60 days with him (docs/ECONOMY.md)"
         }
       ]
     },
@@ -7123,7 +7123,7 @@
       "kind": "view",
       "method": "market_state",
       "args": {},
-      "about": "The contract's market: open, a 10% fee and 250 Bits burned per recipe suit (the settings docs/ECONOMY.md proposes), the listing bounds and caps, and eight pools held by the contract's own account.",
+      "about": "The contract's market: open, a 5% fee and 250 Bits burned per recipe suit (the settings docs/ECONOMY.md proposes), the listing bounds and caps, and eight pools held by the contract's own account.",
       "expect": [
         {
           "path": "vendor",
@@ -7138,7 +7138,7 @@
         {
           "path": "params.fee_bps",
           "op": "eq",
-          "value": 1000
+          "value": 500
         },
         {
           "path": "params.craft_bits",

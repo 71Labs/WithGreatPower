@@ -293,7 +293,7 @@ export function verdict(season: Measure, sixty: Measure): Verdict {
 
 /**
  * The owner's part, one `set_market_params` transaction: crafting burns 250 Bits a suit and
- * the gas fee goes to 10%, the contract's cap. Curves stay. Measured here with the flat faucet.
+ * the gas fee goes to 5%. Curves stay. Measured here with the flat faucet.
  */
 export const RECOMMENDED: Setting = { id: "recommended", label: "Recommended", craftBits: PROPOSED_PARAMS.craftBits, feeBps: PROPOSED_PARAMS.feeBps, priceScale: 1, depthScale: 1, taper: null };
 

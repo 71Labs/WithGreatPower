@@ -94,7 +94,7 @@ describe("the recommended settings", () => {
 
   it("are the proposal: the owner's two values (PROPOSED_PARAMS) and the taper the server pays with (NIGHT_TAPER)", () => {
     expect(RECOMMENDED).toMatchObject({ feeBps: PROPOSED_PARAMS.feeBps, craftBits: PROPOSED_PARAMS.craftBits, taper: null });
-    expect(RECOMMENDED_WITH_TAPER).toMatchObject({ feeBps: 1_000, craftBits: 250, taper: NIGHT_TAPER });
+    expect(RECOMMENDED_WITH_TAPER).toMatchObject({ feeBps: 500, craftBits: 250, taper: NIGHT_TAPER });
     expect(TAPER_ONLY).toMatchObject({ feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits, taper: NIGHT_TAPER });
     // Only fee_bps and craft_bits differ from what the contract holds; the cap is 1000.
     expect({ ...PROPOSED_PARAMS, feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits }).toEqual(DEFAULT_PARAMS);
@@ -176,14 +176,13 @@ describe("Sandwich Man in the measurements", () => {
 });
 
 describe("Sandwich Man and the proposal", () => {
-  it("moves the season's burn share by under a point; over 60 days with him Gwei is unable to buy on just over 10% of item-days (docs/ECONOMY.md)", () => {
+  it("moves the season's burn share by under a point, and keeps Gwei inside the band over 60 days with him (docs/ECONOMY.md)", () => {
     const without = measured(RECOMMENDED_WITH_TAPER, SEASON, SEEDS);
     const season = measured(RECOMMENDED_WITH_TAPER, { ...SEASON, npc: true }, SEEDS);
     const sixty = measured(RECOMMENDED_WITH_TAPER, { ...SIXTY, npc: true }, SEEDS);
     expect(Math.abs(season.burnShare - without.burnShare)).toBeLessThan(0.01);
     expect(season.burned.craft).toBe(without.burned.craft);
-    expect(sixty.soldOut + sixty.broke).toBeGreaterThan(BAND.vendorDown);
-    expect(sixty.soldOut + sixty.broke).toBeLessThan(0.11);
+    expect(sixty.soldOut + sixty.broke).toBeLessThanOrEqual(BAND.vendorDown);
   });
 });
 

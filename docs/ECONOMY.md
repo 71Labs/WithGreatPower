@@ -19,7 +19,7 @@ pnpm --filter wgp exec tsx scripts/economy-balance.ts --search --drain --npc
 | Change | Where | Live |
 |---|---|---|
 | **Faucet taper:** a verified night pays the whole night up to 150 Bits held, then less in a straight line, down to the 5 for showing up at 400 and beyond | Server: `nightPay` in `rewards.ts`, called by `runs.ts` | With the deploy that carries it. It needs no owner call |
-| **Gas fee** `fee_bps` 200 → 1000 (2% → 10%, the contract's cap) | Contract state: `set_market_params` | Once the owner sends the call below |
+| **Gas fee** `fee_bps` 200 → 500 (2% → 5%) | Contract state: `set_market_params` | Once the owner sends the call below |
 | **Crafting cost** `craft_bits` 0 → 250 Bits per recipe suit | Contract state: `set_market_params` | Once the owner sends the call below |
 
 The app reads `fee_bps` and `craft_bits` live from `market_state`, so the same build works before and after the owner's call. The README, this report and `docs/evidence.json` describe mainnet **after** that call; "Claims that wait for the owner's call" at the end lists them.
@@ -30,7 +30,7 @@ The app reads `fee_bps` and `craft_bits` live from `market_state`, so the same b
 |---|---|---|
 | **Source of Bits** | A verified night earns `floor(score / 100) + 5`, +25 on a level-up, +1 per Bits token collected (up to 25), at most 1,000, and the taper pays it in full only to a hero holding up to 150 Bits | Server: `src/lib/market/rewards.ts`, called by `runs.ts` |
 | **Source of items** | Loot from the verified night | The ranked sim (ruleset 4); not changed here |
-| **Sink: gas fee** | `fee_bps` of every trade's and fill's Bits is burned (10%, the most the contract allows) | Contract state: `set_market_params` |
+| **Sink: gas fee** | `fee_bps` of every trade's and fill's Bits is burned (5%; the contract allows up to 10%) | Contract state: `set_market_params` |
 | **Sink: crafting** | `craft_suit` burns the recipe's items and `craft_bits` Bits (250). A hero can craft each of the four recipe suits **once** | Contract state: `set_market_params` |
 | **Not a source or a sink** | Gwei Stacy. She sells only her stock and pays only from her till, so trading with her moves Bits around and creates none | Contract: `market.rs` |
 | **Prices** | Per item, `(virtual_bits + till) / (virtual_items + stock)`. Buying raises it, selling lowers it | Contract state: the pools |
@@ -93,7 +93,7 @@ A setting passes if, averaged over the seeds:
 Burning as much as is earned is not reachable with what the deployed contract has. Three reasons, all measured:
 
 - **Crafting is a one-time sink.** Four suits per hero, ever. A hero who has them burns nothing more by crafting.
-- **The fee is small against the faucet**, even at the 10% cap: 6,231 Bits a season against 58,893 earned with the taper.
+- **The fee is small against the faucet:** at 5% it burns 3,553 Bits a season against 58,044 earned with the taper.
 - **A hero who never spends keeps what they earned.** The taper caps how fast such a hero gains, not what they hold: they climb to the taper's floor of 400 Bits and keep earning 5 a night from there. Net new Bits equal the change in what heroes and Gwei hold.
 
 ## The proposal
@@ -107,7 +107,7 @@ Burning as much as is earned is not reachable with what the deployed contract ha
 | Parameter | Now | Proposed |
 |---|---|---|
 | craft_bits | "0" | "250" |
-| fee_bps | 200 | 1000 |
+| fee_bps | 200 | 500 |
 | Pool virtual reserves | 480/40, 800/20, 1200/8 | Unchanged |
 | Everything else | | Unchanged |
 
@@ -119,32 +119,32 @@ Mean of 8 seeds. "Taper only" is mainnet between the deploy and the owner's call
 |---|---|---|---|---|---|---|---|---|---|
 | 21 days, 60 heroes | Before | 97,324 | 2,801 | 2,801 | 0 | 2.9% | 74.5 | night 2 | 0.4% |
 | | Taper only | 46,873 | 2,466 | 2,466 | 0 | 5.3% | 24.9 | night 2 | 2.2% |
-| | Owner's settings | 97,806 | 31,763 | 8,763 | 23,000 | 32.5% | 54.2 | night 5 | 2.4% |
-| | **Proposed** | 58,893 | 29,231 | 6,231 | 23,000 | **49.6%** | 15.9 | night 5 | 9.6% |
+| | Owner's settings | 97,618 | 28,063 | 5,063 | 23,000 | 28.8% | 57.3 | night 5 | 2.5% |
+| | **Proposed** | 58,044 | 26,553 | 3,553 | 23,000 | **45.7%** | 18.6 | night 5 | 9.1% |
 | 60 days, 60 heroes | Before | 277,718 | 8,436 | 8,436 | 0 | 3.0% | 74.7 | night 2 | |
-| | **Proposed** | 105,445 | 38,090 | 15,090 | 23,000 | **36.1%** | 13.4 | night 5 | |
+| | **Proposed** | 103,037 | 32,461 | 9,461 | 23,000 | **31.5%** | 14.3 | night 5 | |
 | 180 days, nobody quits | Before | 836,139 | 19,575 | 19,575 | 0 | 2.3% | 76.8 | night 2 | |
-| | **Proposed** | 213,479 | 63,932 | 40,932 | 23,000 | **29.9%** | 11.1 | night 5 | |
+| | **Proposed** | 206,759 | 47,767 | 24,767 | 23,000 | **23.1%** | 11.8 | night 5 | |
 | 180 days, quit after 8 nights | Before | 837,260 | 18,588 | 18,588 | 0 | 2.2% | 76.1 | night 2 | |
-| | **Proposed** | 623,141 | 208,064 | 29,251 | 178,813 | **33.4%** | 37.5 | night 5 | |
+| | **Proposed** | 620,458 | 195,741 | 17,803 | 177,938 | **31.6%** | 38.0 | night 5 | |
 | 180 days, quit after 20 nights | Before | 836,199 | 20,469 | 20,469 | 0 | 2.4% | 76.0 | night 1 | |
-| | **Proposed** | 508,926 | 244,485 | 37,641 | 206,844 | **48.1%** | 22.9 | night 4.5 | |
-| 21 days, 20 heroes | **Proposed** | 18,942 | 10,114 | 2,114 | 8,000 | 53.4% | 12.7 | night 5.5 | |
-| 21 days, 200 heroes | **Proposed** | 200,027 | 95,622 | 20,654 | 74,969 | 47.8% | 18.8 | night 5 | |
+| | **Proposed** | 507,420 | 229,537 | 22,631 | 206,906 | **45.2%** | 24.0 | night 5 | |
+| 21 days, 20 heroes | **Proposed** | 18,777 | 9,193 | 1,193 | 8,000 | 49.0% | 15.1 | night 5 | |
+| 21 days, 200 heroes | **Proposed** | 197,756 | 86,719 | 11,781 | 74,938 | 43.8% | 20.6 | night 5 | |
 
-It passes the band: 49.6% of a season's Bits burned, first suit by night 5, Gwei down 9.6% of item-days over 60 days. **In the lab's default run** (seed 2026, Sandwich Man trading) the counters read **59,230 earned and 29,202 burned** (49.3%), against 99,022 and 2,847 before: the gap between earned and burned falls from 96,175 Bits to 30,028.
+It passes the band: 45.7% of a season's Bits burned, first suit by night 5, Gwei down 9.1% of item-days over 60 days. **In the lab's default run** (seed 2026, Sandwich Man trading) the counters read **58,859 earned and 26,454 burned** (44.9%), against 99,022 and 2,847 before: the gap between earned and burned falls from 96,175 Bits to 32,405.
 
 Read the rows honestly:
 
-- **About half, not parity.** Half of a season's Bits still stay in the supply.
-- **The taper does most of the work on the faucet, the owner's call most of the work on the sink.** The taper alone cuts a season's minting by half but burns little (5.3%); the owner's settings alone burn a third of a much larger faucet (32.5%).
-- **Earned rises when the owner's call lands** (46,873 → 58,893 a season), because crafters spend Bits and so stay under the taper. That is the intent: Bits that are spent get replaced, Bits that pile up don't.
-- **Gwei is closer to her limit.** With fewer Bits around, she is unable to buy on 9.6% of item-days over 60 days instead of 0.4%, just inside the band. Over half a year with nobody quitting it is 41.9% instead of 29.7%.
-- **The 180-day share falls** where nobody quits (29.9%): every crafter has all four suits within the first 21 days, so after that only the fee burns, against 5 Bits a night that each hero keeps earning.
+- **Under half, not parity.** More than half of a season's Bits still stay in the supply.
+- **The taper does most of the work on the faucet, the owner's call most of the work on the sink.** The taper alone cuts a season's minting by half but burns little (5.3%); the owner's settings alone burn under a third of a much larger faucet (28.8%).
+- **Earned rises when the owner's call lands** (46,873 → 58,044 a season), because crafters spend Bits and so stay under the taper. That is the intent: Bits that are spent get replaced, Bits that pile up don't.
+- **Gwei is closer to her limit.** With fewer Bits around, she is unable to buy on 9.1% of item-days over 60 days instead of 0.4%, just inside the band. Over half a year with nobody quitting it is 40.3% instead of 29.7%.
+- **The 180-day share falls** where nobody quits (23.1%): every crafter has all four suits within the first 21 days, so after that only the fee burns, against 5 Bits a night that each hero keeps earning.
 
-**Why these.** The flat-faucet search ranks 16 of its 126 settings as passing. Among those that move no price, the most burning is 250 Bits a suit with a 10% fee (32.4% of a season, 4 seeds). 300 Bits a suit pushes the first suit to night 6 (Alternative B). The taper's marks were then chosen so the first suit stays at night 5 and Gwei inside 10%: a tighter taper leaves crafters short of a suit's price for longer.
+**Why these.** The flat-faucet search ranks 16 of its 126 settings as passing. Among those that move no price, 250 Bits a suit burns the most: 32.4% of a season with a 10% fee and 28.9% with 5% (4 seeds). 300 Bits a suit pushes the first suit to night 6 (Alternative B). The taper's marks were then chosen so the first suit stays at night 5 and Gwei inside 10%: a tighter taper leaves crafters short of a suit's price for longer.
 
-**The cost of a 10% fee.** A round trip with Gwei costs about 20% instead of about 4%. On mainnet few players trade, so it takes few Bits from them; in the model it does most of its work on the dumpers and flippers.
+**Why 5% and not the 10% cap.** The bots trade on fixed rules and don't trade less when the fee rises, so the model can't show how a fee thins a market that barely trades. A round trip with Gwei costs about 10% at a 5% fee, against about 20% at 10% and about 4% at 2%. 5% gives up about four points of a season's burn to halve what a real trader pays at the cap.
 
 ### Two flat-faucet alternatives
 
@@ -160,18 +160,18 @@ Without the taper (the owner's call alone):
 - **Balances:** nothing. `set_market_params` leaves every balance, Gwei's stock and her till alone, and mints nothing because all eight pools exist.
 - **Nights:** a player holding over 150 Bits earns less a night, and from 400 only the 5 for showing up, until they spend. Mainnet's players hold about 842 Bits each, so most of the regulars will see the results screen say "Tapered from …" until they craft or buy.
 - **Prices:** nothing. The virtual reserves passed are the ones on chain.
-- **Quotes:** the fee part goes from 2% to 10%. On mainnet's pools (15 Nov):
+- **Quotes:** the fee part goes from 2% to 5%. On mainnet's pools (15 Nov):
 
 | Item | Price | Buy 1 now | After | Sell 1 now | After |
 |---|---|---|---|---|---|
-| Fee bomb, Crumbs, Chain link | 12.3 to 12.6 | 14 | 15 | 11 | 10 |
-| Golden sesame seed | 34.65 | 37 | 40 | 32 | 29 |
-| Sybil goo | 36.33 | 39 | 42 | 34 | 31 |
-| Press pass | 52.26 | 56 | 60 | 49 | 45 |
-| Goblin glider | 132.88 | 145 | 157 | 122 | 112 |
-| Doc's spare arm | 170.73 | 187 | 202 | 156 | 144 |
+| Fee bomb, Crumbs, Chain link | 12.3 to 12.6 | 14 | 14 | 11 | 11 |
+| Golden sesame seed | 34.65 | 37 | 38 | 32 | 31 |
+| Sybil goo | 36.33 | 39 | 40 | 34 | 33 |
+| Press pass | 52.26 | 56 | 57 | 49 | 47 |
+| Goblin glider | 132.88 | 145 | 150 | 122 | 118 |
+| Doc's spare arm | 170.73 | 187 | 193 | 156 | 152 |
 
-- **Listings:** open ones stay. A seller receives the price less 10% instead of 2%.
+- **Listings:** open ones stay. A seller receives the price less 5% instead of 2%.
 - **Crafting:** Stealth, Glider, Octo rig and Sesame cost 250 Bits each on top of the recipe. Starter suits stay free. Suits already owned are untouched.
 - **What players can afford:** about 842 Bits each, so three suits. All 24 crafting all four would burn 24,000 Bits against 20,215 held.
 
@@ -184,12 +184,12 @@ What the app does with the cost, read live from `market_state` (nothing is hard-
 - **Shows it.** Every recipe in the Suit lab prints "Costs 250 Bits" with the player's Bits beside it, and the Craft button carries the price.
 - **Blocks what the contract would refuse.** Short of Bits, Craft is off and the reason is printed with what to do (sell spare loot, play a ranked night). The server checks again: the relayer refuses a `craft_suit` the wallet can't pay before spending gas, and the save-only craft answers the contract's own words, "Needs bits x130".
 - **Never hands out a free suit.** The Bits can only be burned by the player's signed `craft_suit`. So with a cost set, a recipe suit can't be crafted "in the save only" any more: a player without quick play is told to turn it on, and a guest to sign in. Starter suits stay free everywhere. With `craft_bits` at 0 none of this shows and crafting works as it did.
-- **Local play matches.** The simulated market burns the Bits in the same transaction that writes the save (`src/server/market/craft.ts`). `SIM_MARKET_CRAFT_BITS=250 SIM_MARKET_FEE_BPS=1000` runs a local server on the proposed settings (ignored in production).
+- **Local play matches.** The simulated market burns the Bits in the same transaction that writes the save (`src/server/market/craft.ts`). `SIM_MARKET_CRAFT_BITS=250 SIM_MARKET_FEE_BPS=500` runs a local server on the proposed settings (ignored in production).
 
 **Who is affected on the day:** players who craft without quick play (wallet sign-ins who never pressed **Enable quick play**) and guests can no longer craft the four recipe suits until they turn it on or sign in. Suits they already own are untouched.
 
 ```bash
-near contract call-function as-transaction game.wgpnear.near set_market_params json-args '{"params":{"open":true,"fee_bps":1000,"floor_bps":5000,"ceiling_bps":40000,"max_amount":20,"max_open_listings":3,"max_listings":300,"daily_trades":40,"daily_listings":10,"daily_fills":10,"daily_fill_bits":"3000","craft_bits":"250"},"pools":[{"item":"fee-bomb","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"goblin-glider","virtual_bits":"1200","virtual_items":"8","seed_bits":"1200","seed_stock":"8"},{"item":"crumbs","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"sesame-seed","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"},{"item":"chain-link","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"spare-arm","virtual_bits":"1200","virtual_items":"8","seed_bits":"1200","seed_stock":"8"},{"item":"sybil-goo","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"},{"item":"press-pass","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"}]}' prepaid-gas '100.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as wgpnear.near network-config mainnet sign-with-legacy-keychain send
+near contract call-function as-transaction game.wgpnear.near set_market_params json-args '{"params":{"open":true,"fee_bps":500,"floor_bps":5000,"ceiling_bps":40000,"max_amount":20,"max_open_listings":3,"max_listings":300,"daily_trades":40,"daily_listings":10,"daily_fills":10,"daily_fill_bits":"3000","craft_bits":"250"},"pools":[{"item":"fee-bomb","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"goblin-glider","virtual_bits":"1200","virtual_items":"8","seed_bits":"1200","seed_stock":"8"},{"item":"crumbs","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"sesame-seed","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"},{"item":"chain-link","virtual_bits":"480","virtual_items":"40","seed_bits":"480","seed_stock":"40"},{"item":"spare-arm","virtual_bits":"1200","virtual_items":"8","seed_bits":"1200","seed_stock":"8"},{"item":"sybil-goo","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"},{"item":"press-pass","virtual_bits":"800","virtual_items":"20","seed_bits":"800","seed_stock":"20"}]}' prepaid-gas '100.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as wgpnear.near network-config mainnet sign-with-legacy-keychain send
 ```
 
 The JSON is what this prints, if you'd rather build it than paste it:
@@ -210,7 +210,7 @@ In `/lab/economy`, **Drain Gwei** runs 30 days of 60 heroes on the old settings 
 
 ## What was not fixed
 
-- **Bits still inflate.** The proposal moves the burn from 3% to about half of the faucet in a season. It is not parity, and nothing the owner can set on the deployed contract gets there.
+- **Bits still inflate.** The proposal moves the burn from 3% to 45% of the faucet in a season. It is not parity, and nothing the owner can set on the deployed contract gets there.
 - **The model crafts four times as much as mainnet does.** Its heroes craft 1.5 suits each; mainnet's have crafted 0.33 each with crafting free. If that doesn't change, the real burn share will be well under the model's, and the taper will do more of the work by paying less.
 - **Long-lived heroes run out of sink.** Four suits and they're done. A lasting sink needs more recipes, which `set_rules` can add on chain but which also need suits in the game, or a recurring cost the contract doesn't have.
 - **Gwei runs closer to broke.** Fewer Bits in heroes' hands means fewer buyers for what dumpers sell her.
@@ -229,20 +229,20 @@ Sandwich Man is the NPC trader ([npc-trader.md](npc-trader.md)): one more accoun
 |---|---|---|---|---|---|---|---|---|---|
 | 21 days, 60 heroes | Before | 97,324 | 2,801 | 2,801 | 0 | 2.9% | 74.5 | night 2 | 0.0% |
 | | + Sandwich Man | 97,516 | 2,847 | 2,847 | 0 | 2.9% | 74.8 | night 2 | 0.0% |
-| | **Proposed** | 58,893 | 29,231 | 6,231 | 23,000 | 49.6% | 15.9 | night 5 | 2.5% |
-| | **+ Sandwich Man** | 59,346 | 29,370 | 6,370 | 23,000 | **49.3%** | 16.9 | night 5 | 2.2% |
+| | **Proposed** | 58,044 | 26,553 | 3,553 | 23,000 | 45.7% | 18.6 | night 5 | 1.7% |
+| | **+ Sandwich Man** | 59,136 | 26,671 | 3,671 | 23,000 | **44.9%** | 20.3 | night 5 | 2.2% |
 | 60 days, 60 heroes | Before | 277,718 | 8,436 | 8,436 | 0 | 3.0% | 74.7 | night 2 | 0.4% |
 | | + Sandwich Man | 278,121 | 8,691 | 8,691 | 0 | 3.1% | 74.7 | night 2 | 0.0% |
-| | **Proposed** | 105,445 | 38,090 | 15,090 | 23,000 | 36.1% | 13.4 | night 5 | 9.6% |
-| | **+ Sandwich Man** | 104,440 | 37,845 | 14,845 | 23,000 | 36.1% | 12.9 | night 5 | 10.5% |
+| | **Proposed** | 103,037 | 32,461 | 9,461 | 23,000 | 31.5% | 14.3 | night 5 | 9.1% |
+| | **+ Sandwich Man** | 103,208 | 32,301 | 9,301 | 23,000 | 31.2% | 14.0 | night 5 | 9.4% |
 
-**The difference is small for the burn.** One trader with 300 Bits among 60 heroes moves the season's burn share by under a point. Over 60 days with him, Gwei's unable-to-buy share on the proposal is 10.5%, just over the band's 10% (the band is judged without him, as every table above is). "Earned" differs by a few hundred Bits between paired rows only because his trades change what the bots do next.
+**The difference is small for the burn.** One trader with 300 Bits among 60 heroes moves the season's burn share by under a point. Over 60 days with him, Gwei's unable-to-buy share on the proposal is 9.4%, inside the band's 10%. "Earned" differs by a few hundred Bits between paired rows only because his trades change what the bots do next.
 
 ## Claims that wait for the owner's call
 
-These are written for mainnet after the owner sends the `set_market_params` above. Until then the chain check `market-state` in `docs/evidence.json` fails on `fee_bps` and `craft_bits`, which is how to tell:
+These are written for mainnet after the owner sends the `set_market_params` above (`fee_bps` 500, `craft_bits` 250). Until then the chain check `market-state` in `docs/evidence.json` fails on `fee_bps` and `craft_bits`, which is how to tell:
 
-- README: judge check 3's output (`"fee_bps":1000`), "a gas fee on each trade is burned (10% today)", "the contract's `fee_bps`, 10% today", "`craft_bits` on top (250 today)", `fee: ceil(bits · 1000 / 10000)`, "a 10% fee that's burned", "8 pools, 10% fee", the lab's "with mainnet's settings (10% gas fee, crafting burns 250 Bits, …)", and the Currency line's "on mainnet's settings" and "the trade fee (10%) and crafting, which burns 250 Bits a suit".
-- This report's loop table (10%, 250), docs/GAME-LOOP.md, docs/ARCHITECTURE.md, docs/SUSTAINABILITY.md and docs/INVESTING.md where they give the fee as 10% or the crafting cost as 250.
+- README: judge check 3's output (`"fee_bps":500`), "a gas fee on each trade is burned (5% today)", "the contract's `fee_bps`, 5% today", "`craft_bits` on top (250 today)", `fee: ceil(bits · 500 / 10000)`, "a 5% fee that's burned", "8 pools, 5% fee", the lab's "with mainnet's settings (5% gas fee, crafting burns 250 Bits, …)", and the Currency line's "on mainnet's settings" and "the trade fee (5%) and crafting, which burns 250 Bits a suit".
+- This report's loop table (5%, 250), docs/GAME-LOOP.md, docs/ARCHITECTURE.md, docs/SUSTAINABILITY.md and docs/INVESTING.md where they give the fee as 5% or the crafting cost as 250.
 
 The taper needs no owner call: it is live wherever the build that carries it is deployed.
