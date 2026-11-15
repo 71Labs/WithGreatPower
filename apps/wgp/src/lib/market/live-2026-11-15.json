@@ -1,0 +1,199 @@
+{
+  "_read": "game.wgpnear.near on mainnet, 2026-11-15, read-only get_config and market_state",
+  "get_config": {
+    "owner_id": "wgpnear.near",
+    "operators": [
+      "operator.wgpnear.near"
+    ],
+    "paused": false,
+    "items": [
+      "fee-bomb",
+      "goblin-glider",
+      "crumbs",
+      "sesame-seed",
+      "chain-link",
+      "spare-arm",
+      "sybil-goo",
+      "press-pass"
+    ],
+    "suits": [
+      {
+        "id": "classic",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "midnight",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "mint",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "snow",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "stealth",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "sybil-goo",
+            "amount": 3
+          }
+        ]
+      },
+      {
+        "id": "glider",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "goblin-glider",
+            "amount": 1
+          },
+          {
+            "item": "fee-bomb",
+            "amount": 2
+          }
+        ]
+      },
+      {
+        "id": "octo",
+        "starter": false,
+        "min_level": 3,
+        "recipe": [
+          {
+            "item": "spare-arm",
+            "amount": 1
+          },
+          {
+            "item": "chain-link",
+            "amount": 3
+          }
+        ]
+      },
+      {
+        "id": "sesame",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "crumbs",
+            "amount": 4
+          },
+          {
+            "item": "sesame-seed",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "starter_unlock_level": 2,
+    "max_kinds": 64
+  },
+  "market_state": {
+    "vendor": "game.wgpnear.near",
+    "params": {
+      "open": true,
+      "fee_bps": 200,
+      "floor_bps": 5000,
+      "ceiling_bps": 40000,
+      "max_amount": 20,
+      "max_open_listings": 3,
+      "max_listings": 300,
+      "daily_trades": 40,
+      "daily_listings": 10,
+      "daily_fills": 10,
+      "daily_fill_bits": "3000",
+      "craft_bits": "0"
+    },
+    "pools": [
+      {
+        "item": "fee-bomb",
+        "virtual_bits": "480",
+        "virtual_items": "40",
+        "bits": "506",
+        "stock": "38",
+        "escrow": "0"
+      },
+      {
+        "item": "goblin-glider",
+        "virtual_bits": "1200",
+        "virtual_items": "8",
+        "bits": "1059",
+        "stock": "9",
+        "escrow": "5"
+      },
+      {
+        "item": "crumbs",
+        "virtual_bits": "480",
+        "virtual_items": "40",
+        "bits": "493",
+        "stock": "39",
+        "escrow": "0"
+      },
+      {
+        "item": "sesame-seed",
+        "virtual_bits": "800",
+        "virtual_items": "20",
+        "bits": "690",
+        "stock": "23",
+        "escrow": "0"
+      },
+      {
+        "item": "chain-link",
+        "virtual_bits": "480",
+        "virtual_items": "40",
+        "bits": "493",
+        "stock": "39",
+        "escrow": "0"
+      },
+      {
+        "item": "spare-arm",
+        "virtual_bits": "1200",
+        "virtual_items": "8",
+        "bits": "1361",
+        "stock": "7",
+        "escrow": "3"
+      },
+      {
+        "item": "sybil-goo",
+        "virtual_bits": "800",
+        "virtual_items": "20",
+        "bits": "726",
+        "stock": "22",
+        "escrow": "0"
+      },
+      {
+        "item": "press-pass",
+        "virtual_bits": "800",
+        "virtual_items": "20",
+        "bits": "1029",
+        "stock": "15",
+        "escrow": "0"
+      }
+    ],
+    "prices_milli": [
+      "12641",
+      "132882",
+      "12316",
+      "34651",
+      "12316",
+      "170733",
+      "36333",
+      "52257"
+    ],
+    "listings": 3,
+    "day": 20772
+  }
+}

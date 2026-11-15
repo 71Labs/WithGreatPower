@@ -21,7 +21,7 @@ import type { ItemId } from "@wgp/game-core/types";
 
 import { DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, economyConfig, type Setting } from "@/lib/market/balance";
 import { Economy, LAB_BROKE_SEED, type DaySnapshot } from "@/lib/market/bots";
-import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { DEFAULT_PARAMS, marketPoolConfigs, seededPools } from "@/lib/market/config";
 import { shopOf } from "@/lib/market/invest";
 import { explainPrice } from "@/lib/market/reasoning";
 import { withShop } from "@/lib/market/reasoning-shop";
@@ -43,7 +43,7 @@ type Speed = (typeof SPEEDS)[number]["id"];
 const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 const noop = () => () => {};
 /** Each item's curve as seeded; a day's stock and till go on top to rebuild that day's pool. */
-const SEEDED = new Map(seededPools().map((p) => [p.item, p]));
+const SEEDED = new Map(seededPools(marketPoolConfigs()).map((p) => [p.item, p]));
 
 /* ------------------------------------------------------------------ chart */
 
@@ -237,11 +237,13 @@ interface Setup {
    * dry, an investor funds it the next morning and Gwei buys again (balance.ts `INVEST_SHOWCASE`).
    */
   invest: boolean;
+  /** Gwei's new stock (src/lib/market/new-stock.ts): its four pools open, and heroes earn it from the Daily and cases. */
+  newStock?: boolean;
 }
 
 const settingOf = (s: Setup): Setting => (s.recommended ? RECOMMENDED : MAINNET);
 /** Mainnet's rules and curves unless `recommended`; heroes craft each suit once, as the contract requires. Investors only when asked for. */
-const build = (s: Setup) => new Economy(economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain || s.invest ? DRAIN.mix : undefined, invest: s.invest }));
+const build = (s: Setup) => new Economy({ ...economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain || s.invest ? DRAIN.mix : undefined, invest: s.invest }), newStock: !!s.newStock });
 
 export function EconomyLab() {
   const ids = useId();
@@ -253,8 +255,10 @@ export function EconomyLab() {
   const [history, setHistory] = useState<DaySnapshot[]>(() => econ.history.slice());
   // Run waits for the page to hydrate: before that its click would be lost, so it says Loading and can't be pressed.
   const ready = useSyncExternalStore(noop, () => true, () => false);
-  const { days, bots, seed, recommended, drain, invest } = setup;
+  const { days, bots, seed, recommended, drain, invest, newStock } = setup;
   const setting = settingOf(setup);
+  // The items this run has pools for: the launch eight, and Gwei's new stock when it is open.
+  const itemIds = ITEM_IDS.filter((item) => item in history[0]!.prices);
 
   /** A fresh run, for `next` setup (any change to the setup starts over). */
   function fresh(next: Setup = setup): Economy {
@@ -351,6 +355,13 @@ export function EconomyLab() {
               </span>
             </span>
           </label>
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-semibold">
+            <input type="checkbox" checked={!!newStock} onChange={(e) => change({ newStock: e.target.checked })} className="size-5 accent-[var(--game-hero)]" />
+            <span className="flex flex-col leading-4">
+              Open Gwei’s new stock
+              <span className="text-[12px] font-medium text-game-muted">4 items from the Daily and cases; not on NEAR until the owner opens their pools</span>
+            </span>
+          </label>
           <StickerButton size="sm" aria-pressed={drain} onClick={() => (drain ? change({ drain: false }) : change({ days: DRAIN.days, bots: DRAIN.bots, recommended: false, drain: true, invest: false }))} className="h-11">
             {drain ? "Stop draining Gwei" : "Drain Gwei"}
           </StickerButton>
@@ -423,7 +434,7 @@ export function EconomyLab() {
             </span>
           </p>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {ITEM_IDS.map((item) => (
+            {itemIds.map((item) => (
               <ItemChart key={item} item={item} history={history} hover={hover} onHover={setHover} feeBps={setting.feeBps} />
             ))}
           </ul>
@@ -458,7 +469,7 @@ export function EconomyLab() {
                 </tr>
               </thead>
               <tbody>
-                {ITEM_IDS.map((item) => {
+                {itemIds.map((item) => {
                   const a = history[0]!.prices[item]!;
                   const b = last.prices[item]!;
                   return (

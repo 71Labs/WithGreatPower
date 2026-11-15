@@ -8,6 +8,7 @@ import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId, Rarity } from "@wgp/game-core/types";
 
 import type { Pool } from "./math";
+import { LAUNCH_ITEM_IDS, NEW_STOCK_POOLS } from "./new-stock";
 
 export interface MarketParams {
   /** Off: no trades or new listings (open listings can still be cancelled). */
@@ -84,15 +85,20 @@ export interface PoolConfig {
   seedStock: number;
 }
 
-/** One pool per game item, in ITEMS order. */
+/** One pool per launch item, in ITEMS order: what the owner's first set_market_params seeded on chain. */
 export function defaultPoolConfigs(): PoolConfig[] {
-  return (Object.values(ITEMS) as { id: ItemId; rarity: Rarity }[]).map(({ id, rarity }) => {
+  return LAUNCH_ITEM_IDS.map((id) => ITEMS[id] as { id: ItemId; rarity: Rarity }).map(({ id, rarity }) => {
     const c = CURVES[rarity];
     // y = price · x; half the Bits sit in the till.
     const y = c.price * (c.virtualItems + c.stock);
     const seedBits = Math.floor(y / 2);
     return { item: id, virtualBits: y - seedBits, virtualItems: c.virtualItems, seedBits, seedStock: c.stock };
   });
+}
+
+/** The launch pools plus Gwei's new stock (./new-stock.ts): every item the game has. */
+export function marketPoolConfigs(): PoolConfig[] {
+  return [...defaultPoolConfigs(), ...NEW_STOCK_POOLS];
 }
 
 /** The pools as they stand right after seeding. */

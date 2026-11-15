@@ -2,7 +2,9 @@
  * Competitive runs on the server: the Daily Run, time trials and duels (game-core
  * rules/compete.ts). Each is a run like any other (issued, submitted, replayed, verified or
  * rejected; runs.ts), with its own mode, ruleset, budget and board, and none of them touches the
- * player's save, the Season boards or Bits.
+ * Season boards or Bits. The save changes only by Gwei's new stock (src/lib/market/new-stock.ts):
+ * a verified Daily adds a gas receipt (and a finality flag for a clean one) once a day, and a
+ * settled Daily's top three a torn seed phrase, once their pools are open on chain.
  *
  * - Daily (`runs.mode` "daily", ruleset "4", `runs.course` the UTC day): a patrol night on the
  *   day's seed, HMAC(SEED_SECRET, "daily-seed\0" + day), and the standard hero (dailySave), so
@@ -49,6 +51,8 @@ import { secret } from "@/server/auth/secrets";
 import { HttpError, badRequest, conflict, notFound } from "@/server/http";
 import { budgetUsed, releaseBudget, reserveBudget, utcDay } from "@/server/rate-limit";
 import { getVerifier, verifyRun, verifyTrialRun, type Verifier } from "@/server/verify";
+import { dailyAward, podiumAward } from "@/lib/market/new-stock";
+import { grantNewStock, openStockNow } from "@/server/market/new-stock";
 
 import type { Db } from "./client";
 import { queryRows } from "./client";
@@ -468,6 +472,14 @@ export async function submitCompeteRun(
     return { improved };
   });
   if (!claimed) return storedResult(db, await loadRun(), log, clientHash, now);
+  // Gwei's new stock (src/lib/market/new-stock.ts): a verified Daily earns a gas receipt, and a
+  // clean one a finality flag, once a day each, once their pools are open.
+  if (kind === "daily") {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(course) ? course : utcDay(now);
+    await grantNewStock(db, { playerId: run.playerId, awards: dailyAward(result.stats), open: await openStockNow(db), day, runId: run.id, digest, now }).catch((error: unknown) => {
+      console.error(`[new-stock] daily award for run ${run.id}: ${(error as Error).message}`);
+    });
+  }
   const verified = { ...run, status: "verified" as const, verifiedScore: result.score, ticks: result.ticks, stats: result.stats };
   const { save, rev } = await ensureSave(db, run.playerId);
   return {
@@ -585,6 +597,7 @@ export const dailySettlesAt = (day: string) => new Date(Date.parse(`${day}T00:00
  */
 export async function settleDailies(db: Db, now = new Date(), days = 3): Promise<{ day: string; playerId: string; badge: string }[]> {
   const queued: { day: string; playerId: string; badge: string }[] = [];
+  let open: Set<string> | null = null;
   let day = dayBefore(utcDay(now));
   for (let i = 0; i < days; i++, day = dayBefore(day)) {
     if (dailySettlesAt(day).getTime() > now.getTime()) continue;
@@ -610,6 +623,12 @@ export async function settleDailies(db: Db, now = new Date(), days = 3): Promise
           return res.queued;
         });
         if (done) queued.push({ day, playerId: row.playerId, badge });
+      }
+      // Gwei's new stock: a torn seed phrase for each day placed, once its pool is open.
+      open ??= await openStockNow(db);
+      if (open.size > 0) {
+        const [placed] = await db.select({ digest: runs.digest }).from(runs).where(eq(runs.id, row.runId)).limit(1);
+        if (placed?.digest) await grantNewStock(db, { playerId: row.playerId, awards: podiumAward(row.rank), open, day, runId: row.runId, digest: placed.digest, now });
       }
     }
   }

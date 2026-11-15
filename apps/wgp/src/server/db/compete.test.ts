@@ -100,10 +100,10 @@ describe("the Daily Run", () => {
     expect(c).toMatchObject({ kind: "daily", course: "2026-11-05", finished: true, improved: true, rank: 1, total: 1, ghost: null, won: null, streak: 1 });
     expect(c.best).toMatchObject({ score: res.score, ticks: played.ticks, runId: started.runId });
     expect(res.tags).toEqual(["leaderboard:daily:2026-11-05"]);
-    // The save is untouched; the Daily never reaches Tonight, the Season or All time.
+    // The save is untouched but for Gwei's new stock (src/server/market/new-stock.test.ts); the Daily never reaches Tonight, the Season or All time.
     const after = await ensureSave(db, p.id);
-    expect(after.rev).toBe(before.rev);
-    expect(after.save).toEqual(before.save);
+    expect({ ...after.save, inventory: before.save.inventory }).toEqual(before.save);
+    expect(after.save.inventory["gas-receipt"]).toBe((before.save.inventory["gas-receipt"] ?? 0) + 1);
     expect(await countEntries(db, "tonight", "2026-11-05")).toBe(0);
     expect(await countEntries(db, "season", "s1")).toBe(0);
     expect(await countEntries(db, "alltime", "all")).toBe(0);
@@ -265,7 +265,7 @@ describe("the Daily's badges and streaks", () => {
       [`daily-winner:${ps[0].id}`, `daily-podium:${ps[0].id}`, `daily-podium:${ps[1].id}`, `daily-podium:${ps[2].id}`].sort(),
     );
     expect(await settleDailies(db, new Date("2026-11-05T02:00:00Z"))).toEqual([]);
-    const ops = await db.select().from(chainOps).where(eq(chainOps.playerId, ps[0].id));
+    const ops = (await db.select().from(chainOps).where(eq(chainOps.playerId, ps[0].id))).filter((o) => !o.dedupeKey.startsWith("new-stock:"));
     expect(ops.map((o) => (o.payload as { badges: string[] }).badges).flat().sort()).toEqual(["daily-podium", "daily-winner"]);
     expect(ops.every((o) => o.kind === "mint_reward" && o.rewardNonce !== null)).toBe(true);
     const view = await competeView(db, ps[0].id, new Date("2026-11-05T02:00:00Z"));

@@ -19,7 +19,7 @@
 import { ITEMS, SUITS, VILLAINS } from "@wgp/game-core/data";
 import type { ItemId, SuitId } from "@wgp/game-core/types";
 
-import { BITS_TOKEN, DEFAULT_PARAMS, itemToken, seededPools, type InvestRules, type MarketParams, type PoolConfig } from "./config";
+import { BITS_TOKEN, DEFAULT_PARAMS, defaultPoolConfigs, itemToken, seededPools, type InvestRules, type MarketParams, type PoolConfig } from "./config";
 import { buyListing, cancelListing, listItem, marketBuy, marketClaim, marketInvest, marketSell, marketWithdraw, MarketError, memoryLedger, newBook, type MarketBook } from "./engine";
 import { DEFAULT_INVEST_RULES, earned, investRoom, tillShort } from "./invest";
 import { buyQuote, sellPayout, spotMilli } from "./math";
@@ -27,6 +27,7 @@ import { newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
 import { NPC_RULES, npcStatus, type NpcStatus } from "./npc-rules";
 import { npcTurn, walletOnBook } from "./npc-turn";
 import { nightBits } from "./rewards";
+import { caseAward, dailyAward, NEW_STOCK_POOLS, podiumAward } from "./new-stock";
 
 export type BotKind = "crafter" | "dumper" | "flipper" | "hoarder";
 
@@ -39,6 +40,14 @@ export interface EconomyConfig {
   npc?: boolean;
   /** The curves and holdings Gwei starts from (default: config.ts's, as seeded on chain). */
   pools?: PoolConfig[];
+  /**
+   * Gwei's new stock (./new-stock.ts): her four new pools open (added to `pools` where
+   * missing, at their planned seeds), and each hero also plays the Daily every night (a gas receipt; a finality
+   * flag every other night, for a clean run), closes a case every third night (an evidence
+   * bag), and three heroes a day place on the Daily (a torn seed phrase). Crafters may then
+   * chase the two new suits. Off (the default), the run is the launch market's, unchanged.
+   */
+  newStock?: boolean;
   /**
    * The contract's rule: a hero crafts each suit once ("You already own this suit"). A
    * crafter who owns all of them sells drops like a dumper. Off (the default), crafters
@@ -175,6 +184,9 @@ const CRAFTABLE = (Object.values(SUITS) as { id: SuitId; starter: boolean }[]).f
 const VILLAIN_LIST = Object.values(VILLAINS);
 const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 
+/** `pools` with Gwei's new stock added where it's missing. */
+const withNewStock = (pools: PoolConfig[]): PoolConfig[] => [...pools, ...NEW_STOCK_POOLS.filter((n) => !pools.some((p) => p.item === n.item))];
+
 /** mulberry32: a small, fast, seeded generator. */
 export function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -209,6 +221,9 @@ export class Economy {
   /** Heroes who quit (see `lifespan`); what they hold still counts in the supply. */
   readonly retired: Bot[] = [];
   readonly tally: MintTally = { nights: 0, levelUps: 0, untapered: 0, minted: 0 };
+  /** The items Gwei has pools for, and the suits whose recipes she can supply. */
+  private readonly items: ItemId[];
+  private readonly craftable: SuitId[];
   private minted = 0;
   private craftBurned = 0;
   private crafted = 0;
@@ -225,7 +240,11 @@ export class Economy {
   constructor(readonly config: EconomyConfig) {
     this.rand = rng(config.seed);
     const inv = config.investors;
-    this.book = newBook({ ...DEFAULT_PARAMS, ...config.params, ...(inv ? { invest: inv.rules ?? DEFAULT_INVEST_RULES } : {}) }, seededPools(config.pools));
+    this.book = newBook({ ...DEFAULT_PARAMS, ...config.params, ...(inv ? { invest: inv.rules ?? DEFAULT_INVEST_RULES } : {}) }, seededPools(config.newStock ? withNewStock(config.pools ?? defaultPoolConfigs()) : config.pools));
+    // Only what Gwei has a pool for is traded or crafted toward (the launch market: the eight items and four suits).
+    const pooled = new Set(this.book.pools.map((p) => p.item));
+    this.items = ITEM_IDS.filter((i) => pooled.has(i));
+    this.craftable = CRAFTABLE.filter((s) => Object.keys(SUITS[s].recipe).every((i) => pooled.has(i)));
     if (inv) {
       for (let i = 0; i < inv.count; i++) {
         const id = `investor-${i}`;
@@ -370,6 +389,20 @@ export class Economy {
       this.ledger.credit(bot.id, itemToken(item), 1);
     }
     if (this.rand() < 0.08) this.ledger.credit(bot.id, itemToken("press-pass"), 1);
+    if (this.config.newStock) this.newStock(bot);
+  }
+
+  /** Gwei's new stock, by its own rules (./new-stock.ts) on a fixed schedule: no draws, so the patrol's luck is the same. */
+  private newStock(bot: Bot) {
+    const i = this.bots.indexOf(bot);
+    const awards = [
+      ...dailyAward(bot.nights % 2 === 0 ? { fightsWon: 4 } : { fightsWon: 3, fightsLost: 1 }),
+      ...(bot.nights % 3 === 0 ? caseAward({ cleared: 1 }) : []),
+      ...(i >= 0 && (i + this.day) % this.bots.length < 3 ? podiumAward(1 + ((i + this.day) % this.bots.length)) : []),
+    ];
+    for (const a of awards) {
+      if (this.items.includes(a.item)) this.ledger.credit(bot.id, itemToken(a.item), a.amount);
+    }
   }
 
   /** Runs one market action, counting what happened; refusals are part of the game. */
@@ -393,17 +426,17 @@ export class Economy {
     for (const l of b.listings.filter((l) => l.seller === bot.id && now - l.listedAtMs > 3 * DAY_MS)) this.try(() => cancelListing(b, this.ledger, bot.id, l.id));
 
     // Under the one-suit rule a crafter with every suit has nothing left to build.
-    const kind = bot.kind === "crafter" && this.config.oneSuitEach && bot.suits.length >= CRAFTABLE.length ? "dumper" : bot.kind;
+    const kind = bot.kind === "crafter" && this.config.oneSuitEach && bot.suits.length >= this.craftable.length ? "dumper" : bot.kind;
     switch (kind) {
       case "dumper": {
-        for (const item of ITEM_IDS) {
+        for (const item of this.items) {
           const n = Math.min(this.has(bot, itemToken(item)), max);
           if (n > 0) trade(() => marketSell(b, this.ledger, bot.id, item, n, 0, now));
         }
         break;
       }
       case "crafter": {
-        bot.target ??= this.pick(this.config.oneSuitEach ? CRAFTABLE.filter((s) => !bot.suits.includes(s)) : CRAFTABLE);
+        bot.target ??= this.pick(this.config.oneSuitEach ? this.craftable.filter((s) => !bot.suits.includes(s)) : this.craftable);
         const recipe = Object.entries(SUITS[bot.target].recipe) as [ItemId, number][];
         let ready = true;
         for (const [item, need] of recipe) {
@@ -430,14 +463,14 @@ export class Economy {
           }
         }
         // Surplus commons go back to Gwei.
-        for (const item of ITEM_IDS) {
+        for (const item of this.items) {
           const spare = this.has(bot, itemToken(item)) - 6;
           if (spare > 0 && ITEMS[item].rarity === "common") trade(() => marketSell(b, this.ledger, bot.id, item, Math.min(spare, max), 0, now));
         }
         break;
       }
       case "flipper": {
-        for (const item of ITEM_IDS) {
+        for (const item of this.items) {
           const spot = this.price(item);
           const avg = this.averages.get(item) ?? spot;
           const held = this.has(bot, itemToken(item));
@@ -455,7 +488,7 @@ export class Economy {
         break;
       }
       case "hoarder": {
-        const rares = ITEM_IDS.filter((i) => ITEMS[i].rarity === "rare");
+        const rares = this.items.filter((i) => ITEMS[i].rarity === "rare");
         const item = this.pick(rares);
         const q = buyQuote(b.pools.find((p) => p.item === item)!, 1, b.params.feeBps);
         if (q && this.has(bot, BITS_TOKEN) > q.total * 2.5) trade(() => marketBuy(b, this.ledger, bot.id, item, 1, q.total, now));

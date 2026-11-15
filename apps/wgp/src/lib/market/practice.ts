@@ -46,6 +46,7 @@ import {
 } from "./engine";
 import { DEFAULT_INVEST_RULES, investorView, shopsOf } from "./invest";
 import { buyQuote, sellPayout, sellQuote, spotMilli, type Pool } from "./math";
+import { NEW_STOCK_POOLS } from "./new-stock";
 import type { NpcTraderView } from "./npc-api";
 import { dayFacts, sparkSteps, type SparkRow } from "./spark";
 import { booksToday, itemName, newBooks, type NpcBooks, type NpcEvent } from "./npc-book";
@@ -97,6 +98,8 @@ export interface PracticeState {
    * (./spark.ts), at their real times. Absent from a market stored before it was kept.
    */
   marks?: Record<string, [at: number, priceMilli: number][]>;
+  /** Gwei's new stock (./new-stock.ts) opened here before NEAR has its pool: a preview, labelled so. */
+  preview?: string[];
 }
 
 /** What the visitor brings that practice doesn't own: their saved loot and their starting Bits. Read-only here. */
@@ -127,7 +130,10 @@ function fresh(pool: Pool): Pool {
  * It is always open and always takes investors: that is what it is for.
  */
 export function seedPractice(live: Pick<MarketView, "onChain" | "params" | "items"> | null, nowMs: number): PracticeState {
-  const pools = live && live.items.length > 0 ? live.items.map((i) => fresh(i.pool)) : seededPools();
+  const opened = live && live.items.length > 0 ? live.items.map((i) => fresh(i.pool)) : seededPools();
+  // Gwei's new stock opens here at its planned seeds when the live market has no pool for it yet.
+  const preview = seededPools([...NEW_STOCK_POOLS]).filter((p) => !opened.some((o) => o.item === p.item));
+  const pools = [...opened, ...preview];
   const params: MarketParams = { ...DEFAULT_PARAMS, ...(live?.params ?? {}), open: true, invest: PRACTICE_INVEST_RULES };
   const spark: Record<string, number[]> = {};
   const marks: NonNullable<PracticeState["marks"]> = {};
@@ -151,6 +157,7 @@ export function seedPractice(live: Pick<MarketView, "onChain" | "params" | "item
     spark,
     traded: {},
     marks,
+    ...(preview.length > 0 ? { preview: preview.map((p) => p.item) } : {}),
   };
 }
 
@@ -317,6 +324,7 @@ function itemViews(s: PracticeState, nowMs: number): MarketItemView[] {
       buyOne: buyQuote(pool, 1, p.feeBps)?.total ?? null,
       sellOne: sellQuote(pool, 1, p.feeBps)?.net ?? null,
       spark,
+      ...(s.preview?.includes(pool.item) ? { preview: true } : {}),
       ...(rows ? { sparkSteps: sparkSteps(day, before, spotMilli(pool), { from, to: nowMs }) } : {}),
       // The pill and Gwei's reasoning read one history: this market's marks, which open on the live
       // market's last day and then take every trade made here (./spark.ts `dayFacts`). A market

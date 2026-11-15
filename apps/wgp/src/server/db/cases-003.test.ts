@@ -83,7 +83,8 @@ describe("Case File 003 on the server", () => {
     expect(save.hero!.level === before.hero!.level ? save.hero!.xp - before.hero!.xp : CASE_XP).toBe(CASE_XP);
 
     expect(await db.select().from(leaderboardEntries)).toEqual([]);
-    const ops = await db.select().from(chainOps);
+    // Gwei's new stock (an evidence bag for the clear) is its own mint: src/server/market/new-stock.test.ts.
+    const ops = (await db.select().from(chainOps)).filter((o) => !o.dedupeKey.startsWith("new-stock:"));
     expect(ops).toHaveLength(1);
     expect(ops[0]).toMatchObject({ kind: "mint_reward", dedupeKey: badgeKey("case-003", playerId), status: "pending" });
     expect(ops[0].payload).toMatchObject({ runId: started.runId, items: [], badges: ["case-003"] });
@@ -103,7 +104,7 @@ describe("Case File 003 on the server", () => {
     const { save: save2 } = await ensureSave(db, playerId);
     expect(save2.hero).toEqual(save.hero);
     expect(save2.cases?.["case-003"]?.bestTicks).toBe(Math.min(played.ticks, played2.ticks));
-    expect(await db.select().from(chainOps)).toHaveLength(1);
+    expect((await db.select().from(chainOps)).filter((o) => !o.dedupeKey.startsWith("new-stock:"))).toHaveLength(1);
   }, 180_000);
 
   it("refuses Case File 001's log for a case-003 run, and a case-003 log for a case-001 run", async () => {
