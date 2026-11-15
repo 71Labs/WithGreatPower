@@ -129,7 +129,7 @@ Times are from a fresh anonymous clone on Nov 14, 2026 (Apple silicon laptop).
 | Command | Expect | Time |
 |---|---|---|
 | `pnpm install --frozen-lockfile` | Exit 0 | about 25 s |
-| `pnpm test` | game-core `284 passed`, app `1785 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
+| `pnpm test` | game-core `284 passed`, app `1787 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
 | `pnpm verify` | `5/5 runs reproduced from https://www.wgponnear.fun.` (replays the All-time top 5 from the live site) | about 5 s |
 | `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `246 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
 | `pnpm evidence --chain` | `246 claims: 246 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
