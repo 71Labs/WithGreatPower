@@ -50,7 +50,7 @@ const LABELS: [label: string, file: string, inSource?: string][] = [
   ["Invest in Gwei", "components/market/invest.tsx"],
   ["Run 21 days", "app/lab/economy/economy-lab.tsx", '`Run ${plural(days, "day")}`'],
   ["Instant", "app/lab/economy/economy-lab.tsx", 'label: "Instant"'],
-  ["Recommended settings", "app/lab/economy/economy-lab.tsx"],
+  ["Run the old settings", "app/lab/economy/economy-lab.tsx"],
   ["Drain Gwei", "app/lab/economy/economy-lab.tsx"],
   ["Drain Gwei, then invest in her", "app/lab/economy/economy-lab.tsx"],
   ["Load a run where he goes broke", "app/lab/economy/npc-panel.tsx"],

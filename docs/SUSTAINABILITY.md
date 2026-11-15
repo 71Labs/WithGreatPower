@@ -99,7 +99,7 @@ In order:
 1. **Owner key to cold storage, then a timelock.** Today the owner key lives in the production environment, not in cold storage. After judging, the owner calls `set_owner` to hand `game.wgpnear.near` to a cold account whose key is on no server, and `wgpnear.near` stays the factory only. Then upgrades go behind a delay, so players can see a change before it lands. The evidence check `contract-config` asserts `owner_id` is `wgpnear.near` today and changes with that call.
 2. **Run digests on chain.** Mints already carry each run's digest. Recording a daily Merkle root of verified runs, as seasons do for their final board, lets anyone prove a reward maps to a public replay.
 3. **Independent verifiers.** The replay verifier is a pure function in `packages/game-core`. Anyone can run it; the next step is a second, independently run verifier whose agreement is required before a season is recorded.
-4. **Fees that pay for the game.** Today the 2% trade fee is burned. A split, part burned and part to the contract's storage balance, would let trading pay for the state it creates.
+4. **Fees that pay for the game.** Today the 10% trade fee is burned. A split, part burned and part to the contract's storage balance, would let trading pay for the state it creates.
 5. **Seasons as the content loop.** Season 1 ends Nov 15, 00:00 UTC; at its close the board is recorded on chain with soulbound trophies for the top 10 (built and tested; the record first runs on mainnet when Season 1 closes, and is then `get_season("s1")`). Each new season can ship a ruleset, a case file and a suit set without touching earlier seasons' records, because every mode's rules are versioned and old replays stay verifiable from their git tags.
 
 ## What keeps players coming back
