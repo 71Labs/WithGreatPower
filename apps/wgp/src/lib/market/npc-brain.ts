@@ -26,6 +26,34 @@ export const RULES_BRAIN = "rules";
 /** Why the rules picked instead of the LLM. */
 export type BrainFallback = "no_key" | "cap" | "timeout" | "error" | "invalid";
 
+/**
+ * Where the LLM runs. "near-ai": NEAR AI Cloud (private inference in TEEs), preferred when
+ * NEARAI_API_KEY is set; each answer's signature is checked (src/server/npc/nearai.ts).
+ * "moonshot": Kimi K3 through Moonshot's API (LLM_API_KEY), which signs nothing.
+ */
+export type BrainProvider = "near-ai" | "moonshot";
+
+/**
+ * What was checked about one LLM answer that he acted on (a pick or a pass). `verified` is
+ * true only for a NEAR AI Cloud answer whose signature covers this exact request and
+ * response and was made by the signing address the model's attestation report names.
+ * Anything else is `verified: false` with a short reason. It never blocks his turn: an
+ * unverified pick is kept if it is one of his legal moves (docs/npc-trader.md).
+ */
+export interface BrainVerification {
+  provider: BrainProvider;
+  model: string;
+  /** The completion's id, as the provider answered it. */
+  chatId: string | null;
+  /** The address that signed the answer (ECDSA, Ethereum-style), when a signature was read. */
+  signingAddress: string | null;
+  /** "provider_tee": the model's TEE signed it; "gateway": NEAR AI Cloud's gateway TEE did. */
+  signatureKind: string | null;
+  verified: boolean;
+  /** Why it isn't verified; null when it is. Short, and never holds a secret. */
+  reason: string | null;
+}
+
 export const NPC_BRAIN = {
   /** Moonshot's Kimi K3, unless LLM_MODEL names another of the key's models. */
   defaultModel: "kimi-k3",

@@ -316,6 +316,10 @@ export function resolveExpect(e, readDoc = read) {
 }
 
 /** One expectation against a value. Returns null when it holds, else what was wrong. */
+/** An access key's permission in one line (see the account check's keyScopes). */
+export const keyScope = (p) =>
+  p === "FullAccess" ? "FullAccess" : p?.FunctionCall ? `FunctionCall ${p.FunctionCall.receiver_id} ${[...(p.FunctionCall.method_names ?? [])].sort().join(",")}` : JSON.stringify(p);
+
 export function expectProblem(value, e) {
   if (e.unresolved) return e.unresolved;
   const got = pick(value, e.path);
@@ -501,6 +505,9 @@ async function runChainCheck(check, meta) {
         if (!k.result?.keys) return { ok: false, why: `view_access_key_list: ${k.error?.data ?? JSON.stringify(k).slice(0, 200)}` };
         value.keys = k.result.keys.map((key) => key.public_key);
         value.fullAccessKeys = k.result.keys.filter((key) => key.access_key?.permission === "FullAccess").map((key) => key.public_key);
+        // What each key may do, one entry per distinct permission: "FullAccess", or "FunctionCall <receiver> <methods, sorted>"
+        // (no methods listed means every method of the receiver, which never equals a list).
+        value.keyScopes = [...new Set(k.result.keys.map((key) => keyScope(key.access_key?.permission)))].sort();
       }
     } else if (check.kind === "tx") {
       const j = await rpc(meta.archivalRpc, "tx", { tx_hash: check.hash, sender_account_id: check.sender, wait_until: "FINAL" });

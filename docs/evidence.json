@@ -3697,7 +3697,7 @@
       "id": "status-npc",
       "section": "status",
       "source": "README.md",
-      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, and is never counted as a player. An LLM (Kimi K3) picks among the moves his fixed rules allow when the server has its API key; without it, the rules pick.",
+      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, and is never counted as a player. An LLM picks among the moves his fixed rules allow when the server has a key: NEAR AI Cloud (NEARAI_API_KEY), whose answers' signatures are checked, else Kimi K3 (LLM_API_KEY); without either, the rules pick.",
       "status": "proven on chain",
       "code": [
         {
@@ -3741,6 +3741,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
           "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "is NEAR AI Cloud when NEARAI_API_KEY is set, else Kimi with LLM_API_KEY, else the rules"
         }
       ],
       "chain": [
@@ -5573,6 +5578,125 @@
         "site-npc"
       ],
       "note": "The check accepts either mode and fails only if the field is missing; the answer says which brain is live right now."
+    },
+    {
+      "id": "npc-brain-nearai",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "NEAR AI Cloud is preferred when NEARAI_API_KEY is set",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export function npcBrainConfig("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/nearai.ts",
+          "anchor": "export function checkSignature("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/nearai.ts",
+          "anchor": "export function checkReport("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "is NEAR AI Cloud when NEARAI_API_KEY is set, else Kimi with LLM_API_KEY, else the rules"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "is verified when it covers this exact request and response and its signer is the attested one"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "binds the request and the response: a different body on either side is unverified"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "is kept only when it echoes our nonce and its quote's report data binds the signer and the nonce"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "matches the Ethereum test vectors"
+        }
+      ],
+      "note": "The tests use fake NEAR AI endpoints and a throwaway secp256k1 key (the suite fails any real network request). The order is NEAR AI Cloud, then Kimi, then the rules. A signature counts as verified only when its text is the model id and the sha256 of the exact request and response bytes, the EIP-191 signer recovers to its signing_address, and that address is the one the model's attestation report binds to our nonce in its TDX quote report data. The quote's Intel and NVIDIA evidence is not verified on the server. Whether NEAR AI answers in production depends on NEARAI_API_KEY; brain.provider in /api/market/npc says which provider is live."
+    },
+    {
+      "id": "npc-brain-unverified",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "A failed or unavailable verification never blocks his turn: the pick is kept if it is one of his legal moves, and the move is recorded as unverified with a short reason.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/nearai.ts",
+          "anchor": "export async function verifyNearAiAnswer("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "is unverified when its signer isn't the attested address, and the pick still stands"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "is unverified, never blocking, when the signature or the attestation can't be read in time"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "falls back to the rules without a key, on an HTTP error or on a timeout, with nothing to verify"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "records the verification on his ledger line and his last decision"
+        }
+      ],
+      "note": "An address mismatch, a missing signature (404, retried twice) and an attestation read that times out all leave the pick in place with verified: false and a reason; the logs name what failed and hold no key, prompt, answer or reasoning_content. A completion that fails or times out is a rules move, as before, with nothing to verify."
+    },
+    {
+      "id": "npc-visit-trigger",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "With no visitors there is no turn; with visitors he takes at most one turn every 15 minutes, still capped at 10 actions a day.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/background.ts",
+          "anchor": "export function npcVisitSoon("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/store.ts",
+          "anchor": "export async function claimRun("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/nearai.test.ts",
+          "name": "gives a visit a turn only when his last one started 15 minutes ago or more, and two visits at once act once"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/background.test.ts",
+          "name": "asks for a turn after a visit's response, at most once a minute per instance; the 15-minute gap is his lock's"
+        }
+      ],
+      "note": "A visit to /api/stats, /api/leaderboard, /api/seasons, /api/me or /api/market/* schedules after() work that runs his turn with a 15-minute minimum gap, checked by his row lock (claimRun), so concurrent visits act once. Nothing is scheduled without a request: there is no cron and no external pinger. The 5-minute market trigger and the 10 actions and 10 LLM calls a day are unchanged."
     },
     {
       "id": "npc-brain-secrets",

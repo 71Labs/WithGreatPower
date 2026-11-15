@@ -27,22 +27,43 @@ export interface NpcTraderView {
   /** Actions he may still take today, and Bits he may still spend. */
   actionsLeft: number;
   budgetLeft: number;
-  /** Newest first. `brain` is who picked the move (the LLM's model id, e.g. "kimi-k3", or "rules"); null on lines no brain decided (a sale, the seed) and older ones. */
-  log: { at: string; kind: NpcEventKind; text: string; reason: string; txHash: string | null; txUrl: string | null; brain?: string | null }[];
   /**
-   * Who picks his moves (src/lib/market/npc-brain.ts). "llm": the model (`model`, Kimi K3
-   * by default) picks among the legal moves his rules allow, or passes, and the rules pick
-   * when it can't answer. "rules": the rules alone (no LLM_API_KEY, or not on chain).
+   * Newest first. `brain` is who picked the move (the LLM's model id, e.g. "kimi-k3", or "rules"); null on lines no brain decided (a sale, the seed) and older ones.
+   * `verified`: for a move an LLM picked, whether its answer's signature checked out (NEAR AI Cloud only); null where there was nothing to check.
+   */
+  log: { at: string; kind: NpcEventKind; text: string; reason: string; txHash: string | null; txUrl: string | null; brain?: string | null; verified?: boolean | null }[];
+  /**
+   * Who picks his moves (src/lib/market/npc-brain.ts). "llm": the model (`model`; NEAR AI
+   * Cloud's when NEARAI_API_KEY is set, else Kimi K3) picks among the legal moves his rules
+   * allow, or passes, and the rules pick when it can't answer. "rules": the rules alone (no
+   * LLM key, or not on chain).
    * Absent in the practice market, which runs on the rules.
    */
   brain?: {
     mode: "llm" | "rules";
     /** The model id when mode is "llm". */
     model: string | null;
+    /** Where the LLM runs when mode is "llm": "near-ai" (NEAR AI Cloud, NEARAI_API_KEY) or "moonshot" (Kimi, LLM_API_KEY). */
+    provider?: "near-ai" | "moonshot" | null;
     maxCallsPerDay: number;
     callsLeft: number;
     /** The last turn that had a move to pick, on chain: who picked (a model id or "rules"), what, and why the rules did if they did. */
     last: { at: string; by: string; pick: string; text: string | null; reason: string; fallback: string | null; options: number } | null;
+    /**
+     * The newest LLM answer he acted on and what was checked: `verified` is true only when a
+     * NEAR AI Cloud signature covered that exact request and response and its signer matched
+     * the model's attestation report; otherwise false with a short `reason`. Null before any.
+     */
+    lastVerification?: {
+      at: string;
+      provider: string;
+      model: string;
+      chatId: string | null;
+      signingAddress: string | null;
+      signatureKind: string | null;
+      verified: boolean;
+      reason: string | null;
+    } | null;
   };
   /** The public key his on-chain calls are signed with (public, not a secret); null off chain. */
   signerKey?: string | null;

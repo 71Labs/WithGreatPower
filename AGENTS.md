@@ -18,7 +18,7 @@ Each row names the code, a command or test that exercises it, and its row in [do
 | A market inside the contract | A constant-product pool per item, escrowed player listings, a 5% fee that is burned (and 250 Bits burned per crafted suit), 12 pools since Nov 15, and a vendor that stops buying an item when its till is empty | `contracts/wgp/src/market.rs` (`market_buy`, `list_item`) | Command A (`market_state` on mainnet) | `judge-3`, `economy-burn-fee`, `near-market-guards`, `track-merchant-closed-reason` |
 | Gasless play | A function-call session key signs NEP-366 delegate actions; the relayer accepts one call to an allowlisted method, with zero deposit, at most 30 Tgas and within budgets | `apps/wgp/src/server/near/relay.ts`, `apps/wgp/src/server/near/session-keys.ts` | `apps/wgp/src/server/near/relay.test.ts`, `relay-budget.test.ts`; a relayed mainnet trade | `intro-no-popups`, `judge-relayed-trade`, `near-relay` |
 | Reward outbox | A verified run queues its mint in the same database transaction; the operator sends `mint_rewards` in batches with a per-account nonce, so a retry never mints twice | `apps/wgp/src/server/near/mint-worker.ts`, `contracts/wgp/src/lib.rs` (`mint_rewards`) | `apps/wgp/src/server/near/mint-worker.test.ts` | `near-rewards`, `proven-mint` |
-| An NPC with its own wallet and an LLM brain | Sandwich Man trades from `sandwich.wgpnear.near` with the same market calls players use. His fixed rules list every legal move; Kimi K3 (Moonshot) picks one or passes, and the server keeps the pick only if it is listed. The rules decide on a timeout, an error or after 10 LLM calls a day | `apps/wgp/src/lib/market/npc-rules.ts`, `apps/wgp/src/lib/market/npc-brain.ts`, `apps/wgp/src/server/npc/brain.ts` | `curl -s https://www.wgponnear.fun/api/market/npc \| jq '{mode, accountId, bits, brain, log}'` | `track-agent-npc`, `npc-brain-live` |
+| An NPC with its own wallet and an LLM brain | Sandwich Man trades from `sandwich.wgpnear.near` with the same market calls players use. His fixed rules list every legal move; an LLM picks one or passes, and the server keeps the pick only if it is listed: NEAR AI Cloud when `NEARAI_API_KEY` is set (each answer's signature checked against the request, the response and the model's attested signer, recorded as `verified`, never blocking), else Kimi K3 (Moonshot). The rules decide on a timeout, an error or after 10 LLM calls a day. He takes a turn only after a request: a trade or listing, a market read (5-minute window) or any visit to a busy route once 15 minutes have passed since his last turn | `apps/wgp/src/lib/market/npc-rules.ts`, `apps/wgp/src/lib/market/npc-brain.ts`, `apps/wgp/src/server/npc/brain.ts`, `apps/wgp/src/server/npc/nearai.ts`, `apps/wgp/src/server/background.ts` (`npcVisitSoon`) | `curl -s https://www.wgponnear.fun/api/market/npc \| jq '{mode, accountId, bits, brain, log}'`; `apps/wgp/src/server/npc/nearai.test.ts` | `track-agent-npc`, `npc-brain-live`, `npc-brain-nearai`, `npc-visit-trigger` |
 | A faucet with a taper | A verified night pays its Bits in full up to 150 held and less above, down to the 5 for showing up at 400; it reads only the verified result and the hero's balance, so no score or replay changes | `apps/wgp/src/lib/market/rewards.ts` (`nightPay`), `apps/wgp/src/server/market/held.ts` | `/lab/economy` (opens on the live settings, with a switch to the old ones) | `econdoc-owner-settings` |
 | Gwei's wanted list | Each UTC day the items Gwei is short on (sold out, low stock or priced up) become a frozen list; verified nights that bring them get extra drops of those items, capped per night and per day | `apps/wgp/src/lib/market/wanted.ts`, `apps/wgp/src/server/market/wanted.ts` | `curl -s https://www.wgponnear.fun/api/market/wanted` | `economy-wanted-list` |
 | Gwei's new stock | Four items earned from the Daily Run and cases, two suits that burn them, and their pools; awarded only while the pool exists on chain | `apps/wgp/src/lib/market/new-stock.ts`, `apps/wgp/src/server/market/new-stock.ts` | Open `/play/market` | `status-new-stock` |
@@ -70,11 +70,11 @@ The player transactions above come from five different accounts, none of them th
 
 ## The evidence ledger at a glance
 
-`docs/evidence.json` holds 252 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
+`docs/evidence.json` holds 255 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
 
 | Status | Claims |
 |---|---|
-| `proven by test` | 126 |
+| `proven by test` | 129 |
 | `proven on chain` | 60 |
 | `live check` | 20 |
 | `pinned by test` | 8 |
@@ -129,10 +129,10 @@ Times are from a fresh anonymous clone on Nov 14, 2026 (Apple silicon laptop).
 | Command | Expect | Time |
 |---|---|---|
 | `pnpm install --frozen-lockfile` | Exit 0 | about 25 s |
-| `pnpm test` | game-core `284 passed`, app `1799 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
+| `pnpm test` | game-core `284 passed`, app `1811 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
 | `pnpm verify` | `5/5 runs reproduced from https://www.wgponnear.fun.` (replays the All-time top 5 from the live site) | about 5 s |
-| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `252 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
-| `pnpm evidence --chain` | `252 claims: 252 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
+| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `255 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
+| `pnpm evidence --chain` | `255 claims: 255 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
 | `pnpm evidence --chain --only <id>,<id>` | Re-runs single claims (ids are in `docs/EVIDENCE.md`) | seconds |
 | `pnpm typecheck` / `pnpm lint` / `pnpm build` | Exit 0; the build needs no database URL | under 1 min each |
 | `pnpm stats` | Counts from NearBlocks and `/api/stats`; NearBlocks rate-limits, so it can take a couple of minutes | 1–3 min |

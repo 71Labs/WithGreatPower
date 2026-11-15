@@ -9,7 +9,7 @@ import { connection } from "next/server";
 
 import { clientIp, handle, json } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
-import { snapshotMarketSoon } from "@/server/background";
+import { npcVisitSoon, snapshotMarketSoon } from "@/server/background";
 import { marketView } from "@/server/market/view";
 import { rateLimiter } from "@/server/rate-limit";
 
@@ -18,6 +18,7 @@ export const GET = handle("market", (request: Request) =>
     await connection();
     rateLimiter.enforce("market-ip", clientIp(request), MARKET_LIMITS.readPerIp);
     snapshotMarketSoon();
+    npcVisitSoon();
     return json(await marketView(), { cacheSeconds: 10 });
   }),
 );

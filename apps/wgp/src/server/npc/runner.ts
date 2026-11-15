@@ -5,13 +5,16 @@
  * (src/server/background.ts `npcTraderSoon`):
  * - when real market activity lands: a player's relayed trade or listing (the relayer's
  *   market hook, src/server/market/relay.ts) or a simulated one (/api/market/trade);
- * - when someone reads the market, at most once every five minutes.
+ * - when someone reads the market, at most once every five minutes;
+ * - on any visit to a busy route, if his last look started 15 minutes ago or more
+ *   (`npcVisitSoon`). No visitors, no look.
  *
  * Each look: take his lock (src/server/npc/store.ts; no two looks overlap, and none within
  * MIN_GAP_MS of the last), read the market, his wallet and the listings, bring his books
  * up to date and ask `decide` (src/lib/market/npc-rules.ts) for every legal move. On chain
- * a brain then picks one (./brain.ts): an LLM (Kimi K3 by default), among those moves or
- * "pass", when LLM_API_KEY is set and the day's LLM calls aren't used up; otherwise, or
+ * a brain then picks one (./brain.ts): an LLM (NEAR AI Cloud with NEARAI_API_KEY, else Kimi
+ * K3 with LLM_API_KEY), among those moves or "pass", when the day's LLM calls aren't used
+ * up; a NEAR AI answer's signature is checked and recorded, never blocking; otherwise, or
  * when the LLM can't answer in time, the rules' first move. At most one action is sent. Against
  * the contract he signs with his own key (./chain.ts); when the simulated market stands
  * in, he trades there by the rules alone (./sim.ts). Whatever happens is written to his
@@ -32,6 +35,7 @@ import { readChainListings, readChainMarket, readChainWallet, type ChainMarket, 
 import { recordTrade } from "../market/history";
 import { marketView, refreshMarket } from "../market/view";
 import { chooseMove, npcBrainConfig, type BrainConfig, type BrainFetch } from "./brain";
+import type { NearAiFetch } from "./nearai";
 import { sendNpcAction, type NpcSent } from "./chain";
 import { NPC_SIM_ACCOUNT, npcTraderEnv } from "./env";
 import { npcSimTurn } from "./sim";
@@ -78,6 +82,11 @@ export interface NpcRunOptions {
   brain?: BrainConfig | null;
   /** The fetch the LLM call uses; tests pass a fake. */
   brainFetch?: BrainFetch;
+  /** The fetch NEAR AI's attestation and signature reads use; tests pass a fake. */
+  verifyFetch?: NearAiFetch;
+  /** Timeout of each of those reads, and the wait between signature retries; tests shorten them. */
+  verifyTimeoutMs?: number;
+  verifyRetryDelayMs?: number;
 }
 
 /** What the brain is told: his legal moves, his wallet and what he holds, in words. */
@@ -107,7 +116,7 @@ function expireMarket() {
 /** The day's LLM call count after this look, set the moment a call is made. */
 type BrainMeter = { brain?: Pick<NpcState, "brainDay" | "brainCalls"> };
 
-async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: NpcChain, now: Date, brain: { config: BrainConfig | null; fetch?: BrainFetch }, meter: BrainMeter) {
+async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: NpcChain, now: Date, brain: { config: BrainConfig | null; fetch?: BrainFetch; verifyFetch?: NearAiFetch; verifyTimeoutMs?: number; verifyRetryDelayMs?: number }, meter: BrainMeter) {
   const t = now.getTime();
   const market = await chain.market();
   if (!market) return { books: state.books, events: [] as NpcEvent[], report: { why: "nothing_to_do" } as const };
@@ -128,7 +137,17 @@ async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: N
   });
   if (choice.called) meter.brain ??= withBrainCall(state, t);
   const action = choice.action;
-  const decision: NpcDecision = { at: t, by: choice.by, pick: action?.kind ?? "pass", text: action?.text ?? null, reason: choice.reason, fallback: choice.fallback, options: options.length };
+  const decision: NpcDecision = {
+    at: t,
+    by: choice.by,
+    pick: action?.kind ?? "pass",
+    text: action?.text ?? null,
+    reason: choice.reason,
+    fallback: choice.fallback,
+    options: options.length,
+    provider: choice.provider,
+    verification: choice.verification,
+  };
   const said = { brain: choice.by, fallback: choice.fallback } as const;
   if (!action) return { books: seen.books, events: seen.events, decision, report: { why: "passed", ...said } as const };
 
@@ -137,7 +156,7 @@ async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: N
     console.error(`[npc] ${action.kind} ${action.item} refused: ${sent.error}`);
     return { books: settleRefused(seen.books), events: seen.events, decision, refusal: { at: t, text: action.text, error: sent.error, txHash: sent.txHash }, report: { why: "refused", error: sent.error, ...said } as const };
   }
-  const event: NpcEvent = { ...eventOf(action, sent.outcome, t, true, sent.txHash), brain: choice.by };
+  const event: NpcEvent = { ...eventOf(action, sent.outcome, t, true, sent.txHash), brain: choice.by, ...(choice.verification ? { verification: choice.verification } : {}) };
   if (action.kind === "buy" || action.kind === "sell" || action.kind === "fill") {
     // The price history row any relayed trade writes (src/server/market/relay.ts), under his account.
     const after = action.kind === "fill" ? market : ((await chain.market().catch(() => null)) ?? market);
@@ -185,7 +204,7 @@ export async function runNpcTrader(db: Db, opts: NpcRunOptions = {}): Promise<Np
   let report: Pick<NpcRunReport, "why" | "event" | "error" | "brain" | "fallback"> = { why: "nothing_to_do" };
   try {
     if (env) {
-      const turn = await chainTurn(db, claim.state, env, opts.chain ?? realChain, now, { config: opts.brain === undefined ? npcBrainConfig() : opts.brain, fetch: opts.brainFetch }, meter);
+      const turn = await chainTurn(db, claim.state, env, opts.chain ?? realChain, now, { config: opts.brain === undefined ? npcBrainConfig() : opts.brain, fetch: opts.brainFetch, verifyFetch: opts.verifyFetch, verifyTimeoutMs: opts.verifyTimeoutMs, verifyRetryDelayMs: opts.verifyRetryDelayMs }, meter);
       update = { books: turn.books, events: turn.events, refusal: turn.refusal, decision: "decision" in turn ? turn.decision : undefined };
       report = turn.report;
     } else {
