@@ -5527,7 +5527,7 @@
       "id": "npc-no-powers",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "The server only ever sends these five calls from his account; his key is a full-access key.",
+      "quote": "The server only ever sends these five calls from his account, and his account's only key is a function-call key limited to game.wgpnear.near and those five methods.",
       "status": "proven by test",
       "code": [
         {
@@ -5549,7 +5549,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
-          "name": "says whose limit his five calls are: the server's, with a full-access key, and the planned swap under Limits"
+          "name": "says whose limit his five calls are: the key's and the server's, a function-call key limited to the five"
         }
       ],
       "chain": [
@@ -5557,7 +5557,7 @@
         "sandwich-wallet",
         "tx-npc-first-trade"
       ],
-      "note": "The limit to five methods is the server's, so a test proves it: every action the runner can take becomes one of those five calls. The key is a full-access key of his own account, which the chain check shows (one key, full access); nothing on chain stops that key sending another call. The planned swap to a function-call key is under Limits. The other checks add what mainnet shows: he has no hero and no role, and the one call he has sent is a market_buy."
+      "note": "Two limits, both checked. On chain: the account check reads his access keys and requires that none has full access and that every key is a function-call key limited to game.wgpnear.near and the five market methods. In the server: a test shows every action the runner can take becomes one of those five calls. The other checks add what mainnet shows: he has no hero and no role, and his first call was a market_buy."
     },
     {
       "id": "npc-runner",
@@ -7864,7 +7864,7 @@
       "kind": "account",
       "account": "sandwich.wgpnear.near",
       "keys": true,
-      "about": "Sandwich Man's account exists on mainnet, holds NEAR for gas, runs no contract code and has exactly one key: the full-access key its creating transaction added.",
+      "about": "Sandwich Man's account exists on mainnet, holds NEAR for gas, runs no contract code, and its keys are only function-call keys, each limited to game.wgpnear.near and his five market methods (market_buy, market_sell, list_item, buy_listing, cancel_listing): no full-access key.",
       "expect": [
         {
           "path": "exists",
@@ -7883,16 +7883,23 @@
         },
         {
           "path": "keys.length",
-          "op": "eq",
+          "op": "gte",
           "value": 1
         },
         {
           "path": "fullAccessKeys",
-          "op": "includes",
-          "value": "ed25519:2JdLK77r21bBczZK5GyAjapnwAhXaTWz4CjLWFHZkiuP"
+          "op": "eq",
+          "value": []
+        },
+        {
+          "path": "keyScopes",
+          "op": "eq",
+          "value": [
+            "FunctionCall game.wgpnear.near buy_listing,cancel_listing,list_item,market_buy,market_sell"
+          ]
         }
       ],
-      "whenFails": "If the key differs, the owner rotated it: put the new public key here. If the account is gone or out of NEAR, he was retired or needs a top-up: update the README's track table and docs/npc-trader.md."
+      "whenFails": "If fullAccessKeys isn't empty, a full-access key is back on his account; if keyScopes differs, a key reaches another contract or method. Either way the README's Trust line and docs/npc-trader.md's Limits no longer hold: fix the keys or the docs. If the account is gone or out of NEAR, he was retired or needs a top-up."
     },
     "sandwich-bits": {
       "kind": "holdings",

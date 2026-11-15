@@ -36,7 +36,7 @@ Each row names the code, a command or test that exercises it, and its row in [do
 | `wgpnear.near` | The contract's owner, and the factory that creates `<name>.wgpnear.near` player accounts |
 | `operator.wgpnear.near` | Sends `mint_rewards` for verified runs and `record_season` |
 | `relayer.wgpnear.near` | Pays gas for players' NEP-366 meta-transactions; the NEAR Intents gas tank refills it |
-| `sandwich.wgpnear.near` | Sandwich Man, the NPC trader, signing with his own key |
+| `sandwich.wgpnear.near` | Sandwich Man, the NPC trader, signing with his own function-call key (`game.wgpnear.near`, his five market methods only) |
 
 Transactions the evidence ledger looks up again on every `--chain` run (check ids are in `docs/evidence.json`):
 

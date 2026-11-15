@@ -8,7 +8,7 @@ This page lists the keys the game's accounts have on mainnet, what the server do
 |---|---|---|
 | `wgpnear.near`, the contract's owner and the factory that creates player accounts | 1, full access: `ed25519:8ftaeLhZBrurvudEDN9oZNgoYxisjtM4EQUaehpywzD9` | The production server (`FACTORY_PRIVATE_KEY`) and the owner |
 | `game.wgpnear.near`, the contract | 1, full access: `ed25519:AnyHSxwG7eD3CMAtdhwHByqLrMPVNHeZ7zAQUJtcUtE4` | The owner's machine; not the server |
-| `sandwich.wgpnear.near`, the NPC trader | 1, full access: `ed25519:2JdLK77r21bBczZK5GyAjapnwAhXaTWz4CjLWFHZkiuP` | The production server (`NPC_TRADER_PRIVATE_KEY`) and the owner |
+| `sandwich.wgpnear.near`, the NPC trader | Function-call only, after step 1: `game.wgpnear.near`; `market_buy`, `market_sell`, `list_item`, `buy_listing`, `cancel_listing`. The full-access key `ed25519:2JdLK77r21bBczZK5GyAjapnwAhXaTWz4CjLWFHZkiuP` was deleted | The production server (`NPC_TRADER_PRIVATE_KEY`) |
 
 Read them yourself (public keys and permissions only):
 

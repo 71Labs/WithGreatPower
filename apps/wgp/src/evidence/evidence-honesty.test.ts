@@ -230,19 +230,18 @@ describe("wording that has to be the same everywhere", () => {
     expect(read("apps/wgp/src/app/lab/economy/invest-panel.tsx")).not.toMatch(/built and reviewed/);
   });
 
-  it("says whose limit his five calls are: the server's, with a full-access key, and the planned swap under Limits", () => {
+  it("says whose limit his five calls are: the key's and the server's, a function-call key limited to the five", () => {
     const doc = plainDoc("docs/npc-trader.md");
-    expect(doc).toContain("The server only ever sends these five calls from his account; his key is a full-access key.");
-    expect(doc).toContain("the server only ever sends these five calls from his account (his key is a full-access key)");
-    expect(doc).not.toMatch(/He can call only the five/);
+    expect(doc).toContain("The server only ever sends these five calls from his account, and his account's only key is a function-call key limited to game.wgpnear.near and those five methods.");
+    expect(doc).not.toMatch(/his key is a full-access key|Planned: a function-call key/);
     const limits = doc.slice(doc.indexOf("\n## Limits\n"), doc.indexOf("\n## Tests\n"));
-    expect(limits).toContain("Planned: a function-call key.");
-    expect(limits).toContain("Not done as of Nov 13");
-    // The chain check agrees with the page: one key, full access.
+    expect(limits).toContain("His key is a function-call key.");
+    // The chain check agrees with the page: no full-access key, and every key limited to the contract and the five methods.
     const account = checks["sandwich-account"]!.expect!;
-    expect(account.some((e) => e.path === "fullAccessKeys" && e.op === "includes")).toBe(true);
+    expect(account).toContainEqual({ path: "fullAccessKeys", op: "eq", value: [] });
+    expect(account).toContainEqual({ path: "keyScopes", op: "eq", value: ["FunctionCall game.wgpnear.near buy_listing,cancel_listing,list_item,market_buy,market_sell"] });
     expect(claim("npc-no-powers").chain).toContain("sandwich-account");
-    expect(plainDoc("README.md")).toContain("Sandwich Man's key is a full-access key of his own account: the server only ever sends his five market calls, and a function-call key is the planned swap");
+    expect(plainDoc("README.md")).toContain("Sandwich Man's account has only a function-call key, limited to game.wgpnear.near and his five market calls, and the server sends only those");
   });
 
   it("the README opens with the game: a plain pitch, one screenshot, the Play link and a status table whose rows each link an evidence row", () => {
