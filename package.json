@@ -15,6 +15,7 @@
     "stats": "node scripts/stats.mjs",
     "traction": "node scripts/traction.mjs",
     "costs": "node scripts/costs.mjs",
+    "txs": "node scripts/transactions.mjs",
     "evidence": "node scripts/evidence.mjs"
   }
 }
