@@ -428,7 +428,8 @@ function npcView(state: PracticeState, base: PracticeBase, nowMs: number): NpcTr
 export function stageItem(state: PracticeState): ItemId | null {
   let best: Pool | null = null;
   for (const pool of state.book.pools) {
-    if (!isItem(pool.item) || sellPayout(pool, 1) > pool.bits) continue;
+    // A preview of Gwei's new stock isn't a live shop: stage on one NEAR has.
+    if (!isItem(pool.item) || state.preview?.includes(pool.item) || sellPayout(pool, 1) > pool.bits) continue;
     if (!best || pool.bits < best.bits) best = pool;
   }
   return best ? (best.item as ItemId) : null;

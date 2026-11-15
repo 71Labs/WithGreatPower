@@ -13,7 +13,7 @@ import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
 import type { MarketItemView, MarketView } from "@/lib/market/api";
-import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { DEFAULT_PARAMS, marketPoolConfigs, seededPools } from "@/lib/market/config";
 import { formatChange } from "@/lib/market/format";
 import { afterBuy, buyQuote, sellQuote, spotMilli, type Pool } from "@/lib/market/math";
 import { practiceBase, practiceScreen, practiceTrade, seedPractice } from "@/lib/market/practice";
@@ -143,7 +143,7 @@ describe("the practice market: the pill and Why this price? agree", () => {
   it("with no history (the live market had a quiet day, or there is no live market): flat pills, no claimed move", () => {
     for (const live of [liveView(quiet(), true), null]) {
       const items = practiceScreen(seedPractice(live, NOW), practiceBase(0, {}), NOW + 60_000).view.items;
-      expect(items).toHaveLength(seededPools().length);
+      expect(items).toHaveLength(marketPoolConfigs().length);
       for (const i of items) {
         const s = agrees(i);
         expect(s.moved).toBe(false);

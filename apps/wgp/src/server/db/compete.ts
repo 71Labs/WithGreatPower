@@ -628,7 +628,7 @@ export async function settleDailies(db: Db, now = new Date(), days = 3): Promise
       open ??= await openStockNow(db);
       if (open.size > 0) {
         const [placed] = await db.select({ digest: runs.digest }).from(runs).where(eq(runs.id, row.runId)).limit(1);
-        if (placed?.digest) await grantNewStock(db, { playerId: row.playerId, awards: podiumAward(row.rank), open, day, runId: row.runId, digest: placed.digest, now });
+        if (placed?.digest) await grantNewStock(db, { playerId: row.playerId, awards: podiumAward(row.rank), open, day, runId: row.runId, digest: placed.digest, now, waitForRun: true });
       }
     }
   }

@@ -66,7 +66,7 @@ describe("Gwei's new stock on the server", () => {
     expect({ ...after.save, inventory: before.save.inventory }).toEqual(before.save);
     const ops = (await db.select().from(chainOps).where(eq(chainOps.playerId, playerId))).sort((a, b) => (a.rewardNonce ?? 0) - (b.rewardNonce ?? 0));
     expect(ops.map((o) => o.dedupeKey).sort()).toEqual([`new-stock:finality-flag:${playerId}:2026-11-16`, `new-stock:gas-receipt:${playerId}:2026-11-16`]);
-    expect(ops.map((o) => rewardFromOp(o).items)).toEqual([[{ tokenId: "item:gas-receipt", amount: 1 }], [{ tokenId: "item:finality-flag", amount: 1 }]]);
+    expect(ops.map((o) => rewardFromOp(o).items)).toEqual([[{ item: "gas-receipt", amount: 1 }], [{ item: "finality-flag", amount: 1 }]]);
     expect(ops.map((o) => o.rewardNonce)).toEqual([1, 2]);
     // A second Daily that day, or a retried submit: nothing more.
     expect(await grantNewStock(db, { ...input, runId: "r2" })).toEqual([]);

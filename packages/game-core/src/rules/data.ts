@@ -162,7 +162,7 @@ export const SUITS: Record<SuitId, Suit> = {
   octo: { id: "octo", name: "Octo rig", colors: { suit: "#3E8E4A", web: "#5A3A22", lens: "#FFD95A" }, starter: false, recipe: { "spare-arm": 1, "chain-link": 3 }, minLevel: 3, blurb: "Doc’s spare arm, repurposed. It mostly behaves." },
   sesame: { id: "sesame", name: "Sesame", colors: { suit: "#E8B25C", web: "#7A4A1C", lens: "#FFFFFF" }, starter: false, recipe: { crumbs: 4, "sesame-seed": 1 }, minLevel: 2, blurb: "Smells like the Mempool Market at lunch." },
   notary: { id: "notary", name: "Notary", colors: { suit: "#B89A6A", web: "#3B2F22", lens: "#F4F1E8" }, starter: false, recipe: { "evidence-bag": 3, "gas-receipt": 2 }, minLevel: 2, blurb: "Every clue bagged, every receipt kept. Mary Jpeg signs off." },
-  finality: { id: "finality", name: "Finality", colors: { suit: "#F4F4F2", web: "#141414", lens: "#00EC97" }, starter: false, recipe: { "finality-flag": 2, "seed-phrase": 1 }, minLevel: 3, blurb: "Settled, signed, irreversible. Mostly the last one." },
+  finality: { id: "finality", name: "Finality", colors: { suit: "#2F3E46", web: "#E9C46A", lens: "#00EC97" }, starter: false, recipe: { "finality-flag": 2, "seed-phrase": 1 }, minLevel: 3, blurb: "Settled, signed, irreversible. Mostly the last one." },
 };
 
 export interface District {

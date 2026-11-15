@@ -13,7 +13,7 @@
  * so nothing is awarded. If the market can't be read, nothing is awarded either (a later
  * verified result the same day still can be).
  */
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 
 import type { Save } from "@wgp/game-core/types";
 
@@ -26,7 +26,7 @@ import {
 import type { Db } from "../db/client";
 import { enqueueRewardMint, itemTokenId } from "../db/outbox";
 import { ensureSave, getPlayer, writeSave } from "../db/players";
-import { saves } from "../db/schema";
+import { runs, saves } from "../db/schema";
 import { readChainMarket, type ChainReader } from "./chain";
 import { readSim } from "./sim";
 
@@ -105,14 +105,26 @@ export async function grantNewStockTx(
   return { save, rev, granted };
 }
 
-/** Award in a transaction of its own (locks the save row). For callers that aren't already writing the save. */
+/**
+ * Award in a transaction of its own (locks the save row). For callers that aren't already writing the save.
+ * `waitForRun`: award nothing while the player has a run in flight (its submit checks the save's revision,
+ * so a write now would cost them that run); the caller tries again later (settleDailies looks back 3 days).
+ */
 export async function grantNewStock(
   db: Db,
-  input: Omit<GrantInput, "accountId">,
+  input: Omit<GrantInput, "accountId"> & { waitForRun?: boolean },
 ): Promise<NewStockAward[]> {
   if (!input.awards.some((a) => input.open.has(a.item))) return [];
   const player = await getPlayer(db, input.playerId);
   if (!player) return [];
+  if (input.waitForRun) {
+    const [inFlight] = await db
+      .select({ id: runs.id })
+      .from(runs)
+      .where(and(eq(runs.playerId, input.playerId), eq(runs.status, "issued"), gt(runs.expiresAt, input.now)))
+      .limit(1);
+    if (inFlight) return [];
+  }
   await ensureSave(db, input.playerId);
   return db.transaction(async (tx) => {
     const [row] = await tx
