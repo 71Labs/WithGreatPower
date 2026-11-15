@@ -24,6 +24,7 @@ import { CircleAlert, Coins, ExternalLink, Hourglass, KeyRound, LogIn, Store, Ta
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { showToast, useAccount, useGame } from "@/game/store";
 import { RARITY_LABEL } from "@wgp/game-core/data";
+import { NewStockTag } from "./new-stock-tag";
 import type { ItemId } from "@wgp/game-core/types";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest, StakeRequest } from "@/lib/market/api";
@@ -202,7 +203,10 @@ function ItemCard({ item, me, params, coached, onTrade, stall }: { item: MarketI
         <MiniAvatar id={ITEM_SOURCE[item.item]} className="size-8 rounded-[9px] sm:size-10 sm:rounded-[11px]" />
         <span className="flex min-w-0 flex-1 flex-col">
           <h3 className="text-[14px] font-semibold leading-[18px] text-game-ink [overflow-wrap:anywhere] sm:text-[15px] sm:leading-5">{item.name}</h3>
-          <span className="text-[12px] leading-4 text-game-muted">{RARITY_LABEL[item.rarity]}</span>
+          <span className="flex flex-wrap items-center gap-1.5 text-[12px] leading-4 text-game-muted">
+            {RARITY_LABEL[item.rarity]}
+            <NewStockTag item={item} />
+          </span>
         </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">

@@ -1,0 +1,162 @@
+{
+  "contract": "game.wgpnear.near",
+  "set_rules": {
+    "items": [
+      "fee-bomb",
+      "goblin-glider",
+      "crumbs",
+      "sesame-seed",
+      "chain-link",
+      "spare-arm",
+      "sybil-goo",
+      "press-pass",
+      "gas-receipt",
+      "finality-flag",
+      "evidence-bag",
+      "seed-phrase"
+    ],
+    "suits": [
+      {
+        "id": "classic",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "midnight",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "mint",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "snow",
+        "starter": true,
+        "min_level": 1,
+        "recipe": []
+      },
+      {
+        "id": "stealth",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "sybil-goo",
+            "amount": 3
+          }
+        ]
+      },
+      {
+        "id": "glider",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "goblin-glider",
+            "amount": 1
+          },
+          {
+            "item": "fee-bomb",
+            "amount": 2
+          }
+        ]
+      },
+      {
+        "id": "octo",
+        "starter": false,
+        "min_level": 3,
+        "recipe": [
+          {
+            "item": "spare-arm",
+            "amount": 1
+          },
+          {
+            "item": "chain-link",
+            "amount": 3
+          }
+        ]
+      },
+      {
+        "id": "sesame",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "crumbs",
+            "amount": 4
+          },
+          {
+            "item": "sesame-seed",
+            "amount": 1
+          }
+        ]
+      },
+      {
+        "id": "notary",
+        "starter": false,
+        "min_level": 2,
+        "recipe": [
+          {
+            "item": "evidence-bag",
+            "amount": 3
+          },
+          {
+            "item": "gas-receipt",
+            "amount": 2
+          }
+        ]
+      },
+      {
+        "id": "finality",
+        "starter": false,
+        "min_level": 3,
+        "recipe": [
+          {
+            "item": "finality-flag",
+            "amount": 2
+          },
+          {
+            "item": "seed-phrase",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "starter_unlock_level": 2
+  },
+  "new_pools": [
+    {
+      "item": "gas-receipt",
+      "virtual_bits": "480",
+      "virtual_items": "40",
+      "seed_bits": "120",
+      "seed_stock": "10"
+    },
+    {
+      "item": "finality-flag",
+      "virtual_bits": "800",
+      "virtual_items": "20",
+      "seed_bits": "240",
+      "seed_stock": "6"
+    },
+    {
+      "item": "evidence-bag",
+      "virtual_bits": "480",
+      "virtual_items": "40",
+      "seed_bits": "120",
+      "seed_stock": "10"
+    },
+    {
+      "item": "seed-phrase",
+      "virtual_bits": "1200",
+      "virtual_items": "8",
+      "seed_bits": "300",
+      "seed_stock": "2"
+    }
+  ]
+}

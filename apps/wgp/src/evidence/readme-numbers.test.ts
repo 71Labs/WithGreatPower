@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import { DRAIN, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, TAPER_ONLY, economyConfig, measured, play } from "@/lib/market/balance";
 import { LAB_BROKE_SEED } from "@/lib/market/bots";
 import { CURVES, DEFAULT_PARAMS, PROPOSED_PARAMS, defaultPoolConfigs } from "@/lib/market/config";
+import { LAUNCH_ITEM_IDS } from "@/lib/market/new-stock";
 import { NPC_RULES } from "@/lib/market/npc-rules";
 import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_NIGHT_BITS, MAX_PICKUP_BITS, NIGHT_TAPER } from "@/lib/market/rewards";
 import { MARKET_METHODS, MAX_RELAY_GAS, RELAY_METHODS, TGAS } from "@/lib/near/policy";
@@ -67,7 +68,8 @@ describe("the README's numbers equal the code's", () => {
   it("the market: fee, pools, listing bounds and the items-per-call cap", () => {
     const feePct = PROPOSED_PARAMS.feeBps / 100;
     const pools = defaultPoolConfigs().length;
-    expect(pools).toBe(Object.keys(ITEMS).length);
+    // The pools the owner seeded at launch; Gwei's new stock opens four more once the owner calls land (src/lib/market/new-stock.ts).
+    expect(pools).toBe(LAUNCH_ITEM_IDS.length);
     expect({ ...PROPOSED_PARAMS, feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits }).toEqual(DEFAULT_PARAMS);
     says(README, `{"open":true,"fee_bps":${PROPOSED_PARAMS.feeBps},"pools":${pools},"prices_milli":[…]}`);
     says(README, `The contract and its market (${pools} pools, ${feePct}% fee)`);

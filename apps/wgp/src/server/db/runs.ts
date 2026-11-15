@@ -24,6 +24,7 @@ import { applyCaseClear, caseRecord, CHAPTERS, isChapterId } from "@wgp/game-cor
 import type { ReplayResult } from "@wgp/game-core/sim3d/contract";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
+import { caseAward } from "@/lib/market/new-stock";
 import { nightPay } from "@/lib/market/rewards";
 import type { WantedBonus } from "@/lib/market/wanted";
 import { secret } from "@/server/auth/secrets";
@@ -31,6 +32,7 @@ import { HttpError, conflict, notFound } from "@/server/http";
 import { heldBits, type HeldBits } from "@/server/market/held";
 import { reserveBudget, releaseBudget, utcDay } from "@/server/rate-limit";
 import { getChapterVerifier, getVerifier, verifyChapterRun, verifyRun, type Verifier } from "@/server/verify";
+import { grantNewStockTx, openStockNow } from "@/server/market/new-stock";
 import { grantWanted, mintedWanted, saveWithWanted, wantedForRun, withWanted, type MarketReader } from "@/server/market/wanted";
 
 import { badgeKey, badgeView, CASE_BUDGET_SCOPE, CASE_RUNS_PER_DAY, type CaseOutcome } from "./cases";
@@ -266,6 +268,8 @@ async function closeCase(
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
+  // Gwei's new stock (src/lib/market/new-stock.ts): a clear earns an evidence bag, once a day, once its pool is open.
+  const stockOpen = cleared ? await openStockNow(db) : new Set<string>();
   try {
     const out = await db.transaction(async (tx) => {
       const claimed = await tx
@@ -302,6 +306,9 @@ async function closeCase(
             now,
           );
         }
+        const stock = await grantNewStockTx(tx, { playerId, accountId: player.nearAccountId, awards: caseAward(result.stats), open: stockOpen, day: utcDay(now), runId: run.id, digest, now, save, rev });
+        save = stock.save;
+        rev = stock.rev;
       }
       return { save, rev, firstClear };
     });

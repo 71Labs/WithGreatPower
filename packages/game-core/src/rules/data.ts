@@ -134,6 +134,11 @@ export const ITEMS: Record<ItemId, Item> = {
   "spare-arm": { id: "spare-arm", name: "Doc’s spare arm", rarity: "rare", blurb: "It still twitches when bridges open." },
   "sybil-goo": { id: "sybil-goo", name: "Sybil goo", rarity: "uncommon", blurb: "There’s always more of it." },
   "press-pass": { id: "press-pass", name: "Press pass", rarity: "uncommon", blurb: "Signed by Bearson, who regrets it." },
+  // Gwei's new stock: never dropped on patrol; apps/wgp/src/lib/market/new-stock.ts says where each is earned.
+  "gas-receipt": { id: "gas-receipt", name: "Gas receipt", rarity: "common", blurb: "Itemised to the last yocto. Nobody asked." },
+  "finality-flag": { id: "finality-flag", name: "Finality flag", rarity: "uncommon", blurb: "Planted at the finish. Irreversible, allegedly." },
+  "evidence-bag": { id: "evidence-bag", name: "Evidence bag", rarity: "common", blurb: "Mary Jpeg labelled it. Then screenshotted the label." },
+  "seed-phrase": { id: "seed-phrase", name: "Torn seed phrase", rarity: "rare", blurb: "Uncle Gen’s, on a napkin. Eleven words legible." },
 };
 
 export interface Suit {
@@ -156,6 +161,8 @@ export const SUITS: Record<SuitId, Suit> = {
   glider: { id: "glider", name: "Glider", colors: { suit: "#7A4FD1", web: "#1F6B2A", lens: "#F7D23E" }, starter: false, recipe: { "goblin-glider": 1, "fee-bomb": 2 }, minLevel: 2, blurb: "Stitched from a goblin glider. Comes with a faint cackle." },
   octo: { id: "octo", name: "Octo rig", colors: { suit: "#3E8E4A", web: "#5A3A22", lens: "#FFD95A" }, starter: false, recipe: { "spare-arm": 1, "chain-link": 3 }, minLevel: 3, blurb: "Doc’s spare arm, repurposed. It mostly behaves." },
   sesame: { id: "sesame", name: "Sesame", colors: { suit: "#E8B25C", web: "#7A4A1C", lens: "#FFFFFF" }, starter: false, recipe: { crumbs: 4, "sesame-seed": 1 }, minLevel: 2, blurb: "Smells like the Mempool Market at lunch." },
+  notary: { id: "notary", name: "Notary", colors: { suit: "#B89A6A", web: "#3B2F22", lens: "#F4F1E8" }, starter: false, recipe: { "evidence-bag": 3, "gas-receipt": 2 }, minLevel: 2, blurb: "Every clue bagged, every receipt kept. Mary Jpeg signs off." },
+  finality: { id: "finality", name: "Finality", colors: { suit: "#2F3E46", web: "#E9C46A", lens: "#00EC97" }, starter: false, recipe: { "finality-flag": 2, "seed-phrase": 1 }, minLevel: 3, blurb: "Settled, signed, irreversible. Mostly the last one." },
 };
 
 export interface District {

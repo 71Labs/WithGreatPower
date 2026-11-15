@@ -129,10 +129,11 @@ describe("the market view", () => {
   it("prices every item off chain until the contract's market is live", async () => {
     const view = await marketView();
     expect(view.onChain).toBe(false);
-    expect(view.items).toHaveLength(8);
+    // The launch eight and Gwei's new stock, which the simulation opens as set_market_params would.
+    expect(view.items).toHaveLength(12);
     const crumbs = view.items.find((i) => i.item === "crumbs")!;
     expect(crumbs).toMatchObject({ name: "Crumbs", rarity: "common", priceMilli: 12_000, buyOne: 14, sellOne: 10, change24h: null });
-    expect(view.till).toBe(480 * 3 + 800 * 3 + 1200 * 2);
+    expect(view.till).toBe(480 * 3 + 800 * 3 + 1200 * 2 + (120 + 240 + 120 + 300));
   });
 
   it("charts the day's moves and the 24-hour change", async () => {
@@ -157,9 +158,9 @@ describe("the market view", () => {
 
   it("snapshots only pools that moved or went quiet for an hour", async () => {
     const pools = (await readSim(db)).book.pools;
-    expect(await recordSnapshots(db, false, pools, NOW)).toBe(8);
+    expect(await recordSnapshots(db, false, pools, NOW)).toBe(12);
     expect(await recordSnapshots(db, false, pools, new Date(NOW.getTime() + 60_000))).toBe(0);
-    expect(await recordSnapshots(db, false, pools, new Date(NOW.getTime() + 61 * 60_000))).toBe(8);
+    expect(await recordSnapshots(db, false, pools, new Date(NOW.getTime() + 61 * 60_000))).toBe(12);
   });
 });
 

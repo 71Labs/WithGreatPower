@@ -3598,6 +3598,87 @@
       "note": "The code path is built and tested; it stays off until NEAR Auth approves a mainnet client, which is outside this repository."
     },
     {
+      "id": "status-new-stock",
+      "section": "status",
+      "source": "README.md",
+      "quote": "Gwei's new stock: four items earned from the Daily Run and from cases (gas receipt, finality flag, evidence bag, torn seed phrase) and two suits that burn them (Notary, Finality)",
+      "status": "owner action needed",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/new-stock.ts",
+          "anchor": "export const NEW_STOCK_POOLS"
+        },
+        {
+          "path": "scripts/near/new-stock-args.ts",
+          "anchor": "async function main() {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "adds four items and two suits to the game, keeping the launch eight of each"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "set_rules keeps every live item, suit, starter flag, level and recipe exactly as the contract has them, and passes its validation"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "docs/economy/new-stock-calls.json is the owner's two calls as built from the live contract"
+        }
+      ],
+      "note": "Built and tested; on chain it needs two owner calls, set_rules then set_market_params, whose arguments (built from the live get_config and market_state) are in docs/economy/new-stock-calls.json. The contract is unchanged. This row becomes proven on chain with those two transactions. The chain check reads market_state, whose eight pools say the new stock is not live yet; it fails once the owner's calls land, and this row is rewritten then.",
+      "chain": [
+        "market-state"
+      ]
+    },
+    {
+      "id": "status-new-stock-gated",
+      "section": "status",
+      "source": "README.md",
+      "quote": "until both land, the server awards none of it and the market lists only the 8 live pools",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/new-stock.ts",
+          "anchor": "export async function openStockNow("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/new-stock.ts",
+          "anchor": "export function openNewStock("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/new-stock.test.ts",
+          "name": "is closed while the contract has no pool for it, and open once it does"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/new-stock.test.ts",
+          "name": "awards nothing before the owner's calls: no save change, no mint"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/new-stock.test.ts",
+          "name": "once open, writes the item into the save and queues its mint, once per item per day"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "an item is open only once its pool exists; a new suit only once its parts are open"
+        }
+      ],
+      "chain": [
+        "market-state"
+      ],
+      "note": "An item is open only when the market the server reads has its pool; mint_rewards would refuse an unregistered item and fail the whole batch, so nothing is awarded before then. The contract's market lists the pools it has, so the new items appear there once set_market_params opens them."
+    },
+    {
       "id": "status-gas-refill",
       "section": "status",
       "source": "README.md",

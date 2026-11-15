@@ -22,6 +22,7 @@ import { PartOffers, SpareOffers } from "@/components/market/trade-prompt";
 import { useMarketPeek, useRevisits } from "@/components/market/use-market-peek";
 import { craftCost, craftGate, type CraftGate, type CraftWallet } from "@/lib/market/craft";
 import { bitsText, formatBits } from "@/lib/market/format";
+import { openNewStock, suitOpen } from "@/lib/market/new-stock";
 import { holdingsOf, suitGaps, type MarketFacts } from "@/lib/market/prompts";
 import type { CastId } from "@wgp/game-core/cast";
 import { ITEMS, RARITY_LABEL, STARTER_UNLOCK_LEVEL, SUITS } from "@wgp/game-core/data";
@@ -45,6 +46,11 @@ const ITEM_SOURCE: Record<ItemId, CastId> = {
   "spare-arm": "doc-octochain",
   "sybil-goo": "sybil",
   "press-pass": "bearson",
+  // Gwei's new stock (src/lib/market/new-stock.ts): drawn as whoever hands it over.
+  "gas-receipt": "gwei",
+  "finality-flag": "node",
+  "evidence-bag": "mary-jpeg",
+  "seed-phrase": "uncle-gen",
 };
 
 type Status = "equipped" | "owned" | "craftable" | "locked";
@@ -371,7 +377,7 @@ export function SuitSheet({
   const shortfall = id ? craftShortfall(save, id) : null;
   const holdings = holdingsOf(save);
   // What this suit is still missing, to buy from Gwei at her price right now.
-  const gap = id && status === "locked" ? (suitGaps(holdings).find((g) => g.suit === id) ?? null) : null;
+  const gap = id && status === "locked" ? (suitGaps(holdings, openNewStock(market?.items.map((i) => i.item) ?? [])).find((g) => g.suit === id) ?? null) : null;
 
   let footer = null;
   if (id && suit && status === "owned") {
@@ -564,6 +570,10 @@ export function SuitLab() {
     return cost > 0 ? { cost, gate: craftGate(cost, wallet), bits: wallet.kind === "known" ? wallet.bits : null } : NO_COST;
   };
   const anyCost = ALL_SUITS.some((id) => craftCost(id, market?.params) > 0);
+  // Suits made from Gwei's new stock show once the market has their parts' pools (src/lib/market/new-stock.ts).
+  const stockOpen = openNewStock(market?.items.map((i) => i.item) ?? []);
+  const shownSuits = ALL_SUITS.filter((id) => suitOpen(id, stockOpen) || save.suits.includes(id));
+  const comingSuits = ALL_SUITS.filter((id) => !shownSuits.includes(id));
   const latest = activity && sameAction(activity.action, lastAction) ? activity : null;
   const shown = latest
     ? activityNotice(latest, chain)
@@ -600,7 +610,7 @@ export function SuitLab() {
           Suit lab
         </h1>
         <p className="num text-[14px] font-medium leading-5 text-game-paper/80">
-          {save.suits.length} of {ALL_SUITS.length} owned · wearing {SUITS[save.hero.suit].name}
+          {save.suits.length} of {shownSuits.length} owned · wearing {SUITS[save.hero.suit].name}
           {onChainSuits ? ` · ${save.suits.filter((s) => onChainSuits.includes(s)).length} on NEAR` : null}
           {anyCost && wallet.kind === "known" ? ` · ${bitsText(wallet.bits)}` : null}
         </p>
@@ -613,7 +623,7 @@ export function SuitLab() {
       <SuitShare suit={shown && lastAction?.type === "craft-suit" ? lastAction.suit : null} />
 
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {ALL_SUITS.map((id) => {
+        {shownSuits.map((id) => {
           const suit = SUITS[id];
           const status = suitStatus(save, id);
           const showRecipe = status === "locked" || status === "craftable";
@@ -640,6 +650,12 @@ export function SuitLab() {
           );
         })}
       </ul>
+      {comingSuits.length > 0 ? (
+        <p className="flex items-center gap-2 text-[14px] font-medium leading-5 text-game-paper/80 [text-wrap:pretty]">
+          <Hourglass aria-hidden className="size-4 shrink-0" strokeWidth={2.25} />
+          Coming to Gwei’s stall: {comingSuits.map((id) => SUITS[id].name).join(" and ")}, stitched from new stock earned in the Daily Run and in cases.
+        </p>
+      ) : null}
 
       <SuitSheet
         save={save}

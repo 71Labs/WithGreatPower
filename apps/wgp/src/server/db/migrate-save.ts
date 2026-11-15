@@ -7,11 +7,12 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { CAST, type CastId } from "@wgp/game-core/cast";
-import { HERO_BASE_HP, HP_PER_LEVEL, ITEMS, MAX_LOADOUT, POWERS, STARTER_POWERS, STARTER_UNLOCK_LEVEL, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
+import { HERO_BASE_HP, HP_PER_LEVEL, MAX_LOADOUT, POWERS, STARTER_POWERS, STARTER_UNLOCK_LEVEL, SUITS, XP_TO_NEXT } from "@wgp/game-core/data";
 import { newSave } from "@wgp/game-core/engine";
 import type { Hero, ItemId, PowerId, Save, SuitId } from "@wgp/game-core/types";
 
 import { IMPORT_CAPS } from "@/game/import-caps";
+import { LAUNCH_ITEM_IDS, LAUNCH_SUIT_IDS } from "@/lib/market/new-stock";
 import { HttpError, conflict, notFound } from "@/server/http";
 
 import type { Db } from "./client";
@@ -29,8 +30,9 @@ const int = (v: unknown, lo: number, hi: number, fallback: number) =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : fallback;
 
 const POWER_IDS = new Set(Object.keys(POWERS));
-const SUIT_IDS = new Set(Object.keys(SUITS));
-const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
+// Launch items and suits only: Gwei's new stock is earned signed in (src/lib/market/new-stock.ts), never by a guest.
+const SUIT_IDS = new Set<string>(LAUNCH_SUIT_IDS);
+const ITEM_IDS: readonly ItemId[] = LAUNCH_ITEM_IDS;
 const CAST_IDS = new Set<string>(CAST.map((c) => c.id));
 
 /** Rebuilds a local save from scratch with only known ids and capped numbers. Null if it holds no hero. */

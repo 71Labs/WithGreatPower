@@ -34,11 +34,16 @@ export type ItemId =
   | "chain-link"
   | "spare-arm"
   | "sybil-goo"
-  | "press-pass";
+  | "press-pass"
+  // Gwei's new stock: earned from the Daily and from cases, never dropped on patrol (ruleset 4 is untouched).
+  | "gas-receipt"
+  | "finality-flag"
+  | "evidence-bag"
+  | "seed-phrase";
 
 export type Rarity = "common" | "uncommon" | "rare";
 
-export type SuitId = "classic" | "midnight" | "mint" | "snow" | "stealth" | "glider" | "octo" | "sesame";
+export type SuitId = "classic" | "midnight" | "mint" | "snow" | "stealth" | "glider" | "octo" | "sesame" | "notary" | "finality";
 
 /** Colors of a masked hero's suit; the art recolors the hero sticker with these. */
 export interface SuitColors {

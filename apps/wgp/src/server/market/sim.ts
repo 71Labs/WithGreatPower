@@ -37,6 +37,8 @@ import {
   type Trade,
 } from "@/lib/market/engine";
 import { DEFAULT_INVEST_RULES, investorView, type InvestorView } from "@/lib/market/invest";
+import type { Pool } from "@/lib/market/math";
+import { NEW_STOCK_POOLS } from "@/lib/market/new-stock";
 
 import { conflict } from "../http";
 import type { Db } from "../db/client";
@@ -98,11 +100,21 @@ export function simInvestRules(stored: InvestRules | undefined, env: Record<stri
   return { ...rules, lockMs: Number(raw) };
 }
 
-/** A stored sim with its investing rules and the local overrides applied. */
+/**
+ * The sim's pools with Gwei's new stock (src/lib/market/new-stock.ts) opened where it isn't
+ * yet: what the owner's `set_market_params` does on chain, seeds and all. Pure.
+ */
+export function withNewStockPools(pools: Pool[]): Pool[] {
+  const have = new Set(pools.map((p) => p.item));
+  const add = seededPools([...NEW_STOCK_POOLS]).filter((p) => !have.has(p.item));
+  return add.length > 0 ? [...pools, ...add] : pools;
+}
+
+/** A stored sim with its investing rules, Gwei's new stock and the local overrides applied. */
 export function simStateOf(stored: unknown, env: Record<string, string | undefined> = process.env): SimState {
   const state = stored as SimState;
   const over = simParamOverrides(env);
-  return { ...state, book: { ...state.book, params: { ...state.book.params, ...over, invest: simInvestRules(state.book.params.invest, env) } } };
+  return { ...state, book: { ...state.book, pools: withNewStockPools(state.book.pools), params: { ...state.book.params, ...over, invest: simInvestRules(state.book.params.invest, env) } } };
 }
 
 export const seedSim = (): SimState => simStateOf({ book: newBook(DEFAULT_PARAMS, seededPools()), wallets: {} } satisfies SimState);
