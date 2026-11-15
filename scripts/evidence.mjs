@@ -501,6 +501,10 @@ async function runChainCheck(check, meta) {
         if (!k.result?.keys) return { ok: false, why: `view_access_key_list: ${k.error?.data ?? JSON.stringify(k).slice(0, 200)}` };
         value.keys = k.result.keys.map((key) => key.public_key);
         value.fullAccessKeys = k.result.keys.filter((key) => key.access_key?.permission === "FullAccess").map((key) => key.public_key);
+        // And the function-call keys: which contract each may call, and which methods (sorted).
+        value.functionCallKeys = k.result.keys
+          .filter((key) => key.access_key?.permission?.FunctionCall)
+          .map((key) => ({ public_key: key.public_key, receiver_id: key.access_key.permission.FunctionCall.receiver_id, method_names: [...(key.access_key.permission.FunctionCall.method_names ?? [])].sort() }));
       }
     } else if (check.kind === "tx") {
       const j = await rpc(meta.archivalRpc, "tx", { tx_hash: check.hash, sender_account_id: check.sender, wait_until: "FINAL" });
@@ -793,7 +797,7 @@ export function renderMarkdown(data) {
     if (check.kind === "tx") out.push("- (fields as the script reads them: `signer`, `sender` and `receiver` of the call, `relayed`, `actions`, `deposits`, `succeeded`, `logs`)");
     if (check.kind === "command") out.push(`- (\`exit\` is the exit code, \`lines\` the output${check.json ? ", `json` the JSON it prints" : ""})`);
     if (check.kind === "view" && check.absent) out.push(`- the call fails with \`MethodNotFound\`: ${check.contract ?? data.meta.contract} has no \`${check.method}\``);
-    if (check.kind === "account") out.push(`- (\`exists\` is false when the RPC answers \`UNKNOWN_ACCOUNT\`${check.keys ? "; `keys` are the account's public keys and `fullAccessKeys` those with full access" : ""})`);
+    if (check.kind === "account") out.push(`- (\`exists\` is false when the RPC answers \`UNKNOWN_ACCOUNT\`${check.keys ? "; `keys` are the account's public keys, `fullAccessKeys` those with full access and `functionCallKeys` the others, each with its `receiver_id` and sorted `method_names`" : ""})`);
     if (check.kind === "git") out.push("- (`inOrder`: each commit is in the next one's history; `missing`: the listed commits that aren't on the branch; `files`: the listed files the branch has; `merged`: the branch is in this checkout's history; `firstCommit`, `aiTrailers`: from `git log`. Skipped, with a note, in a clone without the commits or the branch.)");
     if (check.kind === "season") out.push(`- one of three states, each checked in full. Open: \`get_season\` is \`null\` and the results file is a 404. Closed: still \`null\`, and the site serves the frozen results. Recorded: \`get_season\` has a root, a digest and 1 to 10 accounts; the results file has that root, its sha256 is that digest, its first leaves are those accounts in order, and each holds \`trophy:${check.season}:<rank>\`.${check.endsAt ? ` Before ${check.endsAt} only the open state passes.` : ""}`);
     if (check.kind === "http" && check.text) out.push("- (`text` is the page's HTML)");
