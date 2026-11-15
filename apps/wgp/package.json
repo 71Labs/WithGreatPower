@@ -17,6 +17,7 @@
     "db:seed-dev": "tsx src/server/db/seed-dev.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@fast-auth-near/browser-sdk": "^1.4.2",
     "@fast-auth-near/javascript-provider": "^1.4.1",
     "@hot-labs/near-connect": "^0.12.0",

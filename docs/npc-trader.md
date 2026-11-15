@@ -1,6 +1,6 @@
 # Sandwich Man, the NPC trader
 
-Sandwich Man is the Mempool Market's arbitrageur: an NPC who trades from his own NEAR account, `sandwich.wgpnear.near`, by fixed, published rules. He is rule-based: no LLM and no other AI decides anything he does. This page says who he is, what his rules are, what stops him doing harm, how to check his trades on chain, and what the owner did to switch him on.
+Sandwich Man is the Mempool Market's arbitrageur: an NPC who trades from his own NEAR account, `sandwich.wgpnear.near`. His fixed, published rules work out every move the market would accept; an LLM picks among those moves or passes, and the rules pick whenever it can't. The rules are the guardrail and the fallback: the LLM can choose a legal move or pass, and nothing else. This page says who he is, what his rules are, how his brain picks, what stops him doing harm, how to check his trades on chain, and what the owner did to switch him on.
 
 **Status: live on NEAR mainnet since Nov 13, 2026.** The owner created `sandwich.wgpnear.near` with 0.3 NEAR, the operator seeded it once with 300 Bits, and the server was given his account id and key. The live `/api/market/npc` answers `"mode":"on-chain"` with his account id. His first trade landed at 07:15 UTC the same day: a `market_buy` of 2 Sybil goo from Gwei for 72 Bits, by rule 5 ("17% under the opening price. First in line for the dip."). `pnpm evidence --chain` checks his account, its key, his Bits, the live endpoint and the three transactions below.
 
@@ -24,7 +24,7 @@ Nothing in this repo creates an account, funds one or sends a transaction: the o
 
 ## His rules
 
-The rules are one file, [`apps/wgp/src/lib/market/npc-rules.ts`](../apps/wgp/src/lib/market/npc-rules.ts): a pure function `decide(market, wallet, listings, now)` with the rules in plain English at the top. Same inputs, same answer; no randomness, no clock but the one passed in. The first rule that fits is the one he takes.
+The rules are one file, [`apps/wgp/src/lib/market/npc-rules.ts`](../apps/wgp/src/lib/market/npc-rules.ts): a pure function `decide(market, wallet, listings, now)` with the rules in plain English at the top. Same inputs, same answer; no randomness, no clock but the one passed in. It lists every move that fits, best first. The rules alone take the first; with the LLM on, it picks among them or passes ([His brain](#his-brain)).
 
 1. **Take down a stale listing.** A listing of his that has sat for 48 hours comes down.
 2. **Flip a cheap listing.** He buys a player's listing when Gwei would pay him at least 10% more for the same lot right now (and at least 1 Bit more), after her gas fee. The seller is paid in full at their own asking price.
@@ -34,6 +34,23 @@ The rules are one file, [`apps/wgp/src/lib/market/npc-rules.ts`](../apps/wgp/src
 6. **Clearance sale.** Only while broke: he sells up to 2 of whatever loses him least to Gwei at her price, until he can reopen.
 
 Every action carries a reason in his voice, for example: "Bought 2 × Crumbs from azalleaxyz’s listing at 13 Bits: Gwei pays 22. Lunch money."
+
+## His brain
+
+`decide` returns every move that fits, best first, not just the first. On chain, a brain then picks one ([`apps/wgp/src/lib/market/npc-brain.ts`](../apps/wgp/src/lib/market/npc-brain.ts), with the server's call in `apps/wgp/src/server/npc/brain.ts`):
+
+- **`claude`:** an LLM, Anthropic's Claude (`claude-haiku-5-5`, a fast and cheap model), is shown his wallet and up to 12 of those moves, each with an id, plus "pass". It answers with a structured output, `{"pick": "<id or pass>", "reason": "…"}`. The server keeps the pick only if the id is one of the moves it was shown, so the move, its numbers, its limit and the text that says what he did are always the rules' own; only the reason's words are the LLM's, cut to one line of at most 160 characters with links and @handles removed. A pass sends nothing and uses none of his 10 daily actions.
+- **`rules`:** the rules' first move, as before the LLM. This is what happens when `ANTHROPIC_API_KEY` is not set on the server, when the call takes more than 8 seconds (no retry), on an API error or a refusal, when the answer isn't one of the moves, and once he has made 10 LLM calls in the UTC day.
+
+Each line of his ledger records which brain picked it (`brain`: `claude` or `rules`). `/api/market/npc` reports `brain.mode` (`claude` when the server has the key and he trades on chain, otherwise `rules`), the model, the day's LLM calls left and the last pick with the reason the rules took over, if they did. **What is live depends on the key:** until the owner sets `ANTHROPIC_API_KEY` in production, `brain.mode` is `rules` and every move is the rules'. Check it:
+
+```bash
+curl -s https://www.wgponnear.fun/api/market/npc | jq '{mode, brain, log: [.log[] | {text, reason, brain}]}'
+```
+
+**Cost, bounded by construction.** At most 10 LLM calls a UTC day (counted when a call is made, whatever it answers), one per turn, about 1,000 input tokens and well under 1,024 output tokens each. At Claude Haiku 5.5's list price ($0.10 per million input tokens, $0.50 per million output tokens) that is under $0.001 a call and under $0.01 a day. Nothing is called when there is no legal move. The simulated market, the practice market and `/lab/economy` run on the rules alone.
+
+**Never logged:** the API key is read from the environment and handed to Anthropic's SDK; the prompt holds his public wallet and the market's moves, no secret, and a failed call logs only what failed (a timeout, an HTTP status), never the prompt or the key.
 
 ## Safety caps
 
@@ -68,7 +85,7 @@ The contract's limits, which apply to him as to any account (`contracts/wgp/src/
 ## How it runs
 
 - `apps/wgp/src/server/npc/runner.ts` is the runner. It is triggered through `after()` (`src/server/background.ts` `npcTraderSoon`) from the relayer's market hook (a player's trade or listing landed on chain), the simulated trade route and reads of `/api/market/npc`, which the market page makes when someone opens it. A read lets him look at most once every 5 minutes. His first mainnet trade was a rule 5 buy: Sybil goo stood 17% under its opening price.
-- A look: take the lock, read the market, his wallet and the open listings, bring his books up to date, call `decide`, send the first action only, write it to his ledger with its reason. A trade also goes into the price history (`market_prices`) under his account id, like any player's.
+- A look: take the lock, read the market, his wallet and the open listings, bring his books up to date, call `decide` for every legal move, let the brain pick one or pass ([His brain](#his-brain)), send that one action at most, write it to his ledger with its reason and the brain that picked it. A trade also goes into the price history (`market_prices`) under his account id, like any player's.
 - His books and ledger are one JSON row in the existing `market_sim` table (`npc:chain` or `npc:sim`). **No migration.**
 - `/lab/economy` runs him among the bot heroes with the same `decide`. Press **Load a run where he goes broke** to watch him close shop, clear stock and reopen.
 
@@ -159,13 +176,14 @@ jq -j '.private_key' ~/.near-credentials/mainnet/sandwich.wgpnear.near.json \
 ## Limits
 
 - **His key is a full-access key.** Nothing on chain stops that key sending something else from his account: a transfer of his NEAR, another contract's method, a new key. What limits him to the five market calls is the server's code (`npcCall` in `apps/wgp/src/server/npc/chain.ts`, and its test). The key can't mint, change the contract's settings or move a player's tokens, because the contract gives his account no role.
-- **Planned: a function-call key.** The owner adds a key limited to `game.wgpnear.near` and the five market methods, gives the server that one and deletes the full-access key. Then the limit is the key's as well. The market calls attach no deposit, so a function-call key can sign all of them. Not done as of Nov 13; `pnpm evidence --chain` still expects the one full-access key and fails when that changes, which is the signal to update this page.
-- **Rule-based.** He follows six fixed rules. He does not learn, plan or read anything but the market.
+- **Planned: a function-call key.** The owner adds a key limited to `game.wgpnear.near` and the five market methods, gives the server that one and deletes the full-access key. Then the limit is the key's as well. The market calls attach no deposit, so a function-call key can sign all of them, and the server needs no change for it (`npcTransaction` in `chain.ts`, tested; the owner's commands are in [KEYS.md](KEYS.md)). Not done as of Nov 13; `pnpm evidence --chain` still expects the one full-access key and fails when that changes, which is the signal to update this page.
+- **An LLM picks, inside the rules.** The LLM chooses among the moves his six fixed rules allow, or passes; it can't make a move the rules didn't list or change its numbers. It sees only his wallet and those moves, keeps no memory between turns and does not learn. Its reasons are its own words: cleaned and capped, not checked for accuracy. Until `ANTHROPIC_API_KEY` is set in production every move is the rules'.
 
 ## Tests
 
 Each claim on this page has a row in [EVIDENCE.md](EVIDENCE.md#sandwich-man-docsnpc-tradermd).
 
 - `apps/wgp/src/lib/market/npc-rules.test.ts`: every rule, the caps, the closed shop and reopening, the books, determinism, and 40 fast-forwards in which the market never refuses one of his actions.
+- `apps/wgp/src/server/npc/brain.test.ts`: the brain with a fake Anthropic client (no request leaves the process). Claude's pick among two legal moves is sent with the rules' numbers and its own reason; a pass sends nothing; an answer that isn't a legal move, a timeout, an error, a refusal or a missing key falls back to the rules; at most 10 calls a UTC day; no secret in the request or the logs.
 - `apps/wgp/src/server/npc/npc.test.ts`: the runner on PGlite. A player lists cheap and he buys it; one action a look; rate-limited; two looks at once act once; off when unconfigured; a refusal is booked, not retried forever; the server only ever sends these five calls from his account (his key is a full-access key).
 - `contracts/wgp/sandbox/tests/npc_trader.rs`: the real wasm in near-workspaces.

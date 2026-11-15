@@ -51,6 +51,9 @@ async function player(handle: string, bits: number, inventory: Save["inventory"]
 beforeEach(async () => {
   db = await freshDb();
   alice = await player("alice", 100, { crumbs: 6 });
+  // These tests are the rules' path; the brain has its own (./brain.test.ts).
+  vi.stubEnv("ANTHROPIC_API_KEY", "");
+  return () => vi.unstubAllEnvs();
 });
 
 describe("in the simulated market", () => {

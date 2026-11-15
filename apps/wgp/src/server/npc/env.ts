@@ -7,6 +7,7 @@
  * Nothing else switches him on. The key is read only here and handed straight to the
  * signer; it is never logged, returned or stored. Setup: docs/npc-trader.md.
  */
+import { KeyPair } from "near-api-js";
 import { z } from "zod";
 
 import { isAccountId } from "../../lib/near/policy";
@@ -33,6 +34,20 @@ export function npcTraderEnv(env: Record<string, string | undefined> = process.e
  */
 export function isNpcAccount(accountId: string, env: Record<string, string | undefined> = process.env): boolean {
   return accountId === NPC_SIM_ACCOUNT || accountId === npcTraderAccount(env);
+}
+
+/**
+ * The public key his calls are signed with, or null when he's off or misconfigured. Public
+ * (it is on chain), so the live view can show which of his account's keys the server holds:
+ * after the swap to a function-call key (docs/KEYS.md) it must be that key. Never throws.
+ */
+export function npcSignerKey(env: Record<string, string | undefined> = process.env): string | null {
+  try {
+    const keyed = npcTraderEnv(env);
+    return keyed ? KeyPair.fromString(keyed.privateKey).getPublicKey().toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** His account id on chain, or null when he's off or misconfigured. Never throws. */

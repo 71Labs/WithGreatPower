@@ -1,13 +1,15 @@
 /**
  * What the market screen's "Other traders" strip reads about Sandwich Man: whether he is
  * trading on chain, in the simulated market or off, his wallet, what he holds, his open
- * listings and the last lines of his ledger with their reasons. Cached with the market
+ * listings, the last lines of his ledger with their reasons, and who picks his moves
+ * (`brain.mode`: "claude" or "rules", with the brain on each ledger line). Cached with the market
  * (tag "market", about 10 seconds); his own actions expire it.
  */
 import { cacheLife, cacheTag } from "next/cache";
 
 import { NPC_OFF_LINE, type NpcTraderView } from "@/lib/market/npc-api";
 import { booksToday, itemName } from "@/lib/market/npc-book";
+import { NPC_BRAIN } from "@/lib/market/npc-brain";
 import { budgetLeft, NPC_ID, NPC_NAME, NPC_RULE_LINES, NPC_RULES, NPC_RULES_URL, npcStatus, statusLine, type NpcWallet } from "@/lib/market/npc-rules";
 import { walletOnBook } from "@/lib/market/npc-turn";
 import type { Listing } from "@/lib/market/engine";
@@ -16,9 +18,10 @@ import { EXPLORER_URL } from "@/lib/near/config";
 import { getDb } from "../db/client";
 import { readChainListings, readChainWallet } from "../market/chain";
 import { MARKET_TAG, marketSource, poolsOf } from "../market/view";
-import { NPC_SIM_ACCOUNT, npcTraderAccount } from "./env";
+import { npcBrainMode } from "./brain";
+import { NPC_SIM_ACCOUNT, npcSignerKey, npcTraderAccount } from "./env";
 import { npcSimHoldings } from "./sim";
-import { readNpcState } from "./store";
+import { brainCallsToday, readNpcState, type NpcState } from "./store";
 
 /** Ledger lines the strip shows. */
 const SHOWN = 5;
@@ -42,6 +45,19 @@ const off = (now: number): NpcTraderView => ({
   seedBits: NPC_RULES.seedBits,
   now: new Date(now).toISOString(),
 });
+
+/** Who picks his moves here, the day's LLM calls left and the last pick, from his state. */
+function brainView(onChain: boolean, state: NpcState, now: number): NonNullable<NpcTraderView["brain"]> {
+  const mode = npcBrainMode(onChain);
+  const d = state.lastDecision;
+  return {
+    mode,
+    model: mode === "claude" ? NPC_BRAIN.model : null,
+    maxCallsPerDay: NPC_BRAIN.maxCallsPerDay,
+    callsLeft: Math.max(0, NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, now)),
+    last: d ? { at: new Date(d.at).toISOString(), by: d.by, pick: d.pick, text: d.text, reason: d.reason, fallback: d.fallback, options: d.options } : null,
+  };
+}
 
 export async function npcTraderView(): Promise<NpcTraderView> {
   "use cache";
@@ -100,7 +116,10 @@ export async function buildNpcView(now = new Date()): Promise<NpcTraderView> {
         reason: e.reason,
         txHash: e.txHash,
         txUrl: e.txHash ? `${EXPLORER_URL}/txns/${e.txHash}` : null,
+        brain: e.brain ?? null,
       })),
+    brain: brainView(source.onChain, state, t),
+    signerKey: source.onChain ? npcSignerKey() : null,
     rules: NPC_RULE_LINES,
     rulesUrl: NPC_RULES_URL,
     seedBits: NPC_RULES.seedBits,

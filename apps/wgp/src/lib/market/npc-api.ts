@@ -27,8 +27,25 @@ export interface NpcTraderView {
   /** Actions he may still take today, and Bits he may still spend. */
   actionsLeft: number;
   budgetLeft: number;
-  /** Newest first. */
-  log: { at: string; kind: NpcEventKind; text: string; reason: string; txHash: string | null; txUrl: string | null }[];
+  /** Newest first. `brain` is who picked the move ("claude" or "rules"); null on lines no brain decided (a sale, the seed) and older ones. */
+  log: { at: string; kind: NpcEventKind; text: string; reason: string; txHash: string | null; txUrl: string | null; brain?: "claude" | "rules" | null }[];
+  /**
+   * Who picks his moves (src/lib/market/npc-brain.ts). "claude": an LLM picks among the
+   * legal moves his rules allow, or passes, and the rules pick when it can't answer.
+   * "rules": the rules alone (no ANTHROPIC_API_KEY, or not on chain). Absent in the
+   * practice market, which runs on the rules.
+   */
+  brain?: {
+    mode: "claude" | "rules";
+    /** The model when mode is "claude". */
+    model: string | null;
+    maxCallsPerDay: number;
+    callsLeft: number;
+    /** The last turn that had a move to pick, on chain: who picked, what, and why the rules did if they did. */
+    last: { at: string; by: "claude" | "rules"; pick: string; text: string | null; reason: string; fallback: string | null; options: number } | null;
+  };
+  /** The public key his on-chain calls are signed with (public, not a secret); null off chain. */
+  signerKey?: string | null;
   /** His rules in plain English (src/lib/market/npc-rules.ts). */
   rules: readonly string[];
   rulesUrl: string;
