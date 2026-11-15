@@ -15,12 +15,13 @@ import { ITEMS } from "@wgp/game-core/data";
 import type { Edition, ItemId, Save } from "@wgp/game-core/types";
 
 import { formatPrice } from "@/components/market/sparkline";
-import { DEFAULT_PARAMS } from "@/lib/market/config";
 import { EXPLORER_URL } from "@/lib/near/config";
 import { REPO_URL, SITE_HOST } from "@/lib/site";
 import { utcDay } from "@/server/rate-limit";
 
 import type { Db } from "../db/client";
+import { readChainMarket } from "../market/chain";
+import { readSim } from "../market/sim";
 import { ALLTIME_PERIOD, countEntries, topEntries, type BoardRow } from "../db/leaderboard";
 import { TROPHY_PLACES, recordSeasonKey, type SeasonStanding } from "../db/season-close";
 import { plural } from "@/lib/plural";
@@ -56,6 +57,12 @@ export interface DraftPlan {
 
 export interface GenContext {
   db: Db;
+  /**
+   * The market's gas fee for market-move posts, in basis points. Left out, it is read live:
+   * the contract's `fee_bps` when the prices are on chain, the simulated market's otherwise.
+   * Null (or a failed read) leaves the number out of the post.
+   */
+  feeBps?: number | null;
   now: Date;
   /** Look up the dev log on GitHub (admin visits only; never on a player's request). */
   devLog?: boolean;
@@ -271,7 +278,21 @@ export async function seasonPosts({ db, now }: GenContext): Promise<DraftPlan[]>
  * item per UTC day. Prices come from `market_prices` (the source the market uses now:
  * on chain once the contract's market is live, else the simulation), fills left out.
  */
-export async function marketMoves({ db, now }: GenContext): Promise<DraftPlan[]> {
+/** The gas fee the market charges now, read where its prices come from; null when it can't be read. */
+async function liveFeeBps(db: Db, onChain: boolean): Promise<number | null> {
+  try {
+    if (onChain) return (await readChainMarket())?.params.feeBps ?? null;
+    return (await readSim(db)).book.params.feeBps;
+  } catch (error) {
+    console.error(`[social] couldn't read the market's fee: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/** "5% of every trade burns", or without a number when the fee couldn't be read. */
+export const feeBurnText = (feeBps: number | null): string => (feeBps === null ? "a gas fee on every trade burns" : `${feeBps / 100}% of every trade burns`);
+
+export async function marketMoves({ db, now, feeBps }: GenContext): Promise<DraftPlan[]> {
   const [latest] = await db.select({ onChain: marketPrices.onChain }).from(marketPrices).orderBy(desc(marketPrices.at)).limit(1);
   if (!latest) return [];
   const since = new Date(now.getTime() - DAY_MS);
@@ -286,7 +307,7 @@ export async function marketMoves({ db, now }: GenContext): Promise<DraftPlan[]>
     .where(and(eq(marketPrices.onChain, latest.onChain), lt(marketPrices.at, since), sql`${marketPrices.kind} <> 'fill'`))
     .orderBy(marketPrices.item, desc(marketPrices.at));
   const before = new Map(opening.map((r) => [r.item, r]));
-  const fee = `${DEFAULT_PARAMS.feeBps / 100}%`;
+  const fee = feeBurnText(feeBps !== undefined ? feeBps : await liveFeeBps(db, latest.onChain));
   const day = utcDay(now);
   const plans: DraftPlan[] = [];
   for (const item of [...new Set(window.map((r) => r.item))]) {
@@ -308,7 +329,7 @@ export async function marketMoves({ db, now }: GenContext): Promise<DraftPlan[]>
       sourceEvent: `market_move:${item}:${day}`,
       mediaUrl: `/api/social/card/market?item=${encodeURIComponent(item)}&at=${now.toISOString()}`,
       sources: [row("Price 24h ago", first), row("Price now", last), { label: "Change", value: `${Math.round(change * 100)}% over ${mine.length} rows`, href: null }],
-      compose: () => `${name} at Gwei’s stall: ${formatPrice(first.priceMilli)} → ${formatPrice(last.priceMilli)} Bits today. Players move the prices; ${fee} of every trade burns.`,
+      compose: () => `${name} at Gwei’s stall: ${formatPrice(first.priceMilli)} → ${formatPrice(last.priceMilli)} Bits today. Players move the prices; ${fee}.`,
     });
   }
   return plans;

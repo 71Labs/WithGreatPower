@@ -147,7 +147,7 @@ describe("what the docs say about themselves", () => {
     expect(readme).toContain("Live on mainnet since Nov 13, 2026: he trades from his own account, sandwich.wgpnear.near.");
     expect(readme).toContain("An LLM picks his move; his rules fence it in.");
     expect(readme).toContain("Kimi K3 (kimi-k3, Moonshot's API) picks one and writes his reason in character");
-    expect(readme).toContain("until the owner sets LLM_API_KEY in production, the live mode is rules.");
+    expect(readme).toContain("LLM_API_KEY is set in production (since Nov 15, 2026), so the live mode is llm.");
     expect(readme).toContain("Gwei is rule-based. Sandwich Man's moves are picked by an LLM among the moves his rules allow, or by the rules alone (next row).");
     const doc = plainDoc("docs/npc-trader.md");
     expect(doc).toContain("Status: live on NEAR mainnet since Nov 13, 2026.");

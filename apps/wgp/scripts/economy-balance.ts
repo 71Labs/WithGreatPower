@@ -342,7 +342,8 @@ async function main() {
       console.log(`  The lab's seed 2026 with him, ${s.label}: ${int(last.minted)} earned / ${int(last.burned)} burned (${pct(last.burned / last.minted)}), ${last.crafted} suits.`);
     }
     const labDrain = measureEconomy("drain", play(economyConfig(MAINNET, { ...DRAIN, seed: 2026, npc: true })));
-    const cells = DRAIN.days * Object.keys(ITEMS).length;
+    // The model runs the pools the market opened with (defaultPoolConfigs), not every item in the game.
+    const cells = DRAIN.days * defaultPoolConfigs().length;
     console.log(`  The lab's Drain Gwei, seed 2026 with him: ${Math.round(labDrain.soldOut * cells)} item-days sold out and ${Math.round(labDrain.broke * cells)} unable to buy, of ${cells}.`);
     json.npc = { tables: out, verdict: v, lab, labDrain: { soldOut: labDrain.soldOut, broke: labDrain.broke, itemDays: cells } };
   }

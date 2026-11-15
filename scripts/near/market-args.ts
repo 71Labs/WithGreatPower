@@ -11,7 +11,7 @@
  *
  * `--craft-bits N` also turns on the crafting sink (N Bits burned per crafted suit) and
  * `--fee-bps N` sets the gas fee (at most 1000). `--proposed` starts from the settings
- * docs/ECONOMY.md proposes (`PROPOSED_PARAMS`: 250 Bits a suit, a 10% fee).
+ * docs/ECONOMY.md proposes (`PROPOSED_PARAMS`: 250 Bits a suit, a 5% fee).
  * Calling it again later updates the rules and curves; seeds are only minted to new pools.
  */
 import { DEFAULT_PARAMS, PROPOSED_PARAMS, setMarketParamsArgs } from "../../apps/wgp/src/lib/market/config";

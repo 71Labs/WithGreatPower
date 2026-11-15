@@ -1932,7 +1932,7 @@
       "id": "economy-burn-fee",
       "section": "economy",
       "source": "README.md",
-      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 10% today.",
+      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 5% today.",
       "status": "proven on chain",
       "code": [
         {
@@ -1955,8 +1955,7 @@
       "chain": [
         "market-state",
         "tx-market-buy"
-      ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      ]
     },
     {
       "id": "economy-fee-live",
@@ -2034,8 +2033,7 @@
       "chain": [
         "market-state",
         "tx-craft-suit"
-      ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values. The loot burn is live (the transaction check); the Bits cost is tested and read live by the Suit lab."
+      ]
     },
     {
       "id": "economy-wanted-list",
@@ -2905,7 +2903,7 @@
       "id": "tryit-lab-inflation",
       "section": "tryit",
       "source": "README.md",
-      "quote": "the default run earns 59,230 Bits and burns 29,202 of them, about 49%. Tick Run the old settings (2% gas fee, crafting burns no Bits, no taper) and run again: 99,022 earned and 2,847 burned, about 3%.",
+      "quote": "the default run earns 58,859 Bits and burns 26,454 of them, about 45%. Tick Run the old settings (2% gas fee, crafting burns no Bits, no taper) and run again: 99,022 earned and 2,847 burned, about 3%.",
       "status": "simulation only",
       "code": [
         {
@@ -2934,7 +2932,7 @@
           "name": "burn about half of what a season earns, and close most of the gap (docs/ECONOMY.md)"
         }
       ],
-      "note": "Numbers from the bot model, not from mainnet. The lab opens on the proposal: the faucet taper (live with the deploy) and the owner's fee_bps 1000 and craft_bits 250 (econdoc-owner-settings)."
+      "note": "Numbers from the bot model, not from mainnet. The lab opens on the proposal: the faucet taper (live with the deploy) and the owner's fee_bps 500 and craft_bits 250 (econdoc-owner-settings)."
     },
     {
       "id": "tryit-drain",
@@ -3522,7 +3520,7 @@
       "id": "status-used",
       "section": "status",
       "source": "README.md",
-      "quote": "The contract and its market (8 pools, 10% fee)",
+      "quote": "The contract and its market (12 pools, 5% fee)",
       "status": "proven on chain",
       "chain": [
         "market-state",
@@ -3534,8 +3532,7 @@
           "path": "contracts/wgp/src/market.rs",
           "anchor": "pub fn market_state(&self) -> MarketState {"
         }
-      ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      ]
     },
     {
       "id": "status-npc",
@@ -3720,7 +3717,7 @@
       "section": "status",
       "source": "README.md",
       "quote": "Gwei's new stock: four items earned from the Daily Run and from cases (gas receipt, finality flag, evidence bag, torn seed phrase) and two suits that burn them (Notary, Finality)",
-      "status": "owner action needed",
+      "status": "proven on chain",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/new-stock.ts",
@@ -3748,7 +3745,6 @@
           "name": "docs/economy/new-stock-calls.json is the owner's two calls as built from the live contract"
         }
       ],
-      "note": "Built and tested; on chain it needs two owner calls, set_rules then set_market_params, whose arguments (built from the live get_config and market_state) are in docs/economy/new-stock-calls.json. The contract is unchanged. This row becomes proven on chain with those two transactions. The chain check reads market_state, whose eight pools say the new stock is not live yet; it fails once the owner's calls land, and this row is rewritten then.",
       "chain": [
         "market-state"
       ]
@@ -3757,7 +3753,7 @@
       "id": "status-new-stock-gated",
       "section": "status",
       "source": "README.md",
-      "quote": "until both land, the server awards none of it and the market lists only the 8 live pools",
+      "quote": "The server awards an item only while its pool exists on chain, because mint_rewards refuses an item the contract doesn't know",
       "status": "proven by test",
       "code": [
         {
@@ -4732,7 +4728,7 @@
       "id": "limits-currency",
       "section": "limits",
       "source": "README.md",
-      "quote": "In the lab's default run, on mainnet's settings, 59,230 are earned and 29,202 burned, about 49% (99,022 and 2,847 on the old settings).",
+      "quote": "In the lab's default run, on mainnet's settings, 58,859 are earned and 26,454 burned, about 45% (99,022 and 2,847 on the old settings).",
       "status": "simulation only",
       "code": [
         {
@@ -4751,14 +4747,13 @@
           "file": "apps/wgp/src/lib/market/balance.test.ts",
           "name": "balances to the Bit every day, for every setting and seed: seeded till + minted − burned = supply"
         }
-      ],
-      "note": "Simulation. \"On mainnet's settings\": True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      ]
     },
     {
       "id": "limits-craft-bits",
       "section": "limits",
       "source": "README.md",
-      "quote": "The sinks are the trade fee (10%) and crafting, which burns 250 Bits a suit on top of the recipe.",
+      "quote": "The sinks are the trade fee (5%) and crafting, which burns 250 Bits a suit on top of the recipe.",
       "status": "proven on chain",
       "code": [
         {
@@ -4785,8 +4780,7 @@
       ],
       "chain": [
         "market-state"
-      ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
+      ]
     },
     {
       "id": "limits-trust",
@@ -5275,7 +5269,7 @@
       "id": "npc-brain-live",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "What is live depends on the key: until the owner sets LLM_API_KEY in production, brain.mode is rules and every move is the rules'.",
+      "quote": "What is live depends on the key: LLM_API_KEY is set in production (since Nov 15, 2026), so brain.mode is llm.",
       "status": "live check",
       "code": [
         {
@@ -5577,7 +5571,7 @@
       "id": "econdoc-owner-settings",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "Gas fee fee_bps 200 → 1000 (2% → 10%, the contract's cap)",
+      "quote": "Gas fee fee_bps 200 → 500 (2% → 5%)",
       "status": "proven on chain",
       "code": [
         {
@@ -5592,7 +5586,6 @@
       "chain": [
         "market-state"
       ],
-      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values. market-args.ts --proposed prints the arguments: only fee_bps and craft_bits change, and the eight pools keep their on-chain virtual reserves.",
       "tests": [
         {
           "pkg": "app",
@@ -5625,7 +5618,7 @@
       "id": "econdoc-recommendation",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "It passes the band: 49.6% of a season's Bits burned, first suit by night 5, Gwei down 9.6% of item-days over 60 days.",
+      "quote": "It passes the band: 45.7% of a season's Bits burned, first suit by night 5, Gwei down 9.1% of item-days over 60 days.",
       "status": "simulation only",
       "code": [
         {
@@ -5761,7 +5754,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "moves the season's burn share by under a point; over 60 days with him Gwei is unable to buy on just over 10% of item-days (docs/ECONOMY.md)"
+          "name": "moves the season's burn share by under a point, and keeps Gwei inside the band over 60 days with him (docs/ECONOMY.md)"
         }
       ]
     },
@@ -7475,7 +7468,7 @@
       "kind": "view",
       "method": "market_state",
       "args": {},
-      "about": "The contract's market: open, a 10% fee and 250 Bits burned per recipe suit (the settings docs/ECONOMY.md proposes), the listing bounds and caps, and eight pools held by the contract's own account.",
+      "about": "The contract's market: open, a 5% fee and 250 Bits burned per recipe suit (the settings docs/ECONOMY.md proposes), the listing bounds and caps, and twelve pools: the eight launch items and Gwei's new stock held by the contract's own account.",
       "expect": [
         {
           "path": "vendor",
@@ -7490,7 +7483,7 @@
         {
           "path": "params.fee_bps",
           "op": "eq",
-          "value": 1000
+          "value": 500
         },
         {
           "path": "params.craft_bits",
@@ -7520,15 +7513,15 @@
         {
           "path": "pools.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         },
         {
           "path": "prices_milli.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         }
       ],
-      "whenFails": "If fee_bps is 200 and craft_bits 0, the owner hasn't sent docs/ECONOMY.md's set_market_params yet: send it. If the owner changed the settings again, update the README, docs/ECONOMY.md and this check."
+      "whenFails": "If fee_bps is 200 and craft_bits 0, or pools is 8, the owner hasn't sent the set_rules and set_market_params calls (docs/ECONOMY.md, docs/economy/new-stock-calls.json): send them. If the owner changed the settings again, update the README, docs/ECONOMY.md and this check."
     },
     "prices-moved": {
       "kind": "view",
@@ -7991,7 +7984,7 @@
     "site-npc": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market/npc",
-      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says which brain picks his moves (brain.mode: llm, with the model, when the server has LLM_API_KEY; rules otherwise).",
+      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says an LLM picks his moves (brain.mode is llm: the server has LLM_API_KEY).",
       "expect": [
         {
           "path": "mode",
@@ -8030,11 +8023,11 @@
         },
         {
           "path": "brain.mode",
-          "op": "anyMatch",
-          "value": "^(llm|rules)$"
+          "op": "eq",
+          "value": "llm"
         }
       ],
-      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md. If brain.mode is missing, production runs a build from before the brain (feat/npc-agent)."
+      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md. If brain.mode is missing, production runs a build from before the brain (feat/npc-agent). If brain.mode is rules, LLM_API_KEY is missing from production: set it, or say so in the README and docs/npc-trader.md."
     },
     "site-play": {
       "kind": "http",
