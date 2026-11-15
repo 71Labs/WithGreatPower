@@ -16,6 +16,7 @@ import { CopyRaceLink } from "@/components/compete/race-link";
 import { GuestNightNext } from "@/components/first-minute/guest-night-next";
 import { TradePromptCard, useTradePrompt } from "@/components/market/trade-prompt";
 import { recordGuestNight } from "@/components/market/use-market-peek";
+import { WantedHaul } from "@/components/market/wanted-tile";
 import { ShareOnX } from "@/components/social/share-on-x";
 import { nightBits } from "@/lib/market/rewards";
 import { runShareText } from "@/lib/social/share";
@@ -180,6 +181,7 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
               </div>
             ) : null}
           </div>
+          <WantedHaul wanted={o.wanted} />
           <VerifiedTrade bits={o.bits} save={o.save as HeroSave} />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {o.ranked ? <ShareOnX text={runShareText(o.score, o.runId)} className="w-full sm:w-auto" /> : null}
