@@ -33,6 +33,8 @@ export interface MarketItemView {
   trades24h: number;
   /** The raw curve, for quotes in the browser (src/lib/market/math.ts). */
   pool: Pool;
+  /** Practice only: Gwei's new stock (./new-stock.ts) before NEAR has its pool. */
+  preview?: boolean;
 }
 
 export interface MarketView {

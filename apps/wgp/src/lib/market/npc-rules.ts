@@ -8,12 +8,14 @@
  * The contract gives him no special power, no discount and no cap of his own: every
  * limit a player has, he has.
  *
- * Nobody tells him what to trade. `decide` below is everything he does: a pure function
+ * Nobody tells him what to trade. `decide` below is everything he may do: a pure function
  * of the market as it stands, his wallet, the open listings and the time. Same inputs,
- * same answer. He acts only when the market moves (a player's trade or listing lands) or
- * someone opens it, one action at a time.
+ * same answer. An LLM may pick among its moves or pass, never outside them (./npc-brain.ts).
+ * He acts only when the market moves (a player's trade or listing lands) or someone opens
+ * it, one action at a time.
  *
- * THE RULES, IN PLAIN ENGLISH (the first one that fits is the one he takes)
+ * THE RULES, IN PLAIN ENGLISH (best first: the rules alone take the first that fits; with the
+ * LLM on, it picks among every one that fits, or passes: ./npc-brain.ts)
  *
  * 1. Take down a stale listing. A listing of his that has sat for 48 hours comes down, so
  *    the items can be priced again.
@@ -192,8 +194,10 @@ export function npcStatus(market: NpcMarket, wallet: NpcWallet, nowMs: number): 
 }
 
 /**
- * Everything Sandwich Man would do right now, best first. The runner sends only the
- * first. Pure and deterministic: no clock but `nowMs`, no randomness, no I/O.
+ * Everything Sandwich Man would do right now, best first: every move the market would
+ * accept inside his caps. The rules alone send the first; the on-chain brain may pick another
+ * of these or pass (./npc-brain.ts). At most one is sent a look. Pure and deterministic: no
+ * clock but `nowMs`, no randomness, no I/O.
  */
 export function decide(market: NpcMarket, wallet: NpcWallet, listings: Listing[], nowMs: number): NpcAction[] {
   const { params, pools } = market;

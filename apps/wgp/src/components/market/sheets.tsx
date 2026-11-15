@@ -14,6 +14,7 @@ import { GameSheet } from "@/components/game/ui";
 import { CircleAlert, KeyRound, Minus, Plus } from "@/components/icons";
 import { MiniAvatar } from "@/components/landing/mini-avatar";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
+import { NewStockEarn } from "./new-stock-tag";
 import type { ItemId } from "@wgp/game-core/types";
 
 import type { ListingView, MarketItemView, MarketMe, MarketView, SimTradeRequest } from "@/lib/market/api";
@@ -128,6 +129,7 @@ function ItemHead({ item }: { item: MarketItemView }) {
         <span className="text-[12px] leading-4 text-game-muted">
           {RARITY_LABEL[item.rarity]} · {ITEMS[item.item].blurb}
         </span>
+        <NewStockEarn item={item} />
       </span>
     </span>
   );

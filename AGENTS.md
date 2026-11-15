@@ -15,10 +15,13 @@ Each row names the code, a command or test that exercises it, and its row in [do
 | Replay-verified scores | The browser records only inputs; the server replays them through the same deterministic simulation and ranks a run only if its state hash reproduces | `packages/game-core/src/replay.ts`, `apps/wgp/src/server/verify.ts` | `pnpm verify` (replays the live All-time top 5); https://www.wgponnear.fun/lab/determinism replays four nights in your browser | `intro-replayed`, `judge-6`, `judge-8` |
 | Deterministic simulation | Its math uses only + − × ÷, `Math.sqrt` and `Math.floor`, which IEEE-754 fixes bit for bit, so Node, Chromium, WebKit and Firefox agree; a scan test bans `Math.sin`, `cos`, `atan2`, `hypot` and `pow` in the core, and golden replays are pinned by hash | `packages/game-core/src/sim3d/dmath.ts`, `packages/game-core/test/determinism-scan.test.ts`, `packages/game-core/test/golden/hashes.json` | `pnpm --filter @wgp/game-core test` (284 tests, golden replays included) | `verify-goldens`, `arch-determinism-scan` |
 | NEP-245 multi-token contract | Heroes, items, suits, badges and Bits are token ids in one contract, with the standard's transfers, views and events | `contracts/wgp/src/mt.rs`, `contracts/wgp/src/events.rs` | Command B (a player's tokens on mainnet); `cargo test` in `contracts/wgp` (68 tests) | `track-nep245`, `judge-4` |
-| A market inside the contract | A constant-product pool per item, escrowed player listings, a 2% fee that is burned, and a vendor that stops buying an item when its till is empty | `contracts/wgp/src/market.rs` (`market_buy`, `list_item`) | Command A (`market_state` on mainnet) | `judge-3`, `economy-burn-fee`, `near-market-guards`, `track-merchant-closed-reason` |
+| A market inside the contract | A constant-product pool per item, escrowed player listings, a 5% fee that is burned (and 250 Bits burned per crafted suit), 12 pools since Nov 15, and a vendor that stops buying an item when its till is empty | `contracts/wgp/src/market.rs` (`market_buy`, `list_item`) | Command A (`market_state` on mainnet) | `judge-3`, `economy-burn-fee`, `near-market-guards`, `track-merchant-closed-reason` |
 | Gasless play | A function-call session key signs NEP-366 delegate actions; the relayer accepts one call to an allowlisted method, with zero deposit, at most 30 Tgas and within budgets | `apps/wgp/src/server/near/relay.ts`, `apps/wgp/src/server/near/session-keys.ts` | `apps/wgp/src/server/near/relay.test.ts`, `relay-budget.test.ts`; a relayed mainnet trade | `intro-no-popups`, `judge-relayed-trade`, `near-relay` |
 | Reward outbox | A verified run queues its mint in the same database transaction; the operator sends `mint_rewards` in batches with a per-account nonce, so a retry never mints twice | `apps/wgp/src/server/near/mint-worker.ts`, `contracts/wgp/src/lib.rs` (`mint_rewards`) | `apps/wgp/src/server/near/mint-worker.test.ts` | `near-rewards`, `proven-mint` |
-| An NPC with its own wallet | Sandwich Man trades from `sandwich.wgpnear.near` with the same market calls players use, by fixed rules in one file (rule-based, not an AI model) | `apps/wgp/src/lib/market/npc-rules.ts` | `curl -s https://www.wgponnear.fun/api/market/npc \| jq '{mode, accountId, bits, log}'` | `track-agent-npc` |
+| An NPC with its own wallet and an LLM brain | Sandwich Man trades from `sandwich.wgpnear.near` with the same market calls players use. His fixed rules list every legal move; Kimi K3 (Moonshot) picks one or passes, and the server keeps the pick only if it is listed. The rules decide on a timeout, an error or after 10 LLM calls a day | `apps/wgp/src/lib/market/npc-rules.ts`, `apps/wgp/src/lib/market/npc-brain.ts`, `apps/wgp/src/server/npc/brain.ts` | `curl -s https://www.wgponnear.fun/api/market/npc \| jq '{mode, accountId, bits, brain, log}'` | `track-agent-npc`, `npc-brain-live` |
+| A faucet with a taper | A verified night pays its Bits in full up to 150 held and less above, down to the 5 for showing up at 400; it reads only the verified result and the hero's balance, so no score or replay changes | `apps/wgp/src/lib/market/rewards.ts` (`nightPay`), `apps/wgp/src/server/market/held.ts` | `/lab/economy` (opens on the live settings, with a switch to the old ones) | `econdoc-owner-settings` |
+| Gwei's wanted list | Each UTC day the items Gwei is short on (sold out, low stock or priced up) become a frozen list; verified nights that bring them get extra drops of those items, capped per night and per day | `apps/wgp/src/lib/market/wanted.ts`, `apps/wgp/src/server/market/wanted.ts` | `curl -s https://www.wgponnear.fun/api/market/wanted` | `economy-wanted-list` |
+| Gwei's new stock | Four items earned from the Daily Run and cases, two suits that burn them, and their pools; awarded only while the pool exists on chain | `apps/wgp/src/lib/market/new-stock.ts`, `apps/wgp/src/server/market/new-stock.ts` | Open `/play/market` | `status-new-stock` |
 | The merchant's reasoning | "Why this price?" explains each price from the vendor's stock and till | `apps/wgp/src/lib/market/reasoning.ts` | Open `/play/market` and tap **Why this price?** | `track-reasoning-tooltip` |
 | NEAR Intents gas tank | `/gas` asks the 1Click API for a quote that turns USDC, ETH, SOL or BTC from 5 chains into NEAR for the relayer; the server fixes the recipient | `apps/wgp/src/server/intents/one-click.ts`, `apps/wgp/src/app/api/intents/` | A dry quote (moves nothing; any valid EVM address works as the refund address): `curl -s -X POST https://www.wgponnear.fun/api/intents/quote -H 'content-type: application/json' -d '{"assetId":"nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near","amount":"2","refundTo":"0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045","recipient":"someone-else.near"}' \| jq '{dry, recipient, amountOutFormatted}'` prints `"recipient": "relayer.wgpnear.near"` | `track-intents`, `tryit-gas` |
 | Seasons on chain | At a season's close the standings are frozen with a Merkle root, and `record_season` stores it and mints soulbound trophies to the top 10 | `apps/wgp/src/server/near/season.ts`, `season-record.ts`, `contracts/wgp/src/lib.rs` (`record_season`) | `apps/wgp/src/server/near/season-record.test.ts`; the first mainnet run is at Season 1's close (Nov 15, 00:50 UTC) | `near-seasons`, `status-season` |
@@ -60,11 +63,11 @@ The player transactions above come from five different accounts, none of them th
 
 ## The evidence ledger at a glance
 
-`docs/evidence.json` holds 214 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
+`docs/evidence.json` holds 230 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
 
 | Status | Claims |
 |---|---|
-| `proven by test` | 103 |
+| `proven by test` | 105 |
 | `proven on chain` | 45 |
 | `live check` | 18 |
 | `pinned by test` | 8 |
@@ -80,7 +83,8 @@ What is not live, so a review doesn't have to dig for it (details in the README'
 - The NEAR Intents gas tank's quotes are live; its first real refill had not landed when this was written.
 - NEAR Auth is built and waits on NEAR adding the site to its mainnet client.
 - Season 1's on-chain record is written at its close (Nov 15, 2026, 00:50 UTC); check `season-s1` follows it through open, closed and recorded.
-- Traffic is a small, incentivised playtest (daily airdrops, sent outside the game); "By the numbers" in the README has the counts and their caveats.
+- Traffic is a small, incentivised playtest (daily airdrops, sent outside the game); "By the numbers" in the README has the counts and their caveats, and [docs/TRACTION.md](docs/TRACTION.md) breaks them down by day (`pnpm traction`).
+- Costs and runway are measured from mainnet history in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md) under "Measured costs" (`pnpm costs`); there is no revenue yet.
 - Trust: the owner key is in the production environment, and `game.wgpnear.near` has a full-access key held by the owner; both are disclosed under Limits, with the plan to remove them after judging.
 
 ## NEAR HACKATHON rules, and where each is met
@@ -117,13 +121,15 @@ Times are from a fresh anonymous clone on Nov 14, 2026 (Apple silicon laptop).
 | Command | Expect | Time |
 |---|---|---|
 | `pnpm install --frozen-lockfile` | Exit 0 | about 25 s |
-| `pnpm test` | game-core `284 passed`, app `1691 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
+| `pnpm test` | game-core `284 passed`, app `1785 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
 | `pnpm verify` | `5/5 runs reproduced from https://www.wgponnear.fun.` (replays the All-time top 5 from the live site) | about 5 s |
-| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `214 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
-| `pnpm evidence --chain` | `214 claims: 214 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
+| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `230 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
+| `pnpm evidence --chain` | `230 claims: 230 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
 | `pnpm evidence --chain --only <id>,<id>` | Re-runs single claims (ids are in `docs/EVIDENCE.md`) | seconds |
 | `pnpm typecheck` / `pnpm lint` / `pnpm build` | Exit 0; the build needs no database URL | under 1 min each |
 | `pnpm stats` | Counts from NearBlocks and `/api/stats`; NearBlocks rate-limits, so it can take a couple of minutes | 1–3 min |
+| `pnpm traction` | Day-by-day mainnet usage: daily active and new player accounts, calls by method, retention, concentration, reward mints, and the `/api/stats` snapshot. Read-only; tonight's run is in `docs/TRACTION.md` | a few min (NearBlocks) |
+| `pnpm costs` | Measured costs from mainnet history: NEAR per relayed action and per reward mint, cost per player, relayer and operator runway, what a Gas tank refill buys. Read-only; tonight's run is in `docs/SUSTAINABILITY.md` ("Measured costs") | a few min (NearBlocks) |
 
 Nothing above signs a transaction, needs a wallet or needs secrets.
 

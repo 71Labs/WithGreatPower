@@ -8,6 +8,7 @@ import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId, Rarity } from "@wgp/game-core/types";
 
 import type { Pool } from "./math";
+import { LAUNCH_ITEM_IDS, NEW_STOCK_POOLS } from "./new-stock";
 
 export interface MarketParams {
   /** Off: no trades or new listings (open listings can still be cancelled). */
@@ -69,6 +70,14 @@ export const DEFAULT_PARAMS: MarketParams = {
   craftBits: 0,
 };
 
+/**
+ * The market settings docs/ECONOMY.md proposes: a 5% gas fee and 250
+ * Bits burned per recipe suit, everything else as it is. They are live once the owner sends
+ * `set_market_params` with them (`scripts/near/market-args.ts --proposed`); the app reads
+ * the live values either way, so nothing here switches them on.
+ */
+export const PROPOSED_PARAMS: MarketParams = { ...DEFAULT_PARAMS, feeBps: 500, craftBits: 250 };
+
 /** Starting spot price, curve depth and stock by rarity. */
 export const CURVES: Record<Rarity, { price: number; virtualItems: number; stock: number }> = {
   common: { price: 12, virtualItems: 40, stock: 40 },
@@ -84,15 +93,20 @@ export interface PoolConfig {
   seedStock: number;
 }
 
-/** One pool per game item, in ITEMS order. */
+/** One pool per launch item, in ITEMS order: what the owner's first set_market_params seeded on chain. */
 export function defaultPoolConfigs(): PoolConfig[] {
-  return (Object.values(ITEMS) as { id: ItemId; rarity: Rarity }[]).map(({ id, rarity }) => {
+  return LAUNCH_ITEM_IDS.map((id) => ITEMS[id] as { id: ItemId; rarity: Rarity }).map(({ id, rarity }) => {
     const c = CURVES[rarity];
     // y = price · x; half the Bits sit in the till.
     const y = c.price * (c.virtualItems + c.stock);
     const seedBits = Math.floor(y / 2);
     return { item: id, virtualBits: y - seedBits, virtualItems: c.virtualItems, seedBits, seedStock: c.stock };
   });
+}
+
+/** The launch pools plus Gwei's new stock (./new-stock.ts): every item the game has. */
+export function marketPoolConfigs(): PoolConfig[] {
+  return [...defaultPoolConfigs(), ...NEW_STOCK_POOLS];
 }
 
 /** The pools as they stand right after seeding. */

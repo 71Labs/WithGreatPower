@@ -16,8 +16,9 @@ import { CopyRaceLink } from "@/components/compete/race-link";
 import { GuestNightNext } from "@/components/first-minute/guest-night-next";
 import { TradePromptCard, useTradePrompt } from "@/components/market/trade-prompt";
 import { recordGuestNight } from "@/components/market/use-market-peek";
+import { WantedHaul } from "@/components/market/wanted-tile";
 import { ShareOnX } from "@/components/social/share-on-x";
-import { nightBits } from "@/lib/market/rewards";
+import { NIGHT_TAPER, nightBits } from "@/lib/market/rewards";
 import { runShareText } from "@/lib/social/share";
 import { useAccount } from "@/game/store";
 import type { NightOutcome, NightSession } from "@/game3d/session";
@@ -29,6 +30,9 @@ import { Results } from "@/sim/ui/results";
 export type Ending = { kind: "submitting" } | { kind: "done"; outcome: NightOutcome };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
+
+/** The server's reason a night paid less than it earned (src/server/db/runs.ts `NightTaper`). */
+type Taper = { full: number; held: number };
 
 /** The verifier's reasons, in words. */
 const REASONS: Record<string, string> = {
@@ -66,8 +70,12 @@ function Score({ label, value }: { label: string; value: number }) {
   );
 }
 
-/** The night's Bits, as the server minted them (src/lib/market/rewards.ts: the score, a level-up and the Bits tokens collected). */
-function EarnedBits({ bits, prompted }: { bits: number; prompted: boolean }) {
+/**
+ * The night's Bits, as the server minted them (src/lib/market/rewards.ts: the score, a level-up
+ * and the Bits tokens collected, tapered by the Bits the hero already holds). When the taper
+ * paid less than the whole night, one line says from what and why.
+ */
+function EarnedBits({ bits, taper, prompted }: { bits: number; taper?: Taper; prompted: boolean }) {
   const account = useAccount();
   // The mint goes out after this screen; say when they'll be spendable so they never look lost.
   const unclaimed = account.status === "signed-in" && isUnclaimed(account.me.player);
@@ -78,6 +86,12 @@ function EarnedBits({ bits, prompted }: { bits: number; prompted: boolean }) {
           <Coins aria-hidden className="size-5 shrink-0" strokeWidth={2.25} />
           You earned <span className="num">{fmt(bits)}</span> Bits
         </p>
+        {taper ? (
+          <p className="pl-7 text-[12px] font-semibold leading-4 text-game-ink [text-wrap:pretty]">
+            Tapered from <span className="num">{fmt(taper.full)}</span>: you hold <span className="num">{fmt(taper.held)}</span> Bits, and nights pay less above{" "}
+            <span className="num">{fmt(NIGHT_TAPER.fullBelow)}</span>.
+          </p>
+        ) : null}
         <p className="pl-7 text-[12px] font-medium leading-4 text-game-ink [text-wrap:pretty]">
           {unclaimed ? "Saved for you. Claim your name to spend them." : "They reach your market wallet within a minute or two."}
         </p>
@@ -98,11 +112,11 @@ function EarnedBits({ bits, prompted }: { bits: number; prompted: boolean }) {
  * market with the sheet prefilled. Nothing shows until the market answers. With a prompt,
  * it replaces the plain link to the stall as the one next step.
  */
-function VerifiedTrade({ bits, save }: { bits: number; save: HeroSave }) {
+function VerifiedTrade({ bits, taper, save }: { bits: number; taper?: Taper; save: HeroSave }) {
   const { prompt } = useTradePrompt(save);
   return (
     <>
-      <EarnedBits bits={bits} prompted={!!prompt} />
+      <EarnedBits bits={bits} taper={taper} prompted={!!prompt} />
       {prompt ? <TradePromptCard prompt={prompt} /> : null}
     </>
   );
@@ -180,7 +194,8 @@ function RankingPanel({ ending, onRetry }: { ending: Ending; onRetry(): void }) 
               </div>
             ) : null}
           </div>
-          <VerifiedTrade bits={o.bits} save={o.save as HeroSave} />
+          <WantedHaul wanted={o.wanted} />
+          <VerifiedTrade bits={o.bits} taper={o.taper} save={o.save as HeroSave} />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {o.ranked ? <ShareOnX text={runShareText(o.score, o.runId)} className="w-full sm:w-auto" /> : null}
             {/* Race my ghost: anyone with the link races this night again, against this run. */}

@@ -19,9 +19,9 @@ import { Reasoning } from "@/components/market/why-price";
 import { ITEMS, RARITY_LABEL } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
-import { DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, economyConfig, type Setting } from "@/lib/market/balance";
+import { DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED_WITH_TAPER, economyConfig, type Setting } from "@/lib/market/balance";
 import { Economy, LAB_BROKE_SEED, type DaySnapshot } from "@/lib/market/bots";
-import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
+import { DEFAULT_PARAMS, marketPoolConfigs, seededPools } from "@/lib/market/config";
 import { shopOf } from "@/lib/market/invest";
 import { explainPrice } from "@/lib/market/reasoning";
 import { withShop } from "@/lib/market/reasoning-shop";
@@ -43,7 +43,7 @@ type Speed = (typeof SPEEDS)[number]["id"];
 const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 const noop = () => () => {};
 /** Each item's curve as seeded; a day's stock and till go on top to rebuild that day's pool. */
-const SEEDED = new Map(seededPools().map((p) => [p.item, p]));
+const SEEDED = new Map(seededPools(marketPoolConfigs()).map((p) => [p.item, p]));
 
 /* ------------------------------------------------------------------ chart */
 
@@ -228,8 +228,11 @@ interface Setup {
   days: number;
   bots: number;
   seed: number;
-  /** The recommended on-chain settings (docs/ECONOMY.md) instead of what mainnet holds today. */
-  recommended: boolean;
+  /**
+   * The settings before the proposal (2% fee, free crafting, the flat faucet) instead of the
+   * proposal the lab opens on: the owner's settings and the faucet taper (docs/ECONOMY.md).
+   */
+  before: boolean;
   /** The stress mix of heroes that runs Gwei out of stock and Bits. */
   drain: boolean;
   /**
@@ -237,15 +240,17 @@ interface Setup {
    * dry, an investor funds it the next morning and Gwei buys again (balance.ts `INVEST_SHOWCASE`).
    */
   invest: boolean;
+  /** Gwei's new stock (src/lib/market/new-stock.ts): its four pools open, and heroes earn it from the Daily and cases. */
+  newStock?: boolean;
 }
 
-const settingOf = (s: Setup): Setting => (s.recommended ? RECOMMENDED : MAINNET);
-/** Mainnet's rules and curves unless `recommended`; heroes craft each suit once, as the contract requires. Investors only when asked for. */
-const build = (s: Setup) => new Economy(economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain || s.invest ? DRAIN.mix : undefined, invest: s.invest }));
+const settingOf = (s: Setup): Setting => (s.before ? MAINNET : RECOMMENDED_WITH_TAPER);
+/** The proposal unless `before`; mainnet's curves either way; heroes craft each suit once, as the contract requires. Investors only when asked for. Gwei's new stock only when asked for. */
+const build = (s: Setup) => new Economy({ ...economyConfig(settingOf(s), { days: s.days, bots: s.bots, seed: s.seed, npc: true, mix: s.drain || s.invest ? DRAIN.mix : undefined, invest: s.invest }), newStock: !!s.newStock });
 
 export function EconomyLab() {
   const ids = useId();
-  const [setup, setSetup] = useState<Setup>({ days: 21, bots: 60, seed: 2026, recommended: false, drain: false, invest: false });
+  const [setup, setSetup] = useState<Setup>({ days: 21, bots: 60, seed: 2026, before: false, drain: false, invest: false });
   const [speed, setSpeed] = useState<Speed>("4x");
   const [running, setRunning] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
@@ -253,8 +258,10 @@ export function EconomyLab() {
   const [history, setHistory] = useState<DaySnapshot[]>(() => econ.history.slice());
   // Run waits for the page to hydrate: before that its click would be lost, so it says Loading and can't be pressed.
   const ready = useSyncExternalStore(noop, () => true, () => false);
-  const { days, bots, seed, recommended, drain, invest } = setup;
+  const { days, bots, seed, before, drain, invest, newStock } = setup;
   const setting = settingOf(setup);
+  // The items this run has pools for: the launch eight, and Gwei's new stock when it is open.
+  const itemIds = ITEM_IDS.filter((item) => item in history[0]!.prices);
 
   /** A fresh run, for `next` setup (any change to the setup starts over). */
   function fresh(next: Setup = setup): Economy {
@@ -343,22 +350,29 @@ export function EconomyLab() {
             </div>
           </div>
           <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-semibold">
-            <input type="checkbox" checked={recommended} onChange={(e) => change({ recommended: e.target.checked })} className="size-5 accent-[var(--game-hero)]" />
+            <input type="checkbox" checked={before} onChange={(e) => change({ before: e.target.checked })} className="size-5 accent-[var(--game-hero)]" />
             <span className="flex flex-col leading-4">
-              Recommended settings
+              Run the old settings
               <span className="num text-[12px] font-medium text-game-muted">
-                Crafting burns {RECOMMENDED.craftBits} Bits, {RECOMMENDED.feeBps / 100}% gas fee
+                {MAINNET.feeBps / 100}% gas fee, free crafting, no taper
               </span>
             </span>
           </label>
-          <StickerButton size="sm" aria-pressed={drain} onClick={() => (drain ? change({ drain: false }) : change({ days: DRAIN.days, bots: DRAIN.bots, recommended: false, drain: true, invest: false }))} className="h-11">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-semibold">
+            <input type="checkbox" checked={!!newStock} onChange={(e) => change({ newStock: e.target.checked })} className="size-5 accent-[var(--game-hero)]" />
+            <span className="flex flex-col leading-4">
+              Open Gwei’s new stock
+              <span className="text-[12px] font-medium text-game-muted">4 items from the Daily and cases; not on NEAR until the owner opens their pools</span>
+            </span>
+          </label>
+          <StickerButton size="sm" aria-pressed={drain} onClick={() => (drain ? change({ drain: false }) : change({ days: DRAIN.days, bots: DRAIN.bots, before: true, drain: true, invest: false }))} className="h-11">
             {drain ? "Stop draining Gwei" : "Drain Gwei"}
           </StickerButton>
           {/* The showcase next to it: the same drain, with investors who fund a till the morning after it runs dry. */}
           <StickerButton
             size="sm"
             aria-pressed={invest}
-            onClick={() => (invest ? change({ invest: false }) : change({ days: INVEST_SHOWCASE.days, bots: INVEST_SHOWCASE.bots, seed: INVEST_SHOWCASE.seed, recommended: false, drain: false, invest: true }))}
+            onClick={() => (invest ? change({ invest: false }) : change({ days: INVEST_SHOWCASE.days, bots: INVEST_SHOWCASE.bots, seed: INVEST_SHOWCASE.seed, before: true, drain: false, invest: true }))}
             className="h-11"
           >
             {invest ? "Send the investors home" : "Drain Gwei, then invest in her"}
@@ -423,7 +437,7 @@ export function EconomyLab() {
             </span>
           </p>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {ITEM_IDS.map((item) => (
+            {itemIds.map((item) => (
               <ItemChart key={item} item={item} history={history} hover={hover} onHover={setHover} feeBps={setting.feeBps} />
             ))}
           </ul>
@@ -431,7 +445,7 @@ export function EconomyLab() {
 
         <InvestPanel history={history} hover={hover} headingId={`${ids}-invest`} />
 
-        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, recommended: false, drain: false, invest: false })} />
+        <NpcPanel history={history} hover={hover} onShowBroke={() => fresh({ days: 21, bots: 60, seed: LAB_BROKE_SEED, before: true, drain: false, invest: false })} />
 
         <details className="rounded-[20px] border-2 border-game-ink bg-game-paper text-game-ink shadow-[var(--game-shadow-sm)]">
           <summary className="flex min-h-12 cursor-pointer items-center px-4 text-[14px] font-semibold focus-visible:outline-offset-2">See the numbers</summary>
@@ -458,7 +472,7 @@ export function EconomyLab() {
                 </tr>
               </thead>
               <tbody>
-                {ITEM_IDS.map((item) => {
+                {itemIds.map((item) => {
                   const a = history[0]!.prices[item]!;
                   const b = last.prices[item]!;
                   return (
@@ -480,7 +494,8 @@ export function EconomyLab() {
           </div>
         </details>
         <p className="text-[12px] leading-4 text-game-paper/70">
-          {recommended ? "The recommended settings, not yet on mainnet" : "Mainnet’s settings today"}: {setting.feeBps / 100}% gas fee, crafting burns {setting.craftBits === 0 ? "no" : setting.craftBits} Bits, listings between {DEFAULT_PARAMS.floorBps / 100}% and {DEFAULT_PARAMS.ceilingBps / 100}% of Gwei’s price,{" "}
+          {before ? "The old settings, mainnet’s until the owner’s call" : "The proposal: the owner’s settings, on mainnet once the owner’s call lands"}: {setting.feeBps / 100}% gas fee, crafting burns {setting.craftBits === 0 ? "no" : setting.craftBits} Bits,{" "}
+          {setting.taper ? `nights pay less above ${setting.taper.fullBelow} Bits held and 5 from ${setting.taper.floorAt} (the taper the server pays with), ` : "every night paid in full, "}listings between {DEFAULT_PARAMS.floorBps / 100}% and {DEFAULT_PARAMS.ceilingBps / 100}% of Gwei’s price,{" "}
           {DEFAULT_PARAMS.dailyTrades} vendor trades per hero a day. Each hero crafts a suit once, as the contract requires.{drain ? " Drain Gwei is a stress run: three hoarders buying rares for every dumper selling loot." : ""} Runs are deterministic for a seed. Gwei’s pricing rules are one file, <code className="font-mono">apps/wgp/src/lib/market/math.ts</code>,
           and every line she says here is worked out from that day’s stock and till.
         </p>

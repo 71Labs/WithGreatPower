@@ -57,7 +57,9 @@ describe("NEAR Intents: only the Gas tank, only to the relayer", () => {
     // relayer's tests use intents.near as a foreign receiver it must refuse. Neither is a use.
     const code = (f: string) => read(f).split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*|#)/.test(l)).join("\n");
     const naming = files.filter((f) => /intents\.near|near-intents|chaindefuser|\bdefuse(?:[_-]|\b)/i.test(code(f)));
-    expect(naming, "only the Gas tank's 1Click client may name NEAR Intents in code").toEqual(["apps/wgp/src/server/intents/one-click.ts"]);
+    // pnpm costs reads 1Click's public token list for NEAR's price, the one a refill is priced at; it asks for no quote or deposit address.
+    expect(naming, "only the Gas tank's 1Click client may name NEAR Intents in code").toEqual(["apps/wgp/src/server/intents/one-click.ts", "scripts/costs.mjs"]);
+    expect(code("scripts/costs.mjs").match(/https:\/\/1click\.chaindefuser\.com\S*/g)).toEqual(['https://1click.chaindefuser.com/v0/tokens";']);
     expect(read("contracts/wgp/src/events.rs")).toContain("`MtEvent` mirrors `defuse_nep245::MtEvent` field for field");
     for (const pkg of ["apps/wgp/package.json", "packages/game-core/package.json", "package.json"]) expect(read(pkg), pkg).not.toMatch(/intents|defuse/i);
     const row = plainDoc("README.md").split("\n").find((l) => l.startsWith("| NEAR Intents"));
@@ -95,15 +97,6 @@ describe("pushes to main don't deploy", () => {
     // Production goes out through the script the README names.
     expect(read("scripts/deploy-prod.sh")).toMatch(/vercel\b[^\n]*--prod/);
     expect(read("README.md")).toContain("pushes to `main` don't deploy by themselves (`apps/wgp/vercel.json`)");
-  });
-});
-
-describe("the faucet taper is written and not wired in", () => {
-  it("the ranked submit path pays nightBits, and never calls taperedNightBits", () => {
-    const runs = read("apps/wgp/src/server/db/runs.ts");
-    expect(runs).toMatch(/const bits = nightBits\(/);
-    expect(runs).not.toContain("taperedNightBits");
-    expect(read("apps/wgp/src/lib/market/rewards.ts")).toContain("export function taperedNightBits(");
   });
 });
 

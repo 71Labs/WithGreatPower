@@ -25,23 +25,23 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_BASE = "https://www.wgponnear.fun";
-const DEFAULT_CONTRACT = "game.wgpnear.near";
-const NEARBLOCKS_API = "https://api.nearblocks.io/v1";
+export const DEFAULT_BASE = "https://www.wgponnear.fun";
+export const DEFAULT_CONTRACT = "game.wgpnear.near";
+export const NEARBLOCKS_API = "https://api.nearblocks.io/v1";
 /** The game's own senders: the operator mints rewards, the relayer pays gas for players' trades. */
-const OWN_ACCOUNTS = ["operator.wgpnear.near", "relayer.wgpnear.near"];
+export const OWN_ACCOUNTS = ["operator.wgpnear.near", "relayer.wgpnear.near"];
 /**
  * Sandwich Man, the NPC trader (docs/npc-trader.md). His calls are real market calls, but he
  * is never a player: they are counted on their own line and he is left out of the accounts.
  */
-const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];
+export const NPC_ACCOUNTS = ["sandwich.wgpnear.near"];
 /** The methods players call from their own accounts (signed by their session key, relayed). */
 /** The author's own player account. It plays like any other and is counted as one; the tally says whether it is among them. */
-const AUTHOR_ACCOUNTS = ["sele.wgpnear.near"];
-const PLAYER_METHODS = ["register_hero", "craft_suit", "equip_suit", "market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
+export const AUTHOR_ACCOUNTS = ["sele.wgpnear.near"];
+export const PLAYER_METHODS = ["register_hero", "craft_suit", "equip_suit", "market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
 /** The market's five, a subset of the player methods. */
-const MARKET_METHODS = ["market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
-const PER_PAGE = 25;
+export const MARKET_METHODS = ["market_buy", "market_sell", "list_item", "buy_listing", "cancel_listing"];
+export const PER_PAGE = 25;
 const PAGE_GAP_MS = 1000;
 /** A stop for a runaway loop: 25,000 receipts. Past it the tally says it is partial. */
 const MAX_PAGES = 1000;

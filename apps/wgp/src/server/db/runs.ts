@@ -24,11 +24,16 @@ import { applyCaseClear, caseRecord, CHAPTERS, isChapterId } from "@wgp/game-cor
 import type { ReplayResult } from "@wgp/game-core/sim3d/contract";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
-import { nightBits } from "@/lib/market/rewards";
+import { caseAward } from "@/lib/market/new-stock";
+import { nightPay } from "@/lib/market/rewards";
+import type { WantedBonus } from "@/lib/market/wanted";
 import { secret } from "@/server/auth/secrets";
 import { HttpError, conflict, notFound } from "@/server/http";
+import { heldBits, type HeldBits } from "@/server/market/held";
 import { reserveBudget, releaseBudget, utcDay } from "@/server/rate-limit";
 import { getChapterVerifier, getVerifier, verifyChapterRun, verifyRun, type Verifier } from "@/server/verify";
+import { grantNewStockTx, openStockNow } from "@/server/market/new-stock";
+import { grantWanted, mintedWanted, saveWithWanted, wantedForRun, withWanted, type MarketReader } from "@/server/market/wanted";
 
 import { badgeKey, badgeView, CASE_BUDGET_SCOPE, CASE_RUNS_PER_DAY, type CaseOutcome } from "./cases";
 import type { Db } from "./client";
@@ -162,8 +167,12 @@ export type SubmitResult =
       score: number;
       ticks: number;
       digest: string;
-      /** Bits minted for the night (src/lib/market/rewards.ts). */
+      /** Bits minted for the night (src/lib/market/rewards.ts `nightPay`). */
       bits: number;
+      /** Gwei's wanted list: the extra minted on the wanted items this night brought (src/lib/market/wanted.ts). */
+      wanted?: WantedBonus[];
+      /** Present when the wallet taper paid less than the whole night: the whole night, and the Bits the hero held. */
+      taper?: NightTaper;
       /** False for assist runs, which save progress but stay off the boards. */
       ranked: boolean;
       save: Save;
@@ -178,6 +187,12 @@ export type SubmitResult =
     }
   | { status: "rejected"; runId: string; reason: string; idempotent: boolean };
 
+/** Why a night paid less than it earned: the untapered night and the balance the taper read. */
+export interface NightTaper {
+  full: number;
+  held: number;
+}
+
 class Abort extends Error {
   constructor(readonly why: "raced" | "rev_conflict") {
     super(why);
@@ -191,11 +206,12 @@ async function loadRun(db: Db, runId: string): Promise<Run | null> {
   return row ?? null;
 }
 
-/** The Bits a verified run's reward mint carries (0 if it queued none). */
-async function mintedBitsFor(db: Db, runId: string): Promise<number> {
+/** The Bits a verified run's reward mint carries (0 if it queued none), and the taper's reason when it paid less. */
+async function mintedBitsFor(db: Db, runId: string): Promise<{ bits: number; taper?: NightTaper }> {
   const [op] = await db.select({ payload: chainOps.payload }).from(chainOps).where(eq(chainOps.dedupeKey, `mint_reward:${runId}`)).limit(1);
-  const items = (op?.payload as { items?: MintItem[] } | undefined)?.items ?? [];
-  return items.find((i) => i.tokenId === BITS_TOKEN_ID)?.amount ?? 0;
+  const payload = op?.payload as { items?: MintItem[]; taper?: NightTaper } | undefined;
+  const bits = (payload?.items ?? []).find((i) => i.tokenId === BITS_TOKEN_ID)?.amount ?? 0;
+  return { bits, ...(payload?.taper ? { taper: payload.taper } : {}) };
 }
 
 /** The stored outcome of a finished run, for idempotent resubmits. */
@@ -206,13 +222,15 @@ async function storedOutcome(db: Db, run: Run, log: Uint8Array, clientHash: stri
   if (run.status === "verified") {
     const { save, rev } = await ensureSave(db, run.playerId);
     const chapter = isChapterId(run.mode) ? run.mode : null;
+    const paid = chapter ? { bits: 0 } : await mintedBitsFor(db, run.id);
     return {
       status: "verified",
       runId: run.id,
       score: run.verifiedScore ?? 0,
       ticks: run.ticks ?? 0,
       digest: run.digest ?? "",
-      bits: chapter ? 0 : await mintedBitsFor(db, run.id),
+      ...paid,
+      ...(chapter ? {} : { wanted: await mintedWanted(db, run.id) }),
       ranked: !run.assist && !chapter,
       save,
       rev,
@@ -250,6 +268,8 @@ async function closeCase(
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
+  // Gwei's new stock (src/lib/market/new-stock.ts): a clear earns an evidence bag, once a day, once its pool is open.
+  const stockOpen = cleared ? await openStockNow(db) : new Set<string>();
   try {
     const out = await db.transaction(async (tx) => {
       const claimed = await tx
@@ -286,6 +306,9 @@ async function closeCase(
             now,
           );
         }
+        const stock = await grantNewStockTx(tx, { playerId, accountId: player.nearAccountId, awards: caseAward(result.stats), open: stockOpen, day: utcDay(now), runId: run.id, digest, now, save, rev });
+        save = stock.save;
+        rev = stock.rev;
       }
       return { save, rev, firstClear };
     });
@@ -311,7 +334,7 @@ async function closeCase(
 
 export async function submitRun(
   db: Db,
-  input: { playerId: string; runId: string; log: Uint8Array; clientHash: string; now?: Date; verifier?: Verifier },
+  input: { playerId: string; runId: string; log: Uint8Array; clientHash: string; now?: Date; verifier?: Verifier; market?: MarketReader; held?: HeldBits },
 ): Promise<SubmitResult> {
   const now = input.now ?? new Date();
   const { playerId, log, clientHash } = input;
@@ -361,15 +384,24 @@ export async function submitRun(
   if (chapter) return closeCase(db, run, chapter, result, { log, clientHash, now, submitted });
   const assist = run.assist || (result.stats.assist ?? 0) > 0;
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
-  // Bits come from the verified replay alone (its score and, since ruleset 3, the Bits tokens it
-  // collected); the results screen shows the number this returns.
-  const bits = nightBits({
-    score: result.score,
-    levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0),
-    pickups: result.stats.bits ?? 0,
-  });
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
+  // Gwei's wanted list for the day the night started: a bonus on those items' drop, never on the score.
+  const wanted = await wantedForRun(db, run.issuedAt, now, input.market);
+  // Bits come from the verified replay alone (its score and, since ruleset 3, the Bits tokens it
+  // collected), tapered by the Bits the hero already holds (src/lib/market/rewards.ts). An
+  // unreadable balance pays the whole night. The results screen shows the number this returns.
+  const held = await (input.held ?? heldBits)(db, { playerId, accountId: player.nearAccountId });
+  const pay = nightPay(
+    {
+      score: result.score,
+      levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0),
+      pickups: result.stats.bits ?? 0,
+    },
+    held,
+  );
+  const bits = pay.bits;
+  const taper: NightTaper | undefined = pay.held !== null && pay.bits < pay.full ? { full: pay.full, held: pay.held } : undefined;
 
   try {
     const out = await db.transaction(async (tx) => {
@@ -389,7 +421,10 @@ export async function submitRun(
         .returning({ id: runs.id });
       if (claimed.length === 0) throw new Abort("raced");
 
-      const rev = await writeSave(tx, playerId, result.save, run.saveRevAtStart, now);
+      const loot = lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {});
+      const bonus = wanted ? await grantWanted(tx, { playerId, list: wanted, loot, now }) : [];
+      const save = saveWithWanted(result.save, bonus);
+      const rev = await writeSave(tx, playerId, save, run.saveRevAtStart, now);
       if (rev === null) throw new Abort("rev_conflict");
 
       const tags = assist ? [] : await recordScore(tx, { playerId, runId: run.id, score: result.score, ticks: result.ticks, issuedAt: run.issuedAt, now });
@@ -399,7 +434,7 @@ export async function submitRun(
       // this transaction.
       const level = result.save.hero?.level;
       const levelledUp = !!level && level > (startSave.hero?.level ?? 0);
-      const items = withBits(lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {}), bits);
+      const items = withBits(withWanted(loot, bonus), bits);
       if (items.length > 0 || levelledUp) {
         await enqueueRewardMint(
           tx,
@@ -407,12 +442,12 @@ export async function submitRun(
             kind: "mint_reward",
             dedupeKey: `mint_reward:${run.id}`,
             playerId,
-            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), digest },
+            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), ...(bonus.length ? { wanted: bonus } : {}), digest, ...(taper ? { taper } : {}) },
           },
           now,
         );
       }
-      return { rev, tags };
+      return { rev, tags, save, bonus };
     });
     return {
       status: "verified",
@@ -421,8 +456,10 @@ export async function submitRun(
       ticks: result.ticks,
       digest,
       bits,
+      wanted: out.bonus,
+      ...(taper ? { taper } : {}),
       ranked: !assist,
-      save: result.save,
+      save: out.save,
       rev: out.rev,
       tags: out.tags,
       idempotent: false,

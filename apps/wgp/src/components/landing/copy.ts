@@ -5,10 +5,15 @@
  * disagrees with the simulation.
  */
 
-/** The opener under the headline. The second half is hidden on a phone. */
+/**
+ * The opener: the headline is the city's own motto (Uncle Gen's line in docs/story/bible.md),
+ * and the pitch under it puts the world first: villains who are the economy's tricks, and a
+ * hero whose job is to keep its market honest. The pitch's second half is hidden on a phone.
+ */
+export const HERO_HEADLINE = { lead: "With great power", point: "comes great gas fees." } as const;
 export const HERO_PITCH = {
-  lead: "A 3D web-swinging game in a comic-book city. Swing on real rope physics and web up two villains a night",
-  more: ", help the neighbors, and bank a night the server replays before it ranks you",
+  lead: "A 3D web-swinging game set in a city where the villains are the economy. Sandwich Man cuts every queue, Gas Goblin spikes the fees and Doc Octochain tolls the bridges. Your job is to keep its market honest: swing on real rope physics and web up two villains a night",
+  more: ", sell their loot to Gwei Stacy at prices players move, and bank a night the server replays before it ranks you",
 } as const;
 
 /** The card a shared link shows. */

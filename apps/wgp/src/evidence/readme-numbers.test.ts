@@ -17,11 +17,12 @@ import { replayRun } from "@wgp/game-core/replay";
 import { RULESET_VERSION, SIM_HZ } from "@wgp/game-core/sim3d/constants";
 import { describe, expect, it } from "vitest";
 
-import { DRAIN, MAINNET, RECOMMENDED, SEASON, economyConfig, measured, play } from "@/lib/market/balance";
+import { DRAIN, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, TAPER_ONLY, economyConfig, measured, play } from "@/lib/market/balance";
 import { LAB_BROKE_SEED } from "@/lib/market/bots";
-import { CURVES, DEFAULT_PARAMS, defaultPoolConfigs } from "@/lib/market/config";
+import { CURVES, DEFAULT_PARAMS, PROPOSED_PARAMS, defaultPoolConfigs } from "@/lib/market/config";
+import { LAUNCH_ITEM_IDS, NEW_STOCK_IDS, NEW_STOCK_POOLS } from "@/lib/market/new-stock";
 import { NPC_RULES } from "@/lib/market/npc-rules";
-import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_NIGHT_BITS, MAX_PICKUP_BITS } from "@/lib/market/rewards";
+import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, BITS_PER_SCORE, MAX_NIGHT_BITS, MAX_PICKUP_BITS, NIGHT_TAPER } from "@/lib/market/rewards";
 import { MARKET_METHODS, MAX_RELAY_GAS, RELAY_METHODS, TGAS } from "@/lib/near/policy";
 import { TRIAL_RUNS_PER_DAY } from "@/server/db/compete";
 import { REWARD_BATCH_SIZE } from "@/server/db/outbox";
@@ -62,21 +63,26 @@ const lab = (setting: typeof MAINNET, seed = 2026) => {
 };
 
 describe("the README's numbers equal the code's", () => {
+  // The fee and the crafting cost the README quotes are the proposed ones (PROPOSED_PARAMS): mainnet's once the
+  // owner's set_market_params lands (docs/ECONOMY.md, "The owner's command"). Everything else is the contract's default.
   it("the market: fee, pools, listing bounds and the items-per-call cap", () => {
-    const feePct = DEFAULT_PARAMS.feeBps / 100;
-    const pools = defaultPoolConfigs().length;
-    expect(pools).toBe(Object.keys(ITEMS).length);
-    says(README, `{"open":true,"fee_bps":${DEFAULT_PARAMS.feeBps},"pools":${pools},"prices_milli":[…]}`);
+    const feePct = PROPOSED_PARAMS.feeBps / 100;
+    // The pools the owner seeded at launch, plus Gwei's new stock, opened by the owner's calls on Nov 15 (src/lib/market/new-stock.ts).
+    expect(defaultPoolConfigs().length).toBe(LAUNCH_ITEM_IDS.length);
+    const pools = defaultPoolConfigs().length + NEW_STOCK_POOLS.length;
+    expect(pools).toBe(LAUNCH_ITEM_IDS.length + NEW_STOCK_IDS.length);
+    expect({ ...PROPOSED_PARAMS, feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits }).toEqual(DEFAULT_PARAMS);
+    says(README, `{"open":true,"fee_bps":${PROPOSED_PARAMS.feeBps},"pools":${pools},"prices_milli":[…]}`);
     says(README, `The contract and its market (${pools} pools, ${feePct}% fee)`);
     says(README, `a gas fee on each trade is burned (${feePct}% today)`);
     says(README, `the contract's fee_bps, ${feePct}% today`);
-    says(README, `fee:     ceil(bits · ${DEFAULT_PARAMS.feeBps} / 10000), burned`);
+    says(README, `fee:     ceil(bits · ${PROPOSED_PARAMS.feeBps} / 10000), burned`);
     says(README, `a ${feePct}% fee that's burned`);
     const bounds = `${DEFAULT_PARAMS.floorBps / 100}–${DEFAULT_PARAMS.ceilingBps / 100}%`;
     says(README, `at ${bounds} of her price`);
     says(README, `listing prices within ${bounds} of the vendor's`);
     says(README, `at most ${DEFAULT_PARAMS.maxAmount} items a call`);
-    says(README, `the contract's craft_bits on top (${DEFAULT_PARAMS.craftBits} today)`);
+    says(README, `the contract's craft_bits on top (${PROPOSED_PARAMS.craftBits} today)`);
   });
 
   it("the app's market defaults are the contract's MarketParams::default()", () => {
@@ -99,6 +105,7 @@ describe("the README's numbers equal the code's", () => {
   it("the Bits a night earns", () => {
     const rule = `floor(score / ${BITS_PER_SCORE}) + ${BITS_FOR_SHOWING_UP}`;
     says(README, `${rule}, +${BITS_FOR_LEVEL_UP} on a level-up, +1 for each gold Bits token you swing through (up to ${MAX_PICKUP_BITS}), and at most ${fmt(MAX_NIGHT_BITS)} a night`);
+    says(README, `A hero who already holds over ${NIGHT_TAPER.fullBelow} Bits gets less, down to the ${BITS_FOR_SHOWING_UP} for showing up at ${NIGHT_TAPER.floorAt}`);
     says(plainDoc("docs/GAME-LOOP.md"), `(${rule}, +${BITS_FOR_LEVEL_UP} on a level-up, +1 per gold token up to ${MAX_PICKUP_BITS}, capped at ${fmt(MAX_NIGHT_BITS)} a night)`);
     says(plainDoc("docs/ECONOMY.md"), `${rule}, +${BITS_FOR_LEVEL_UP} on a level-up, +1 per Bits token collected (up to ${MAX_PICKUP_BITS}), at most ${fmt(MAX_NIGHT_BITS)}`);
   });
@@ -152,17 +159,22 @@ describe("the README's numbers equal the code's", () => {
     says(README, `runs ${SEASON.bots} bot players for ${SEASON.days} days`);
     says(README, `Run ${SEASON.days} days`);
     says(README, `${SEASON.bots} bot players patrol, buy, sell, list and craft for ${SEASON.days} days`);
-    says(README, `(${MAINNET.feeBps / 100}% gas fee, crafting burns no Bits)`);
-    expect(MAINNET).toMatchObject({ feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits });
-    says(README, `(crafting burns ${RECOMMENDED.craftBits} Bits, ${RECOMMENDED.feeBps / 100}% gas fee)`);
+    const proposal = RECOMMENDED_WITH_TAPER;
+    expect(proposal).toMatchObject({ feeBps: PROPOSED_PARAMS.feeBps, craftBits: PROPOSED_PARAMS.craftBits, taper: NIGHT_TAPER });
+    says(README, `with mainnet's settings (${proposal.feeBps / 100}% gas fee, crafting burns ${proposal.craftBits} Bits, nights tapered by the Bits a hero holds)`);
+    expect(MAINNET).toMatchObject({ feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits, taper: null });
+    says(README, `Tick Run the old settings (${MAINNET.feeBps / 100}% gas fee, crafting burns no Bits, no taper)`);
     says(README, `press Drain Gwei and run ${DRAIN.days} days`);
 
-    // The run the lab opens on: seed 2026, Sandwich Man trading, mainnet's settings.
-    const today = lab(MAINNET);
-    says(README, `${fmt(today.minted)} earned and ${fmt(today.burned)} burned`);
-    says(README, `about ${Math.round((100 * today.burned) / today.minted)}% of the Bits earned are burned`);
-    const recommended = lab(RECOMMENDED);
-    says(README, `run again: about ${Math.round((100 * recommended.burned) / recommended.minted)}%`);
+    // The run the lab opens on: seed 2026, Sandwich Man trading, the proposal (economy-lab.tsx).
+    const now = lab(proposal);
+    const pct = (d: { minted: number; burned: number }) => Math.round((100 * d.burned) / d.minted);
+    says(README, `the default run earns ${fmt(now.minted)} Bits and burns ${fmt(now.burned)} of them, about ${pct(now)}%`);
+    const before = lab(MAINNET);
+    says(README, `run again: ${fmt(before.minted)} earned and ${fmt(before.burned)} burned, about ${pct(before)}%`);
+    says(README, `on mainnet's settings, ${fmt(now.minted)} are earned and ${fmt(now.burned)} burned, about ${pct(now)}% (${fmt(before.minted)} and ${fmt(before.burned)} on the old settings)`);
+    says(README, `the whole night up to ${NIGHT_TAPER.fullBelow} held, falling to the ${BITS_FOR_SHOWING_UP} for showing up at ${NIGHT_TAPER.floorAt}`);
+    says(README, `The sinks are the trade fee (${proposal.feeBps / 100}%) and crafting, which burns ${proposal.craftBits} Bits a suit`);
   });
 
   it("docs/ECONOMY.md's headline rows are what the model measures", () => {
@@ -171,14 +183,22 @@ describe("the README's numbers equal the code's", () => {
     const pct = (x: number) => `${(100 * x).toFixed(1)}%`;
     const today = measured(MAINNET, SEASON, seeds);
     says(doc, `| 21 days | ${fmt(Math.round(today.minted.total))} | ${fmt(Math.round(today.burned.total))} | ${pct(today.burnShare)} |`);
-    const rec = measured(RECOMMENDED, SEASON, seeds);
-    says(doc, `| | Recommended | ${fmt(Math.round(rec.minted.total))} | ${fmt(Math.round(rec.burned.total))} | ${fmt(Math.round(rec.burned.fee))} | ${fmt(Math.round(rec.burned.craft))} | ${pct(rec.burnShare)} |`);
-    // The README's "what turning it on would do" figure is this one, rounded.
-    says(README, `about ${Math.round(100 * rec.burnShare)}% of a season's Bits burned`);
+    const row = (m: typeof today) => `${fmt(Math.round(m.minted.total))} | ${fmt(Math.round(m.burned.total))} | ${fmt(Math.round(m.burned.fee))} | ${fmt(Math.round(m.burned.craft))} | ${pct(m.burnShare)} |`;
+    says(doc, `| 21 days, 60 heroes | Before | ${row(today)}`);
+    says(doc, `| | Taper only | ${row(measured(TAPER_ONLY, SEASON, seeds))}`);
+    says(doc, `| | Owner's settings | ${row(measured(RECOMMENDED, SEASON, seeds))}`);
+    const proposed = measured(RECOMMENDED_WITH_TAPER, SEASON, seeds);
+    says(doc, `| | Proposed | ${row(proposed)}`);
+    says(doc, `It passes the band: ${pct(proposed.burnShare)} of a season's Bits burned`);
     says(doc, `| craft_bits | "${MAINNET.craftBits}" | "${RECOMMENDED.craftBits}" |`);
     says(doc, `| fee_bps | ${MAINNET.feeBps} | ${RECOMMENDED.feeBps} |`);
-    const today2026 = lab(MAINNET);
-    says(doc, `its counters for seed 2026 read ${fmt(today2026.minted)} earned (his ${NPC_RULES.seedBits}-Bit seed included) and ${fmt(today2026.burned)} burned`);
+    says(doc, `NIGHT_TAPER = { fullBelow: ${NIGHT_TAPER.fullBelow}, floorAt: ${NIGHT_TAPER.floorAt} }`);
+    // The lab's counters (seed 2026, Sandwich Man trading): the proposal it opens on, and the old settings.
+    const before = lab(MAINNET);
+    const now = lab(RECOMMENDED_WITH_TAPER);
+    says(doc, `the old settings read ${fmt(before.minted)} earned (his ${NPC_RULES.seedBits}-Bit seed included) and ${fmt(before.burned)} burned`);
+    says(doc, `the counters read ${fmt(now.minted)} earned and ${fmt(now.burned)} burned (${pct(now.burned / now.minted)}), against ${fmt(before.minted)} and ${fmt(before.burned)} before`);
+    says(doc, `the gap between earned and burned falls from ${fmt(before.minted - before.burned)} Bits to ${fmt(now.minted - now.burned)}`);
   });
 
   it("Sandwich Man's limits, in the README and in docs/npc-trader.md", () => {
@@ -210,10 +230,10 @@ describe("the README's numbers equal the code's", () => {
     says(sustain, `One mint_rewards call covers up to ${REWARD_BATCH_SIZE} verified nights`);
     says(sustain, `a per-player cap of ${RUNS_PER_DAY} ranked nights a day`);
     says(sustain, `Listing bounds (${DEFAULT_PARAMS.floorBps / 100}–${DEFAULT_PARAMS.ceilingBps / 100}% of the vendor's price)`);
-    says(sustain, `Today the ${DEFAULT_PARAMS.feeBps / 100}% trade fee is burned`);
+    says(sustain, `Today the ${PROPOSED_PARAMS.feeBps / 100}% trade fee is burned`);
 
     const loop = plainDoc("docs/GAME-LOOP.md");
-    says(loop, `${DEFAULT_PARAMS.feeBps / 100}% of every trade's Bits is burned`);
+    says(loop, `${PROPOSED_PARAMS.feeBps / 100}% of every trade's Bits is burned`);
     says(loop, `(within ${DEFAULT_PARAMS.floorBps / 100}–${DEFAULT_PARAMS.ceilingBps / 100}% of hers)`);
     says(loop, `same city for everyone, ${DAILY_ATTEMPTS} tries`);
     says(loop, `the top ${TROPHY_PLACES} get soulbound trophies`);

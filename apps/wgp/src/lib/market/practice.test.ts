@@ -14,7 +14,7 @@ import { newSave } from "@wgp/game-core/engine";
 import type { ItemId, Save } from "@wgp/game-core/types";
 
 import type { MarketItemView, MarketView } from "./api";
-import { DEFAULT_PARAMS, seededPools } from "./config";
+import { DEFAULT_PARAMS, marketPoolConfigs, seededPools } from "./config";
 import { MarketError } from "./engine";
 import { bitsText } from "./format";
 import { DEFAULT_INVEST_RULES, shopOf } from "./invest";
@@ -80,7 +80,9 @@ describe("the practice market", () => {
     // With no live market to read, it opens on the seeded defaults.
     const offline = seedPractice(null, T0);
     expect(offline.seededFrom).toBe("defaults");
-    expect(offline.book.pools).toEqual(seededPools());
+    // Gwei's new stock (./new-stock.ts) opens after the launch pools, as a preview while NEAR has no pool for it.
+    expect(offline.book.pools).toEqual(seededPools(marketPoolConfigs()));
+    expect(offline.preview).toEqual(["gas-receipt", "finality-flag", "evidence-bag", "seed-phrase"]);
   });
 
   it("shortens only the lock: every other investing rule is contract v3's", () => {
@@ -93,7 +95,8 @@ describe("the practice market", () => {
     const fresh = practiceScreen(s, base(), T0);
     expect(fresh.me).toMatchObject({ onChain: false, accountId: PRACTICE_ACCOUNT, bits: PRACTICE_START_BITS, items: {}, tradesLeft: 40, pendingBits: 0 });
     expect(fresh.view).toMatchObject({ onChain: false, contractId: null, contract: null });
-    expect(fresh.view.items.map((i) => i.item)).toEqual(seededPools().map((p) => p.item));
+    expect(fresh.view.items.map((i) => i.item)).toEqual(marketPoolConfigs().map((p) => p.item));
+    expect(fresh.view.items.filter((i) => i.preview).map((i) => i.item)).toEqual(["gas-receipt", "finality-flag", "evidence-bag", "seed-phrase"]);
     // What their guest nights would have paid counts too, and their saved loot is there to sell.
     const played = practiceScreen(s, base({ crumbs: 4, "sybil-goo": 1 }, 140), T0);
     expect(played.me.bits).toBe(PRACTICE_START_BITS + 140);

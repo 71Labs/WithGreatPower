@@ -18,8 +18,8 @@
     "vendorDown": 0.1
   },
   "audit": {
-    "runs": 40,
-    "days": 880
+    "runs": 48,
+    "days": 1056
   },
   "labBefore": {
     "minted": 98255,
@@ -27,7 +27,7 @@
     "crafted": 295
   },
   "mainnet": {
-    "at": "2026-11-12T15:56:18.896Z",
+    "at": "2026-11-15T08:10:08.996Z",
     "params": {
       "open": true,
       "fee_bps": 200,
@@ -55,8 +55,8 @@
         "item": "goblin-glider",
         "virtualBits": 1200,
         "virtualItems": 8,
-        "bits": 1360,
-        "stock": 7,
+        "bits": 1059,
+        "stock": 9,
         "escrow": 5
       },
       {
@@ -71,8 +71,8 @@
         "item": "sesame-seed",
         "virtualBits": 800,
         "virtualItems": 20,
-        "bits": 842,
-        "stock": 19,
+        "bits": 690,
+        "stock": 23,
         "escrow": 0
       },
       {
@@ -87,16 +87,16 @@
         "item": "spare-arm",
         "virtualBits": 1200,
         "virtualItems": 8,
-        "bits": 1543,
-        "stock": 6,
+        "bits": 1361,
+        "stock": 7,
         "escrow": 3
       },
       {
         "item": "sybil-goo",
         "virtualBits": 800,
         "virtualItems": 20,
-        "bits": 801,
-        "stock": 20,
+        "bits": 726,
+        "stock": 22,
         "escrow": 0
       },
       {
@@ -108,19 +108,19 @@
         "escrow": 0
       }
     ],
-    "supply": 21379,
-    "till": 7067,
+    "supply": 26572,
+    "till": 6357,
     "seededTill": 6240,
-    "held": 14312,
-    "netMinted": 15139,
-    "rewardMints": 170,
-    "verifiedRuns": 232,
-    "players": 23,
-    "netMintedPerRewardMint": 89.1,
-    "heldPerPlayer": 622,
-    "nightsPerPlayer": 7.4,
+    "held": 20215,
+    "netMinted": 20332,
+    "rewardMints": 219,
+    "verifiedRuns": 288,
+    "players": 24,
+    "netMintedPerRewardMint": 92.8,
+    "heldPerPlayer": 842,
+    "nightsPerPlayer": 9.1,
     "craftedSuits": 8,
-    "suitsPerPlayer": 0.35
+    "suitsPerPlayer": 0.33
   },
   "quotes": {
     "before": [
@@ -132,9 +132,9 @@
       },
       {
         "item": "goblin-glider",
-        "price": 170.666,
-        "buyOne": 187,
-        "sellOne": 156
+        "price": 132.882,
+        "buyOne": 145,
+        "sellOne": 122
       },
       {
         "item": "crumbs",
@@ -144,9 +144,9 @@
       },
       {
         "item": "sesame-seed",
-        "price": 42.102,
-        "buyOne": 45,
-        "sellOne": 40
+        "price": 34.651,
+        "buyOne": 37,
+        "sellOne": 32
       },
       {
         "item": "chain-link",
@@ -156,15 +156,15 @@
       },
       {
         "item": "spare-arm",
-        "price": 195.928,
-        "buyOne": 216,
-        "sellOne": 178
+        "price": 170.733,
+        "buyOne": 187,
+        "sellOne": 156
       },
       {
         "item": "sybil-goo",
-        "price": 40.025,
-        "buyOne": 43,
-        "sellOne": 38
+        "price": 36.333,
+        "buyOne": 39,
+        "sellOne": 34
       },
       {
         "item": "press-pass",
@@ -182,9 +182,9 @@
       },
       {
         "item": "goblin-glider",
-        "price": 170.666,
-        "buyOne": 193,
-        "sellOne": 152
+        "price": 132.882,
+        "buyOne": 150,
+        "sellOne": 118
       },
       {
         "item": "crumbs",
@@ -194,9 +194,9 @@
       },
       {
         "item": "sesame-seed",
-        "price": 42.102,
-        "buyOne": 47,
-        "sellOne": 38
+        "price": 34.651,
+        "buyOne": 38,
+        "sellOne": 31
       },
       {
         "item": "chain-link",
@@ -206,15 +206,15 @@
       },
       {
         "item": "spare-arm",
-        "price": 195.928,
-        "buyOne": 222,
-        "sellOne": 172
+        "price": 170.733,
+        "buyOne": 193,
+        "sellOne": 152
       },
       {
         "item": "sybil-goo",
-        "price": 40.025,
-        "buyOne": 45,
-        "sellOne": 37
+        "price": 36.333,
+        "buyOne": 40,
+        "sellOne": 33
       },
       {
         "item": "press-pass",
@@ -277,6 +277,57 @@
         },
         "trades": 1915
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 21,
+        "bots": 60,
+        "seed": -1,
+        "minted": {
+          "total": 46873,
+          "score": 36635,
+          "showingUp": 6300,
+          "levelUp": 3938,
+          "withheld": 50788
+        },
+        "burned": {
+          "total": 2466,
+          "fee": 2466,
+          "craft": 0
+        },
+        "burnShare": 0.053,
+        "lateBurnShare": 0.073,
+        "lateNetPerHeroDay": 24.9,
+        "seededTill": 6240,
+        "supply": 50647,
+        "till": 3176,
+        "tillLow": 3117,
+        "heldMean": 791.2,
+        "heldMedian": 955,
+        "gini": 0.343,
+        "soldOut": 0,
+        "broke": 0.004,
+        "suits": 92,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 0.78,
+            "low": 0.78,
+            "high": 1.27
+          },
+          "uncommon": {
+            "end": 0.63,
+            "low": 0.62,
+            "high": 1.01
+          },
+          "rare": {
+            "end": 0.32,
+            "low": 0.3,
+            "high": 1.03
+          }
+        },
+        "trades": 1898
+      },
       "recommended": {
         "setting": "recommended",
         "days": 21,
@@ -334,27 +385,27 @@
         "bots": 60,
         "seed": -1,
         "minted": {
-          "total": 63750,
-          "score": 53516,
+          "total": 58044,
+          "score": 47929,
           "showingUp": 6300,
-          "levelUp": 3934,
-          "withheld": 34242
+          "levelUp": 3816,
+          "withheld": 39549
         },
         "burned": {
-          "total": 26948,
-          "fee": 3948,
+          "total": 26553,
+          "fee": 3553,
           "craft": 23000
         },
-        "burnShare": 0.423,
-        "lateBurnShare": 0.422,
-        "lateNetPerHeroDay": 22.97,
+        "burnShare": 0.457,
+        "lateBurnShare": 0.509,
+        "lateNetPerHeroDay": 18.62,
         "seededTill": 6240,
-        "supply": 43043,
-        "till": 2533,
-        "tillLow": 2415,
-        "heldMean": 675.2,
-        "heldMedian": 619,
-        "gini": 0.406,
+        "supply": 37731,
+        "till": 2201,
+        "tillLow": 2022,
+        "heldMean": 592.2,
+        "heldMedian": 508,
+        "gini": 0.441,
         "soldOut": 0,
         "broke": 0.017,
         "suits": 92,
@@ -362,22 +413,22 @@
         "firstSuitNight": 5,
         "price": {
           "common": {
-            "end": 0.74,
-            "low": 0.71,
+            "end": 0.7,
+            "low": 0.66,
             "high": 1.2
           },
           "uncommon": {
-            "end": 0.55,
-            "low": 0.52,
+            "end": 0.47,
+            "low": 0.45,
             "high": 0.97
           },
           "rare": {
             "end": 0.27,
             "low": 0.26,
-            "high": 0.92
+            "high": 0.9
           }
         },
-        "trades": 1481
+        "trades": 1420
       },
       "gentle": {
         "setting": "gentle",
@@ -534,6 +585,57 @@
         },
         "trades": 5925
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 60,
+        "bots": 60,
+        "seed": -1,
+        "minted": {
+          "total": 95355,
+          "score": 66237,
+          "showingUp": 18000,
+          "levelUp": 11119,
+          "withheld": 183393
+        },
+        "burned": {
+          "total": 7004,
+          "fee": 7004,
+          "craft": 0
+        },
+        "burnShare": 0.073,
+        "lateBurnShare": 0.103,
+        "lateNetPerHeroDay": 16.86,
+        "seededTill": 6240,
+        "supply": 94592,
+        "till": 2196,
+        "tillLow": 2024,
+        "heldMean": 1540,
+        "heldMedian": 2052,
+        "gini": 0.333,
+        "soldOut": 0,
+        "broke": 0.022,
+        "suits": 92,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 0.29,
+            "low": 0.29,
+            "high": 1.27
+          },
+          "uncommon": {
+            "end": 0.39,
+            "low": 0.39,
+            "high": 1.01
+          },
+          "rare": {
+            "end": 0.37,
+            "low": 0.27,
+            "high": 1.03
+          }
+        },
+        "trades": 5702
+      },
       "recommended": {
         "setting": "recommended",
         "days": 60,
@@ -591,50 +693,50 @@
         "bots": 60,
         "seed": -1,
         "minted": {
-          "total": 113090,
-          "score": 83868,
+          "total": 103037,
+          "score": 73856,
           "showingUp": 18000,
-          "levelUp": 11222,
-          "withheld": 166144
+          "levelUp": 11181,
+          "withheld": 176089
         },
         "burned": {
-          "total": 33361,
-          "fee": 10361,
+          "total": 32461,
+          "fee": 9461,
           "craft": 23000
         },
-        "burnShare": 0.295,
-        "lateBurnShare": 0.147,
-        "lateNetPerHeroDay": 15.48,
+        "burnShare": 0.315,
+        "lateBurnShare": 0.15,
+        "lateNetPerHeroDay": 14.32,
         "seededTill": 6240,
-        "supply": 85968,
-        "till": 1838,
-        "tillLow": 1655,
-        "heldMean": 1402.2,
-        "heldMedian": 1617,
-        "gini": 0.326,
+        "supply": 76816,
+        "till": 1464,
+        "tillLow": 1383,
+        "heldMean": 1255.9,
+        "heldMedian": 1459,
+        "gini": 0.345,
         "soldOut": 0,
-        "broke": 0.064,
+        "broke": 0.091,
         "suits": 92,
         "crafterShare": 1,
         "firstSuitNight": 5,
         "price": {
           "common": {
-            "end": 0.27,
-            "low": 0.27,
+            "end": 0.26,
+            "low": 0.26,
             "high": 1.2
           },
           "uncommon": {
-            "end": 0.34,
-            "low": 0.34,
+            "end": 0.32,
+            "low": 0.31,
             "high": 0.97
           },
           "rare": {
-            "end": 0.36,
-            "low": 0.25,
-            "high": 0.92
+            "end": 0.32,
+            "low": 0.24,
+            "high": 0.9
           }
         },
-        "trades": 5057
+        "trades": 4781
       },
       "gentle": {
         "setting": "gentle",
@@ -791,6 +893,57 @@
         },
         "trades": 11743
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 180,
+        "bots": 60,
+        "seed": -1,
+        "minted": {
+          "total": 199648,
+          "score": 112817,
+          "showingUp": 54000,
+          "levelUp": 32831,
+          "withheld": 636804
+        },
+        "burned": {
+          "total": 15804,
+          "fee": 15804,
+          "craft": 0
+        },
+        "burnShare": 0.079,
+        "lateBurnShare": 0.065,
+        "lateNetPerHeroDay": 12.63,
+        "seededTill": 6240,
+        "supply": 190084,
+        "till": 968,
+        "tillLow": 504,
+        "heldMean": 3151.9,
+        "heldMedian": 4211,
+        "gini": 0.313,
+        "soldOut": 0,
+        "broke": 0.33,
+        "suits": 92,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 0.08,
+            "low": 0.08,
+            "high": 1.27
+          },
+          "uncommon": {
+            "end": 0.18,
+            "low": 0.18,
+            "high": 1.01
+          },
+          "rare": {
+            "end": 0.3,
+            "low": 0.23,
+            "high": 1.03
+          }
+        },
+        "trades": 10911
+      },
       "recommended": {
         "setting": "recommended",
         "days": 180,
@@ -848,29 +1001,29 @@
         "bots": 60,
         "seed": -1,
         "minted": {
-          "total": 224487,
-          "score": 137403,
+          "total": 206759,
+          "score": 119547,
           "showingUp": 54000,
-          "levelUp": 33084,
-          "withheld": 613792
+          "levelUp": 33213,
+          "withheld": 629884
         },
         "burned": {
-          "total": 50391,
-          "fee": 27391,
+          "total": 47767,
+          "fee": 24767,
           "craft": 23000
         },
-        "burnShare": 0.224,
-        "lateBurnShare": 0.136,
-        "lateNetPerHeroDay": 12.02,
+        "burnShare": 0.231,
+        "lateBurnShare": 0.138,
+        "lateNetPerHeroDay": 11.81,
         "seededTill": 6240,
-        "supply": 180337,
-        "till": 1020,
-        "tillLow": 519,
-        "heldMean": 2988.6,
-        "heldMedian": 3769,
-        "gini": 0.303,
+        "supply": 165232,
+        "till": 1135,
+        "tillLow": 534,
+        "heldMean": 2735,
+        "heldMedian": 3521,
+        "gini": 0.322,
         "soldOut": 0,
-        "broke": 0.374,
+        "broke": 0.403,
         "suits": 92,
         "crafterShare": 1,
         "firstSuitNight": 5,
@@ -881,17 +1034,17 @@
             "high": 1.2
           },
           "uncommon": {
-            "end": 0.19,
-            "low": 0.19,
+            "end": 0.2,
+            "low": 0.2,
             "high": 0.97
           },
           "rare": {
-            "end": 0.31,
-            "low": 0.23,
-            "high": 0.92
+            "end": 0.33,
+            "low": 0.24,
+            "high": 0.9
           }
         },
-        "trades": 10008
+        "trades": 9422
       },
       "gentle": {
         "setting": "gentle",
@@ -1048,6 +1201,57 @@
         },
         "trades": 12305
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 180,
+        "bots": 60,
+        "seed": -1,
+        "minted": {
+          "total": 587647,
+          "score": 501356,
+          "showingUp": 54000,
+          "levelUp": 32291,
+          "withheld": 248680
+        },
+        "burned": {
+          "total": 17241,
+          "fee": 17241,
+          "craft": 0
+        },
+        "burnShare": 0.029,
+        "lateBurnShare": 0.026,
+        "lateNetPerHeroDay": 51.65,
+        "seededTill": 6240,
+        "supply": 576646,
+        "till": 3920,
+        "tillLow": 3089,
+        "heldMean": 258,
+        "heldMedian": 229,
+        "gini": 0.312,
+        "soldOut": 0,
+        "broke": 0.133,
+        "suits": 2093.6,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 0.24,
+            "low": 0.23,
+            "high": 1.29
+          },
+          "uncommon": {
+            "end": 0.56,
+            "low": 0.46,
+            "high": 1.02
+          },
+          "rare": {
+            "end": 0.56,
+            "low": 0.38,
+            "high": 1.03
+          }
+        },
+        "trades": 12652
+      },
       "recommended": {
         "setting": "recommended",
         "days": 180,
@@ -1105,50 +1309,50 @@
         "bots": 60,
         "seed": -1,
         "minted": {
-          "total": 689212,
-          "score": 602624,
+          "total": 620458,
+          "score": 533683,
           "showingUp": 54000,
-          "levelUp": 32588,
-          "withheld": 146418
+          "levelUp": 32775,
+          "withheld": 216089
         },
         "burned": {
-          "total": 206423,
-          "fee": 18798,
-          "craft": 187625
+          "total": 195741,
+          "fee": 17803,
+          "craft": 177938
         },
-        "burnShare": 0.299,
-        "lateBurnShare": 0.307,
-        "lateNetPerHeroDay": 43.88,
+        "burnShare": 0.316,
+        "lateBurnShare": 0.33,
+        "lateNetPerHeroDay": 38,
         "seededTill": 6240,
-        "supply": 489029,
-        "till": 3579,
-        "tillLow": 3239,
-        "heldMean": 230.6,
-        "heldMedian": 180,
-        "gini": 0.407,
+        "supply": 430958,
+        "till": 2986,
+        "tillLow": 2667,
+        "heldMean": 206.9,
+        "heldMedian": 177,
+        "gini": 0.392,
         "soldOut": 0,
-        "broke": 0.098,
-        "suits": 750.5,
+        "broke": 0.082,
+        "suits": 711.8,
         "crafterShare": 0.978,
         "firstSuitNight": 5,
         "price": {
           "common": {
-            "end": 0.18,
-            "low": 0.18,
+            "end": 0.17,
+            "low": 0.17,
             "high": 1.2
           },
           "uncommon": {
-            "end": 0.66,
-            "low": 0.59,
-            "high": 0.99
+            "end": 0.55,
+            "low": 0.5,
+            "high": 0.97
           },
           "rare": {
-            "end": 0.68,
-            "low": 0.51,
-            "high": 0.98
+            "end": 0.58,
+            "low": 0.46,
+            "high": 0.93
           }
         },
-        "trades": 7253
+        "trades": 7362
       },
       "gentle": {
         "setting": "gentle",
@@ -1305,6 +1509,57 @@
         },
         "trades": 11901
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 180,
+        "bots": 60,
+        "seed": -1,
+        "minted": {
+          "total": 361559,
+          "score": 274718,
+          "showingUp": 54000,
+          "levelUp": 32841,
+          "withheld": 475323
+        },
+        "burned": {
+          "total": 16628,
+          "fee": 16628,
+          "craft": 0
+        },
+        "burnShare": 0.046,
+        "lateBurnShare": 0.034,
+        "lateNetPerHeroDay": 29.02,
+        "seededTill": 6240,
+        "supply": 351172,
+        "till": 1963,
+        "tillLow": 1531,
+        "heldMean": 391.2,
+        "heldMedian": 396,
+        "gini": 0.273,
+        "soldOut": 0,
+        "broke": 0.24,
+        "suits": 889.4,
+        "crafterShare": 0.998,
+        "firstSuitNight": 1,
+        "price": {
+          "common": {
+            "end": 0.07,
+            "low": 0.07,
+            "high": 1.28
+          },
+          "uncommon": {
+            "end": 0.18,
+            "low": 0.18,
+            "high": 1.01
+          },
+          "rare": {
+            "end": 0.52,
+            "low": 0.31,
+            "high": 1.1
+          }
+        },
+        "trades": 11979
+      },
       "recommended": {
         "setting": "recommended",
         "days": 180,
@@ -1362,50 +1617,50 @@
         "bots": 60,
         "seed": -1,
         "minted": {
-          "total": 561551,
-          "score": 474607,
+          "total": 507420,
+          "score": 420467,
           "showingUp": 54000,
-          "levelUp": 32944,
-          "withheld": 275608
+          "levelUp": 32953,
+          "withheld": 329009
         },
         "burned": {
-          "total": 233449,
-          "fee": 25667,
-          "craft": 207781
+          "total": 229537,
+          "fee": 22631,
+          "craft": 206906
         },
-        "burnShare": 0.416,
-        "lateBurnShare": 0.423,
-        "lateNetPerHeroDay": 28.88,
+        "burnShare": 0.452,
+        "lateBurnShare": 0.463,
+        "lateNetPerHeroDay": 24.04,
         "seededTill": 6240,
-        "supply": 334342,
-        "till": 1863,
-        "tillLow": 1360,
-        "heldMean": 339.8,
-        "heldMedian": 271,
-        "gini": 0.38,
+        "supply": 284123,
+        "till": 1504,
+        "tillLow": 1085,
+        "heldMean": 291.3,
+        "heldMedian": 260,
+        "gini": 0.354,
         "soldOut": 0,
-        "broke": 0.256,
-        "suits": 831.1,
-        "crafterShare": 0.966,
+        "broke": 0.254,
+        "suits": 827.6,
+        "crafterShare": 0.964,
         "firstSuitNight": 5,
         "price": {
           "common": {
             "end": 0.1,
             "low": 0.1,
-            "high": 1.2
+            "high": 1.21
           },
           "uncommon": {
             "end": 0.2,
             "low": 0.2,
-            "high": 0.97
+            "high": 0.98
           },
           "rare": {
-            "end": 0.54,
-            "low": 0.35,
-            "high": 0.94
+            "end": 0.44,
+            "low": 0.3,
+            "high": 0.91
           }
         },
-        "trades": 8442
+        "trades": 8519
       },
       "gentle": {
         "setting": "gentle",
@@ -1562,6 +1817,57 @@
         },
         "trades": 630
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 21,
+        "bots": 20,
+        "seed": -1,
+        "minted": {
+          "total": 15114,
+          "score": 11733,
+          "showingUp": 2100,
+          "levelUp": 1281,
+          "withheld": 17563
+        },
+        "burned": {
+          "total": 831,
+          "fee": 831,
+          "craft": 0
+        },
+        "burnShare": 0.055,
+        "lateBurnShare": 0.078,
+        "lateNetPerHeroDay": 23.08,
+        "seededTill": 6240,
+        "supply": 20524,
+        "till": 3209,
+        "tillLow": 3167,
+        "heldMean": 865.8,
+        "heldMedian": 1067,
+        "gini": 0.328,
+        "soldOut": 0,
+        "broke": 0.005,
+        "suits": 32,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 0.7,
+            "low": 0.7,
+            "high": 1.08
+          },
+          "uncommon": {
+            "end": 0.71,
+            "low": 0.69,
+            "high": 1.02
+          },
+          "rare": {
+            "end": 0.37,
+            "low": 0.35,
+            "high": 1.04
+          }
+        },
+        "trades": 617
+      },
       "recommended": {
         "setting": "recommended",
         "days": 21,
@@ -1619,50 +1925,50 @@
         "bots": 20,
         "seed": -1,
         "minted": {
-          "total": 20825,
-          "score": 17478,
+          "total": 18777,
+          "score": 15471,
           "showingUp": 2100,
-          "levelUp": 1247,
-          "withheld": 11720
+          "levelUp": 1206,
+          "withheld": 13573
         },
         "burned": {
-          "total": 9341,
-          "fee": 1341,
+          "total": 9193,
+          "fee": 1193,
           "craft": 8000
         },
-        "burnShare": 0.449,
-        "lateBurnShare": 0.469,
-        "lateNetPerHeroDay": 20.29,
+        "burnShare": 0.49,
+        "lateBurnShare": 0.573,
+        "lateNetPerHeroDay": 15.09,
         "seededTill": 6240,
-        "supply": 17724,
-        "till": 2944,
-        "tillLow": 2893,
-        "heldMean": 739,
-        "heldMedian": 710,
-        "gini": 0.394,
+        "supply": 15825,
+        "till": 2519,
+        "tillLow": 2390,
+        "heldMean": 665.3,
+        "heldMedian": 622,
+        "gini": 0.418,
         "soldOut": 0,
-        "broke": 0.004,
+        "broke": 0.007,
         "suits": 32,
         "crafterShare": 1,
         "firstSuitNight": 5,
         "price": {
           "common": {
-            "end": 0.68,
-            "low": 0.67,
+            "end": 0.66,
+            "low": 0.64,
             "high": 1.07
           },
           "uncommon": {
-            "end": 0.66,
-            "low": 0.63,
-            "high": 0.99
+            "end": 0.58,
+            "low": 0.57,
+            "high": 0.98
           },
           "rare": {
-            "end": 0.36,
-            "low": 0.35,
-            "high": 1
+            "end": 0.32,
+            "low": 0.31,
+            "high": 0.96
           }
         },
-        "trades": 481
+        "trades": 456
       },
       "gentle": {
         "setting": "gentle",
@@ -1819,6 +2125,57 @@
         },
         "trades": 6406
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 21,
+        "bots": 200,
+        "seed": -1,
+        "minted": {
+          "total": 157494,
+          "score": 123779,
+          "showingUp": 21000,
+          "levelUp": 12716,
+          "withheld": 167760
+        },
+        "burned": {
+          "total": 7979,
+          "fee": 7979,
+          "craft": 0
+        },
+        "burnShare": 0.051,
+        "lateBurnShare": 0.068,
+        "lateNetPerHeroDay": 25.28,
+        "seededTill": 6240,
+        "supply": 155756,
+        "till": 3803,
+        "tillLow": 3623,
+        "heldMean": 759.8,
+        "heldMedian": 931,
+        "gini": 0.345,
+        "soldOut": 0,
+        "broke": 0.028,
+        "suits": 300,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 1.02,
+            "low": 1.02,
+            "high": 1.69
+          },
+          "uncommon": {
+            "end": 0.5,
+            "low": 0.49,
+            "high": 0.96
+          },
+          "rare": {
+            "end": 0.26,
+            "low": 0.24,
+            "high": 0.93
+          }
+        },
+        "trades": 6400
+      },
       "recommended": {
         "setting": "recommended",
         "days": 21,
@@ -1876,50 +2233,50 @@
         "bots": 200,
         "seed": -1,
         "minted": {
-          "total": 214419,
-          "score": 180835,
+          "total": 197756,
+          "score": 163887,
           "showingUp": 21000,
-          "levelUp": 12584,
-          "withheld": 110831
+          "levelUp": 12869,
+          "withheld": 127460
         },
         "burned": {
-          "total": 88021,
-          "fee": 13021,
-          "craft": 75000
+          "total": 86719,
+          "fee": 11781,
+          "craft": 74938
         },
-        "burnShare": 0.41,
-        "lateBurnShare": 0.412,
-        "lateNetPerHeroDay": 23.82,
+        "burnShare": 0.438,
+        "lateBurnShare": 0.476,
+        "lateNetPerHeroDay": 20.57,
         "seededTill": 6240,
-        "supply": 132638,
-        "till": 2863,
-        "tillLow": 2350,
-        "heldMean": 648.9,
-        "heldMedian": 579,
-        "gini": 0.426,
+        "supply": 117278,
+        "till": 2475,
+        "tillLow": 1964,
+        "heldMean": 574,
+        "heldMedian": 471,
+        "gini": 0.455,
         "soldOut": 0,
-        "broke": 0.032,
-        "suits": 300,
+        "broke": 0.035,
+        "suits": 299.8,
         "crafterShare": 1,
         "firstSuitNight": 5,
         "price": {
           "common": {
-            "end": 0.9,
-            "low": 0.81,
+            "end": 0.83,
+            "low": 0.76,
             "high": 1.57
           },
           "uncommon": {
-            "end": 0.41,
-            "low": 0.35,
+            "end": 0.36,
+            "low": 0.3,
             "high": 0.89
           },
           "rare": {
             "end": 0.24,
             "low": 0.23,
-            "high": 0.88
+            "high": 0.76
           }
         },
-        "trades": 5019
+        "trades": 4837
       },
       "gentle": {
         "setting": "gentle",
@@ -2027,6 +2384,12 @@
   },
   "verdicts": {
     "mainnet": {
+      "burnShare": false,
+      "firstSuit": true,
+      "vendor": true,
+      "ok": false
+    },
+    "taper-only": {
       "burnShare": false,
       "firstSuit": true,
       "vendor": true,
@@ -4229,80 +4592,6 @@
       "till": 7363
     }
   ],
-  "setMarketParamsArgs": {
-    "params": {
-      "open": true,
-      "fee_bps": 500,
-      "floor_bps": 5000,
-      "ceiling_bps": 40000,
-      "max_amount": 20,
-      "max_open_listings": 3,
-      "max_listings": 300,
-      "daily_trades": 40,
-      "daily_listings": 10,
-      "daily_fills": 10,
-      "daily_fill_bits": "3000",
-      "craft_bits": "250"
-    },
-    "pools": [
-      {
-        "item": "fee-bomb",
-        "virtual_bits": "480",
-        "virtual_items": "40",
-        "seed_bits": "480",
-        "seed_stock": "40"
-      },
-      {
-        "item": "goblin-glider",
-        "virtual_bits": "1200",
-        "virtual_items": "8",
-        "seed_bits": "1200",
-        "seed_stock": "8"
-      },
-      {
-        "item": "crumbs",
-        "virtual_bits": "480",
-        "virtual_items": "40",
-        "seed_bits": "480",
-        "seed_stock": "40"
-      },
-      {
-        "item": "sesame-seed",
-        "virtual_bits": "800",
-        "virtual_items": "20",
-        "seed_bits": "800",
-        "seed_stock": "20"
-      },
-      {
-        "item": "chain-link",
-        "virtual_bits": "480",
-        "virtual_items": "40",
-        "seed_bits": "480",
-        "seed_stock": "40"
-      },
-      {
-        "item": "spare-arm",
-        "virtual_bits": "1200",
-        "virtual_items": "8",
-        "seed_bits": "1200",
-        "seed_stock": "8"
-      },
-      {
-        "item": "sybil-goo",
-        "virtual_bits": "800",
-        "virtual_items": "20",
-        "seed_bits": "800",
-        "seed_stock": "20"
-      },
-      {
-        "item": "press-pass",
-        "virtual_bits": "800",
-        "virtual_items": "20",
-        "seed_bits": "800",
-        "seed_stock": "20"
-      }
-    ]
-  },
   "npc": {
     "tables": {
       "season": {
@@ -4407,6 +4696,57 @@
             }
           },
           "trades": 1567
+        },
+        "recommended-taper": {
+          "setting": "recommended-taper",
+          "days": 21,
+          "bots": 60,
+          "seed": -1,
+          "minted": {
+            "total": 59136,
+            "score": 48920,
+            "showingUp": 6300,
+            "levelUp": 3916,
+            "withheld": 38235
+          },
+          "burned": {
+            "total": 26671,
+            "fee": 3671,
+            "craft": 23000
+          },
+          "burnShare": 0.449,
+          "lateBurnShare": 0.479,
+          "lateNetPerHeroDay": 20.31,
+          "seededTill": 6240,
+          "supply": 39005,
+          "till": 2081,
+          "tillLow": 1963,
+          "heldMean": 613.6,
+          "heldMedian": 503,
+          "gini": 0.446,
+          "soldOut": 0,
+          "broke": 0.022,
+          "suits": 92,
+          "crafterShare": 1,
+          "firstSuitNight": 5,
+          "price": {
+            "common": {
+              "end": 0.68,
+              "low": 0.67,
+              "high": 1.2
+            },
+            "uncommon": {
+              "end": 0.45,
+              "low": 0.42,
+              "high": 0.99
+            },
+            "rare": {
+              "end": 0.27,
+              "low": 0.26,
+              "high": 0.88
+            }
+          },
+          "trades": 1467
         }
       },
       "sixty": {
@@ -4511,6 +4851,57 @@
             }
           },
           "trades": 5401
+        },
+        "recommended-taper": {
+          "setting": "recommended-taper",
+          "days": 60,
+          "bots": 60,
+          "seed": -1,
+          "minted": {
+            "total": 103208,
+            "score": 74171,
+            "showingUp": 18000,
+            "levelUp": 11038,
+            "withheld": 174497
+          },
+          "burned": {
+            "total": 32301,
+            "fee": 9301,
+            "craft": 23000
+          },
+          "burnShare": 0.312,
+          "lateBurnShare": 0.144,
+          "lateNetPerHeroDay": 13.99,
+          "seededTill": 6240,
+          "supply": 77447,
+          "till": 1492,
+          "tillLow": 1354,
+          "heldMean": 1264.1,
+          "heldMedian": 1414,
+          "gini": 0.355,
+          "soldOut": 0,
+          "broke": 0.094,
+          "suits": 92,
+          "crafterShare": 1,
+          "firstSuitNight": 5,
+          "price": {
+            "common": {
+              "end": 0.25,
+              "low": 0.25,
+              "high": 1.2
+            },
+            "uncommon": {
+              "end": 0.3,
+              "low": 0.3,
+              "high": 0.99
+            },
+            "rare": {
+              "end": 0.33,
+              "low": 0.25,
+              "high": 0.88
+            }
+          },
+          "trades": 4829
         }
       }
     },
@@ -4572,6 +4963,57 @@
         },
         "trades": 1949
       },
+      "taper-only": {
+        "setting": "taper-only",
+        "days": 21,
+        "bots": 60,
+        "seed": 2026,
+        "minted": {
+          "total": 47014,
+          "score": 36789,
+          "showingUp": 6300,
+          "levelUp": 3925,
+          "withheld": 51474
+        },
+        "burned": {
+          "total": 2439,
+          "fee": 2439,
+          "craft": 0
+        },
+        "burnShare": 0.052,
+        "lateBurnShare": 0.072,
+        "lateNetPerHeroDay": 25.5,
+        "seededTill": 6240,
+        "supply": 51115,
+        "till": 2908,
+        "tillLow": 2908,
+        "heldMean": 801.8,
+        "heldMedian": 999,
+        "gini": 0.333,
+        "soldOut": 0,
+        "broke": 0,
+        "suits": 92,
+        "crafterShare": 1,
+        "firstSuitNight": 2,
+        "price": {
+          "common": {
+            "end": 0.77,
+            "low": 0.77,
+            "high": 1.26
+          },
+          "uncommon": {
+            "end": 0.58,
+            "low": 0.58,
+            "high": 0.98
+          },
+          "rare": {
+            "end": 0.31,
+            "low": 0.31,
+            "high": 1.16
+          }
+        },
+        "trades": 1897
+      },
       "recommended": {
         "setting": "recommended",
         "days": 21,
@@ -4622,6 +5064,57 @@
           }
         },
         "trades": 1596
+      },
+      "recommended-taper": {
+        "setting": "recommended-taper",
+        "days": 21,
+        "bots": 60,
+        "seed": 2026,
+        "minted": {
+          "total": 58559,
+          "score": 48534,
+          "showingUp": 6300,
+          "levelUp": 3725,
+          "withheld": 40382
+        },
+        "burned": {
+          "total": 26454,
+          "fee": 3454,
+          "craft": 23000
+        },
+        "burnShare": 0.449,
+        "lateBurnShare": 0.51,
+        "lateNetPerHeroDay": 19.39,
+        "seededTill": 6240,
+        "supply": 38645,
+        "till": 2394,
+        "tillLow": 2233,
+        "heldMean": 602.2,
+        "heldMedian": 521.5,
+        "gini": 0.44,
+        "soldOut": 0,
+        "broke": 0.018,
+        "suits": 92,
+        "crafterShare": 1,
+        "firstSuitNight": 6,
+        "price": {
+          "common": {
+            "end": 0.71,
+            "low": 0.69,
+            "high": 1.13
+          },
+          "uncommon": {
+            "end": 0.53,
+            "low": 0.49,
+            "high": 0.95
+          },
+          "rare": {
+            "end": 0.27,
+            "low": 0.26,
+            "high": 1.01
+          }
+        },
+        "trades": 1430
       }
     },
     "labDrain": {
@@ -4629,5 +5122,79 @@
       "broke": 0.292,
       "itemDays": 240
     }
+  },
+  "setMarketParamsArgs": {
+    "params": {
+      "open": true,
+      "fee_bps": 500,
+      "floor_bps": 5000,
+      "ceiling_bps": 40000,
+      "max_amount": 20,
+      "max_open_listings": 3,
+      "max_listings": 300,
+      "daily_trades": 40,
+      "daily_listings": 10,
+      "daily_fills": 10,
+      "daily_fill_bits": "3000",
+      "craft_bits": "250"
+    },
+    "pools": [
+      {
+        "item": "fee-bomb",
+        "virtual_bits": "480",
+        "virtual_items": "40",
+        "seed_bits": "480",
+        "seed_stock": "40"
+      },
+      {
+        "item": "goblin-glider",
+        "virtual_bits": "1200",
+        "virtual_items": "8",
+        "seed_bits": "1200",
+        "seed_stock": "8"
+      },
+      {
+        "item": "crumbs",
+        "virtual_bits": "480",
+        "virtual_items": "40",
+        "seed_bits": "480",
+        "seed_stock": "40"
+      },
+      {
+        "item": "sesame-seed",
+        "virtual_bits": "800",
+        "virtual_items": "20",
+        "seed_bits": "800",
+        "seed_stock": "20"
+      },
+      {
+        "item": "chain-link",
+        "virtual_bits": "480",
+        "virtual_items": "40",
+        "seed_bits": "480",
+        "seed_stock": "40"
+      },
+      {
+        "item": "spare-arm",
+        "virtual_bits": "1200",
+        "virtual_items": "8",
+        "seed_bits": "1200",
+        "seed_stock": "8"
+      },
+      {
+        "item": "sybil-goo",
+        "virtual_bits": "800",
+        "virtual_items": "20",
+        "seed_bits": "800",
+        "seed_stock": "20"
+      },
+      {
+        "item": "press-pass",
+        "virtual_bits": "800",
+        "virtual_items": "20",
+        "seed_bits": "800",
+        "seed_stock": "20"
+      }
+    ]
   }
 }

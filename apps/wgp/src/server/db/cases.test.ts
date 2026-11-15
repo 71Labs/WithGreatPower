@@ -105,7 +105,8 @@ describe("Case File 001 on the server", () => {
 
     // Unranked: nothing on any board, no Bits mint; one badge mint.
     expect(await db.select().from(leaderboardEntries)).toEqual([]);
-    const ops = await db.select().from(chainOps);
+    // Gwei's new stock (an evidence bag for the clear) is its own mint: src/server/market/new-stock.test.ts.
+    const ops = (await db.select().from(chainOps)).filter((o) => !o.dedupeKey.startsWith("new-stock:"));
     expect(ops).toHaveLength(1);
     expect(ops[0]).toMatchObject({ kind: "mint_reward", dedupeKey: badgeKey("case-001", playerId), status: "pending", rewardNonce: 1 });
     expect(ops[0].payload).toMatchObject({ runId: started.runId, items: [], badges: ["case-001"], accountId: "detective.wgp.testnet" });
@@ -128,7 +129,7 @@ describe("Case File 001 on the server", () => {
     const { save: save2 } = await ensureSave(db, playerId);
     expect(save2.hero).toEqual(save.hero);
     expect(save2.cases?.["case-001"]).toEqual({ ...save.cases!["case-001"]!, bestTicks: Math.min(played.ticks, played2.ticks) });
-    expect(await db.select().from(chainOps)).toHaveLength(1);
+    expect((await db.select().from(chainOps)).filter((o) => !o.dedupeKey.startsWith("new-stock:"))).toHaveLength(1);
   }, 120_000);
 
   it("refuses a patrol log for a chapter run, and a chapter log for a ranked night", async () => {

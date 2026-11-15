@@ -16,6 +16,11 @@ export const ITEM_SOURCE: Record<ItemId, CastId> = {
   "spare-arm": "doc-octochain",
   "sybil-goo": "sybil",
   "press-pass": "bearson",
+  // Gwei's new stock (src/lib/market/new-stock.ts): drawn as whoever hands it over.
+  "gas-receipt": "gwei",
+  "finality-flag": "node",
+  "evidence-bag": "mary-jpeg",
+  "seed-phrase": "uncle-gen",
 };
 
 /**
@@ -93,6 +98,10 @@ const SUSPECT: Record<ItemId, string> = {
   "spare-arm": "Doc Octochain",
   "sybil-goo": "The Sybil, all of him",
   "press-pass": "J. Jonah Bearson",
+  "gas-receipt": "Gwei Stacy, who prints them",
+  "finality-flag": "Whoever won the Daily",
+  "evidence-bag": "Mary Jpeg's filing system",
+  "seed-phrase": "Uncle Gen, who wants it back",
 };
 
 export interface MoverHeadline {

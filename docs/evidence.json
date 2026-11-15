@@ -601,6 +601,14 @@
           "anchor": "export function decide("
         },
         {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        },
+        {
           "path": "apps/wgp/src/server/npc/runner.ts",
           "anchor": "export async function runNpcTrader("
         },
@@ -640,6 +648,26 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/npc.test.ts",
           "name": "signs one market call with his own account and books it with its transaction"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that"
         }
       ],
       "chain": [
@@ -651,7 +679,79 @@
         "tx-npc-first-trade",
         "chain-tally"
       ],
-      "note": "Rule-based, not an LLM or any other AI agent: the rules are the one file the code pointer names. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key, and the live site reporting him on chain. The runner test builds his call from a decision, signs it as his account and books it with its transaction. The tally's count of his calls is a lower bound (1 on Nov 13). The tests still cover the off path: with his account or key unset he does nothing."
+      "note": "An LLM (Kimi K3, Moonshot) picks among the legal moves his rules list, or passes; the rules are the guardrail and pick whenever it can't. The code pointers are the rules, the check that keeps only a listed move, and the call with its fallback. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key (a rules move, from before the brain), and the live site reporting him on chain and which brain is live (brain.mode). The brain tests use a fake LLM endpoint: a pick among two legal moves is sent with the rules' numbers, a made-up move is ignored, no key means rules only, at most 10 calls a day. The tally's count of his calls is a lower bound (1 on Nov 13). With his account or key unset he does nothing."
+    },
+    {
+      "id": "track-npc-brain",
+      "section": "track",
+      "source": "README.md",
+      "quote": "An LLM picks his move; his rules fence it in.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-rules.ts",
+          "anchor": "export function decide("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "only the reason: the move is the one shown, number for number"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "can pass: nothing is sent, no action is used, and the pass is on record"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on a timeout, without waiting past it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move without a key or once the day's calls are used, and makes no call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that"
+        }
+      ],
+      "chain": [
+        "site-npc"
+      ],
+      "note": "The tests run the on-chain runner against a fake chain and a fake LLM endpoint (a fetch the test passes; the suite fails any real network request): Kimi K3's pick among two legal moves is sent with the rules' own numbers and its own reason; a pass sends nothing; an answer that is not a listed move, a cut-off answer, a timeout, an HTTP error, a missing key or the day's 10th call used up all fall back to the rules' first move; every ledger line records which brain picked it (the model id or rules). The live check reads brain.mode from /api/market/npc: llm only once LLM_API_KEY is set in production, rules until then."
     },
     {
       "id": "track-merchant-prices",
@@ -1707,6 +1807,51 @@
       ]
     },
     {
+      "id": "numbers-traction",
+      "section": "numbers",
+      "source": "README.md",
+      "quote": "Day by day, the same chain data shows who came back and how concentrated the calls are: docs/TRACTION.md has the tables by UTC day, with retention and the relayer outage marked, and the author's accounts and Sandwich Man left out.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/traction.mjs",
+          "anchor": "export function traction(rows"
+        },
+        {
+          "path": "scripts/traction.mjs",
+          "anchor": "export const CONTEXT_WINDOWS = ["
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "counts only players' calls: not the team's, the contract's, the author's or Sandwich Man's"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "buckets by UTC day from the first call, keeps empty days and counts an account as new only on its first day"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "marks the relayer outage and Season 1's airdrops on the days they touch"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "counts retention by distinct active days, with the median"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/traction.test.ts",
+          "name": "works out the share of calls from the busiest 1 and 3 accounts"
+        }
+      ],
+      "note": "The tests hold the report's maths on fixtures: who counts as a player, the day buckets, retention and concentration. The tables in docs/TRACTION.md are that maths run on NearBlocks' rows on Nov 14, 2026; they are dated and have no live check, and pnpm traction prints the current ones."
+    },
+    {
       "id": "economy-earn",
       "section": "economy",
       "source": "README.md",
@@ -1719,7 +1864,7 @@
         },
         {
           "path": "apps/wgp/src/server/db/runs.ts",
-          "anchor": "const bits = nightBits("
+          "anchor": "const pay = nightPay("
         }
       ],
       "tests": [
@@ -1742,6 +1887,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
           "name": "the Bits a night earns"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "verifies a run: save, boards, outbox and run row in one go"
         }
       ]
     },
@@ -1782,7 +1932,7 @@
       "id": "economy-burn-fee",
       "section": "economy",
       "source": "README.md",
-      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 2% today.",
+      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 5% today.",
       "status": "proven on chain",
       "code": [
         {
@@ -1850,7 +2000,7 @@
       "id": "economy-craft-burn",
       "section": "economy",
       "source": "README.md",
-      "quote": "Crafting a suit (/play/suits) burns the loot in its recipe, and the contract's craft_bits on top (0 today).",
+      "quote": "Crafting a suit (/play/suits) burns the loot in its recipe, and the contract's craft_bits on top (250 today).",
       "status": "proven by test",
       "code": [
         {
@@ -1883,8 +2033,150 @@
       "chain": [
         "market-state",
         "tx-craft-suit"
+      ]
+    },
+    {
+      "id": "economy-wanted-list",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "Each UTC day Gwei posts up to three items she is short on: sold out, down to 75% of her opening stock, or priced at least 25% above where she opened.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export function deriveWanted("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export const LOW_STOCK_BPS = 7_500;"
+        },
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export const PRICE_UP_BPS = 12_500;"
+        }
       ],
-      "note": "craft_bits is 0 on mainnet, so the Bits cost is tested and off; the loot burn is live (the transaction check)."
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "puts a sold-out item first at ×3, low stock and a price far above its start at ×2"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "draws the line at 75% of the opening stock and 125% of the opening price"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "keeps at most three, the furthest short first, and gives the same list whatever the pools' order"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "lists nothing when every stall is as she opened it (all stocked)"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "lists nothing with no pools at all"
+        }
+      ],
+      "note": "She leaves out a pool whose till can't pay for one, items the game doesn't drop, and everything while the market is switched off; the tests cover each."
+    },
+    {
+      "id": "economy-wanted-frozen",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "The first request of the day works the list out from her pools and stores it with the snapshot it came from, so the day's list doesn't change.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/wanted.ts",
+          "anchor": "export async function wantedToday("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "snapshots the market on the day's first request and stores the snapshot with the list"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "keeps the day's list however the market moves after it, and reads the market once"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "stores one list when two first requests race"
+        }
+      ],
+      "note": "The list is a market_sim row with id wanted:<day>, so no migration; it is taken on a request, never on a schedule."
+    },
+    {
+      "id": "economy-wanted-bonus",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "A verified night that brings in a wanted item gets a multiplier on that item's drop (×2, or ×3 when she is sold out), capped per night and per player per day by rarity; the score, the replay and the Bits are unchanged.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export function wantedBonus("
+        },
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": "const bonus = wanted ? await grantWanted("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "mints the multiplier on the wanted item only, never on the score or the Bits, and mirrors it in the save"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "holds the day's cap across nights: 8 extra commons a player a day"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "caps the extra a night adds by rarity: 4 commons, 2 uncommons, 1 rare"
+        }
+      ]
+    },
+    {
+      "id": "economy-wanted-screens",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "Tonight (/play) shows the list and the night's results show the bonus",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/components/tonight/tonight.tsx",
+          "anchor": "<WantedTile />"
+        },
+        {
+          "path": "apps/wgp/src/app/play/patrol/night-results.tsx",
+          "anchor": "<WantedHaul wanted={o.wanted} />"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/wanted-ui.test.ts",
+          "name": "names each wanted item with its multiplier and why, and links to the market"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/wanted-ui.test.ts",
+          "name": "prints one line per wanted item the night brought"
+        }
+      ]
     },
     {
       "id": "economy-round-trip",
@@ -2611,12 +2903,16 @@
       "id": "tryit-lab-inflation",
       "section": "tryit",
       "source": "README.md",
-      "quote": "with mainnet's settings about 3% of the Bits earned are burned. Tick Recommended settings (crafting burns 250 Bits, 5% gas fee) and run again: about 28%.",
+      "quote": "the default run earns 58,859 Bits and burns 26,454 of them, about 45%. Tick Run the old settings (2% gas fee, crafting burns no Bits, no taper) and run again: 99,022 earned and 2,847 burned, about 3%.",
       "status": "simulation only",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
-          "anchor": "export const RECOMMENDED: Setting"
+          "anchor": "export const RECOMMENDED_WITH_TAPER: Setting"
+        },
+        {
+          "path": "apps/wgp/src/app/lab/economy/economy-lab.tsx",
+          "anchor": "const settingOf = (s: Setup): Setting =>"
         }
       ],
       "tests": [
@@ -2627,11 +2923,16 @@
         },
         {
           "pkg": "app",
+          "file": "apps/wgp/src/app/lab/economy/economy-lab.test.ts",
+          "name": "opens on the proposal (the owner's settings and the faucet taper), with the old settings one tick away"
+        },
+        {
+          "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "are what mainnet's settings miss: today under 5% of a season's Bits are burned"
+          "name": "burn about half of what a season earns, and close most of the gap (docs/ECONOMY.md)"
         }
       ],
-      "note": "Numbers from the bot model, not from mainnet. The recommended settings are not applied (econdoc-not-applied)."
+      "note": "Numbers from the bot model, not from mainnet. The lab opens on the proposal: the faucet taper (live with the deploy) and the owner's fee_bps 500 and craft_bits 250 (econdoc-owner-settings)."
     },
     {
       "id": "tryit-drain",
@@ -3219,7 +3520,7 @@
       "id": "status-used",
       "section": "status",
       "source": "README.md",
-      "quote": "The contract and its market (8 pools, 2% fee)",
+      "quote": "The contract and its market (12 pools, 5% fee)",
       "status": "proven on chain",
       "chain": [
         "market-state",
@@ -3237,12 +3538,20 @@
       "id": "status-npc",
       "section": "status",
       "source": "README.md",
-      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, by fixed rules: rule-based, not an AI agent, and never counted as a player.",
+      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, and is never counted as a player. An LLM (Kimi K3) picks among the moves his fixed rules allow when the server has its API key; without it, the rules pick.",
       "status": "proven on chain",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/npc-rules.ts",
           "anchor": "export function decide("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
         },
         {
           "path": "apps/wgp/src/server/npc/runner.ts",
@@ -3263,6 +3572,16 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/stats-tally.test.ts",
           "name": "never counts Sandwich Man as a player: his calls are on their own line"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -3392,6 +3711,86 @@
         }
       ],
       "note": "The code path is built and tested; it stays off until NEAR Auth approves a mainnet client, which is outside this repository."
+    },
+    {
+      "id": "status-new-stock",
+      "section": "status",
+      "source": "README.md",
+      "quote": "Gwei's new stock: four items earned from the Daily Run and from cases (gas receipt, finality flag, evidence bag, torn seed phrase) and two suits that burn them (Notary, Finality)",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/new-stock.ts",
+          "anchor": "export const NEW_STOCK_POOLS"
+        },
+        {
+          "path": "scripts/near/new-stock-args.ts",
+          "anchor": "async function main() {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "adds four items and two suits to the game, keeping the launch eight of each"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "set_rules keeps every live item, suit, starter flag, level and recipe exactly as the contract has them, and passes its validation"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "docs/economy/new-stock-calls.json is the owner's two calls as built from the live contract"
+        }
+      ],
+      "chain": [
+        "market-state"
+      ]
+    },
+    {
+      "id": "status-new-stock-gated",
+      "section": "status",
+      "source": "README.md",
+      "quote": "The server awards an item only while its pool exists on chain, because mint_rewards refuses an item the contract doesn't know",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/new-stock.ts",
+          "anchor": "export async function openStockNow("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/new-stock.ts",
+          "anchor": "export function openNewStock("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/new-stock.test.ts",
+          "name": "is closed while the contract has no pool for it, and open once it does"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/new-stock.test.ts",
+          "name": "awards nothing before the owner's calls: no save change, no mint"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/new-stock.test.ts",
+          "name": "once open, writes the item into the save and queues its mint, once per item per day"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/new-stock.test.ts",
+          "name": "an item is open only once its pool exists; a new suit only once its parts are open"
+        }
+      ],
+      "chain": [
+        "market-state"
+      ],
+      "note": "An item is open only when the market the server reads has its pool; mint_rewards would refuse an unregistered item and fail the whole batch, so nothing is awarded before then. The contract's market lists the pools it has, so the new items appear there once set_market_params opens them."
     },
     {
       "id": "status-gas-refill",
@@ -4301,15 +4700,40 @@
       ]
     },
     {
+      "id": "keys-factory-only-creates",
+      "section": "limits",
+      "source": "docs/KEYS.md",
+      "quote": "The server never calls an owner-only method with the factory key.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/near/factory.ts",
+          "anchor": "export async function createPlayerAccount("
+        },
+        {
+          "path": "apps/wgp/src/server/near/env.ts",
+          "anchor": "export function factoryEnv("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/owner-keys.test.ts",
+          "name": "signs only account creation, and no server code calls an owner-only method"
+        }
+      ],
+      "note": "The test reads every non-test source file of the app: none names an owner-only method outside a comment, only factory.ts reads the factory key, it signs once, to the new player's account, with the four create-account actions, and every owner-only method asserts one yoctoNEAR."
+    },
+    {
       "id": "limits-currency",
       "section": "limits",
       "source": "README.md",
-      "quote": "in the lab's default run, on mainnet's settings, 99,022 earned and 2,847 burned",
+      "quote": "In the lab's default run, on mainnet's settings, 58,859 are earned and 26,454 burned, about 45% (99,022 and 2,847 on the old settings).",
       "status": "simulation only",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
-          "anchor": "export const MAINNET: Setting"
+          "anchor": "export const RECOMMENDED_WITH_TAPER: Setting"
         }
       ],
       "tests": [
@@ -4329,8 +4753,8 @@
       "id": "limits-craft-bits",
       "section": "limits",
       "source": "README.md",
-      "quote": "A Bits cost for crafting exists in the contract (craft_bits) and is off on mainnet",
-      "status": "built, off on mainnet",
+      "quote": "The sinks are the trade fee (5%) and crafting, which burns 250 Bits a suit on top of the recipe.",
+      "status": "proven on chain",
       "code": [
         {
           "path": "contracts/wgp/src/lib.rs",
@@ -4346,7 +4770,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/craft.test.ts",
-          "name": "is nothing while craft_bits is 0, for every suit (mainnet today)"
+          "name": "is craft_bits for a suit with a recipe and nothing for a starter, as the contract charges"
         },
         {
           "pkg": "app",
@@ -4662,7 +5086,7 @@
       "id": "gameloop-npc",
       "section": "gameloop",
       "source": "docs/GAME-LOOP.md",
-      "quote": "He is a rule-based trader, not a player and not an AI agent, with his own NEAR account (sandwich.wgpnear.near, on mainnet since Nov 13, 2026).",
+      "quote": "He is a trader, not a player, with his own NEAR account (sandwich.wgpnear.near, on mainnet since Nov 13, 2026). His rules list the moves he may make and an LLM picks one when the server has its key; otherwise the rules pick.",
       "status": "live check",
       "code": [
         {
@@ -4675,6 +5099,16 @@
           "pkg": "app",
           "file": "apps/wgp/src/components/market/other-traders.test.ts",
           "name": "on chain: the strip with his own NEAR account, linked to the explorer"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -4710,6 +5144,180 @@
         "tx-npc-first-trade"
       ],
       "note": "The account, its key and his Bits are read from an RPC node; the three transactions are looked up by hash. The test is the other half: with his two environment variables unset he is off."
+    },
+    {
+      "id": "npc-brain",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "The rules are the guardrail and the fallback: the LLM can choose a legal move or pass, and nothing else.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "only the reason: the move is the one shown, number for number"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "can pass: nothing is sent, no action is used, and the pass is on record"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is cleaned before it is shown: one line, no links or handles, at most 160 characters"
+        }
+      ],
+      "note": "acceptPick keeps the LLM's answer only if its id is one of the moves it was shown or pass; the move it returns is the rules' action with only the reason replaced, cleaned to one line of at most 160 characters."
+    },
+    {
+      "id": "npc-brain-fallback",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "when the call takes more than 20 seconds (no retry), on a network or HTTP error, when the answer was cut off (finish_reason other than stop) or isn't one of the moves, and once he has made 10 LLM calls in the UTC day.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on a timeout, without waiting past it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move without a key or once the day's calls are used, and makes no call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        }
+      ]
+    },
+    {
+      "id": "npc-brain-cost",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "At most 10 LLM calls a UTC day (counted when a call is made, whatever it answers), one per turn",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "maxCallsPerDay: 10,"
+        },
+        {
+          "path": "apps/wgp/src/server/npc/store.ts",
+          "anchor": "export const withBrainCall ="
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move without a key or once the day's calls are used, and makes no call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        }
+      ],
+      "note": "The count is kept in his state row, set the moment a call is made and written back even when the look fails afterwards. Each call asks for at most 600 tokens out (max_tokens); the daily token figure beside it is that arithmetic, not a measured bill."
+    },
+    {
+      "id": "npc-brain-live",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "What is live depends on the key: LLM_API_KEY is set in production (since Nov 15, 2026), so brain.mode is llm.",
+      "status": "live check",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/view.ts",
+          "anchor": "function brainView("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "says which brain picks and, on each ledger line, which one did"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        }
+      ],
+      "chain": [
+        "site-npc"
+      ],
+      "note": "The check accepts either mode and fails only if the field is missing; the answer says which brain is live right now."
+    },
+    {
+      "id": "npc-brain-secrets",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "a failed call logs only what failed (a timeout, an HTTP status), never the prompt, the answer or the key.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export function npcBrainConfig("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        }
+      ]
     },
     {
       "id": "npc-rules-file",
@@ -4935,21 +5543,56 @@
       "note": "Creating and funding his account and seeding 300 Bits are the owner's two transactions, checked by hash. Setting his key in production leaves no trace on chain; the live site answering mode on-chain is the sign of it."
     },
     {
-      "id": "econdoc-not-applied",
-      "section": "econdoc",
-      "source": "docs/ECONOMY.md",
-      "quote": "Nothing here has been applied. Mainnet still has craft_bits: \"0\" and fee_bps: 200.",
-      "status": "owner action needed",
+      "id": "keys-npc-function-call-ready",
+      "section": "npc",
+      "source": "docs/KEYS.md",
+      "quote": "the server needs no change for a function-call key",
+      "status": "proven by test",
       "code": [
         {
+          "path": "apps/wgp/src/server/npc/chain.ts",
+          "anchor": "export function npcTransaction("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/owner-keys.test.ts",
+          "name": "can be a function-call key for the game contract and the five market methods: every call he signs is one, with no deposit"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/owner-keys.test.ts",
+          "name": "is shown by its public key only, so anyone can see which of his keys the server holds"
+        }
+      ]
+    },
+    {
+      "id": "econdoc-owner-settings",
+      "section": "econdoc",
+      "source": "docs/ECONOMY.md",
+      "quote": "Gas fee fee_bps 200 → 500 (2% → 5%)",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/config.ts",
+          "anchor": "export const PROPOSED_PARAMS: MarketParams"
+        },
+        {
           "path": "scripts/near/market-args.ts",
-          "anchor": "const args ="
+          "anchor": "const base ="
         }
       ],
       "chain": [
         "market-state"
       ],
-      "note": "The recommended settings are one owner transaction away. The chain check reads the live params and fails when they change."
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "are the proposal: the owner's two values (PROPOSED_PARAMS) and the taper the server pays with (NIGHT_TAPER)"
+        }
+      ]
     },
     {
       "id": "econdoc-identity",
@@ -4975,19 +5618,19 @@
       "id": "econdoc-recommendation",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "It passes the band: 28.8% of a season's Bits burned, first suit by night 5, Gwei down 2.5% of item-days over 60 days.",
+      "quote": "It passes the band: 45.7% of a season's Bits burned, first suit by night 5, Gwei down 9.1% of item-days over 60 days.",
       "status": "simulation only",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
-          "anchor": "export const BAND"
+          "anchor": "export const RECOMMENDED_WITH_TAPER: Setting"
         }
       ],
       "tests": [
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "meet the band: 25–100% of a season's Bits burned, a first suit by night 5, Gwei trading 90% of item-days"
+          "name": "still meet it with the faucet taper, which burns a larger share and mints less"
         },
         {
           "pkg": "app",
@@ -5025,26 +5668,45 @@
       "id": "econdoc-taper",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "It is written and tested but not wired in.",
-      "status": "built, off on mainnet",
+      "quote": "A hero holding up to 150 Bits earns the whole night; above that the night shrinks in a straight line to the 5 for showing up at 400.",
+      "status": "proven by test",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/rewards.ts",
-          "anchor": "export function taperedNightBits("
+          "anchor": "export function nightPay("
+        },
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": "const pay = nightPay("
+        },
+        {
+          "path": "apps/wgp/src/server/market/held.ts",
+          "anchor": "export async function heldBits("
         }
       ],
       "tests": [
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/rewards.test.ts",
-          "name": "falls in a straight line between the marks and never pays more than the night earned"
+          "name": "is the live taper: the whole night up to 150 Bits held, the 5 for showing up from 400"
         },
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "the ranked submit path pays nightBits, and never calls taperedNightBits"
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "pays the night through the wallet taper, reading the hero's Bits, and says why it paid less"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/held.test.ts",
+          "name": "reads bits_of on chain and adds the Bits in mints that haven't landed yet"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/held.test.ts",
+          "name": "answers null, so the whole night is paid, when the chain read fails, answers nonsense or is slow"
         }
-      ]
+      ],
+      "note": "Server code: live wherever the build that carries it is deployed; it needs no owner call. It changes no score, replay or ruleset."
     },
     {
       "id": "econdoc-suit-lab",
@@ -5080,7 +5742,7 @@
       "id": "econdoc-with-npc",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "the recommendation still passes the band with him (28.7%, night 5, 2.3%)",
+      "quote": "One trader with 300 Bits among 60 heroes moves the season's burn share by under a point.",
       "status": "simulation only",
       "code": [
         {
@@ -5092,7 +5754,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "moves the season's burn share by under a point, and the recommendation still meets the band (docs/ECONOMY.md)"
+          "name": "moves the season's burn share by under a point, and keeps Gwei inside the band over 60 days with him (docs/ECONOMY.md)"
         }
       ]
     },
@@ -6403,6 +7065,37 @@
       ]
     },
     {
+      "id": "sustain-measured",
+      "section": "sustain",
+      "source": "docs/SUSTAINABILITY.md",
+      "quote": "The relayer's runway counts only what it can spend before its 1 NEAR cut-off, and the 7-day average includes the idle days.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "scripts/costs.mjs",
+          "anchor": "export function measure({ rows, views, nearUsd, now, relayerWrappedNear = null }) {"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/costs.test.ts",
+          "name": "measures the whole report from rows and views: the relayer's runway ends at its 1 NEAR cut-off"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/costs.test.ts",
+          "name": "buckets spend into the last 7 days, and averages over all 7, idle days included"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/costs.test.ts",
+          "name": "counts each transaction the relayer signed once, at its whole fee, and never a refund"
+        }
+      ],
+      "note": "The test proves the arithmetic behind the section, on fixtures. The section's figures are one dated reading of mainnet history (Nov 14, 21:40 UTC) and change as play goes on; pnpm costs prints the current ones."
+    },
+    {
       "id": "disclosures-first-commit",
       "section": "disclosures",
       "source": "README.md",
@@ -6775,7 +7468,7 @@
       "kind": "view",
       "method": "market_state",
       "args": {},
-      "about": "The contract's market: open, a 2% fee, no Bits cost for crafting, the listing bounds and caps, and eight pools held by the contract's own account.",
+      "about": "The contract's market: open, a 5% fee and 250 Bits burned per recipe suit (the settings docs/ECONOMY.md proposes), the listing bounds and caps, and twelve pools: the eight launch items and Gwei's new stock held by the contract's own account.",
       "expect": [
         {
           "path": "vendor",
@@ -6790,12 +7483,12 @@
         {
           "path": "params.fee_bps",
           "op": "eq",
-          "value": 200
+          "value": 500
         },
         {
           "path": "params.craft_bits",
           "op": "eq",
-          "value": "0"
+          "value": "250"
         },
         {
           "path": "params.floor_bps",
@@ -6820,15 +7513,15 @@
         {
           "path": "pools.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         },
         {
           "path": "prices_milli.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         }
       ],
-      "whenFails": "The owner changed the market's settings: update the README, docs/ECONOMY.md and this check."
+      "whenFails": "If fee_bps is 200 and craft_bits 0, or pools is 8, the owner hasn't sent the set_rules and set_market_params calls (docs/ECONOMY.md, docs/economy/new-stock-calls.json): send them. If the owner changed the settings again, update the README, docs/ECONOMY.md and this check."
     },
     "prices-moved": {
       "kind": "view",
@@ -6944,7 +7637,7 @@
       "kind": "view",
       "method": "get_config",
       "args": {},
-      "about": "The contract's owner, its one operator, and its eight items and eight suits.",
+      "about": "The contract's owner, its one operator, and its twelve items and ten suits (the launch eight of each, plus Gwei's new stock and the Notary and Finality suits since Nov 15).",
       "expect": [
         {
           "path": "owner_id",
@@ -6966,12 +7659,12 @@
         {
           "path": "items.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         },
         {
           "path": "suits.length",
           "op": "eq",
-          "value": 8
+          "value": 10
         }
       ]
     },
@@ -7129,7 +7822,7 @@
     "site-market": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market",
-      "about": "The live game reads its market from the contract.",
+      "about": "The live game reads its market from the contract: all twelve pools, the 5% fee.",
       "expect": [
         {
           "path": "onChain",
@@ -7149,12 +7842,12 @@
         {
           "path": "items.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         },
         {
           "path": "params.feeBps",
           "op": "eq",
-          "value": 200
+          "value": 500
         }
       ]
     },
@@ -7291,7 +7984,7 @@
     "site-npc": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market/npc",
-      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, and shows at least one move with its transaction.",
+      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says an LLM picks his moves (brain.mode is llm: the server has LLM_API_KEY).",
       "expect": [
         {
           "path": "mode",
@@ -7327,9 +8020,14 @@
           "path": "log.*.txUrl",
           "op": "anyMatch",
           "value": "^https://nearblocks\\.io/txns/[1-9A-HJ-NP-Za-km-z]{43,44}$"
+        },
+        {
+          "path": "brain.mode",
+          "op": "eq",
+          "value": "llm"
         }
       ],
-      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md."
+      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md. If brain.mode is missing, production runs a build from before the brain (feat/npc-agent). If brain.mode is rules, LLM_API_KEY is missing from production: set it, or say so in the README and docs/npc-trader.md."
     },
     "site-play": {
       "kind": "http",

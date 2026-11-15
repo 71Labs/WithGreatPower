@@ -70,6 +70,8 @@ export interface NpcEvent {
   reason: string;
   onChain: boolean;
   txHash: string | null;
+  /** Which brain picked the move (./npc-brain.ts): the LLM's model id (e.g. "kimi-k3") or "rules". Absent on lines no brain decided (a sale, the seed) and on older lines. */
+  brain?: string;
 }
 
 export const itemName = (item: string) => (item in ITEMS ? ITEMS[item as keyof typeof ITEMS].name : item);

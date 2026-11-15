@@ -16,6 +16,7 @@ import type { MarketItemView } from "./api";
 import type { MarketParams } from "./config";
 import { bitsText } from "./format";
 import { buyQuote, sellQuote, spotMilli } from "./math";
+import { suitOpen } from "./new-stock";
 import { explainPrice, openingOf, type PriceState } from "./reasoning";
 
 const ALL_SUITS = Object.keys(SUITS) as SuitId[];
@@ -78,10 +79,14 @@ export interface SuitGap {
   levelShort: boolean;
 }
 
-/** Every suit the player doesn't own that takes loot, with what it still needs. */
-export function suitGaps(h: Holdings): SuitGap[] {
+/**
+ * Every suit the player doesn't own that takes loot, with what it still needs. A suit made
+ * from Gwei's new stock counts only once its items are open (`open`: ./new-stock.ts).
+ */
+export function suitGaps(h: Holdings, open: ReadonlySet<string> = new Set()): SuitGap[] {
   const gaps: SuitGap[] = [];
   for (const id of ALL_SUITS) {
+    if (!suitOpen(id, open)) continue;
     const s = SUITS[id];
     const recipe = Object.entries(s.recipe) as [ItemId, number][];
     if (h.suits.includes(id) || recipe.length === 0) continue;

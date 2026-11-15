@@ -31,6 +31,14 @@ describe("the economy lab before it hydrates", () => {
     expect(src).toContain('{!ready ? "Loading…" : running ? "Pause" : done ? `Run ${plural(days, "day")} again` : last.day > 0 ? "Resume" : `Run ${plural(days, "day")}`}');
   });
 
+  it("opens on the proposal (the owner's settings and the faucet taper), with the old settings one tick away", () => {
+    const page = text(html);
+    expect(page).toContain("The proposal: the owner’s settings, on mainnet once the owner’s call lands: 5% gas fee, crafting burns 250 Bits, nights pay less above 150 Bits held and 5 from 400");
+    const old = setup.match(/<input type="checkbox"[^>]*>/)![0];
+    expect(old).not.toMatch(/checked=""/);
+    expect(text(setup)).toContain("Run the old settings 2% gas fee, free crafting, no taper");
+  });
+
   it("labels each slider with its name alone, and the Seed as a whole number", () => {
     for (const name of ["Days", "Bot heroes"]) {
       const label = setup.match(new RegExp(`<label for="([^"]+)">${name}</label>`));
