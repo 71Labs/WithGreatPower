@@ -115,14 +115,15 @@ describe("the faucet taper is written and not wired in", () => {
  * now expect him there.
  */
 describe("Sandwich Man runs only where the owner turned him on", () => {
-  it("the chain checks expect him on mainnet: his account with its key, the live site on chain, and his calls as a lower bound", () => {
+  it("the chain checks expect him on mainnet: his account with its function-call key, the live site on chain, and his calls as a lower bound", () => {
     type Check = { kind: string; account?: string; keys?: boolean; expect: { path: string; op: string; value?: unknown; doc?: string }[] };
     const checks = evidence().checks as unknown as Record<string, Check>;
     const expects = (id: string) => checks[id]!.expect.map((e) => `${e.path} ${e.op} ${JSON.stringify(e.value)}`);
 
     expect(checks["sandwich-account"]).toMatchObject({ kind: "account", account: "sandwich.wgpnear.near", keys: true });
     expect(expects("sandwich-account")).toEqual(expect.arrayContaining(["exists eq true", "keys.length eq 1"]));
-    expect(expects("sandwich-account").some((e) => e.startsWith("fullAccessKeys includes "))).toBe(true);
+    // His one key is a function-call key for the game contract (docs/KEYS.md), not a full-access key.
+    expect(expects("sandwich-key")).toEqual(expect.arrayContaining(["fullAccessKeys.length eq 0", "functionCallKeys.length eq 1", 'functionCallKeys.0.receiver_id eq "game.wgpnear.near"']));
     expect(expects("site-npc")).toEqual(expect.arrayContaining(['mode eq "on-chain"', 'accountId eq "sandwich.wgpnear.near"', "log.length gte 1"]));
     // A lower bound, never zero: the tally must find at least the one call the README cites.
     const npcCalls = checks["chain-tally"]!.expect.find((e) => e.path === "json.chain.npcCalls");

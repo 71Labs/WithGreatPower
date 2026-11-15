@@ -2,7 +2,7 @@
 
 This page lists the keys the game's accounts have on mainnet, what the server does with the ones it holds, and the commands the owner runs, in order, to move the contract's ownership to a cold account, delete the contract account's full-access key and give Sandwich Man a function-call key instead of a full-access one. Nothing in this repository runs them: only the owner can, from their own terminal, with near-cli-rs and their key files in `~/.near-credentials/mainnet/`.
 
-## The keys on mainnet (read Nov 15, 2026, block 224633581)
+## The keys on mainnet before the owner's commands (read Nov 15, 2026, block 224633581)
 
 | Account | Keys | Held by |
 |---|---|---|
@@ -107,3 +107,7 @@ Do this last, after step 2 checks out. What it changes, on purpose: the contract
 - Before 1f: put the old key back in `NPC_TRADER_PRIVATE_KEY` and redeploy. After 1f the new key is the only one; if it stops working, Sandwich Man stops trading, and nothing else is affected.
 - After 2b: `COLD_OWNER_ACCOUNT` can call `set_owner` again.
 - After 3b: there is no undo, by design.
+
+## After the commands
+
+These evidence checks read the result (`pnpm evidence --chain`): `contract-owner` (the owner is no longer `wgpnear.near`), `owner-account` (`wgpnear.near` keeps one full-access key, the factory's), `contract-keys` (the contract account has no key at all) and `sandwich-key` (his one key is a function-call key for `game.wgpnear.near` and exactly his five methods, and he has no full-access key). They fail until the commands have run.

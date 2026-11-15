@@ -4445,23 +4445,41 @@
       "id": "limits-owner-key",
       "section": "limits",
       "source": "README.md",
-      "quote": "the contract's owner, wgpnear.near, has one key, a full-access key, and that key is in the production server's environment, because the same account is the factory that creates player accounts",
+      "quote": "the contract's owner is a cold account whose key is on no server.",
       "status": "proven on chain",
-      "note": "The chain checks show the contract's owner_id is wgpnear.near and that this account has exactly one key, with full access. That the key is in the production environment is what scripts/near/setup-mainnet.sh does (it puts the factory account's key into Vercel as FACTORY_PRIVATE_KEY) and what the server's env reader needs; the production environment itself can't be read from here, and no key value appears anywhere in this repository. When the owner calls set_owner to move ownership to a cold account, contract-config and this row change.",
+      "note": "The chain checks show the contract's owner_id is no longer wgpnear.near, and that wgpnear.near, the factory, still has exactly one key, with full access: that key is in the production environment, which is what scripts/near/setup-mainnet.sh does (FACTORY_PRIVATE_KEY). That the new owner's key is on no server can't be read from here; it is the owner's statement. keys-factory-only-creates proves the server never calls an owner-only method.",
       "code": [
         {
           "path": "scripts/near/setup-mainnet.sh",
           "anchor": "put FACTORY_PRIVATE_KEY \"$(key_of \"$PARENT\")\" sensitive"
         },
         {
-          "path": "apps/wgp/src/server/near/env.ts",
-          "anchor": "need(env, [\"FACTORY_ACCOUNT_ID\", \"FACTORY_PRIVATE_KEY\"]);"
+          "path": "docs/KEYS.md",
+          "anchor": "### 2. The contract's owner: `set_owner` to the cold account"
         }
       ],
       "chain": [
-        "contract-config",
+        "contract-owner",
         "owner-account"
       ]
+    },
+    {
+      "id": "limits-contract-key",
+      "section": "limits",
+      "source": "README.md",
+      "quote": "game.wgpnear.near has no access key at all, so its code can change only through the owner's upgrade method (tested in the sandbox, not yet run on mainnet), and no NEAR can leave it.",
+      "status": "proven on chain",
+      "code": [
+        {
+          "path": "contracts/wgp/src/lib.rs",
+          "anchor": "pub fn upgrade(&mut self) {"
+        }
+      ],
+      "chain": [
+        "contract-keys",
+        "contract-owner"
+      ],
+      "note": "With no access key, nothing can sign a transaction as game.wgpnear.near; the contract's own upgrade method (owner-only, one yoctoNEAR) is the only way to deploy new code. The sandbox test upgrade_from_v1_keeps_players runs it; it has not run on mainnet."
     },
     {
       "id": "keys-factory-only-creates",
@@ -5167,8 +5185,8 @@
       "id": "npc-no-powers",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "The server only ever sends these five calls from his account; his key is a full-access key.",
-      "status": "proven by test",
+      "quote": "The server only ever sends these five calls from his account; his key is a function-call key limited to game.wgpnear.near and those five methods.",
+      "status": "proven on chain",
       "code": [
         {
           "path": "apps/wgp/src/lib/near/policy.ts",
@@ -5189,15 +5207,16 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/evidence/evidence-honesty.test.ts",
-          "name": "says whose limit his five calls are: the server's, with a full-access key, and the planned swap under Limits"
+          "name": "says whose limit his five calls are: the key's, a function-call key for exactly those, and the server's"
         }
       ],
       "chain": [
+        "sandwich-key",
         "sandwich-account",
         "sandwich-wallet",
         "tx-npc-first-trade"
       ],
-      "note": "The limit to five methods is the server's, so a test proves it: every action the runner can take becomes one of those five calls. The key is a full-access key of his own account, which the chain check shows (one key, full access); nothing on chain stops that key sending another call. The planned swap to a function-call key is under Limits. The other checks add what mainnet shows: he has no hero and no role, and the one call he has sent is a market_buy."
+      "note": "Two limits, both proven. On chain: his one key is a function-call key for game.wgpnear.near and exactly the five market methods, and his account has no full-access key (sandwich-key). In the server: every action the runner can take becomes one of those five calls, with no deposit (the tests). The other checks add what mainnet shows: he has no hero and no role, and his first call was a market_buy."
     },
     {
       "id": "npc-runner",
@@ -5561,18 +5580,19 @@
       "id": "sustain-owner-key",
       "section": "sustain",
       "source": "docs/SUSTAINABILITY.md",
-      "quote": "Today the owner key lives in the production environment, not in cold storage.",
+      "quote": "Done: the owner called set_owner to hand game.wgpnear.near to a cold account whose key is on no server, deleted the contract account's full-access key, and wgpnear.near is the factory only",
       "status": "proven on chain",
-      "note": "Same proof as the README's limits-owner-key: the owner is wgpnear.near, whose one key has full access, and scripts/near/setup-mainnet.sh puts that account's key into the production environment as FACTORY_PRIVATE_KEY. This page used to say the plan was to move ownership off the build machine, which implied it was not on a server.",
+      "note": "Same proof as the README's limits-owner-key and limits-contract-key: the owner is no longer wgpnear.near, wgpnear.near keeps its one full-access key as the factory, and game.wgpnear.near has no key.",
       "code": [
         {
-          "path": "scripts/near/setup-mainnet.sh",
-          "anchor": "put FACTORY_PRIVATE_KEY \"$(key_of \"$PARENT\")\" sensitive"
+          "path": "docs/KEYS.md",
+          "anchor": "### 3. The contract account: delete its full-access key"
         }
       ],
       "chain": [
-        "contract-config",
-        "owner-account"
+        "contract-owner",
+        "owner-account",
+        "contract-keys"
       ]
     },
     {
@@ -7372,13 +7392,8 @@
       "kind": "view",
       "method": "get_config",
       "args": {},
-      "about": "The contract's owner, its one operator, and its eight items and eight suits.",
+      "about": "The contract's one operator, its pause flag, and its eight items and eight suits. (Its owner is the contract-owner check.)",
       "expect": [
-        {
-          "path": "owner_id",
-          "op": "eq",
-          "value": "wgpnear.near"
-        },
         {
           "path": "operators",
           "op": "eq",
@@ -7403,11 +7418,25 @@
         }
       ]
     },
+    "contract-owner": {
+      "kind": "view",
+      "method": "get_config",
+      "args": {},
+      "about": "The contract's owner is no longer wgpnear.near, the factory whose full-access key is in the production server's environment: set_owner moved it to a cold account (docs/KEYS.md).",
+      "expect": [
+        {
+          "path": "owner_id",
+          "op": "ne",
+          "value": "wgpnear.near"
+        }
+      ],
+      "whenFails": "If owner_id is wgpnear.near, set_owner hasn't run (docs/KEYS.md step 2): the README's Limits and docs/SUSTAINABILITY.md say the owner key is cold, which is then false."
+    },
     "owner-account": {
       "kind": "account",
       "account": "wgpnear.near",
       "keys": true,
-      "about": "The contract's owner account, wgpnear.near (also the factory that creates player accounts), exists and has exactly one key, with full access.",
+      "about": "wgpnear.near, the factory that creates player accounts (and the contract's owner until set_owner), exists and has exactly one key, with full access: the server's FACTORY_PRIVATE_KEY.",
       "expect": [
         {
           "path": "exists",
@@ -7425,7 +7454,7 @@
           "value": 1
         }
       ],
-      "whenFails": "If the account has another key now, or the contract's owner moved to a cold account (set_owner), update the README's Limits and docs/SUSTAINABILITY.md."
+      "whenFails": "If the account has another key now, update the README's Limits, docs/KEYS.md and docs/SUSTAINABILITY.md."
     },
     "author-wallet": {
       "kind": "view",
@@ -7471,11 +7500,30 @@
       ],
       "whenFails": "If the code hash changed, the contract was upgraded: every claim about the deployed contract needs a second look."
     },
+    "contract-keys": {
+      "kind": "account",
+      "account": "game.wgpnear.near",
+      "keys": true,
+      "about": "The contract account has no access key at all: its full-access key was deleted, so only the owner's upgrade method can change its code (docs/KEYS.md).",
+      "expect": [
+        {
+          "path": "exists",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "keys.length",
+          "op": "eq",
+          "value": 0
+        }
+      ],
+      "whenFails": "If it has a key, docs/KEYS.md step 3 hasn't run, or a key was added: the README's Limits row on the contract account is then false."
+    },
     "sandwich-account": {
       "kind": "account",
       "account": "sandwich.wgpnear.near",
       "keys": true,
-      "about": "Sandwich Man's account exists on mainnet, holds NEAR for gas, runs no contract code and has exactly one key: the full-access key its creating transaction added.",
+      "about": "Sandwich Man's account exists on mainnet, holds NEAR for gas, runs no contract code and has exactly one key (sandwich-key says which kind).",
       "expect": [
         {
           "path": "exists",
@@ -7496,14 +7544,44 @@
           "path": "keys.length",
           "op": "eq",
           "value": 1
-        },
-        {
-          "path": "fullAccessKeys",
-          "op": "includes",
-          "value": "ed25519:2JdLK77r21bBczZK5GyAjapnwAhXaTWz4CjLWFHZkiuP"
         }
       ],
-      "whenFails": "If the key differs, the owner rotated it: put the new public key here. If the account is gone or out of NEAR, he was retired or needs a top-up: update the README's track table and docs/npc-trader.md."
+      "whenFails": "If the account is gone or out of NEAR, he was retired or needs a top-up: update the README's track table and docs/npc-trader.md."
+    },
+    "sandwich-key": {
+      "kind": "account",
+      "account": "sandwich.wgpnear.near",
+      "keys": true,
+      "about": "Sandwich Man's one key is a function-call key for game.wgpnear.near and exactly his five market methods, and his account has no full-access key (docs/KEYS.md step 1).",
+      "expect": [
+        {
+          "path": "fullAccessKeys.length",
+          "op": "eq",
+          "value": 0
+        },
+        {
+          "path": "functionCallKeys.length",
+          "op": "eq",
+          "value": 1
+        },
+        {
+          "path": "functionCallKeys.0.receiver_id",
+          "op": "eq",
+          "value": "game.wgpnear.near"
+        },
+        {
+          "path": "functionCallKeys.0.method_names",
+          "op": "eq",
+          "value": [
+            "buy_listing",
+            "cancel_listing",
+            "list_item",
+            "market_buy",
+            "market_sell"
+          ]
+        }
+      ],
+      "whenFails": "If he still has a full-access key, docs/KEYS.md step 1 hasn't run: docs/npc-trader.md and the README's Trust line say his key is a function-call key, which is then false."
     },
     "sandwich-bits": {
       "kind": "holdings",
