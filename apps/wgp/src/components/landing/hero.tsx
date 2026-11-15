@@ -3,7 +3,7 @@ import { StickerChip, StickerLink } from "@/components/game/kit";
 import { ArrowRight } from "@/components/icons";
 import { START_URL } from "@/lib/site";
 
-import { HERO_PITCH } from "./copy";
+import { HERO_HEADLINE, HERO_PITCH } from "./copy";
 import { HeroLoop } from "./hero-loop";
 import { LiveProof } from "./live-proof";
 
@@ -11,7 +11,7 @@ import { LiveProof } from "./live-proof";
 const FACTS = ["Free", "In your browser", "No wallet needed"] as const;
 
 /**
- * The opener: the three facts, one parody line, one red action that goes straight into a
+ * The opener: the three facts, the world in two lines, one red action that goes straight into a
  * night, the live count, and the game itself in motion. On a phone the clip sits inside the
  * first screen, under the button.
  */
@@ -37,9 +37,9 @@ export function Hero() {
             id="hero-title"
             className="mt-5 font-display text-[clamp(2.625rem,1.9rem+2.2vw,3.5rem)] font-medium leading-[1.02] tracking-[-0.045em] sm:mt-7"
           >
-            <span className="text-(--night-ink-faint)">With great power</span>
+            <span className="text-(--night-ink-faint)">{HERO_HEADLINE.lead}</span>
             <br />
-            <span className="text-(--night-ink)">comes great physics.</span>
+            <span className="text-(--night-ink)">{HERO_HEADLINE.point}</span>
           </h1>
           <p className="mt-4 max-w-[46ch] text-[17px] leading-7 text-pretty sm:mt-6 sm:text-[18px] sm:leading-[30px]">
             {HERO_PITCH.lead}

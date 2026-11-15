@@ -8,6 +8,7 @@ import { AVATARS, HeroArt } from "@/components/cast";
 import { CaseTile } from "@/components/cases/case-tile";
 import { CompeteTile } from "@/components/compete/compete-tile";
 import { MarketTile } from "@/components/market/market-tile";
+import { WantedTile } from "@/components/market/wanted-tile";
 import { CityTile } from "@/components/tonight/city-tile";
 import { ComeBackTile } from "@/components/first-minute/come-back-tile";
 import { MakeItYoursTile } from "@/components/first-minute/make-it-yours";
@@ -302,6 +303,8 @@ export function Tonight() {
         <div className="flex w-full flex-col gap-3 [grid-area:case] lg:max-w-[400px]">
           <MakeItYoursTile save={save} />
           <CrewChecklistTile save={save} />
+          {/* What Gwei is short on decides what's worth hunting tonight. */}
+          <WantedTile />
           <CaseTile save={save} />
           <MarketTile save={save} />
           <CompeteTile />

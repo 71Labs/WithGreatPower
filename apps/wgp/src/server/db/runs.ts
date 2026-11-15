@@ -25,10 +25,12 @@ import type { ReplayResult } from "@wgp/game-core/sim3d/contract";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import { nightBits } from "@/lib/market/rewards";
+import type { WantedBonus } from "@/lib/market/wanted";
 import { secret } from "@/server/auth/secrets";
 import { HttpError, conflict, notFound } from "@/server/http";
 import { reserveBudget, releaseBudget, utcDay } from "@/server/rate-limit";
 import { getChapterVerifier, getVerifier, verifyChapterRun, verifyRun, type Verifier } from "@/server/verify";
+import { grantWanted, mintedWanted, saveWithWanted, wantedForRun, withWanted, type MarketReader } from "@/server/market/wanted";
 
 import { badgeKey, badgeView, CASE_BUDGET_SCOPE, CASE_RUNS_PER_DAY, type CaseOutcome } from "./cases";
 import type { Db } from "./client";
@@ -164,6 +166,8 @@ export type SubmitResult =
       digest: string;
       /** Bits minted for the night (src/lib/market/rewards.ts). */
       bits: number;
+      /** Gwei's wanted list: the extra minted on the wanted items this night brought (src/lib/market/wanted.ts). */
+      wanted?: WantedBonus[];
       /** False for assist runs, which save progress but stay off the boards. */
       ranked: boolean;
       save: Save;
@@ -213,6 +217,7 @@ async function storedOutcome(db: Db, run: Run, log: Uint8Array, clientHash: stri
       ticks: run.ticks ?? 0,
       digest: run.digest ?? "",
       bits: chapter ? 0 : await mintedBitsFor(db, run.id),
+      ...(chapter ? {} : { wanted: await mintedWanted(db, run.id) }),
       ranked: !run.assist && !chapter,
       save,
       rev,
@@ -311,7 +316,7 @@ async function closeCase(
 
 export async function submitRun(
   db: Db,
-  input: { playerId: string; runId: string; log: Uint8Array; clientHash: string; now?: Date; verifier?: Verifier },
+  input: { playerId: string; runId: string; log: Uint8Array; clientHash: string; now?: Date; verifier?: Verifier; market?: MarketReader },
 ): Promise<SubmitResult> {
   const now = input.now ?? new Date();
   const { playerId, log, clientHash } = input;
@@ -370,6 +375,8 @@ export async function submitRun(
   });
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
+  // Gwei's wanted list for the day the night started: a bonus on those items' drop, never on the score.
+  const wanted = await wantedForRun(db, run.issuedAt, now, input.market);
 
   try {
     const out = await db.transaction(async (tx) => {
@@ -389,7 +396,10 @@ export async function submitRun(
         .returning({ id: runs.id });
       if (claimed.length === 0) throw new Abort("raced");
 
-      const rev = await writeSave(tx, playerId, result.save, run.saveRevAtStart, now);
+      const loot = lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {});
+      const bonus = wanted ? await grantWanted(tx, { playerId, list: wanted, loot, now }) : [];
+      const save = saveWithWanted(result.save, bonus);
+      const rev = await writeSave(tx, playerId, save, run.saveRevAtStart, now);
       if (rev === null) throw new Abort("rev_conflict");
 
       const tags = assist ? [] : await recordScore(tx, { playerId, runId: run.id, score: result.score, ticks: result.ticks, issuedAt: run.issuedAt, now });
@@ -399,7 +409,7 @@ export async function submitRun(
       // this transaction.
       const level = result.save.hero?.level;
       const levelledUp = !!level && level > (startSave.hero?.level ?? 0);
-      const items = withBits(lootDiff(startSave.inventory ?? {}, result.save.inventory ?? {}), bits);
+      const items = withBits(withWanted(loot, bonus), bits);
       if (items.length > 0 || levelledUp) {
         await enqueueRewardMint(
           tx,
@@ -407,12 +417,12 @@ export async function submitRun(
             kind: "mint_reward",
             dedupeKey: `mint_reward:${run.id}`,
             playerId,
-            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), digest },
+            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), ...(bonus.length ? { wanted: bonus } : {}), digest },
           },
           now,
         );
       }
-      return { rev, tags };
+      return { rev, tags, save, bonus };
     });
     return {
       status: "verified",
@@ -421,8 +431,9 @@ export async function submitRun(
       ticks: result.ticks,
       digest,
       bits,
+      wanted: out.bonus,
       ranked: !assist,
-      save: result.save,
+      save: out.save,
       rev: out.rev,
       tags: out.tags,
       idempotent: false,

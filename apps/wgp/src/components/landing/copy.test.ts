@@ -11,7 +11,7 @@ import { generatePatrol, newSave, reduce } from "@wgp/game-core/engine";
 import { LOOPS } from "@/audio/loops";
 import { TIERS } from "@/game3d/scene/quality";
 
-import { CAST_INTRO, ERRAND_CAPTION, FIGHT_PANEL, HERO_PITCH, NIGHT_HEADING, NIGHT_INTRO, SHARE_DESCRIPTION, SITE_DESCRIPTION, SOUNDTRACK_FACT, TIERS_FACT } from "./copy";
+import { CAST_INTRO, ERRAND_CAPTION, FIGHT_PANEL, HERO_HEADLINE, HERO_PITCH, NIGHT_HEADING, NIGHT_INTRO, SHARE_DESCRIPTION, SITE_DESCRIPTION, SOUNDTRACK_FACT, TIERS_FACT } from "./copy";
 
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const word = (n: number) => WORDS[n]!;
@@ -87,6 +87,24 @@ describe("the landing page's counts", () => {
     const themes = Object.keys(LOOPS).filter((k) => k.startsWith("music/"));
     expect(SOUNDTRACK_FACT).toMatch(new RegExp(`^${Word(themes.length)} looping themes`));
     expect(CAST_INTRO).toContain(`All ${word(CAST.length)} are original parodies`);
+  });
+});
+
+describe("the hero's premise", () => {
+  it("opens on the city's own motto and names only the game's villains as the economy's", () => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const bible = readFileSync(path.join(here, "../../../../../docs/story/bible.md"), "utf8");
+    // Uncle Gen's line, as the story bible gives it.
+    expect(bible).toContain(`${HERO_HEADLINE.lead} ${HERO_HEADLINE.point.replace(/\.$/, "")}`);
+    const villains = CAST.filter((c) => c.role === "Villain").map((c) => c.name);
+    const named = ["Sandwich Man", "Gas Goblin", "Doc Octochain"];
+    for (const name of named) {
+      expect(villains).toContain(name);
+      expect(HERO_PITCH.lead).toContain(name);
+    }
+    // Gwei Stacy is the vendor, not a villain: the pitch puts her on the trading side.
+    expect(HERO_PITCH.lead).not.toContain("Gwei");
+    expect(HERO_PITCH.more).toContain("sell their loot to Gwei Stacy");
   });
 });
 

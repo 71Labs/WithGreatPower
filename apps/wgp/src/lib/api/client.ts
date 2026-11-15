@@ -8,6 +8,7 @@ import type { Action } from "@wgp/game-core/engine";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
 import type { CasesResponse } from "@/lib/cases/types";
+import type { WantedBonus } from "@/lib/market/wanted";
 import { withRef } from "@/lib/referrals/ref";
 import type { ClaimInfo } from "@/server/auth/privy-sign-in";
 import type { LeaderboardView } from "@/server/db/board-view";
@@ -44,6 +45,8 @@ export type SubmitResponse = {
   ticks: number;
   digest: string;
   bits: number;
+  /** Gwei's wanted list: the extra minted on wanted items this night brought; absent from older servers. */
+  wanted?: WantedBonus[];
   ranked: boolean;
   save: Save;
   rev: number;
