@@ -52,7 +52,7 @@ beforeEach(async () => {
   db = await freshDb();
   alice = await player("alice", 100, { crumbs: 6 });
   // These tests are the rules' path; the brain has its own (./brain.test.ts).
-  vi.stubEnv("ANTHROPIC_API_KEY", "");
+  vi.stubEnv("LLM_API_KEY", "");
   return () => vi.unstubAllEnvs();
 });
 

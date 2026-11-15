@@ -1,47 +1,64 @@
 /**
- * The server's half of Sandwich Man's brain (src/lib/market/npc-brain.ts): one call to
- * Anthropic's Messages API a turn, with his legal moves, and the rules' first move
- * whenever that call can't give a usable answer.
+ * The server's half of Sandwich Man's brain (src/lib/market/npc-brain.ts): one call to an
+ * OpenAI-compatible chat completions endpoint a turn (Moonshot's Kimi K3 by default), with
+ * his legal moves, and the rules' first move whenever that call can't give a usable answer.
  *
- * - Key: ANTHROPIC_API_KEY. Unset, the LLM is never called and the rules pick every move.
- *   The key is read only here and handed to the SDK; it is never logged or returned.
+ * - Environment: LLM_API_KEY (the secret; unset, the LLM is never called and the rules
+ *   pick every move), LLM_MODEL (default kimi-k3), LLM_BASE_URL (default
+ *   https://api.moonshot.ai/v1). The key is read only here and sent only as the request's
+ *   bearer token; it is never logged or returned.
  * - Cost, bounded by construction: at most NPC_BRAIN.maxCallsPerDay calls a UTC day
- *   (counted in his state, src/server/npc/store.ts), one per turn, no retries, an 8 s
- *   timeout, a short structured answer.
+ *   (counted in his state, src/server/npc/store.ts), one per turn, no retries, a 20 s
+ *   timeout, at most NPC_BRAIN.maxTokens tokens out.
  * - Nothing the model says is trusted: `acceptPick` keeps its move only if it is one of
- *   the moves it was shown, and only the reason's words reach his ledger.
- * - Logs name what failed (a timeout, an HTTP status), never the prompt or the key.
+ *   the moves it was shown, and only the reason's words reach his ledger. The model's
+ *   `reasoning_content` is never read, logged or shown.
+ * - Logs name what failed (a timeout, an HTTP status), never the prompt, the answer or the key.
+ * - Plain fetch, no SDK. Tests pass their own `fetch`.
  */
-import Anthropic from "@anthropic-ai/sdk";
-
-import { acceptPick, BRAIN_SYSTEM, brainPrompt, NPC_BRAIN, PICK_SCHEMA, type BrainFallback, type BrainInput, type NpcBrain } from "@/lib/market/npc-brain";
+import { acceptPick, BRAIN_SYSTEM, brainPrompt, NPC_BRAIN, RULES_BRAIN, type BrainFallback, type BrainInput, type NpcBrain } from "@/lib/market/npc-brain";
 import type { NpcAction } from "@/lib/market/npc-rules";
 
-/** The one SDK call the brain makes; tests swap in a fake. */
-export type BrainCreate = (body: Anthropic.MessageCreateParamsNonStreaming, options: { timeout: number; maxRetries: number; signal: AbortSignal }) => Promise<Anthropic.Message>;
+type Env = Record<string, string | undefined>;
 
-/** The API key, or null when the LLM is off. Never throws, never logs. */
-export function npcBrainKey(env: Record<string, string | undefined> = process.env): string | null {
-  const key = env.ANTHROPIC_API_KEY?.trim();
-  return key ? key : null;
+export interface BrainConfig {
+  apiKey: string;
+  model: string;
+  /** The chat completions URL. */
+  url: string;
 }
 
-/** Which brain picks his on-chain moves with this environment. The simulated market always runs on the rules. */
-export function npcBrainMode(onChain: boolean, env: Record<string, string | undefined> = process.env): NpcBrain {
-  return onChain && npcBrainKey(env) !== null ? "claude" : "rules";
-}
+/** The fetch the brain uses; tests pass a fake. */
+export type BrainFetch = (url: string, init: { method: "POST"; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<Response>;
 
-/** The real call, or null without a key. */
-export function anthropicCreate(env: Record<string, string | undefined> = process.env): BrainCreate | null {
-  const apiKey = npcBrainKey(env);
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/;
+
+/** The LLM's settings, or null when it is off (no key, or a base URL that isn't https). Never throws, never logs. */
+export function npcBrainConfig(env: Env = process.env): BrainConfig | null {
+  const apiKey = env.LLM_API_KEY?.trim();
   if (!apiKey) return null;
-  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: NPC_BRAIN.timeoutMs });
-  return (body, options) => client.messages.create(body, options);
+  const model = env.LLM_MODEL?.trim();
+  const base = (env.LLM_BASE_URL?.trim() || NPC_BRAIN.defaultBaseUrl).replace(/\/+$/, "");
+  let url: URL;
+  try {
+    url = new URL(`${base}/chat/completions`);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  return { apiKey, model: model && MODEL_ID.test(model) ? model : NPC_BRAIN.defaultModel, url: url.toString() };
+}
+
+/** Who picks his on-chain moves with this environment: "llm" with a key, else "rules". The simulated market always runs on the rules. */
+export function npcBrainMode(onChain: boolean, env: Env = process.env): { mode: "llm" | "rules"; model: string | null } {
+  const config = onChain ? npcBrainConfig(env) : null;
+  return config ? { mode: "llm", model: config.model } : { mode: "rules", model: null };
 }
 
 export interface NpcChoice {
   /** The move to send, or null to pass (only the LLM passes; the rules always take their first move). */
   action: NpcAction | null;
+  /** The model id when the LLM picked, else "rules". */
   by: NpcBrain;
   reason: string;
   /** Set when the rules picked because the LLM couldn't. */
@@ -50,61 +67,59 @@ export interface NpcChoice {
   called: boolean;
 }
 
-const rulesPick = (options: NpcAction[], fallback: BrainFallback, called: boolean): NpcChoice => ({ action: options[0] ?? null, by: "rules", reason: options[0]?.reason ?? "", fallback, called });
+const rulesPick = (options: NpcAction[], fallback: BrainFallback, called: boolean): NpcChoice => ({ action: options[0] ?? null, by: RULES_BRAIN, reason: options[0]?.reason ?? "", fallback, called });
 
-function failureOf(error: unknown, timedOut: boolean): BrainFallback {
-  if (timedOut || error instanceof Anthropic.APIConnectionTimeoutError) return "timeout";
-  return "error";
+/** The one part of a chat completion the brain reads: the first choice's content, if the model finished. */
+function contentOf(body: unknown): string | null {
+  const choice = (body as { choices?: { finish_reason?: unknown; message?: { content?: unknown } }[] } | null)?.choices?.[0];
+  if (!choice || choice.finish_reason !== "stop") return null;
+  return typeof choice.message?.content === "string" ? choice.message.content : null;
 }
 
 /**
  * Picks this turn's move from `input.options` (his legal moves, best first). The LLM picks
- * when `create` is given and `callsLeft` > 0; otherwise, or when its answer is unusable,
+ * when `config` is given and `callsLeft` > 0; otherwise, or when its answer is unusable,
  * the rules' first move. Never throws.
  */
-export async function chooseMove(input: BrainInput, opts: { create: BrainCreate | null; callsLeft: number; timeoutMs?: number }): Promise<NpcChoice> {
+export async function chooseMove(input: BrainInput, opts: { config: BrainConfig | null; callsLeft: number; fetch?: BrainFetch; timeoutMs?: number }): Promise<NpcChoice> {
   const { options } = input;
-  if (options.length === 0) return { action: null, by: "rules", reason: "", fallback: null, called: false };
-  if (!opts.create) return rulesPick(options, "no_key", false);
+  if (options.length === 0) return { action: null, by: RULES_BRAIN, reason: "", fallback: null, called: false };
+  const { config } = opts;
+  if (!config) return rulesPick(options, "no_key", false);
   if (opts.callsLeft <= 0) return rulesPick(options, "cap", false);
 
-  const timeoutMs = opts.timeoutMs ?? NPC_BRAIN.timeoutMs;
+  const send: BrainFetch = opts.fetch ?? ((url, init) => fetch(url, init));
   const controller = new AbortController();
-  let timedOut = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-      reject(new Error("timeout"));
-    }, timeoutMs);
-  });
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? NPC_BRAIN.timeoutMs);
   try {
-    const message = await Promise.race([
-      opts.create(
-        {
-          model: NPC_BRAIN.model,
-          max_tokens: NPC_BRAIN.maxTokens,
-          system: BRAIN_SYSTEM,
-          messages: [{ role: "user", content: brainPrompt(input) }],
-          output_config: { effort: "low", format: { type: "json_schema", schema: PICK_SCHEMA } },
-        },
-        { timeout: timeoutMs, maxRetries: 0, signal: controller.signal },
-      ),
-      deadline,
-    ]);
-    if (message.stop_reason === "refusal") return rulesPick(options, "refusal", true);
-    const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    const answer = acceptPick(options, text);
+    const res = await send(config.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: NPC_BRAIN.maxTokens,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: BRAIN_SYSTEM },
+          { role: "user", content: brainPrompt(input) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.error(`[npc] brain: HTTP ${res.status}; the rules pick`);
+      return rulesPick(options, "error", true);
+    }
+    const text = contentOf(await res.json());
+    const answer = text === null ? ({ ok: false } as const) : acceptPick(options, text);
     if (!answer.ok) {
-      console.error(`[npc] brain: unusable answer (stop_reason ${message.stop_reason}); the rules pick`);
+      console.error("[npc] brain: unusable answer (cut off, not JSON or not a listed move); the rules pick");
       return rulesPick(options, "invalid", true);
     }
-    return { action: answer.action, by: "claude", reason: answer.reason, fallback: null, called: true };
-  } catch (error) {
-    const fallback = failureOf(error, timedOut);
-    const status = error instanceof Anthropic.APIError && error.status ? ` ${error.status}` : "";
-    console.error(`[npc] brain: ${fallback}${status}; the rules pick`);
+    return { action: answer.action, by: config.model, reason: answer.reason, fallback: null, called: true };
+  } catch {
+    const fallback: BrainFallback = controller.signal.aborted ? "timeout" : "error";
+    console.error(`[npc] brain: ${fallback}; the rules pick`);
     return rulesPick(options, fallback, true);
   } finally {
     clearTimeout(timer);

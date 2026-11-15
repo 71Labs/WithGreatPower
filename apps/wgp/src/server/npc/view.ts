@@ -2,7 +2,7 @@
  * What the market screen's "Other traders" strip reads about Sandwich Man: whether he is
  * trading on chain, in the simulated market or off, his wallet, what he holds, his open
  * listings, the last lines of his ledger with their reasons, and who picks his moves
- * (`brain.mode`: "claude" or "rules", with the brain on each ledger line). Cached with the market
+ * (`brain.mode`: "llm" with its model, or "rules"; the brain on each ledger line). Cached with the market
  * (tag "market", about 10 seconds); his own actions expire it.
  */
 import { cacheLife, cacheTag } from "next/cache";
@@ -48,11 +48,11 @@ const off = (now: number): NpcTraderView => ({
 
 /** Who picks his moves here, the day's LLM calls left and the last pick, from his state. */
 function brainView(onChain: boolean, state: NpcState, now: number): NonNullable<NpcTraderView["brain"]> {
-  const mode = npcBrainMode(onChain);
+  const { mode, model } = npcBrainMode(onChain);
   const d = state.lastDecision;
   return {
     mode,
-    model: mode === "claude" ? NPC_BRAIN.model : null,
+    model,
     maxCallsPerDay: NPC_BRAIN.maxCallsPerDay,
     callsLeft: Math.max(0, NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, now)),
     last: d ? { at: new Date(d.at).toISOString(), by: d.by, pick: d.pick, text: d.text, reason: d.reason, fallback: d.fallback, options: d.options } : null,

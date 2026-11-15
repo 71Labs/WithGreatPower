@@ -10,9 +10,9 @@
  * Each look: take his lock (src/server/npc/store.ts; no two looks overlap, and none within
  * MIN_GAP_MS of the last), read the market, his wallet and the listings, bring his books
  * up to date and ask `decide` (src/lib/market/npc-rules.ts) for every legal move. On chain
- * a brain then picks one (./brain.ts): Claude, among those moves or "pass", when
- * ANTHROPIC_API_KEY is set and the day's LLM calls aren't used up; otherwise, or when the
- * LLM can't answer in time, the rules' first move. At most one action is sent. Against
+ * a brain then picks one (./brain.ts): an LLM (Kimi K3 by default), among those moves or
+ * "pass", when LLM_API_KEY is set and the day's LLM calls aren't used up; otherwise, or
+ * when the LLM can't answer in time, the rules' first move. At most one action is sent. Against
  * the contract he signs with his own key (./chain.ts); when the simulated market stands
  * in, he trades there by the rules alone (./sim.ts). Whatever happens is written to his
  * ledger with its reason and the brain that picked it, and a trade also goes into the
@@ -31,7 +31,7 @@ import type { Db } from "../db/client";
 import { readChainListings, readChainMarket, readChainWallet, type ChainMarket, type ChainWallet } from "../market/chain";
 import { recordTrade } from "../market/history";
 import { marketView, refreshMarket } from "../market/view";
-import { anthropicCreate, chooseMove, type BrainCreate } from "./brain";
+import { chooseMove, npcBrainConfig, type BrainConfig, type BrainFetch } from "./brain";
 import { sendNpcAction, type NpcSent } from "./chain";
 import { NPC_SIM_ACCOUNT, npcTraderEnv } from "./env";
 import { npcSimTurn } from "./sim";
@@ -74,8 +74,10 @@ export interface NpcRunOptions {
   /** Whether the contract's market is live; defaults to what the market view says. */
   onChain?: boolean;
   chain?: NpcChain;
-  /** The LLM call; defaults to Anthropic's SDK with ANTHROPIC_API_KEY. Null is "rules only". */
-  brain?: BrainCreate | null;
+  /** The LLM's settings; default from LLM_API_KEY, LLM_MODEL and LLM_BASE_URL. Null is "rules only". */
+  brain?: BrainConfig | null;
+  /** The fetch the LLM call uses; tests pass a fake. */
+  brainFetch?: BrainFetch;
 }
 
 /** What the brain is told: his legal moves, his wallet and what he holds, in words. */
@@ -105,7 +107,7 @@ function expireMarket() {
 /** The day's LLM call count after this look, set the moment a call is made. */
 type BrainMeter = { brain?: Pick<NpcState, "brainDay" | "brainCalls"> };
 
-async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: NpcChain, now: Date, create: BrainCreate | null, meter: BrainMeter) {
+async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: NpcChain, now: Date, brain: { config: BrainConfig | null; fetch?: BrainFetch }, meter: BrainMeter) {
   const t = now.getTime();
   const market = await chain.market();
   if (!market) return { books: state.books, events: [] as NpcEvent[], report: { why: "nothing_to_do" } as const };
@@ -117,7 +119,7 @@ async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: N
   const options = decide(market, wallet, listings, t);
   if (options.length === 0) return { books: seen.books, events: seen.events, report: { why: "nothing_to_do" } as const };
 
-  const choice = await chooseMove(brainInput(options, wallet, booksToday(seen.books, w.bits, t), listings, t), { create, callsLeft: NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, t) });
+  const choice = await chooseMove(brainInput(options, wallet, booksToday(seen.books, w.bits, t), listings, t), { ...brain, callsLeft: NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, t) });
   if (choice.called) meter.brain = withBrainCall(state, t);
   const action = choice.action;
   const decision: NpcDecision = { at: t, by: choice.by, pick: action?.kind ?? "pass", text: action?.text ?? null, reason: choice.reason, fallback: choice.fallback, options: options.length };
@@ -177,7 +179,7 @@ export async function runNpcTrader(db: Db, opts: NpcRunOptions = {}): Promise<Np
   let report: Pick<NpcRunReport, "why" | "event" | "error" | "brain" | "fallback"> = { why: "nothing_to_do" };
   try {
     if (env) {
-      const turn = await chainTurn(db, claim.state, env, opts.chain ?? realChain, now, opts.brain === undefined ? anthropicCreate() : opts.brain, meter);
+      const turn = await chainTurn(db, claim.state, env, opts.chain ?? realChain, now, { config: opts.brain === undefined ? npcBrainConfig() : opts.brain, fetch: opts.brainFetch }, meter);
       update = { books: turn.books, events: turn.events, refusal: turn.refusal, decision: "decision" in turn ? turn.decision : undefined };
       report = turn.report;
     } else {

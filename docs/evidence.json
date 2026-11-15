@@ -662,7 +662,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "is the rules without ANTHROPIC_API_KEY, and the LLM is never called"
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         },
         {
           "pkg": "app",
@@ -679,7 +679,7 @@
         "tx-npc-first-trade",
         "chain-tally"
       ],
-      "note": "An LLM (Claude) picks among the legal moves his rules list, or passes; the rules are the guardrail and pick whenever it can't. The code pointers are the rules, the check that keeps only a listed move, and the call with its fallback. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key (a rules move, from before the brain), and the live site reporting him on chain and which brain is live (brain.mode). The brain tests use a fake Anthropic client: a pick among two legal moves is sent with the rules' numbers, a made-up move is ignored, no key means rules only, at most 10 calls a day. The tally's count of his calls is a lower bound (1 on Nov 13). With his account or key unset he does nothing."
+      "note": "An LLM (Kimi K3, Moonshot) picks among the legal moves his rules list, or passes; the rules are the guardrail and pick whenever it can't. The code pointers are the rules, the check that keeps only a listed move, and the call with its fallback. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key (a rules move, from before the brain), and the live site reporting him on chain and which brain is live (brain.mode). The brain tests use a fake LLM endpoint: a pick among two legal moves is sent with the rules' numbers, a made-up move is ignored, no key means rules only, at most 10 calls a day. The tally's count of his calls is a lower bound (1 on Nov 13). With his account or key unset he does nothing."
     },
     {
       "id": "track-npc-brain",
@@ -725,7 +725,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "is the rules without ANTHROPIC_API_KEY, and the LLM is never called"
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         },
         {
           "pkg": "app",
@@ -735,7 +735,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "takes the rules' move on an error or a refusal, and logs neither the prompt nor the key"
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
         },
         {
           "pkg": "app",
@@ -751,7 +751,7 @@
       "chain": [
         "site-npc"
       ],
-      "note": "The tests run the on-chain runner against a fake chain and a fake Anthropic client (the suite fails any real network request): Claude's pick among two legal moves is sent with the rules' own numbers and its own reason; a pass sends nothing; an answer that is not a listed move, a timeout, an error, a refusal, a missing key or the day's 10th call used up all fall back to the rules' first move; every ledger line records which brain picked it. The live check reads brain.mode from /api/market/npc: claude only once ANTHROPIC_API_KEY is set in production, rules until then."
+      "note": "The tests run the on-chain runner against a fake chain and a fake LLM endpoint (a fetch the test passes; the suite fails any real network request): Kimi K3's pick among two legal moves is sent with the rules' own numbers and its own reason; a pass sends nothing; an answer that is not a listed move, a cut-off answer, a timeout, an HTTP error, a missing key or the day's 10th call used up all fall back to the rules' first move; every ledger line records which brain picked it (the model id or rules). The live check reads brain.mode from /api/market/npc: llm only once LLM_API_KEY is set in production, rules until then."
     },
     {
       "id": "track-merchant-prices",
@@ -3382,7 +3382,7 @@
       "id": "status-npc",
       "section": "status",
       "source": "README.md",
-      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, and is never counted as a player. An LLM picks among the moves his fixed rules allow when the server has an Anthropic key; without it, the rules pick.",
+      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, and is never counted as a player. An LLM (Kimi K3) picks among the moves his fixed rules allow when the server has its API key; without it, the rules pick.",
       "status": "proven on chain",
       "code": [
         {
@@ -3425,7 +3425,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "is the rules without ANTHROPIC_API_KEY, and the LLM is never called"
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -4872,7 +4872,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "is the rules without ANTHROPIC_API_KEY, and the LLM is never called"
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -4958,7 +4958,7 @@
       "id": "npc-brain-fallback",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "when the call takes more than 8 seconds (no retry), on an API error or a refusal, when the answer isn't one of the moves, and once he has made 10 LLM calls in the UTC day.",
+      "quote": "when the call takes more than 20 seconds (no retry), on a network or HTTP error, when the answer was cut off (finish_reason other than stop) or isn't one of the moves, and once he has made 10 LLM calls in the UTC day.",
       "status": "proven by test",
       "code": [
         {
@@ -4975,7 +4975,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "takes the rules' move on an error or a refusal, and logs neither the prompt nor the key"
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
         },
         {
           "pkg": "app",
@@ -4990,7 +4990,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "is the rules without ANTHROPIC_API_KEY, and the LLM is never called"
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ]
     },
@@ -5027,13 +5027,13 @@
           "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
         }
       ],
-      "note": "The count is kept in his state row, set the moment a call is made and written back even when the look fails afterwards. The price per call quoted beside it is Anthropic's list price for the model on Nov 15, 2026, times a request of about 1,000 input tokens and at most 1,024 output tokens; it is arithmetic, not a measured bill."
+      "note": "The count is kept in his state row, set the moment a call is made and written back even when the look fails afterwards. Each call asks for at most 600 tokens out (max_tokens); the daily token figure beside it is that arithmetic, not a measured bill."
     },
     {
       "id": "npc-brain-live",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "What is live depends on the key: until the owner sets ANTHROPIC_API_KEY in production, brain.mode is rules and every move is the rules'.",
+      "quote": "What is live depends on the key: until the owner sets LLM_API_KEY in production, brain.mode is rules and every move is the rules'.",
       "status": "live check",
       "code": [
         {
@@ -5050,7 +5050,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "is the rules without ANTHROPIC_API_KEY, and the LLM is never called"
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -5062,19 +5062,19 @@
       "id": "npc-brain-secrets",
       "section": "npc",
       "source": "docs/npc-trader.md",
-      "quote": "a failed call logs only what failed (a timeout, an HTTP status), never the prompt or the key.",
+      "quote": "a failed call logs only what failed (a timeout, an HTTP status), never the prompt, the answer or the key.",
       "status": "proven by test",
       "code": [
         {
           "path": "apps/wgp/src/server/npc/brain.ts",
-          "anchor": "export function npcBrainKey("
+          "anchor": "export function npcBrainConfig("
         }
       ],
       "tests": [
         {
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/brain.test.ts",
-          "name": "takes the rules' move on an error or a refusal, and logs neither the prompt nor the key"
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
         },
         {
           "pkg": "app",
@@ -7719,7 +7719,7 @@
     "site-npc": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market/npc",
-      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says which brain picks his moves (brain.mode: claude when the server has ANTHROPIC_API_KEY, rules otherwise).",
+      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says which brain picks his moves (brain.mode: llm, with the model, when the server has LLM_API_KEY; rules otherwise).",
       "expect": [
         {
           "path": "mode",
@@ -7759,7 +7759,7 @@
         {
           "path": "brain.mode",
           "op": "anyMatch",
-          "value": "^(claude|rules)$"
+          "value": "^(llm|rules)$"
         }
       ],
       "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md. If brain.mode is missing, production runs a build from before the brain (feat/npc-agent)."

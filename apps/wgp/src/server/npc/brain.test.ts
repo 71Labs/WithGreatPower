@@ -1,21 +1,20 @@
 /**
- * Sandwich Man's brain on a fake chain and a fake Anthropic client (no request ever leaves
- * the process): Claude picks among the legal moves his rules allow or passes; anything
- * else, a timeout, an error, a refusal or a missing key, and the rules pick. At most
- * NPC_BRAIN.maxCallsPerDay calls a UTC day.
+ * Sandwich Man's brain on a fake chain and a fake LLM endpoint (a `fetch` the test passes;
+ * no request ever leaves the process): Kimi K3 picks among the legal moves his rules allow
+ * or passes; anything else, a timeout, an error, a cut-off answer or a missing key, and the
+ * rules pick. At most NPC_BRAIN.maxCallsPerDay calls a UTC day.
  */
-import type Anthropic from "@anthropic-ai/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_PARAMS, seededPools } from "@/lib/market/config";
 import type { Listing } from "@/lib/market/engine";
-import { acceptPick, brainPrompt, cleanReason, NPC_BRAIN, PICK_SCHEMA } from "@/lib/market/npc-brain";
+import { acceptPick, brainPrompt, cleanReason, NPC_BRAIN } from "@/lib/market/npc-brain";
 import { NPC_RULES, type NpcAction } from "@/lib/market/npc-rules";
 
 import type { Db } from "../db/client";
 import { freshDb } from "../db/test-helpers";
 import type { ChainMarket, ChainWallet } from "../market/chain";
-import { anthropicCreate, chooseMove, npcBrainKey, npcBrainMode, type BrainCreate } from "./brain";
+import { chooseMove, npcBrainConfig, npcBrainMode, type BrainConfig, type BrainFetch } from "./brain";
 import { NPC_SIM_ACCOUNT } from "./env";
 import { runNpcTrader, type NpcChain } from "./runner";
 import { readNpcState } from "./store";
@@ -27,14 +26,15 @@ const NOW = new Date("2026-11-12T12:00:00Z");
 const at = (seconds: number) => new Date(NOW.getTime() + seconds * 1_000);
 const KEY = `ed25519:${"1".repeat(60)}` as const;
 const NPC = { accountId: "sandwich.wgpnear.near", privateKey: KEY };
-const API_KEY = "sk-ant-test-not-a-real-key";
+const API_KEY = "sk-test-not-a-real-key";
+const LLM: BrainConfig = { apiKey: API_KEY, model: "kimi-k3", url: "https://api.moonshot.ai/v1/chat/completions" };
 
 let db: Db;
 
 beforeEach(async () => {
   db = await freshDb();
   // Whatever the shell running the tests holds, these tests decide what the brain sees.
-  vi.stubEnv("ANTHROPIC_API_KEY", "");
+  vi.stubEnv("LLM_API_KEY", "");
   return () => vi.unstubAllEnvs();
 });
 
@@ -71,33 +71,42 @@ function fakeChain(listings: Listing[]) {
   return { chain, sent, add: (l: Listing) => void open.push(l) };
 }
 
-const message = (text: string, stop: Anthropic.Message["stop_reason"] = "end_turn") =>
-  ({ id: "msg_test", type: "message", role: "assistant", model: NPC_BRAIN.model, content: [{ type: "text", text, citations: null }], stop_reason: stop, stop_sequence: null, usage: { input_tokens: 600, output_tokens: 40 } }) as unknown as Anthropic.Message;
+/** A chat completion as Moonshot answers it: the model reasons first (reasoning_content), then the JSON. */
+const completion = (content: string, finish = "stop") =>
+  new Response(JSON.stringify({ id: "cmpl-test", model: "kimi-k3", choices: [{ index: 0, finish_reason: finish, message: { role: "assistant", content, reasoning_content: "SECRET-REASONING should never surface" } }], usage: { prompt_tokens: 600, completion_tokens: 260 } }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 
-/** A fake client that answers `answer` and records every request it was given. */
-function fakeClaude(answer: string | ((n: number) => string)) {
-  const calls: { body: Anthropic.MessageCreateParamsNonStreaming; options: { timeout: number; maxRetries: number } }[] = [];
-  const create: BrainCreate = async (body, options) => {
-    calls.push({ body, options });
-    return message(typeof answer === "string" ? answer : answer(calls.length));
+/** A fake endpoint that answers `answer` and records every request it was given. */
+function fakeLlm(answer: string | (() => Response)) {
+  const calls: { url: string; headers: Record<string, string>; body: { model: string; max_tokens: number; response_format: unknown; messages: { role: string; content: string }[] } }[] = [];
+  const fetch: BrainFetch = async (url, init) => {
+    calls.push({ url, headers: init.headers, body: JSON.parse(init.body) });
+    return typeof answer === "string" ? completion(answer) : answer();
   };
-  return { create, calls };
+  return { fetch, calls };
 }
 
-const pick = (id: string, reason = "Second loaf, same bread. I was here first.") => JSON.stringify({ pick: id, reason });
+const pick = (id: number | string, reason = "Second loaf, same bread. I was here first.") => JSON.stringify({ pick: id, reason });
 
 describe("which brain", () => {
-  it("is the rules without ANTHROPIC_API_KEY, and the LLM is never called", async () => {
-    expect(npcBrainKey({})).toBeNull();
-    expect(npcBrainKey({ ANTHROPIC_API_KEY: "  " })).toBeNull();
-    expect(anthropicCreate({})).toBeNull();
-    expect(npcBrainMode(true, {})).toBe("rules");
-    expect(npcBrainMode(true, { ANTHROPIC_API_KEY: API_KEY })).toBe("claude");
+  it("is the rules without LLM_API_KEY, and the LLM is never called", async () => {
+    expect(npcBrainConfig({})).toBeNull();
+    expect(npcBrainConfig({ LLM_API_KEY: "  " })).toBeNull();
+    expect(npcBrainConfig({ LLM_API_KEY: API_KEY })).toEqual(LLM);
+    expect(npcBrainConfig({ LLM_API_KEY: API_KEY, LLM_MODEL: "kimi-k3.1-pro", LLM_BASE_URL: "https://api.moonshot.ai/v1/" })).toEqual({ ...LLM, model: "kimi-k3.1-pro" });
+    // Only https, never a plain-http endpoint that would carry the key in the clear.
+    expect(npcBrainConfig({ LLM_API_KEY: API_KEY, LLM_BASE_URL: "http://example.com/v1" })).toBeNull();
+    expect(npcBrainMode(true, {})).toEqual({ mode: "rules", model: null });
+    expect(npcBrainMode(true, { LLM_API_KEY: API_KEY })).toEqual({ mode: "llm", model: "kimi-k3" });
     // The simulated market always runs on the rules.
-    expect(npcBrainMode(false, { ANTHROPIC_API_KEY: API_KEY })).toBe("rules");
+    expect(npcBrainMode(false, { LLM_API_KEY: API_KEY })).toEqual({ mode: "rules", model: null });
 
     const { chain, sent } = fakeChain([listing(7, 13)]);
-    const report = await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain });
+    const llm = fakeLlm(pick(1));
+    const report = await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brainFetch: llm.fetch });
+    expect(llm.calls).toHaveLength(0);
     expect(report).toMatchObject({ ran: true, brain: "rules", fallback: "no_key" });
     expect(report.event).toMatchObject({ kind: "fill", brain: "rules", reason: "Gwei pays 22. Lunch money." });
     expect(sent).toHaveLength(1);
@@ -108,59 +117,59 @@ describe("which brain", () => {
   });
 });
 
-describe("Claude picks", () => {
+describe("Kimi K3 picks", () => {
   it("one of the legal moves, and writes the reason; the move and its numbers are the rules' own", async () => {
     const { chain, sent } = fakeChain([listing(7, 13), listing(8, 14)]);
-    const claude = fakeClaude(pick("2"));
-    const report = await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: claude.create });
+    const llm = fakeLlm(pick(2));
+    const report = await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: LLM, brainFetch: llm.fetch });
 
     // The second legal move, not the rules' first.
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ kind: "fill", listingId: 8, price: 14, amount: 2 });
-    expect(report).toMatchObject({ brain: "claude", fallback: null });
-    expect(report.event).toMatchObject({ kind: "fill", brain: "claude", bits: 14, text: "Bought 2 × Crumbs from azalleaxyz’s listing at 14 Bits", reason: "Second loaf, same bread. I was here first." });
+    expect(report).toMatchObject({ brain: "kimi-k3", fallback: null });
+    expect(report.event).toMatchObject({ kind: "fill", brain: "kimi-k3", bits: 14, text: "Bought 2 × Crumbs from azalleaxyz’s listing at 14 Bits", reason: "Second loaf, same bread. I was here first." });
+    // The model's reasoning is never kept.
+    expect(JSON.stringify(report)).not.toContain("SECRET-REASONING");
 
-    // One structured, short, bounded request with the legal moves and a pass.
-    expect(claude.calls).toHaveLength(1);
-    const { body, options } = claude.calls[0]!;
-    expect(body.model).toBe("claude-haiku-5-5");
-    expect(body.output_config?.format).toEqual({ type: "json_schema", schema: PICK_SCHEMA });
-    expect(body.max_tokens).toBeLessThanOrEqual(1_024);
-    expect(options).toMatchObject({ maxRetries: 0 });
-    expect(options.timeout).toBeLessThanOrEqual(8_000);
-    const turn = String(body.messages[0]!.content);
-    expect(turn).toContain('id "1" (rule 2, fill): Bought 2 × Crumbs from azalleaxyz’s listing at 13 Bits');
-    expect(turn).toContain('id "2" (rule 2, fill): Bought 2 × Crumbs from azalleaxyz’s listing at 14 Bits');
-    expect(turn).toContain('id "pass"');
-    // No secret ever goes into the request.
-    const whole = JSON.stringify(body);
-    expect(whole).not.toContain(KEY);
-    expect(whole).not.toContain(API_KEY);
+    // One JSON-mode request, bounded, with the legal moves and a pass.
+    expect(llm.calls).toHaveLength(1);
+    const { url, headers, body } = llm.calls[0]!;
+    expect(url).toBe("https://api.moonshot.ai/v1/chat/completions");
+    expect(headers.authorization).toBe(`Bearer ${API_KEY}`);
+    expect(body).toMatchObject({ model: "kimi-k3", max_tokens: 600, response_format: { type: "json_object" } });
+    const turn = body.messages.find((m) => m.role === "user")!.content;
+    expect(turn).toContain("- id 1 (rule 2, fill): Bought 2 × Crumbs from azalleaxyz’s listing at 13 Bits");
+    expect(turn).toContain("- id 2 (rule 2, fill): Bought 2 × Crumbs from azalleaxyz’s listing at 14 Bits");
+    expect(turn).toContain('- "pass": do nothing this turn.');
+    // No secret goes into the request body: the key travels only in the authorization header.
+    expect(JSON.stringify(body)).not.toContain(KEY);
+    expect(JSON.stringify(body)).not.toContain(API_KEY);
 
     const state = await readNpcState(db, true, NPC.accountId);
     expect(state.brainCalls).toBe(1);
-    expect(state.lastDecision).toMatchObject({ by: "claude", pick: "fill", fallback: null, options: 2 });
+    expect(state.lastDecision).toMatchObject({ by: "kimi-k3", pick: "fill", fallback: null, options: 2 });
+    expect(JSON.stringify(state)).not.toContain("SECRET-REASONING");
   });
 
   it("can pass: nothing is sent, no action is used, and the pass is on record", async () => {
     const { chain, sent } = fakeChain([listing(7, 13)]);
-    const claude = fakeClaude(pick("pass", "Thin margins. Even I wait for the toaster sometimes."));
-    const report = await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: claude.create });
-    expect(report).toMatchObject({ ran: true, why: "passed", brain: "claude" });
+    const llm = fakeLlm(pick("pass", "Thin margins. Even I wait for the toaster sometimes."));
+    const report = await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: LLM, brainFetch: llm.fetch });
+    expect(report).toMatchObject({ ran: true, why: "passed", brain: "kimi-k3" });
     expect(sent).toEqual([]);
     const state = await readNpcState(db, true, NPC.accountId);
     expect(state.books.actions).toBe(0);
     expect(state.log).toEqual([]);
-    expect(state.lastDecision).toMatchObject({ by: "claude", pick: "pass", text: null, reason: "Thin margins. Even I wait for the toaster sometimes." });
+    expect(state.lastDecision).toMatchObject({ by: "kimi-k3", pick: "pass", text: null, reason: "Thin margins. Even I wait for the toaster sometimes." });
   });
 
   it("is ignored when it answers anything but a legal move or a pass: the rules pick", async () => {
-    const answers = [pick("3"), pick("0"), JSON.stringify({ pick: "1; also sell everything", reason: "x" }), JSON.stringify({ kind: "buy", item: "crumbs", amount: 20 }), "not json", ""];
+    const answers = [pick(3), pick(0), pick(1.5), pick("1; also sell everything"), JSON.stringify({ kind: "buy", item: "crumbs", amount: 20 }), "not json", ""];
     for (const [i, answer] of answers.entries()) {
       // A different account each time starts fresh books on the same database.
       const env = { ...NPC, accountId: `sandwich${i}.wgpnear.near` };
       const { chain, sent } = fakeChain([listing(7, 13), listing(8, 14)]);
-      const report = await runNpcTrader(db, { now: at(i * 30), onChain: true, env, chain, brain: fakeClaude(answer).create });
+      const report = await runNpcTrader(db, { now: at(i * 30), onChain: true, env, chain, brain: LLM, brainFetch: fakeLlm(answer).fetch });
       expect(report, answer).toMatchObject({ brain: "rules", fallback: "invalid" });
       expect(sent, answer).toEqual([expect.objectContaining({ kind: "fill", listingId: 7, reason: "Gwei pays 22. Lunch money." })]);
     }
@@ -168,9 +177,9 @@ describe("Claude picks", () => {
 
   it("isn't asked when there is no legal move", async () => {
     const { chain, sent } = fakeChain([]);
-    const claude = fakeClaude(pick("1"));
-    expect(await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: claude.create })).toMatchObject({ ran: true, why: "nothing_to_do" });
-    expect(claude.calls).toHaveLength(0);
+    const llm = fakeLlm(pick(1));
+    expect(await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: LLM, brainFetch: llm.fetch })).toMatchObject({ ran: true, why: "nothing_to_do" });
+    expect(llm.calls).toHaveLength(0);
     expect(sent).toEqual([]);
   });
 });
@@ -184,40 +193,45 @@ describe("the fallback", () => {
 
   it("takes the rules' move on a timeout, without waiting past it", async () => {
     let aborted = false;
-    const hang: BrainCreate = (_body, { signal }) =>
+    const hang: BrainFetch = (_url, { signal }) =>
       new Promise((_, reject) => {
         signal.addEventListener("abort", () => {
           aborted = true;
-          reject(new Error("aborted"));
+          reject(new DOMException("aborted", "AbortError"));
         });
       });
     const started = Date.now();
-    const choice = await chooseMove(input, { create: hang, callsLeft: 10, timeoutMs: 50 });
+    const choice = await chooseMove(input, { config: LLM, callsLeft: 10, fetch: hang, timeoutMs: 50 });
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(choice).toMatchObject({ by: "rules", fallback: "timeout", called: true, action: options[0] });
     expect(aborted).toBe(true);
-    expect(NPC_BRAIN.timeoutMs).toBeLessThanOrEqual(8_000);
+    expect(NPC_BRAIN.timeoutMs).toBe(20_000);
   });
 
-  it("takes the rules' move on an error or a refusal, and logs neither the prompt nor the key", async () => {
+  it("takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    const failing: BrainCreate = async () => {
+    const failing: BrainFetch = async () => {
       throw new Error(`boom ${API_KEY}`);
     };
-    expect(await chooseMove(input, { create: failing, callsLeft: 10 })).toMatchObject({ by: "rules", fallback: "error", called: true, action: options[0] });
-    const refusing: BrainCreate = async () => message("", "refusal");
-    expect(await chooseMove(input, { create: refusing, callsLeft: 10 })).toMatchObject({ by: "rules", fallback: "refusal", action: options[0] });
+    expect(await chooseMove(input, { config: LLM, callsLeft: 10, fetch: failing })).toMatchObject({ by: "rules", fallback: "error", called: true, action: options[0] });
+    const unauthorized: BrainFetch = async () => new Response(JSON.stringify({ error: { message: `bad key ${API_KEY}` } }), { status: 401 });
+    expect(await chooseMove(input, { config: LLM, callsLeft: 10, fetch: unauthorized })).toMatchObject({ by: "rules", fallback: "error", action: options[0] });
+    // Reasoning ran out of tokens before the JSON finished: finish_reason "length".
+    const cutOff: BrainFetch = async () => completion('{"pick": 2, "reas', "length");
+    expect(await chooseMove(input, { config: LLM, callsLeft: 10, fetch: cutOff })).toMatchObject({ by: "rules", fallback: "invalid", action: options[0] });
     const text = logged.mock.calls.flat().join(" ");
+    expect(text).toContain("HTTP 401");
     expect(text).not.toContain(API_KEY);
     expect(text).not.toContain("Bought 2");
+    expect(text).not.toContain("SECRET-REASONING");
     logged.mockRestore();
   });
 
   it("takes the rules' move without a key or once the day's calls are used, and makes no call", async () => {
-    const claude = fakeClaude(pick("2"));
-    expect(await chooseMove(input, { create: null, callsLeft: 10 })).toMatchObject({ by: "rules", fallback: "no_key", called: false });
-    expect(await chooseMove(input, { create: claude.create, callsLeft: 0 })).toMatchObject({ by: "rules", fallback: "cap", called: false });
-    expect(claude.calls).toHaveLength(0);
+    const llm = fakeLlm(pick(2));
+    expect(await chooseMove(input, { config: null, callsLeft: 10, fetch: llm.fetch })).toMatchObject({ by: "rules", fallback: "no_key", called: false });
+    expect(await chooseMove(input, { config: LLM, callsLeft: 0, fetch: llm.fetch })).toMatchObject({ by: "rules", fallback: "cap", called: false });
+    expect(llm.calls).toHaveLength(0);
   });
 });
 
@@ -225,10 +239,10 @@ describe("cost", () => {
   it("is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that", async () => {
     expect(NPC_BRAIN.maxCallsPerDay).toBeLessThanOrEqual(10);
     const { chain, sent, add } = fakeChain([listing(7, 13)]);
-    // Claude passes every time: passes use no action, so only the call cap stops the calls.
-    const claude = fakeClaude(pick("pass", "Not today."));
-    for (let i = 0; i < NPC_BRAIN.maxCallsPerDay + 5; i++) await runNpcTrader(db, { now: at(i * 30), onChain: true, env: NPC, chain, brain: claude.create });
-    expect(claude.calls).toHaveLength(NPC_BRAIN.maxCallsPerDay);
+    // The LLM passes every time: passes use no action, so only the call cap stops the calls.
+    const llm = fakeLlm(pick("pass", "Not today."));
+    for (let i = 0; i < NPC_BRAIN.maxCallsPerDay + 5; i++) await runNpcTrader(db, { now: at(i * 30), onChain: true, env: NPC, chain, brain: LLM, brainFetch: llm.fetch });
+    expect(llm.calls).toHaveLength(NPC_BRAIN.maxCallsPerDay);
     // The first look past the cap was the rules': they took the listing, and every move since is theirs.
     expect(sent[0]).toMatchObject({ kind: "fill", listingId: 7 });
     const state = await readNpcState(db, true, NPC.accountId);
@@ -239,8 +253,8 @@ describe("cost", () => {
 
     // A new UTC day: the calls start again.
     add(listing(9, 13));
-    await runNpcTrader(db, { now: new Date("2026-11-13T00:01:00Z"), onChain: true, env: NPC, chain, brain: claude.create });
-    expect(claude.calls).toHaveLength(NPC_BRAIN.maxCallsPerDay + 1);
+    await runNpcTrader(db, { now: new Date("2026-11-13T00:01:00Z"), onChain: true, env: NPC, chain, brain: LLM, brainFetch: llm.fetch });
+    expect(llm.calls).toHaveLength(NPC_BRAIN.maxCallsPerDay + 1);
     expect(NPC_RULES.maxActionsPerDay).toBe(10);
   });
 });
@@ -249,13 +263,15 @@ describe("what the LLM's answer may change", () => {
   const options: NpcAction[] = [{ kind: "sell", rule: 3, item: "crumbs", amount: 2, minBits: 21, expectBits: 22, text: "Sold 2 × Crumbs to Gwei for 22 Bits", reason: "Cost me 13." }];
 
   it("only the reason: the move is the one shown, number for number", () => {
-    const got = acceptPick(options, JSON.stringify({ pick: "1", reason: "Out before you. As always." }));
+    const got = acceptPick(options, JSON.stringify({ pick: 1, reason: "Out before you. As always." }));
     expect(got).toEqual({ ok: true, action: { ...options[0], reason: "Out before you. As always." }, reason: "Out before you. As always." });
-    expect(acceptPick(options, JSON.stringify({ pick: "2", reason: "x" }))).toEqual({ ok: false });
-    expect(acceptPick(options, JSON.stringify({ pick: 1, reason: "x" }))).toEqual({ ok: false });
+    expect(acceptPick(options, JSON.stringify({ pick: "1", reason: "x" }))).toMatchObject({ ok: true });
+    expect(acceptPick(options, JSON.stringify({ pick: 2, reason: "x" }))).toEqual({ ok: false });
+    expect(acceptPick(options, JSON.stringify({ pick: true, reason: "x" }))).toEqual({ ok: false });
+    expect(acceptPick(options, JSON.stringify({ pick: 1 }))).toEqual({ ok: false });
     expect(acceptPick(options, "{")).toEqual({ ok: false });
     // An empty reason keeps the rules' own.
-    expect(acceptPick(options, JSON.stringify({ pick: "1", reason: "   " }))).toMatchObject({ ok: true, reason: "Cost me 13." });
+    expect(acceptPick(options, JSON.stringify({ pick: 1, reason: "   " }))).toMatchObject({ ok: true, reason: "Cost me 13." });
   });
 
   it("is cleaned before it is shown: one line, no links or handles, at most 160 characters", () => {
@@ -275,6 +291,7 @@ describe("what the LLM's answer may change", () => {
 
 describe("the view", () => {
   it("says which brain picks and, on each ledger line, which one did", async () => {
+    vi.stubEnv("LLM_API_KEY", API_KEY);
     const view = await buildNpcView(NOW);
     // The simulated market runs on the rules, key or not.
     expect(view.mode).toBe("simulated");

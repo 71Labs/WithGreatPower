@@ -146,12 +146,13 @@ describe("what the docs say about themselves", () => {
     const readme = plainDoc("README.md");
     expect(readme).toContain("Live on mainnet since Nov 13, 2026: he trades from his own account, sandwich.wgpnear.near.");
     expect(readme).toContain("An LLM picks his move; his rules fence it in.");
-    expect(readme).toContain("until the owner sets the key on the server, the live mode is rules.");
+    expect(readme).toContain("Kimi K3 (kimi-k3, Moonshot's API) picks one and writes his reason in character");
+    expect(readme).toContain("until the owner sets LLM_API_KEY in production, the live mode is rules.");
     expect(readme).toContain("Gwei is rule-based. Sandwich Man's moves are picked by an LLM among the moves his rules allow, or by the rules alone (next row).");
     const doc = plainDoc("docs/npc-trader.md");
     expect(doc).toContain("Status: live on NEAR mainnet since Nov 13, 2026.");
     expect(doc).toContain("The rules are the guardrail and the fallback: the LLM can choose a legal move or pass, and nothing else.");
-    expect(plainDoc("docs/ARCHITECTURE.md")).toContain("has traded on mainnet from his own account, sandwich.wgpnear.near, since Nov 13; an LLM picks among the moves his rules allow when the server has its Anthropic key, and the rules pick otherwise");
+    expect(plainDoc("docs/ARCHITECTURE.md")).toContain("has traded on mainnet from his own account, sandwich.wgpnear.near, since Nov 13; an LLM picks among the moves his rules allow when the server has its LLM key (Kimi K3, Moonshot), and the rules pick otherwise");
     // Nothing still says he is rule-based only, or that no LLM is involved.
     for (const name of TOP_DOCS.filter((d) => d !== "docs/EVIDENCE.md")) {
       expect(plainDoc(name), name).not.toMatch(/He is rule-based, not an LLM|no LLM and no other AI decides|Both are rule-based, not AI agents|he is rule-based, not an AI agent|rule-based trader, not a player and not an AI agent/);
