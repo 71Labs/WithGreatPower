@@ -152,6 +152,43 @@ describe("runs", () => {
       expect(different.code).toBe("already_submitted");
     });
 
+    it("pays the night through the wallet taper, reading the hero's Bits, and says why it paid less", async () => {
+      const run = await startRun(db, { playerId, now: T0 });
+      const asked: { playerId: string; accountId: string }[] = [];
+      // 4,200 points is 47 Bits; holding 275, halfway between 150 and 400, pays 5 + half of the other 42.
+      const held = async (_: Db, player: { playerId: string; accountId: string }) => (asked.push(player), 275);
+      const out = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(240), held });
+      expect(asked).toEqual([{ playerId, accountId: "peter.wgp.testnet" }]);
+      expect(out).toMatchObject({ status: "verified", score: 4200, bits: 26, taper: { full: 47, held: 275 } });
+      // The score, the board and the save are the verified run's, whatever the taper paid.
+      const [row] = await db.select().from(runs).where(eq(runs.id, run.runId));
+      expect(row).toMatchObject({ status: "verified", verifiedScore: 4200 });
+      expect((await db.select().from(leaderboardEntries).where(eq(leaderboardEntries.playerId, playerId))).every((b) => b.bestScore === 4200)).toBe(true);
+      const [op] = await db.select().from(chainOps);
+      expect(op.payload).toMatchObject({ items: [{ tokenId: "item:bits", amount: 26 }, { tokenId: "item:fee-bomb", amount: 2 }, { tokenId: "item:goblin-glider", amount: 1 }], taper: { full: 47, held: 275 } });
+      // A resubmit answers the same number and the same reason, from the queued mint.
+      const again = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(250), held: async () => 0 });
+      expect(again).toMatchObject({ status: "verified", bits: 26, taper: { full: 47, held: 275 }, idempotent: true });
+    });
+
+    it("pays the whole night, with no reason attached, under the taper's lower mark or when the balance can't be read", async () => {
+      for (const balance of [150, null]) {
+        const run = await startRun(db, { playerId, abandon: true, now: T0 });
+        const out = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(240), held: async () => balance });
+        expect(out).toMatchObject({ status: "verified", bits: 47 });
+        expect(out).not.toHaveProperty("taper");
+        const { save, rev: r } = await ensureSave(db, playerId);
+        await writeSave(db, playerId, { ...save, nightDone: false }, r);
+        await db.delete(chainOps);
+      }
+    });
+
+    it("never pays less than the 5 for showing up, however many Bits the hero holds", async () => {
+      const run = await startRun(db, { playerId, now: T0 });
+      const out = await submitRun(db, { playerId, runId: run.runId, log, clientHash: logHash(log), now: later(240), held: async () => 1_000_000 });
+      expect(out).toMatchObject({ status: "verified", bits: 5, taper: { full: 47, held: 1_000_000 } });
+    });
+
     it.each([
       ["hash_mismatch", {}, "not-the-hash", 240],
       ["too_short", { ticks: 60 * 19 }, undefined, 240],

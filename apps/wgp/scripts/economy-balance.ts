@@ -29,6 +29,7 @@ import {
   RECOMMENDED,
   RECOMMENDED_TAPER,
   RECOMMENDED_WITH_TAPER,
+  TAPER_ONLY,
   SEASON,
   SIXTY,
   economyConfig,
@@ -94,7 +95,7 @@ const line = (label: string, m: Measure) => [
 function audit(): { runs: number; days: number } {
   let days = 0;
   let runs = 0;
-  for (const setting of [MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES]) {
+  for (const setting of [MAINNET, TAPER_ONLY, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES]) {
     for (const seed of SEEDS) {
       const e = play(economyConfig(setting, { ...SEASON, seed, lifespan: seed % 2 ? undefined : 8 }));
       const till0 = e.history[0]!.till;
@@ -260,7 +261,7 @@ async function main() {
     }
   }
 
-  const settings = [MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES];
+  const settings = [MAINNET, TAPER_ONLY, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES];
   const tables: Record<string, Record<string, Measure>> = {};
   const runs: [string, string, { days: number; bots: number; lifespan?: number }][] = [
     ["season", "21 days, 60 heroes (a season)", SEASON],
@@ -323,7 +324,7 @@ async function main() {
     const out: Record<string, Record<string, Measure>> = {};
     for (const [id, title, run] of runs.slice(0, 2)) {
       out[id] = {};
-      for (const s of [MAINNET, RECOMMENDED]) {
+      for (const s of [MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER]) {
         const without = tables[id]![s.id]!;
         const withNpc = measured(s, { ...run, npc: true }, SEEDS);
         out[id]![s.id] = withNpc;
@@ -334,8 +335,12 @@ async function main() {
     const v = verdict(out.season!.recommended!, out.sixty!.recommended!);
     console.log(`  ${v.ok ? "PASS" : "FAIL"}  Recommended + Sandwich Man   burn share ${v.burnShare ? "ok" : "no"} · first suit ${v.firstSuit ? "ok" : "no"} · vendor ${v.vendor ? "ok" : "no"}`);
     // What /lab/economy shows for its default seed: the lab always runs with him.
-    const lab = Object.fromEntries([MAINNET, RECOMMENDED].map((s) => [s.id, measure(s, { ...SEASON, seed: 2026, npc: true })]));
-    console.log(`  The lab's seed 2026 with him: mainnet today ${int(lab.mainnet!.minted.total)} earned / ${int(lab.mainnet!.burned.total)} burned; recommended ${int(lab.recommended!.minted.total)} earned / ${int(lab.recommended!.burned.total)} burned.`);
+    const lab = Object.fromEntries([MAINNET, TAPER_ONLY, RECOMMENDED, RECOMMENDED_WITH_TAPER].map((s) => [s.id, measure(s, { ...SEASON, seed: 2026, npc: true })]));
+    // The lab's own counters: "earned" there is everything minted, his 300-Bit seed included.
+    for (const s of [MAINNET, TAPER_ONLY, RECOMMENDED, RECOMMENDED_WITH_TAPER]) {
+      const last = play(economyConfig(s, { ...SEASON, seed: 2026, npc: true })).history.at(-1)!;
+      console.log(`  The lab's seed 2026 with him, ${s.label}: ${int(last.minted)} earned / ${int(last.burned)} burned (${pct(last.burned / last.minted)}), ${last.crafted} suits.`);
+    }
     const labDrain = measureEconomy("drain", play(economyConfig(MAINNET, { ...DRAIN, seed: 2026, npc: true })));
     const cells = DRAIN.days * Object.keys(ITEMS).length;
     console.log(`  The lab's Drain Gwei, seed 2026 with him: ${Math.round(labDrain.soldOut * cells)} item-days sold out and ${Math.round(labDrain.broke * cells)} unable to buy, of ${cells}.`);

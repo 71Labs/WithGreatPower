@@ -69,6 +69,14 @@ export const DEFAULT_PARAMS: MarketParams = {
   craftBits: 0,
 };
 
+/**
+ * The market settings docs/ECONOMY.md proposes: a 10% gas fee (the contract's cap) and 250
+ * Bits burned per recipe suit, everything else as it is. They are live once the owner sends
+ * `set_market_params` with them (`scripts/near/market-args.ts --proposed`); the app reads
+ * the live values either way, so nothing here switches them on.
+ */
+export const PROPOSED_PARAMS: MarketParams = { ...DEFAULT_PARAMS, feeBps: 1_000, craftBits: 250 };
+
 /** Starting spot price, curve depth and stock by rarity. */
 export const CURVES: Record<Rarity, { price: number; virtualItems: number; stock: number }> = {
   common: { price: 12, virtualItems: 40, stock: 40 },

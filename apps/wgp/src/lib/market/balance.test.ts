@@ -2,13 +2,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { ALTERNATIVES, BAND, DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, SIXTY, economyConfig, gini, investStory, measure, measureEconomy, measured, median, play, poolConfigsFor, vendorLimits, verdict, type Setting } from "./balance";
+import { ALTERNATIVES, BAND, DRAIN, INVEST_SHOWCASE, MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, SEASON, SIXTY, TAPER_ONLY, economyConfig, gini, investStory, measure, measureEconomy, measured, median, play, poolConfigsFor, vendorLimits, verdict, type Setting } from "./balance";
 import { LAB_INVESTORS } from "./bots";
-import { defaultPoolConfigs, seededPools } from "./config";
+import { DEFAULT_PARAMS, PROPOSED_PARAMS, defaultPoolConfigs, seededPools } from "./config";
 import { sellQuote, spotMilli } from "./math";
+import { NIGHT_TAPER } from "./rewards";
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
-const SETTINGS: Setting[] = [MAINNET, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES];
+const SETTINGS: Setting[] = [MAINNET, TAPER_ONLY, RECOMMENDED, RECOMMENDED_WITH_TAPER, ...ALTERNATIVES];
 
 describe("the economy's accounting", () => {
   it("balances to the Bit every day, for every setting and seed: seeded till + minted − burned = supply", () => {
@@ -91,6 +92,28 @@ describe("the recommended settings", () => {
     expect(taper.sixty.minted.total).toBeLessThan(flat.sixty.minted.total * 0.6);
   });
 
+  it("are the proposal: the owner's two values (PROPOSED_PARAMS) and the taper the server pays with (NIGHT_TAPER)", () => {
+    expect(RECOMMENDED).toMatchObject({ feeBps: PROPOSED_PARAMS.feeBps, craftBits: PROPOSED_PARAMS.craftBits, taper: null });
+    expect(RECOMMENDED_WITH_TAPER).toMatchObject({ feeBps: 1_000, craftBits: 250, taper: NIGHT_TAPER });
+    expect(TAPER_ONLY).toMatchObject({ feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits, taper: NIGHT_TAPER });
+    // Only fee_bps and craft_bits differ from what the contract holds; the cap is 1000.
+    expect({ ...PROPOSED_PARAMS, feeBps: DEFAULT_PARAMS.feeBps, craftBits: DEFAULT_PARAMS.craftBits }).toEqual(DEFAULT_PARAMS);
+    expect(PROPOSED_PARAMS.feeBps).toBeLessThanOrEqual(1_000);
+  });
+
+  it("burn about half of what a season earns, and close most of the gap (docs/ECONOMY.md)", () => {
+    const season = measured(RECOMMENDED_WITH_TAPER, SEASON, SEEDS);
+    const before = measured(MAINNET, SEASON, SEEDS);
+    expect(season.burnShare).toBeGreaterThan(0.45);
+    expect(season.burnShare).toBeLessThan(1);
+    // Most of the gap between earned and burned is gone.
+    expect(season.minted.total - season.burned.total).toBeLessThan(0.35 * (before.minted.total - before.burned.total));
+    // The taper alone mints half as much and burns little; the owner's call is what burns.
+    const taperOnly = measured(TAPER_ONLY, SEASON, SEEDS);
+    expect(taperOnly.minted.total).toBeLessThan(0.55 * before.minted.total);
+    expect(taperOnly.burnShare).toBeLessThan(0.1);
+  });
+
   it("are what mainnet's settings miss: today under 5% of a season's Bits are burned", () => {
     const { season, sixty } = judged(MAINNET);
     expect(season.burnShare).toBeLessThan(0.05);
@@ -149,6 +172,18 @@ describe("Sandwich Man in the measurements", () => {
     expect(Math.abs(season.burnShare - without.burnShare)).toBeLessThan(0.01);
     expect(season.burned.craft).toBe(without.burned.craft);
     expect(verdict(season, sixty).ok).toBe(true);
+  });
+});
+
+describe("Sandwich Man and the proposal", () => {
+  it("moves the season's burn share by under a point; over 60 days with him Gwei is unable to buy on just over 10% of item-days (docs/ECONOMY.md)", () => {
+    const without = measured(RECOMMENDED_WITH_TAPER, SEASON, SEEDS);
+    const season = measured(RECOMMENDED_WITH_TAPER, { ...SEASON, npc: true }, SEEDS);
+    const sixty = measured(RECOMMENDED_WITH_TAPER, { ...SIXTY, npc: true }, SEEDS);
+    expect(Math.abs(season.burnShare - without.burnShare)).toBeLessThan(0.01);
+    expect(season.burned.craft).toBe(without.burned.craft);
+    expect(sixty.soldOut + sixty.broke).toBeGreaterThan(BAND.vendorDown);
+    expect(sixty.soldOut + sixty.broke).toBeLessThan(0.11);
   });
 });
 

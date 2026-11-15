@@ -100,15 +100,6 @@ describe("pushes to main don't deploy", () => {
   });
 });
 
-describe("the faucet taper is written and not wired in", () => {
-  it("the ranked submit path pays nightBits, and never calls taperedNightBits", () => {
-    const runs = read("apps/wgp/src/server/db/runs.ts");
-    expect(runs).toMatch(/const bits = nightBits\(/);
-    expect(runs).not.toContain("taperedNightBits");
-    expect(read("apps/wgp/src/lib/market/rewards.ts")).toContain("export function taperedNightBits(");
-  });
-});
-
 /**
  * Sandwich Man has traded on mainnet since Nov 13, 2026, because the owner set his account and
  * key in production. The repository still turns nothing on by itself, and the chain checks

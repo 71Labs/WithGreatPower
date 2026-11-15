@@ -1,6 +1,7 @@
 /**
  * POST /api/runs/:id/submit { log: base64, clientHash } (body ≤ ~89 KB, log ≤ 64 KB)
- *   200 { status: "verified", runId, score, ticks, ranked, digest, save, rev, idempotent }
+ *   200 { status: "verified", runId, score, ticks, ranked, digest, bits, taper?, save, rev, idempotent }
+ *       (`taper`: { full, held } when the wallet taper paid less than the whole night)
  *   422 { error: "run_rejected", status: "rejected", reason, runId, idempotent }
  *   409 { error: "rev_conflict", … } when the save moved on during the run
  *   410 run_expired · 409 already_submitted (a different log for a finished run)

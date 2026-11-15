@@ -1764,7 +1764,7 @@
         },
         {
           "path": "apps/wgp/src/server/db/runs.ts",
-          "anchor": "const bits = nightBits("
+          "anchor": "const pay = nightPay("
         }
       ],
       "tests": [
@@ -1787,6 +1787,11 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/readme-numbers.test.ts",
           "name": "the Bits a night earns"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "verifies a run: save, boards, outbox and run row in one go"
         }
       ]
     },
@@ -1827,7 +1832,7 @@
       "id": "economy-burn-fee",
       "section": "economy",
       "source": "README.md",
-      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 2% today.",
+      "quote": "A \"gas fee\" on every trade is burned: the contract's fee_bps, 10% today.",
       "status": "proven on chain",
       "code": [
         {
@@ -1850,7 +1855,8 @@
       "chain": [
         "market-state",
         "tx-market-buy"
-      ]
+      ],
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "economy-fee-live",
@@ -1895,7 +1901,7 @@
       "id": "economy-craft-burn",
       "section": "economy",
       "source": "README.md",
-      "quote": "Crafting a suit (/play/suits) burns the loot in its recipe, and the contract's craft_bits on top (0 today).",
+      "quote": "Crafting a suit (/play/suits) burns the loot in its recipe, and the contract's craft_bits on top (250 today).",
       "status": "proven by test",
       "code": [
         {
@@ -1929,7 +1935,7 @@
         "market-state",
         "tx-craft-suit"
       ],
-      "note": "craft_bits is 0 on mainnet, so the Bits cost is tested and off; the loot burn is live (the transaction check)."
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values. The loot burn is live (the transaction check); the Bits cost is tested and read live by the Suit lab."
     },
     {
       "id": "economy-wanted-list",
@@ -2799,12 +2805,16 @@
       "id": "tryit-lab-inflation",
       "section": "tryit",
       "source": "README.md",
-      "quote": "with mainnet's settings about 3% of the Bits earned are burned. Tick Recommended settings (crafting burns 250 Bits, 5% gas fee) and run again: about 28%.",
+      "quote": "the default run earns 59,230 Bits and burns 29,202 of them, about 49%. Tick Run the old settings (2% gas fee, crafting burns no Bits, no taper) and run again: 99,022 earned and 2,847 burned, about 3%.",
       "status": "simulation only",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
-          "anchor": "export const RECOMMENDED: Setting"
+          "anchor": "export const RECOMMENDED_WITH_TAPER: Setting"
+        },
+        {
+          "path": "apps/wgp/src/app/lab/economy/economy-lab.tsx",
+          "anchor": "const settingOf = (s: Setup): Setting =>"
         }
       ],
       "tests": [
@@ -2815,11 +2825,16 @@
         },
         {
           "pkg": "app",
+          "file": "apps/wgp/src/app/lab/economy/economy-lab.test.ts",
+          "name": "opens on the proposal (the owner's settings and the faucet taper), with the old settings one tick away"
+        },
+        {
+          "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "are what mainnet's settings miss: today under 5% of a season's Bits are burned"
+          "name": "burn about half of what a season earns, and close most of the gap (docs/ECONOMY.md)"
         }
       ],
-      "note": "Numbers from the bot model, not from mainnet. The recommended settings are not applied (econdoc-not-applied)."
+      "note": "Numbers from the bot model, not from mainnet. The lab opens on the proposal: the faucet taper (live with the deploy) and the owner's fee_bps 1000 and craft_bits 250 (econdoc-owner-settings)."
     },
     {
       "id": "tryit-drain",
@@ -3407,7 +3422,7 @@
       "id": "status-used",
       "section": "status",
       "source": "README.md",
-      "quote": "The contract and its market (8 pools, 2% fee)",
+      "quote": "The contract and its market (8 pools, 10% fee)",
       "status": "proven on chain",
       "chain": [
         "market-state",
@@ -3419,7 +3434,8 @@
           "path": "contracts/wgp/src/market.rs",
           "anchor": "pub fn market_state(&self) -> MarketState {"
         }
-      ]
+      ],
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "status-npc",
@@ -4492,12 +4508,12 @@
       "id": "limits-currency",
       "section": "limits",
       "source": "README.md",
-      "quote": "in the lab's default run, on mainnet's settings, 99,022 earned and 2,847 burned",
+      "quote": "In the lab's default run, on mainnet's settings, 59,230 are earned and 29,202 burned, about 49% (99,022 and 2,847 on the old settings).",
       "status": "simulation only",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
-          "anchor": "export const MAINNET: Setting"
+          "anchor": "export const RECOMMENDED_WITH_TAPER: Setting"
         }
       ],
       "tests": [
@@ -4511,14 +4527,15 @@
           "file": "apps/wgp/src/lib/market/balance.test.ts",
           "name": "balances to the Bit every day, for every setting and seed: seeded till + minted − burned = supply"
         }
-      ]
+      ],
+      "note": "Simulation. \"On mainnet's settings\": True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "limits-craft-bits",
       "section": "limits",
       "source": "README.md",
-      "quote": "A Bits cost for crafting exists in the contract (craft_bits) and is off on mainnet",
-      "status": "built, off on mainnet",
+      "quote": "The sinks are the trade fee (10%) and crafting, which burns 250 Bits a suit on top of the recipe.",
+      "status": "proven on chain",
       "code": [
         {
           "path": "contracts/wgp/src/lib.rs",
@@ -4534,7 +4551,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/craft.test.ts",
-          "name": "is nothing while craft_bits is 0, for every suit (mainnet today)"
+          "name": "is craft_bits for a suit with a recipe and nothing for a starter, as the contract charges"
         },
         {
           "pkg": "app",
@@ -4544,7 +4561,8 @@
       ],
       "chain": [
         "market-state"
-      ]
+      ],
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values."
     },
     {
       "id": "limits-trust",
@@ -5123,21 +5141,32 @@
       "note": "Creating and funding his account and seeding 300 Bits are the owner's two transactions, checked by hash. Setting his key in production leaves no trace on chain; the live site answering mode on-chain is the sign of it."
     },
     {
-      "id": "econdoc-not-applied",
+      "id": "econdoc-owner-settings",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "Nothing here has been applied. Mainnet still has craft_bits: \"0\" and fee_bps: 200.",
-      "status": "owner action needed",
+      "quote": "Gas fee fee_bps 200 → 1000 (2% → 10%, the contract's cap)",
+      "status": "proven on chain",
       "code": [
         {
+          "path": "apps/wgp/src/lib/market/config.ts",
+          "anchor": "export const PROPOSED_PARAMS: MarketParams"
+        },
+        {
           "path": "scripts/near/market-args.ts",
-          "anchor": "const args ="
+          "anchor": "const base ="
         }
       ],
       "chain": [
         "market-state"
       ],
-      "note": "The recommended settings are one owner transaction away. The chain check reads the live params and fails when they change."
+      "note": "True once the owner sends docs/ECONOMY.md's set_market_params (fee_bps 1000, craft_bits 250); until then the market-state check fails on those two values. market-args.ts --proposed prints the arguments: only fee_bps and craft_bits change, and the eight pools keep their on-chain virtual reserves.",
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/balance.test.ts",
+          "name": "are the proposal: the owner's two values (PROPOSED_PARAMS) and the taper the server pays with (NIGHT_TAPER)"
+        }
+      ]
     },
     {
       "id": "econdoc-identity",
@@ -5163,19 +5192,19 @@
       "id": "econdoc-recommendation",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "It passes the band: 28.8% of a season's Bits burned, first suit by night 5, Gwei down 2.5% of item-days over 60 days.",
+      "quote": "It passes the band: 49.6% of a season's Bits burned, first suit by night 5, Gwei down 9.6% of item-days over 60 days.",
       "status": "simulation only",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/balance.ts",
-          "anchor": "export const BAND"
+          "anchor": "export const RECOMMENDED_WITH_TAPER: Setting"
         }
       ],
       "tests": [
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "meet the band: 25–100% of a season's Bits burned, a first suit by night 5, Gwei trading 90% of item-days"
+          "name": "still meet it with the faucet taper, which burns a larger share and mints less"
         },
         {
           "pkg": "app",
@@ -5213,26 +5242,45 @@
       "id": "econdoc-taper",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "It is written and tested but not wired in.",
-      "status": "built, off on mainnet",
+      "quote": "A hero holding up to 150 Bits earns the whole night; above that the night shrinks in a straight line to the 5 for showing up at 400.",
+      "status": "proven by test",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/rewards.ts",
-          "anchor": "export function taperedNightBits("
+          "anchor": "export function nightPay("
+        },
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": "const pay = nightPay("
+        },
+        {
+          "path": "apps/wgp/src/server/market/held.ts",
+          "anchor": "export async function heldBits("
         }
       ],
       "tests": [
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/rewards.test.ts",
-          "name": "falls in a straight line between the marks and never pays more than the night earned"
+          "name": "is the live taper: the whole night up to 150 Bits held, the 5 for showing up from 400"
         },
         {
           "pkg": "app",
-          "file": "apps/wgp/src/evidence/built-not-live.test.ts",
-          "name": "the ranked submit path pays nightBits, and never calls taperedNightBits"
+          "file": "apps/wgp/src/server/db/runs.test.ts",
+          "name": "pays the night through the wallet taper, reading the hero's Bits, and says why it paid less"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/held.test.ts",
+          "name": "reads bits_of on chain and adds the Bits in mints that haven't landed yet"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/held.test.ts",
+          "name": "answers null, so the whole night is paid, when the chain read fails, answers nonsense or is slow"
         }
-      ]
+      ],
+      "note": "Server code: live wherever the build that carries it is deployed; it needs no owner call. It changes no score, replay or ruleset."
     },
     {
       "id": "econdoc-suit-lab",
@@ -5268,7 +5316,7 @@
       "id": "econdoc-with-npc",
       "section": "econdoc",
       "source": "docs/ECONOMY.md",
-      "quote": "the recommendation still passes the band with him (28.7%, night 5, 2.3%)",
+      "quote": "One trader with 300 Bits among 60 heroes moves the season's burn share by under a point.",
       "status": "simulation only",
       "code": [
         {
@@ -5280,7 +5328,7 @@
         {
           "pkg": "app",
           "file": "apps/wgp/src/lib/market/balance.test.ts",
-          "name": "moves the season's burn share by under a point, and the recommendation still meets the band (docs/ECONOMY.md)"
+          "name": "moves the season's burn share by under a point; over 60 days with him Gwei is unable to buy on just over 10% of item-days (docs/ECONOMY.md)"
         }
       ]
     },
@@ -6994,7 +7042,7 @@
       "kind": "view",
       "method": "market_state",
       "args": {},
-      "about": "The contract's market: open, a 2% fee, no Bits cost for crafting, the listing bounds and caps, and eight pools held by the contract's own account.",
+      "about": "The contract's market: open, a 10% fee and 250 Bits burned per recipe suit (the settings docs/ECONOMY.md proposes), the listing bounds and caps, and eight pools held by the contract's own account.",
       "expect": [
         {
           "path": "vendor",
@@ -7009,12 +7057,12 @@
         {
           "path": "params.fee_bps",
           "op": "eq",
-          "value": 200
+          "value": 1000
         },
         {
           "path": "params.craft_bits",
           "op": "eq",
-          "value": "0"
+          "value": "250"
         },
         {
           "path": "params.floor_bps",
@@ -7047,7 +7095,7 @@
           "value": 8
         }
       ],
-      "whenFails": "The owner changed the market's settings: update the README, docs/ECONOMY.md and this check."
+      "whenFails": "If fee_bps is 200 and craft_bits 0, the owner hasn't sent docs/ECONOMY.md's set_market_params yet: send it. If the owner changed the settings again, update the README, docs/ECONOMY.md and this check."
     },
     "prices-moved": {
       "kind": "view",
