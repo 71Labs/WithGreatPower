@@ -7822,7 +7822,7 @@
     "site-market": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market",
-      "about": "The live game reads its market from the contract.",
+      "about": "The live game reads its market from the contract: all twelve pools, the 5% fee.",
       "expect": [
         {
           "path": "onChain",
@@ -7842,12 +7842,12 @@
         {
           "path": "items.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         },
         {
           "path": "params.feeBps",
           "op": "eq",
-          "value": 200
+          "value": 500
         }
       ]
     },

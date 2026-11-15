@@ -616,7 +616,7 @@ Expected:
 
 ### <a id="check-site-market"></a>site-market
 
-The live game reads its market from the contract. Used by [`judge-5`](#judge-5).
+The live game reads its market from the contract: all twelve pools, the 5% fee. Used by [`judge-5`](#judge-5).
 
 ```bash
 curl -s 'https://www.wgponnear.fun/api/market' | jq .
@@ -627,8 +627,8 @@ Expected:
 - `onChain` is `true`
 - `network` is `"mainnet"`
 - `contractId` is `"game.wgpnear.near"`
-- `items.length` is `8`
-- `params.feeBps` is `200`
+- `items.length` is `12`
+- `params.feeBps` is `500`
 
 ### <a id="check-site-stats"></a>site-stats
 
