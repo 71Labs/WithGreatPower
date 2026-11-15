@@ -36,7 +36,11 @@ export type MeResponse = Me | { signedIn: false };
 export type Board = LeaderboardView["board"];
 export type LeaderboardResponse = LeaderboardView & { signedIn: boolean };
 
-/** `bits`: the Bits minted for the night (src/lib/market/rewards.ts). `chapter`: a story chapter's run (unranked, no Bits). */
+/**
+ * `bits`: the Bits minted for the night (src/lib/market/rewards.ts). `taper`: present when the
+ * wallet taper paid less than the whole night (`full`), because the hero held `held` Bits.
+ * `chapter`: a story chapter's run (unranked, no Bits).
+ */
 export type SubmitResponse = {
   status: "verified";
   runId: string;
@@ -44,6 +48,7 @@ export type SubmitResponse = {
   ticks: number;
   digest: string;
   bits: number;
+  taper?: { full: number; held: number };
   ranked: boolean;
   save: Save;
   rev: number;

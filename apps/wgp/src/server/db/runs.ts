@@ -24,9 +24,10 @@ import { applyCaseClear, caseRecord, CHAPTERS, isChapterId } from "@wgp/game-cor
 import type { ReplayResult } from "@wgp/game-core/sim3d/contract";
 import type { ChapterId, Save } from "@wgp/game-core/types";
 
-import { nightBits } from "@/lib/market/rewards";
+import { nightPay } from "@/lib/market/rewards";
 import { secret } from "@/server/auth/secrets";
 import { HttpError, conflict, notFound } from "@/server/http";
+import { heldBits, type HeldBits } from "@/server/market/held";
 import { reserveBudget, releaseBudget, utcDay } from "@/server/rate-limit";
 import { getChapterVerifier, getVerifier, verifyChapterRun, verifyRun, type Verifier } from "@/server/verify";
 
@@ -162,8 +163,10 @@ export type SubmitResult =
       score: number;
       ticks: number;
       digest: string;
-      /** Bits minted for the night (src/lib/market/rewards.ts). */
+      /** Bits minted for the night (src/lib/market/rewards.ts `nightPay`). */
       bits: number;
+      /** Present when the wallet taper paid less than the whole night: the whole night, and the Bits the hero held. */
+      taper?: NightTaper;
       /** False for assist runs, which save progress but stay off the boards. */
       ranked: boolean;
       save: Save;
@@ -178,6 +181,12 @@ export type SubmitResult =
     }
   | { status: "rejected"; runId: string; reason: string; idempotent: boolean };
 
+/** Why a night paid less than it earned: the untapered night and the balance the taper read. */
+export interface NightTaper {
+  full: number;
+  held: number;
+}
+
 class Abort extends Error {
   constructor(readonly why: "raced" | "rev_conflict") {
     super(why);
@@ -191,11 +200,12 @@ async function loadRun(db: Db, runId: string): Promise<Run | null> {
   return row ?? null;
 }
 
-/** The Bits a verified run's reward mint carries (0 if it queued none). */
-async function mintedBitsFor(db: Db, runId: string): Promise<number> {
+/** The Bits a verified run's reward mint carries (0 if it queued none), and the taper's reason when it paid less. */
+async function mintedBitsFor(db: Db, runId: string): Promise<{ bits: number; taper?: NightTaper }> {
   const [op] = await db.select({ payload: chainOps.payload }).from(chainOps).where(eq(chainOps.dedupeKey, `mint_reward:${runId}`)).limit(1);
-  const items = (op?.payload as { items?: MintItem[] } | undefined)?.items ?? [];
-  return items.find((i) => i.tokenId === BITS_TOKEN_ID)?.amount ?? 0;
+  const payload = op?.payload as { items?: MintItem[]; taper?: NightTaper } | undefined;
+  const bits = (payload?.items ?? []).find((i) => i.tokenId === BITS_TOKEN_ID)?.amount ?? 0;
+  return { bits, ...(payload?.taper ? { taper: payload.taper } : {}) };
 }
 
 /** The stored outcome of a finished run, for idempotent resubmits. */
@@ -206,13 +216,14 @@ async function storedOutcome(db: Db, run: Run, log: Uint8Array, clientHash: stri
   if (run.status === "verified") {
     const { save, rev } = await ensureSave(db, run.playerId);
     const chapter = isChapterId(run.mode) ? run.mode : null;
+    const paid = chapter ? { bits: 0 } : await mintedBitsFor(db, run.id);
     return {
       status: "verified",
       runId: run.id,
       score: run.verifiedScore ?? 0,
       ticks: run.ticks ?? 0,
       digest: run.digest ?? "",
-      bits: chapter ? 0 : await mintedBitsFor(db, run.id),
+      ...paid,
       ranked: !run.assist && !chapter,
       save,
       rev,
@@ -311,7 +322,7 @@ async function closeCase(
 
 export async function submitRun(
   db: Db,
-  input: { playerId: string; runId: string; log: Uint8Array; clientHash: string; now?: Date; verifier?: Verifier },
+  input: { playerId: string; runId: string; log: Uint8Array; clientHash: string; now?: Date; verifier?: Verifier; held?: HeldBits },
 ): Promise<SubmitResult> {
   const now = input.now ?? new Date();
   const { playerId, log, clientHash } = input;
@@ -361,15 +372,22 @@ export async function submitRun(
   if (chapter) return closeCase(db, run, chapter, result, { log, clientHash, now, submitted });
   const assist = run.assist || (result.stats.assist ?? 0) > 0;
   const digest = runDigest(run, log, result.hash, result.score, result.ticks);
-  // Bits come from the verified replay alone (its score and, since ruleset 3, the Bits tokens it
-  // collected); the results screen shows the number this returns.
-  const bits = nightBits({
-    score: result.score,
-    levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0),
-    pickups: result.stats.bits ?? 0,
-  });
   const player = await getPlayer(db, playerId);
   if (!player) throw notFound("No such player");
+  // Bits come from the verified replay alone (its score and, since ruleset 3, the Bits tokens it
+  // collected), tapered by the Bits the hero already holds (src/lib/market/rewards.ts). An
+  // unreadable balance pays the whole night. The results screen shows the number this returns.
+  const held = await (input.held ?? heldBits)(db, { playerId, accountId: player.nearAccountId });
+  const pay = nightPay(
+    {
+      score: result.score,
+      levelledUp: (result.save.hero?.level ?? 0) > (startSave.hero?.level ?? 0),
+      pickups: result.stats.bits ?? 0,
+    },
+    held,
+  );
+  const bits = pay.bits;
+  const taper: NightTaper | undefined = pay.held !== null && pay.bits < pay.full ? { full: pay.full, held: pay.held } : undefined;
 
   try {
     const out = await db.transaction(async (tx) => {
@@ -407,7 +425,7 @@ export async function submitRun(
             kind: "mint_reward",
             dedupeKey: `mint_reward:${run.id}`,
             playerId,
-            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), digest },
+            payload: { runId: run.id, playerId, accountId: player.nearAccountId, items, ...(level ? { level } : {}), digest, ...(taper ? { taper } : {}) },
           },
           now,
         );
@@ -421,6 +439,7 @@ export async function submitRun(
       ticks: result.ticks,
       digest,
       bits,
+      ...(taper ? { taper } : {}),
       ranked: !assist,
       save: result.save,
       rev: out.rev,

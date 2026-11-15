@@ -54,8 +54,8 @@ export type RankedStart =
   | { kind: "error"; message: string };
 
 export type NightOutcome =
-  /** `bits`: what the server minted for the night (src/lib/market/rewards.ts). `runId`: its public page, /r/<runId>. */
-  | { kind: "verified"; runId: string; score: number; ranked: boolean; save: Save; rank: { rank: number; total: number } | null; bits: number }
+  /** `bits`: what the server minted for the night (src/lib/market/rewards.ts); `taper`: why it was less than the whole night. `runId`: its public page, /r/<runId>. */
+  | { kind: "verified"; runId: string; score: number; ranked: boolean; save: Save; rank: { rank: number; total: number } | null; bits: number; taper?: { full: number; held: number } }
   | { kind: "rejected"; reason: string; preview: Save; score: number }
   | { kind: "guest"; save: Save; score: number }
   | { kind: "unranked"; preview: Save; score: number }
@@ -199,7 +199,7 @@ export async function endNight(s: NightSession): Promise<NightOutcome> {
     await clearRecording();
     adoptServerSave(res.data.save, res.data.rev);
     const rank = res.data.ranked ? await tonightRank() : null;
-    return { kind: "verified", runId: res.data.runId, score: res.data.score, ranked: res.data.ranked, save: res.data.save, rank, bits: res.data.bits };
+    return { kind: "verified", runId: res.data.runId, score: res.data.score, ranked: res.data.ranked, save: res.data.save, rank, bits: res.data.bits, ...(res.data.taper ? { taper: res.data.taper } : {}) };
   }
   if (res.status === 0 || res.status >= 500 || res.status === 429) {
     return { kind: "submit-failed", message: res.status === 0 ? "You look offline." : (res.message ?? "The server couldn’t check your run."), preview };

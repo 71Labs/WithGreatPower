@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_NIGHT_BITS, MAX_PICKUP_BITS, nightBits, taperedNightBits } from "./rewards";
+import { MAX_NIGHT_BITS, MAX_PICKUP_BITS, NIGHT_TAPER, nightBits, nightPay, taperedNightBits } from "./rewards";
 
-describe("taperedNightBits (proposed; the server pays nightBits today)", () => {
+describe("taperedNightBits", () => {
   const night = { score: 8_000, levelledUp: false }; // 85 Bits untapered
   const taper = { fullBelow: 250, floorAt: 500 };
 
@@ -28,6 +28,30 @@ describe("taperedNightBits (proposed; the server pays nightBits today)", () => {
     expect(taperedNightBits(night, Number.NaN, taper)).toBe(85);
     expect(taperedNightBits(night, -10, taper)).toBe(85);
     expect(taperedNightBits(night, 9_999, { fullBelow: 400, floorAt: 400 })).toBe(85);
+  });
+});
+
+describe("nightPay: what the server pays a verified night", () => {
+  const night = { score: 8_000, levelledUp: false }; // 85 Bits untapered
+
+  it("is the live taper: the whole night up to 150 Bits held, the 5 for showing up from 400", () => {
+    expect(NIGHT_TAPER).toEqual({ fullBelow: 150, floorAt: 400 });
+    expect(nightPay(night, 0)).toEqual({ bits: 85, full: 85, held: 0 });
+    expect(nightPay(night, 150)).toEqual({ bits: 85, full: 85, held: 150 });
+    expect(nightPay(night, 275)).toEqual({ bits: 45, full: 85, held: 275 });
+    expect(nightPay(night, 400)).toEqual({ bits: 5, full: 85, held: 400 });
+    expect(nightPay(night, 5_000)).toEqual({ bits: 5, full: 85, held: 5_000 });
+  });
+
+  it("pays the whole night when the balance couldn't be read", () => {
+    expect(nightPay(night, null)).toEqual({ bits: 85, full: 85, held: null });
+    expect(nightPay(night, Number.NaN)).toEqual({ bits: 85, full: 85, held: null });
+  });
+
+  it("lets a crafter save up to a suit's price: above 250 Bits held a night still pays more than showing up", () => {
+    const suit = 250;
+    expect(NIGHT_TAPER.floorAt).toBeGreaterThan(suit);
+    expect(nightPay(night, suit).bits).toBeGreaterThan(5);
   });
 });
 
