@@ -1932,6 +1932,149 @@
       "note": "craft_bits is 0 on mainnet, so the Bits cost is tested and off; the loot burn is live (the transaction check)."
     },
     {
+      "id": "economy-wanted-list",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "Each UTC day Gwei posts up to three items she is short on: sold out, down to 75% of her opening stock, or priced at least 25% above where she opened.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export function deriveWanted("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export const LOW_STOCK_BPS = 7_500;"
+        },
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export const PRICE_UP_BPS = 12_500;"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "puts a sold-out item first at ×3, low stock and a price far above its start at ×2"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "draws the line at 75% of the opening stock and 125% of the opening price"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "keeps at most three, the furthest short first, and gives the same list whatever the pools' order"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "lists nothing when every stall is as she opened it (all stocked)"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "lists nothing with no pools at all"
+        }
+      ],
+      "note": "She leaves out a pool whose till can't pay for one, items the game doesn't drop, and everything while the market is switched off; the tests cover each."
+    },
+    {
+      "id": "economy-wanted-frozen",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "The first request of the day works the list out from her pools and stores it with the snapshot it came from, so the day's list doesn't change.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/market/wanted.ts",
+          "anchor": "export async function wantedToday("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "snapshots the market on the day's first request and stores the snapshot with the list"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "keeps the day's list however the market moves after it, and reads the market once"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "stores one list when two first requests race"
+        }
+      ],
+      "note": "The list is a market_sim row with id wanted:<day>, so no migration; it is taken on a request, never on a schedule."
+    },
+    {
+      "id": "economy-wanted-bonus",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "A verified night that brings in a wanted item gets a multiplier on that item's drop (×2, or ×3 when she is sold out), capped per night and per player per day by rarity; the score, the replay and the Bits are unchanged.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/wanted.ts",
+          "anchor": "export function wantedBonus("
+        },
+        {
+          "path": "apps/wgp/src/server/db/runs.ts",
+          "anchor": "const bonus = wanted ? await grantWanted("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "mints the multiplier on the wanted item only, never on the score or the Bits, and mirrors it in the save"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/market/wanted.test.ts",
+          "name": "holds the day's cap across nights: 8 extra commons a player a day"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/lib/market/wanted.test.ts",
+          "name": "caps the extra a night adds by rarity: 4 commons, 2 uncommons, 1 rare"
+        }
+      ]
+    },
+    {
+      "id": "economy-wanted-screens",
+      "section": "economy",
+      "source": "README.md",
+      "quote": "Tonight (/play) shows the list and the night's results show the bonus",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/components/tonight/tonight.tsx",
+          "anchor": "<WantedTile />"
+        },
+        {
+          "path": "apps/wgp/src/app/play/patrol/night-results.tsx",
+          "anchor": "<WantedHaul wanted={o.wanted} />"
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/wanted-ui.test.ts",
+          "name": "names each wanted item with its multiplier and why, and links to the market"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/components/market/wanted-ui.test.ts",
+          "name": "prints one line per wanted item the night brought"
+        }
+      ]
+    },
+    {
       "id": "economy-round-trip",
       "section": "economy",
       "source": "README.md",
