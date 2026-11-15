@@ -7637,7 +7637,7 @@
       "kind": "view",
       "method": "get_config",
       "args": {},
-      "about": "The contract's owner, its one operator, and its eight items and eight suits.",
+      "about": "The contract's owner, its one operator, and its twelve items and ten suits (the launch eight of each, plus Gwei's new stock and the Notary and Finality suits since Nov 15).",
       "expect": [
         {
           "path": "owner_id",
@@ -7659,12 +7659,12 @@
         {
           "path": "items.length",
           "op": "eq",
-          "value": 8
+          "value": 12
         },
         {
           "path": "suits.length",
           "op": "eq",
-          "value": 8
+          "value": 10
         }
       ]
     },

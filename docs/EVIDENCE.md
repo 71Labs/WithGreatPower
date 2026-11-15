@@ -503,7 +503,7 @@ Expected:
 
 ### <a id="check-contract-config"></a>contract-config
 
-The contract's owner, its one operator, and its eight items and eight suits. Used by [`status-used`](#status-used), [`proven-deploy`](#proven-deploy), [`limits-owner-key`](#limits-owner-key), [`limits-trust`](#limits-trust), [`sustain-owner-key`](#sustain-owner-key).
+The contract's owner, its one operator, and its twelve items and ten suits (the launch eight of each, plus Gwei's new stock and the Notary and Finality suits since Nov 15). Used by [`status-used`](#status-used), [`proven-deploy`](#proven-deploy), [`limits-owner-key`](#limits-owner-key), [`limits-trust`](#limits-trust), [`sustain-owner-key`](#sustain-owner-key).
 
 ```bash
 curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"call_function","finality":"final","account_id":"game.wgpnear.near","method_name":"get_config","args_base64":"e30="}}' \
@@ -515,8 +515,8 @@ Expected:
 - `owner_id` is `"wgpnear.near"`
 - `operators` is `["operator.wgpnear.near"]`
 - `paused` is `false`
-- `items.length` is `8`
-- `suits.length` is `8`
+- `items.length` is `12`
+- `suits.length` is `10`
 
 ### <a id="check-owner-account"></a>owner-account
 
