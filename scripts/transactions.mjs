@@ -186,10 +186,10 @@ export function buildLedger(capture) {
   const methods = [...new Set(calls.map((c) => c.method))].sort((a, b) => rank(a) - rank(b) || cmpStr(a, b));
   const byMethod = methods.map((method) => {
     const rows = calls.filter((c) => c.method === method);
-    const by = { player: 0, author: 0, team: 0, NPC: 0, contract: 0, other: 0 };
+    const by = { player: 0, author: 0, team: 0, NPC: 0, contract: 0, system: 0 };
     for (const c of rows) {
       const l = labelOf(c.caller, contract);
-      by[l in by ? l : "other"] += 1;
+      by[l in by ? l : "system"] += 1;
     }
     return { method, rows, calls: rows.length, failed: rows.filter((c) => !c.ok).length, relayed: rows.filter((c) => c.relayed).length, callers: new Set(rows.map((c) => c.caller)).size, by };
   });
@@ -265,15 +265,14 @@ export function milestones({ contract, calls, txns }) {
     calls.find((c) => c.method.includes("create_account")),
     `\`${contract}\` is created`,
   );
-  calls
-    .filter((c) => c.method === "deploy_contract")
-    .forEach((c, i) => add(c, i === 0 ? `Contract code deployed (${c.detail})` : `Contract code upgraded, deploy ${i + 1} (${c.detail})`));
+  const deploys = calls.filter((c) => c.method === "deploy_contract");
+  deploys.forEach((c, i) => add(c, `Code deployed to the contract, deploy ${i + 1} of ${deploys.length} (${c.detail})`));
   for (const c of calls.filter((x) => x.method === "upgrade")) add(c, "The owner's `upgrade` call");
   add(firstOk((c) => c.method === "register_hero"), "First hero registered (any account)");
   add(firstOk((c) => c.method === "register_hero" && labelOf(c.caller, contract) === "player"), "First player's hero (not the author's, the team's or the NPC's)");
   add(firstOk((c) => c.relayed), `First relayed call (signed by the player, sent by \`${RELAYER}\`)`);
   add(firstOk((c) => c.relayed && MARKET_METHODS.includes(c.method)), "First relayed market trade");
-  add(firstOk((c) => MARKET_METHODS.includes(c.method) && labelOf(c.caller, contract) === "player"), "First market call by a player");
+  add(firstOk((c) => c.relayed && MARKET_METHODS.includes(c.method) && labelOf(c.caller, contract) === "player"), "First relayed market trade by a player (not the author's, the team's or the NPC's)");
   for (const npc of NPC_ACCOUNTS) {
     const created = txns.find((t) => t.receiver === npc && t.actions.some((a) => a.kind === "CREATE_ACCOUNT"));
     if (created) add({ ...created, caller: created.signer, ok: created.ok !== false }, `Sandwich Man's account \`${npc}\` is created`);
@@ -294,13 +293,22 @@ export function milestones({ contract, calls, txns }) {
     const suits = Array.isArray(c.args?.suits) ? c.args.suits.length : "?";
     add(c, `\`set_rules\`: ${items} items, ${suits} suits`);
   }
+  // Which pools each call configures for the first time, against the calls before it that went through.
+  const pooled = new Set();
+  let earlier = false;
   for (const c of calls.filter((x) => x.method === "set_market_params")) {
     const p = c.args?.params ?? {};
     const pools = Array.isArray(c.args?.pools) ? c.args.pools : [];
     const fee = typeof p.fee_bps === "number" ? `fee ${p.fee_bps / 100}% (fee_bps ${p.fee_bps})` : "fee ?";
     const craft = p.craft_bits !== undefined ? `, craft ${p.craft_bits} Bits` : "";
     const named = pools.map((x) => x?.item).filter(Boolean);
-    add(c, `\`set_market_params\`: ${fee}${craft}, ${pools.length} pool${pools.length === 1 ? "" : "s"}${named.length ? ` (${named.join(", ")})` : ""}`);
+    const fresh = named.filter((item) => !pooled.has(item));
+    const which = !earlier ? (named.length ? ` (${named.join(", ")})` : "") : `, ${fresh.length} of them new${fresh.length ? ` (${fresh.join(", ")})` : ""}`;
+    add(c, `\`set_market_params\`: ${fee}${craft}, ${pools.length} pool${pools.length === 1 ? "" : "s"}${which}`);
+    if (c.ok) {
+      named.forEach((item) => pooled.add(item));
+      earlier = true;
+    }
   }
   for (const c of calls.filter((x) => ["set_paused", "add_operator", "remove_operator", "set_owner"].includes(x.method))) {
     const arg = c.args ? Object.values(c.args).map((v) => JSON.stringify(v)).join(", ") : "";
@@ -337,7 +345,7 @@ export function describeTxn(t, account) {
   return kinds.join(" + ") || "no actions";
 }
 
-const header = (cells) => `| ${cells.join(" | ")} |\n|${cells.map((c) => (/^(#|Calls|Failed|Relayed|Callers|Transactions|Player|Author|Team|NPC|Contract|Receipts|Pages)/.test(c) ? "--:" : "---")).join("|")}|`;
+const header = (cells) => `| ${cells.join(" | ")} |\n|${cells.map((c) => (/^(#|Calls|Failed|Relayed|Callers|Transactions|Player|Author|Team|NPC|Contract|System|Receipts|Pages)/.test(c) ? "--:" : "---")).join("|")}|`;
 
 export function renderMarkdown(capture) {
   const L = buildLedger(capture);
@@ -346,7 +354,7 @@ export function renderMarkdown(capture) {
   out.push("# Every transaction of the game's accounts on NEAR mainnet\n");
   out.push(`Generated ${L.fetchedAt} (UTC) by \`${COMMAND}\` (scripts/transactions.mjs). ${METHOD_NOTES.generated}\n`);
   out.push(
-    `**Source.** The NearBlocks API (https://api.nearblocks.io/v1), read-only and with no key: every page of \`/account/<id>/txns-only\` (the transactions each account below signed or received) for ${LEDGER_ACCOUNTS.map((a) => `\`${a === DEFAULT_CONTRACT ? c : a}\``).join(", ")}, and every page of \`/account/${c}/txns\` (the receipts the contract received). Each hash links to its page on nearblocks.io. Times are UTC, from the block that included the transaction or receipt.\n`,
+    `**Source.** The NearBlocks API (https://api.nearblocks.io/v1), read-only and with no key: every page of \`/account/<id>/txns-only\` (the transactions each account below signed or received) for ${LEDGER_ACCOUNTS.map((a) => `\`${a === DEFAULT_CONTRACT ? c : a}\``).join(", ")}, and every page of \`/account/${c}/txns\` (the receipts the contract received). Each hash links to its page on nearblocks.io. Times are UTC, from the block that included the transaction; a receipt's row carries its transaction's time.\n`,
   );
   if (!L.complete) out.push(`**Partial.** Not every list could be read to the end when this was generated: ${L.notes.join("; ") || "see the per-account table"}. The rows below are what was read.\n`);
   out.push(`**How rows are attributed.** ${METHOD_NOTES.relayed} ${METHOD_NOTES.labels}\n`);
@@ -371,15 +379,15 @@ export function renderMarkdown(capture) {
   out.push(`\n"Transactions" are those the account signed or received (NearBlocks' \`txns-only\`). The contract's relayed calls are transactions to the player's account, so they are counted under \`${RELAYER}\` and appear in the contract's table by their receipts.\n`);
 
   out.push("### Per method of the contract\n");
-  out.push(header(["Method", "Calls", "Failed", "Relayed", "Callers", "Player", "Author", "Team", "NPC", "Contract"]));
-  for (const m of L.byMethod) out.push(`| [\`${m.method}\`](#${slugFor(m.method)}) | ${m.calls} | ${m.failed} | ${m.relayed} | ${m.callers} | ${m.by.player} | ${m.by.author} | ${m.by.team} | ${m.by.NPC} | ${m.by.contract} |`);
-  out.push(`| **All** | **${L.calls.length}** | **${L.calls.filter((x) => !x.ok).length}** | **${L.calls.filter((x) => x.relayed).length}** | | **${L.byMethod.reduce((n, m) => n + m.by.player, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.author, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.team, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.NPC, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.contract, 0)}** |`);
-  out.push(`\nOne row per function call (a receipt with two calls is two rows); a receipt with no function call (the account's creation, a transfer) is one row under its actions in brackets; a deploy is one row under \`deploy_contract\` with the call that came with it. The label columns count calls by the caller's label.\n`);
+  out.push(header(["Method", "Calls", "Failed", "Relayed", "Callers", "Player", "Author", "Team", "NPC", "Contract", "System"]));
+  for (const m of L.byMethod) out.push(`| [\`${m.method}\`](#${slugFor(m.method)}) | ${m.calls} | ${m.failed} | ${m.relayed} | ${m.callers} | ${m.by.player} | ${m.by.author} | ${m.by.team} | ${m.by.NPC} | ${m.by.contract} | ${m.by.system} |`);
+  out.push(`| **All** | **${L.calls.length}** | **${L.calls.filter((x) => !x.ok).length}** | **${L.calls.filter((x) => x.relayed).length}** | | **${L.byMethod.reduce((n, m) => n + m.by.player, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.author, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.team, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.NPC, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.contract, 0)}** | **${L.byMethod.reduce((n, m) => n + m.by.system, 0)}** |`);
+  out.push(`\nOne row per function call (a receipt with two calls is two rows); a receipt with no function call (the account's creation, a transfer) is one row under its actions in brackets; a deploy is one row under \`deploy_contract\` with the call that came with it. The label columns count calls by the caller's label; System is \`system\`, the protocol account that sends gas refunds.\n`);
 
   out.push("### Per UTC day\n");
   out.push(header(["Day", "Transactions", "Failed", "Contract receipts", "Player calls"]));
   for (const d of L.days) out.push(`| ${d.day} | ${d.transactions} | ${d.failed} | ${d.contractCalls} | ${d.playerCalls} |`);
-  out.push(`\n"Player calls" are the game methods (${PLAYER_METHODS.map((m) => `\`${m}\``).join(", ")}) called by player accounts.\n`);
+  out.push(`\nDays with no transaction are left out. "Player calls" are the game methods (${PLAYER_METHODS.map((m) => `\`${m}\``).join(", ")}) called by player accounts.\n`);
 
   out.push("## Milestones\n");
   out.push("Found in the rows below by what they did, not typed in by hand.\n");
@@ -395,7 +403,7 @@ export function renderMarkdown(capture) {
     out.push(header(["#", "UTC time", "Caller", "Sent by", "Result", "Transaction"]));
     m.rows.forEach((r, i) => {
       const sentBy = r.signer === null ? "not in the lists read" : r.signer === r.caller ? "itself" : `${who(r.signer, c)}${r.relayed ? ", relayed" : ""}`;
-      const extra = r.detail ? ` (${r.detail})` : !r.incoming ? ` to ${who(r.receiver, c)}` : "";
+      const extra = r.detail ? `, with ${r.detail}` : !r.incoming ? ` to ${who(r.receiver, c)}` : "";
       out.push(`| ${i + 1} | ${utcTime(r.ns)} | ${who(r.caller, c)}${extra} | ${sentBy} | ${okText(r.ok)} | ${link(r.hash)} |`);
     });
     out.push("");
@@ -419,7 +427,7 @@ export function renderMarkdown(capture) {
 }
 
 const ACCOUNT_ABOUT = {
-  "wgpnear.near": "The owner and factory account (team): it created the game's sub-accounts and players' `*.wgpnear.near` accounts, deployed and configured the contract.",
+  "wgpnear.near": "The owner and factory account (team): it created the contract's, the relayer's, the operator's and Sandwich Man's accounts and players' `*.wgpnear.near` accounts, and it sends the owner's calls to the contract. (The contract's code was deployed by a transaction `game.wgpnear.near` signed itself; see `deploy_contract` above.)",
   "relayer.wgpnear.near": "The relayer (team): it signs and pays for players' relayed calls (NEP-366) and receives the top-ups that keep it running.",
   "operator.wgpnear.near": "The operator (team): it mints verified nights' rewards (`mint_rewards`) and records seasons (`record_season`).",
   "sandwich.wgpnear.near": "Sandwich Man, the NPC trader: his own key signs his market calls. He is never counted as a player.",

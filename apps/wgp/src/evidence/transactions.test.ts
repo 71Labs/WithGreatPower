@@ -101,11 +101,12 @@ const relayed = (hash: string, player: string, iso: string, method: string, args
 
 const ITEMS = ["fee-bomb", "goblin-glider", "crumbs", "sesame-seed", "chain-link", "spare-arm", "sybil-goo", "press-pass", "gas-receipt", "finality-flag", "evidence-bag", "seed-phrase"];
 const SUITS = ["classic", "midnight", "mint", "snow", "stealth", "glider", "octo", "sesame", "notary", "finality"].map((id) => ({ id }));
-const POOLS = ["gas-receipt", "finality-flag", "evidence-bag", "seed-phrase"].map((item) => ({ item }));
+const POOLS = ITEMS.map((item) => ({ item }));
 
 const T = {
   create: txn("H01create", OWNER, GAME, "2026-11-04T10:00:00Z", [act("CREATE_ACCOUNT"), act("TRANSFER", 5e24), act("ADD_KEY")]),
   deploy: txn("H02deploy", OWNER, GAME, "2026-11-04T10:05:00Z", [act("DEPLOY_CONTRACT"), fc("new")]),
+  open: txn("H02bopen", OWNER, GAME, "2026-11-04T10:10:00Z", [fc("set_market_params", { params: { fee_bps: 200, craft_bits: "0", open: true }, pools: POOLS.slice(0, 8) })]),
   authorHero: txn("H03author", "sele.wgpnear.near", GAME, "2026-11-04T11:00:00Z", [fc("register_hero", { name: "Sele", suit: "classic" })]),
   playerAcct: txn("H03bcreate", OWNER, "alice.wgpnear.near", "2026-11-04T11:30:00Z", [act("CREATE_ACCOUNT"), act("ADD_KEY")]),
   playerHero: relayed("H04hero", "alice.wgpnear.near", "2026-11-04T12:00:00Z", "register_hero", { name: "Alice", suit: "mint" }),
@@ -124,6 +125,7 @@ const T = {
 const RECEIPTS = [
   receipt("r01", "H01create", OWNER, "2026-11-04T10:00:00Z", T.create.actions),
   receipt("r02", "H02deploy", OWNER, "2026-11-04T10:05:00Z", T.deploy.actions),
+  receipt("r02b", "H02bopen", OWNER, "2026-11-04T10:10:00Z", T.open.actions),
   receipt("r03", "H03author", "sele.wgpnear.near", "2026-11-04T11:00:00Z", T.authorHero.actions),
   // A relayed call reaches the contract with the player, not the relayer, as its predecessor.
   receipt("r04", "H04hero", "alice.wgpnear.near", "2026-11-04T12:00:01Z", [fc("register_hero", { name: "Alice", suit: "mint" })]),
@@ -145,8 +147,8 @@ function capture(shuffle = false): Capture {
     fetchedAt: "2026-11-15T03:00:00Z",
     contract: GAME,
     accounts: {
-      [GAME]: list([T.create, T.deploy, T.authorHero, T.seed, T.npcBuy, T.upgrade, T.season, T.rules, T.params], RECEIPTS),
-      [OWNER]: list([T.create, T.deploy, T.playerAcct, T.npcCreate, T.upgrade, T.rules, T.params]),
+      [GAME]: list([T.create, T.deploy, T.open, T.authorHero, T.seed, T.npcBuy, T.upgrade, T.season, T.rules, T.params], RECEIPTS),
+      [OWNER]: list([T.create, T.deploy, T.open, T.playerAcct, T.npcCreate, T.upgrade, T.rules, T.params]),
       [RELAYER]: list([T.playerHero, T.buyFailed, T.buyOk, T.topUp]),
       [OPERATOR]: list([T.seed, T.season]),
       [NPC]: list([T.npcCreate, T.npcBuy]),
@@ -168,7 +170,7 @@ describe("pnpm txs, on recorded fixtures", () => {
       ["deploy_contract", 2],
       ["upgrade", 1],
       ["set_rules", 1],
-      ["set_market_params", 1],
+      ["set_market_params", 2],
       ["(create_account + transfer + add_key)", 1],
     ]);
     expect(L.calls).toHaveLength(RECEIPTS.length);
@@ -228,22 +230,24 @@ describe("pnpm txs, on recorded fixtures", () => {
     const found = Object.fromEntries(s.buildLedger(capture()).milestones.map((m) => [m.label, m.hash]));
     expect(found).toEqual({
       "`game.wgpnear.near` is created": "H01create",
-      "Contract code deployed (deploy_contract + new)": "H02deploy",
+      "Code deployed to the contract, deploy 1 of 2 (deploy_contract + new)": "H02deploy",
+      "`set_market_params`: fee 2% (fee_bps 200), craft 0 Bits, 8 pools (fee-bomb, goblin-glider, crumbs, sesame-seed, chain-link, spare-arm, sybil-goo, press-pass)": "H02bopen",
       "First hero registered (any account)": "H03author",
       // The author's hero came first; the first player's is the relayed one after it.
       "First player's hero (not the author's, the team's or the NPC's)": "H04hero",
       "First relayed call (signed by the player, sent by `relayer.wgpnear.near`)": "H04hero",
       // The first relayed buy failed; the first that went through is the milestone.
       "First relayed market trade": "H06buy",
-      "First market call by a player": "H06buy",
+      "First relayed market trade by a player (not the author's, the team's or the NPC's)": "H06buy",
       "Sandwich Man's account `sandwich.wgpnear.near` is created": "H06cnpc",
       "Sandwich Man's one-off seed (`mint_rewards` to him)": "H07seed",
       "Sandwich Man's first trade": "H08npc",
       "The owner's `upgrade` call": "H09upgrade",
-      "Contract code upgraded, deploy 2 (deploy_contract + migrate)": "H09upgrade",
+      "Code deployed to the contract, deploy 2 of 2 (deploy_contract + migrate)": "H09upgrade",
       "`record_season` for s1: root and digest written, 2 trophies minted (trophy:s1:1 to alice.wgpnear.near, trophy:s1:2 to bob.near)": "H10season",
       "`set_rules`: 12 items, 10 suits": "H11rules",
-      "`set_market_params`: fee 5% (fee_bps 500), craft 250 Bits, 4 pools (gas-receipt, finality-flag, evidence-bag, seed-phrase)": "H12params",
+      // The second call names all twelve pools; the four it adds are named as new.
+      "`set_market_params`: fee 5% (fee_bps 500), craft 250 Bits, 12 pools, 4 of them new (gas-receipt, finality-flag, evidence-bag, seed-phrase)": "H12params",
     });
     const md = s.renderMarkdown(capture());
     expect(md).toContain("[`H10season`](https://nearblocks.io/txns/H10season)");
