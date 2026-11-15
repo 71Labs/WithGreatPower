@@ -220,12 +220,15 @@ describe("the season check asserts the right thing in each state", () => {
 
   it("the documents describe both states, so no edit is needed when the season closes", () => {
     const readme = read("README.md");
-    expect(readme).toContain("Season 1 ends Nov 15, 00:00 UTC (the end of Nov 14); after that the record is `get_season(\"s1\")` on the contract and the results file is `/api/seasons/s1/results`");
+    // Season 1 closed and was recorded on Nov 15, 2026; the documents now say so, with the time and where to read it.
+    expect(readme).toContain("Season 1 ended Nov 15, 00:00 UTC (the end of Nov 14); the record landed at 01:26 UTC and is `get_season(\"s1\")` on the contract, and the results file is `/api/seasons/s1/results`");
     // The end the documents give is the season's own, from the migration that creates it (ends_at is exclusive).
     expect(read("apps/wgp/drizzle/0001_seed_season_1.sql")).toContain("('s1', 'Season 1', '2026-11-05T00:00:00Z', '2026-11-15T00:00:00Z', 'scheduled')");
-    for (const doc of ["README.md", "docs/GAME-LOOP.md", "docs/ARCHITECTURE.md", "docs/SUSTAINABILITY.md"]) expect(read(doc), doc).not.toMatch(/23:59/);
-    expect(readme).toContain("**Before the record lands,** `get_season(\"s1\")` answers `null`");
-    expect(readme).toContain("**After it lands,** `get_season(\"s1\")` holds the root, the digest and the top of the board");
+    // 23:59 appears only as the hackathon's submission deadline, written in full, never as Season 1's end.
+    for (const doc of ["README.md", "docs/GAME-LOOP.md", "docs/ARCHITECTURE.md", "docs/SUSTAINABILITY.md"]) expect(read(doc).replaceAll("submission deadline was 2026-11-14 23:59 UTC", "").replaceAll("| **Deadline** | 2026-11-14 23:59 UTC.", ""), doc).not.toMatch(/23:59/);
+    expect(readme).toContain("**Before the record landed,** `get_season(\"s1\")` answered `null`");
+    expect(readme).toContain("**Now that it has landed,** `get_season(\"s1\")` holds the root, the digest and the top 10");
+    expect(readme).not.toContain("first run on mainnet when Season 1 closes");
     for (const doc of ["README.md", "docs/GAME-LOOP.md", "docs/SUSTAINABILITY.md", "docs/ARCHITECTURE.md"]) {
       expect(read(doc), doc).not.toMatch(/Season 1 has not closed yet|not run on mainnet yet|never run on mainnet yet|Not run on mainnet yet/);
     }
@@ -261,6 +264,13 @@ describe("contract v3's credentials can be checked without merging its branch", 
       expect(claim.status).toBe("owner action needed");
       expect(claim.chain).toEqual(expect.arrayContaining(["v3-branch", "no-metadata", "no-enumeration"]));
     }
-    for (const d of ["README.md", "docs/INVESTING.md", "docs/GAME-LOOP.md", "docs/ARCHITECTURE.md", "docs/CONTRACT-V3-REVIEW.md"]) expect(read(d), d).not.toMatch(/pull\/\d+|PR #\d+/);
+    // The README's dated "Changed after the deadline" section names the public pull requests merged after the
+    // deadline on purpose; nothing else in these documents may lean on a pull request.
+    const withoutDeadline = (d: string) => {
+      const text = read(d);
+      const at = text.indexOf("\n## Changed after the deadline (Nov 15, 2026)\n");
+      return at < 0 ? text : text.slice(0, at) + text.slice(text.indexOf("\n## ", at + 1));
+    };
+    for (const d of ["README.md", "docs/INVESTING.md", "docs/GAME-LOOP.md", "docs/ARCHITECTURE.md", "docs/CONTRACT-V3-REVIEW.md"]) expect(withoutDeadline(d), d).not.toMatch(/pull\/\d+|PR #\d+/);
   });
 });
