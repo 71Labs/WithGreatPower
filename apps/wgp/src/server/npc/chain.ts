@@ -3,8 +3,10 @@
  * (NPC_TRADER_ACCOUNT_ID / NPC_TRADER_PRIVATE_KEY). He pays his own gas and attaches no
  * deposit. `npcCall` is the whole list of what he can send: the five market methods any
  * player's session key may call (src/lib/near/policy.ts MARKET_METHODS) and nothing else.
+ * His key may be a full-access key or a function-call key limited to the game contract and
+ * those five methods (docs/KEYS.md): `npcTransaction` is signable by either.
  */
-import { actions } from "near-api-js";
+import { actions, type Action } from "near-api-js";
 import { z } from "zod";
 
 import { feeOf } from "@/lib/market/math";
@@ -63,13 +65,22 @@ export function outcomeOf(action: NpcAction, result: unknown, feeBps: number): N
   }
 }
 
-/** Signs and sends one action from his account and waits for it. A refusal comes back as `ok: false`. */
-export async function sendNpcAction(env: KeyedAccountEnv, action: NpcAction, feeBps: number): Promise<NpcSent> {
+/**
+ * The whole transaction he signs for an action: one function call to the game contract,
+ * one of the five market methods, no deposit. That is exactly what a function-call key
+ * limited to the game contract and those five methods may sign (it can attach no
+ * deposit), so the server works the same with his full-access key or that key. Pure.
+ */
+export function npcTransaction(action: NpcAction, contractId: string): { receiverId: string; actions: Action[] } {
   const { method, args } = npcCall(action);
   if (!(MARKET_METHODS as readonly string[]).includes(method)) throw new Error(`Not a market method: ${method}`);
+  return { receiverId: contractId, actions: [actions.functionCall(method, args, NPC_GAS, 0n)] };
+}
+
+/** Signs and sends one action from his account and waits for it. A refusal comes back as `ok: false`. */
+export async function sendNpcAction(env: KeyedAccountEnv, action: NpcAction, feeBps: number): Promise<NpcSent> {
   const outcome = await keyedAccount(env.accountId, env.privateKey).signAndSendTransaction({
-    receiverId: chainEnv().contractId,
-    actions: [actions.functionCall(method, args, NPC_GAS, 0n)],
+    ...npcTransaction(action, chainEnv().contractId),
     waitUntil: "EXECUTED_OPTIMISTIC",
     throwOnFailure: false,
   });

@@ -601,6 +601,14 @@
           "anchor": "export function decide("
         },
         {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        },
+        {
           "path": "apps/wgp/src/server/npc/runner.ts",
           "anchor": "export async function runNpcTrader("
         },
@@ -640,6 +648,26 @@
           "pkg": "app",
           "file": "apps/wgp/src/server/npc/npc.test.ts",
           "name": "signs one market call with his own account and books it with its transaction"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that"
         }
       ],
       "chain": [
@@ -651,7 +679,79 @@
         "tx-npc-first-trade",
         "chain-tally"
       ],
-      "note": "Rule-based, not an LLM or any other AI agent: the rules are the one file the code pointer names. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key, and the live site reporting him on chain. The runner test builds his call from a decision, signs it as his account and books it with its transaction. The tally's count of his calls is a lower bound (1 on Nov 13). The tests still cover the off path: with his account or key unset he does nothing."
+      "note": "An LLM (Kimi K3, Moonshot) picks among the legal moves his rules list, or passes; the rules are the guardrail and pick whenever it can't. The code pointers are the rules, the check that keeps only a listed move, and the call with its fallback. The chain checks show his account with its one key, that he holds Bits or items, the seed mint, his first market_buy signed by that key (a rules move, from before the brain), and the live site reporting him on chain and which brain is live (brain.mode). The brain tests use a fake LLM endpoint: a pick among two legal moves is sent with the rules' numbers, a made-up move is ignored, no key means rules only, at most 10 calls a day. The tally's count of his calls is a lower bound (1 on Nov 13). With his account or key unset he does nothing."
+    },
+    {
+      "id": "track-npc-brain",
+      "section": "track",
+      "source": "README.md",
+      "quote": "An LLM picks his move; his rules fence it in.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-rules.ts",
+          "anchor": "export function decide("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "only the reason: the move is the one shown, number for number"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "can pass: nothing is sent, no action is used, and the pass is on record"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on a timeout, without waiting past it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move without a key or once the day's calls are used, and makes no call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that"
+        }
+      ],
+      "chain": [
+        "site-npc"
+      ],
+      "note": "The tests run the on-chain runner against a fake chain and a fake LLM endpoint (a fetch the test passes; the suite fails any real network request): Kimi K3's pick among two legal moves is sent with the rules' own numbers and its own reason; a pass sends nothing; an answer that is not a listed move, a cut-off answer, a timeout, an HTTP error, a missing key or the day's 10th call used up all fall back to the rules' first move; every ledger line records which brain picked it (the model id or rules). The live check reads brain.mode from /api/market/npc: llm only once LLM_API_KEY is set in production, rules until then."
     },
     {
       "id": "track-merchant-prices",
@@ -3441,12 +3541,20 @@
       "id": "status-npc",
       "section": "status",
       "source": "README.md",
-      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, by fixed rules: rule-based, not an AI agent, and never counted as a player.",
+      "quote": "Sandwich Man trades from his own account, sandwich.wgpnear.near, and is never counted as a player. An LLM (Kimi K3) picks among the moves his fixed rules allow when the server has its API key; without it, the rules pick.",
       "status": "proven on chain",
       "code": [
         {
           "path": "apps/wgp/src/lib/market/npc-rules.ts",
           "anchor": "export function decide("
+        },
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
         },
         {
           "path": "apps/wgp/src/server/npc/runner.ts",
@@ -3467,6 +3575,16 @@
           "pkg": "app",
           "file": "apps/wgp/src/evidence/stats-tally.test.ts",
           "name": "never counts Sandwich Man as a player: his calls are on their own line"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -4586,6 +4704,31 @@
       ]
     },
     {
+      "id": "keys-factory-only-creates",
+      "section": "limits",
+      "source": "docs/KEYS.md",
+      "quote": "The server never calls an owner-only method with the factory key.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/near/factory.ts",
+          "anchor": "export async function createPlayerAccount("
+        },
+        {
+          "path": "apps/wgp/src/server/near/env.ts",
+          "anchor": "export function factoryEnv("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/owner-keys.test.ts",
+          "name": "signs only account creation, and no server code calls an owner-only method"
+        }
+      ],
+      "note": "The test reads every non-test source file of the app: none names an owner-only method outside a comment, only factory.ts reads the factory key, it signs once, to the new player's account, with the four create-account actions, and every owner-only method asserts one yoctoNEAR."
+    },
+    {
       "id": "limits-currency",
       "section": "limits",
       "source": "README.md",
@@ -4949,7 +5092,7 @@
       "id": "gameloop-npc",
       "section": "gameloop",
       "source": "docs/GAME-LOOP.md",
-      "quote": "He is a rule-based trader, not a player and not an AI agent, with his own NEAR account (sandwich.wgpnear.near, on mainnet since Nov 13, 2026).",
+      "quote": "He is a trader, not a player, with his own NEAR account (sandwich.wgpnear.near, on mainnet since Nov 13, 2026). His rules list the moves he may make and an LLM picks one when the server has its key; otherwise the rules pick.",
       "status": "live check",
       "code": [
         {
@@ -4962,6 +5105,16 @@
           "pkg": "app",
           "file": "apps/wgp/src/components/market/other-traders.test.ts",
           "name": "on chain: the strip with his own NEAR account, linked to the explorer"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
         }
       ],
       "chain": [
@@ -4997,6 +5150,180 @@
         "tx-npc-first-trade"
       ],
       "note": "The account, its key and his Bits are read from an RPC node; the three transactions are looked up by hash. The test is the other half: with his two environment variables unset he is off."
+    },
+    {
+      "id": "npc-brain",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "The rules are the guardrail and the fallback: the LLM can choose a legal move or pass, and nothing else.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "export function acceptPick("
+        },
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "only the reason: the move is the one shown, number for number"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "can pass: nothing is sent, no action is used, and the pass is on record"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is cleaned before it is shown: one line, no links or handles, at most 160 characters"
+        }
+      ],
+      "note": "acceptPick keeps the LLM's answer only if its id is one of the moves it was shown or pass; the move it returns is the rules' action with only the reason replaced, cleaned to one line of at most 160 characters."
+    },
+    {
+      "id": "npc-brain-fallback",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "when the call takes more than 20 seconds (no retry), on a network or HTTP error, when the answer was cut off (finish_reason other than stop) or isn't one of the moves, and once he has made 10 LLM calls in the UTC day.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export async function chooseMove("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on a timeout, without waiting past it"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is ignored when it answers anything but a legal move or a pass: the rules pick"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move without a key or once the day's calls are used, and makes no call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        }
+      ]
+    },
+    {
+      "id": "npc-brain-cost",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "At most 10 LLM calls a UTC day (counted when a call is made, whatever it answers), one per turn",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/lib/market/npc-brain.ts",
+          "anchor": "maxCallsPerDay: 10,"
+        },
+        {
+          "path": "apps/wgp/src/server/npc/store.ts",
+          "anchor": "export const withBrainCall ="
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is at most NPC_BRAIN.maxCallsPerDay LLM calls a UTC day, whatever they answer; the rules pick after that"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move without a key or once the day's calls are used, and makes no call"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        }
+      ],
+      "note": "The count is kept in his state row, set the moment a call is made and written back even when the look fails afterwards. Each call asks for at most 600 tokens out (max_tokens); the daily token figure beside it is that arithmetic, not a measured bill."
+    },
+    {
+      "id": "npc-brain-live",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "What is live depends on the key: until the owner sets LLM_API_KEY in production, brain.mode is rules and every move is the rules'.",
+      "status": "live check",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/view.ts",
+          "anchor": "function brainView("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "says which brain picks and, on each ledger line, which one did"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "is the rules without LLM_API_KEY, and the LLM is never called"
+        }
+      ],
+      "chain": [
+        "site-npc"
+      ],
+      "note": "The check accepts either mode and fails only if the field is missing; the answer says which brain is live right now."
+    },
+    {
+      "id": "npc-brain-secrets",
+      "section": "npc",
+      "source": "docs/npc-trader.md",
+      "quote": "a failed call logs only what failed (a timeout, an HTTP status), never the prompt, the answer or the key.",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/brain.ts",
+          "anchor": "export function npcBrainConfig("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "takes the rules' move on an error, an HTTP error or a cut-off answer, and logs neither the prompt, the answer nor the key"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/server/npc/brain.test.ts",
+          "name": "one of the legal moves, and writes the reason; the move and its numbers are the rules' own"
+        }
+      ]
     },
     {
       "id": "npc-rules-file",
@@ -5220,6 +5547,31 @@
         "site-npc"
       ],
       "note": "Creating and funding his account and seeding 300 Bits are the owner's two transactions, checked by hash. Setting his key in production leaves no trace on chain; the live site answering mode on-chain is the sign of it."
+    },
+    {
+      "id": "keys-npc-function-call-ready",
+      "section": "npc",
+      "source": "docs/KEYS.md",
+      "quote": "the server needs no change for a function-call key",
+      "status": "proven by test",
+      "code": [
+        {
+          "path": "apps/wgp/src/server/npc/chain.ts",
+          "anchor": "export function npcTransaction("
+        }
+      ],
+      "tests": [
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/owner-keys.test.ts",
+          "name": "can be a function-call key for the game contract and the five market methods: every call he signs is one, with no deposit"
+        },
+        {
+          "pkg": "app",
+          "file": "apps/wgp/src/evidence/owner-keys.test.ts",
+          "name": "is shown by its public key only, so anyone can see which of his keys the server holds"
+        }
+      ]
     },
     {
       "id": "econdoc-owner-settings",
@@ -7639,7 +7991,7 @@
     "site-npc": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market/npc",
-      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, and shows at least one move with its transaction.",
+      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says which brain picks his moves (brain.mode: llm, with the model, when the server has LLM_API_KEY; rules otherwise).",
       "expect": [
         {
           "path": "mode",
@@ -7675,9 +8027,14 @@
           "path": "log.*.txUrl",
           "op": "anyMatch",
           "value": "^https://nearblocks\\.io/txns/[1-9A-HJ-NP-Za-km-z]{43,44}$"
+        },
+        {
+          "path": "brain.mode",
+          "op": "anyMatch",
+          "value": "^(llm|rules)$"
         }
       ],
-      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md."
+      "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md. If brain.mode is missing, production runs a build from before the brain (feat/npc-agent)."
     },
     "site-play": {
       "kind": "http",

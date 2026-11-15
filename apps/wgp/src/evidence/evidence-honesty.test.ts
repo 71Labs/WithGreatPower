@@ -280,7 +280,7 @@ describe("wording that has to be the same everywhere", () => {
     expect(what("Practice only")).toContain("not on NEAR");
     expect(what("Simulation only")).toContain("Nothing in it is on chain.");
     expect(what("Built, not deployed")).toMatch(/reviewed by a second AI agent that did not write it; not an audit/);
-    expect(rows.find((r) => r[1]!.includes("Sandwich Man"))![1]).toContain("He is rule-based, not an AI agent.");
+    expect(rows.find((r) => r[1]!.includes("Sandwich Man"))![1]).toContain("an LLM, Kimi K3 (Moonshot), picks one or passes, and the rules pick whenever it can't");
     // The one command, and a pointer to what isn't proven; the evidence system no longer leads.
     expect(opening).toContain("`pnpm install --frozen-lockfile && pnpm evidence --chain`");
     expect(opening).toContain("[Limits](#limits-and-whats-next)");
