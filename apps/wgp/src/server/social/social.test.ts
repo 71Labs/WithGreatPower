@@ -14,7 +14,7 @@ import { freshDb, givePlayerHero, heroSave, makePlayer } from "@/server/db/test-
 import { HttpError } from "@/server/http";
 
 import { adminAccountIds, requireAdmin } from "./admin";
-import { devLog, txUrl } from "./generators";
+import { devLog, feeBurnText, txUrl } from "./generators";
 import { setXProfile } from "./players";
 import { decideDraft, listDrafts, nearMentionFree, syncDrafts } from "./queue";
 
@@ -184,10 +184,24 @@ describe("draft generators", () => {
     const now = new Date("2026-11-08T12:00:00Z");
     const row = (item: string, hoursAgo: number, priceMilli: number) => ({ item, at: new Date(now.getTime() - hoursAgo * 3_600_000), kind: "snapshot", onChain: true, priceMilli, stock: 50, till: 1000 });
     await db.insert(marketPrices).values([row("fee-bomb", 30, 1000), row("fee-bomb", 6, 1150), row("fee-bomb", 1, 1300), row("crumbs", 30, 1000), row("crumbs", 1, 1100)]);
-    await syncDrafts(db, { now });
+    await syncDrafts(db, { now, feeBps: 500 });
     const d = (await draftFor("market_move:fee-bomb:2026-11-08"))!;
-    expect(d.text).toBe(`Fee bomb at Gwei’s stall: ${formatPrice(1000)} → ${formatPrice(1300)} Bits today. Players move the prices; 2% of every trade burns.\n\n#NEARHackathon`);
+    expect(d.text).toBe(`Fee bomb at Gwei’s stall: ${formatPrice(1000)} → ${formatPrice(1300)} Bits today. Players move the prices; 5% of every trade burns.\n\n#NEARHackathon`);
     expect(await draftFor("market_move:crumbs:2026-11-08")).toBeUndefined();
+  });
+
+  it("says the market's live fee in a market move, never a fixed one, and no number when it can't be read", () => {
+    expect(feeBurnText(500)).toBe("5% of every trade burns");
+    expect(feeBurnText(200)).toBe("2% of every trade burns");
+    expect(feeBurnText(null)).toBe("a gas fee on every trade burns");
+  });
+
+  it("leaves the number out when the chain's fee can't be read (no NEAR here)", async () => {
+    const now = new Date("2026-11-08T12:00:00Z");
+    const row = (hoursAgo: number, priceMilli: number) => ({ item: "fee-bomb", at: new Date(now.getTime() - hoursAgo * 3_600_000), kind: "snapshot", onChain: true, priceMilli, stock: 50, till: 1000 });
+    await db.insert(marketPrices).values([row(30, 1000), row(1, 1300)]);
+    await syncDrafts(db, { now });
+    expect((await draftFor("market_move:fee-bomb:2026-11-08"))!.text).toContain("Players move the prices; a gas fee on every trade burns.");
   });
 
   it("quote The Daily Rug's headline for last night's #1", async () => {
