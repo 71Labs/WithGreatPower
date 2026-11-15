@@ -52,7 +52,7 @@ const E = "apps/wgp/src/evidence/";
  */
 const TEXT_ONLY: Record<string, string[]> = {
   [`${E}readme-flow.test.ts`]: ["every button and label", "every page the README names", "the keys the README gives", "the market step is in two labelled parts"],
-  [`${E}readme-numbers.test.ts`]: ["the market: fee, pools", "the app's market defaults", "the Bits a night earns", "the ways to play: how many", "the verifier's limits", "rewards, the relayer", "Sandwich Man's limits", "the other docs:", "the starting prices", "the contract's unit-test count", "the bot's scores under Limits", "the deployed code hash", "suits are cosmetic, as the README says"],
+  [`${E}readme-numbers.test.ts`]: ["the market: fee, pools", "the app's market defaults", "the Bits a night earns", "the ways to play: how many", "the verifier's limits", "rewards, the relayer", "Sandwich Man's limits", "the other docs:", "the starting prices", "the contract's unit-test count", "the bot's scores under Limits", "the deployed code hash", "suits are cosmetic, as the README says", "the relayer's budgets, the reward entry's limits"],
   [`${E}built-not-live.test.ts`]: ["*"],
   [`${E}claims-precise.test.ts`]: ["pnpm stats' duration", "the documents state those bounds", "names all three sources", "the three /api/cron routes", "the libraries the README credits", "every file the disclosures", "each chapter document", "ARCHITECTURE.md's route table"],
   [`${E}readme-evidence.test.ts`]: ["states the real order", "says in every place", "discloses his seed", "dates the live counts", "every row of", "every transaction the README lists", "every evidence link", "the README has the Evidence section"],
@@ -252,8 +252,9 @@ describe("wording that has to be the same everywhere", () => {
     const opening = readme.slice(title.length, readme.indexOf("\n## "));
     // The pitch comes first, in plain words: what it is, what is different, and no popups after Google sign-in.
     const pitch = opening.trim().split("\n\n")[0]!;
-    expect(pitch.startsWith("With Great Power is a 3D web-swinging game you play free in a browser")).toBe(true);
-    for (const words of ["**Every ranked score is replayed and verified by the server**", "anyone can re-run that replay with one command", "a NEP-245 token in one contract on NEAR mainnet", "after a Google sign-in there are no wallet popups"]) expect(pitch).toContain(words);
+    // It opens on the world and its economy: the villains, Gwei's market inside the contract and Sandwich Man.
+    expect(pitch.startsWith("With Great Power is set in a city that runs on \"mainnet\", where the villains are a market's oldest tricks given faces")).toBe(true);
+    for (const words of ["The city's shop is the Mempool Market, and it lives inside a NEAR contract", "a 3D web-swinging game you play free in a browser", "**Every ranked score is replayed and verified by the server**", "anyone can re-run that replay with one command", "a NEP-245 token in one contract on NEAR mainnet", "after a Google sign-in there are no wallet popups"]) expect(pitch).toContain(words);
     expect(pitch).not.toMatch(/EVIDENCE\.md|pnpm/);
     // One screenshot that the Screenshots section also shows, then the Play link.
     const shot = /!\[[^\]]+\]\((docs\/screenshots\/[^)]+)\)/.exec(opening)?.[1];

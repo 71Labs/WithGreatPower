@@ -24,7 +24,7 @@ Each row names the code, a command or test that exercises it, and its row in [do
 | Gwei's new stock | Four items earned from the Daily Run and cases, two suits that burn them, and their pools; awarded only while the pool exists on chain | `apps/wgp/src/lib/market/new-stock.ts`, `apps/wgp/src/server/market/new-stock.ts` | Open `/play/market` | `status-new-stock` |
 | The merchant's reasoning | "Why this price?" explains each price from the vendor's stock and till | `apps/wgp/src/lib/market/reasoning.ts` | Open `/play/market` and tap **Why this price?** | `track-reasoning-tooltip` |
 | NEAR Intents gas tank | `/gas` asks the 1Click API for a quote that turns USDC, ETH, SOL or BTC from 5 chains into NEAR for the relayer; the server fixes the recipient | `apps/wgp/src/server/intents/one-click.ts`, `apps/wgp/src/app/api/intents/` | A dry quote (moves nothing; any valid EVM address works as the refund address): `curl -s -X POST https://www.wgponnear.fun/api/intents/quote -H 'content-type: application/json' -d '{"assetId":"nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near","amount":"2","refundTo":"0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045","recipient":"someone-else.near"}' \| jq '{dry, recipient, amountOutFormatted}'` prints `"recipient": "relayer.wgpnear.near"` | `track-intents`, `tryit-gas` |
-| Seasons on chain | At a season's close the standings are frozen with a Merkle root, and `record_season` stores it and mints soulbound trophies to the top 10 | `apps/wgp/src/server/near/season.ts`, `season-record.ts`, `contracts/wgp/src/lib.rs` (`record_season`) | `apps/wgp/src/server/near/season-record.test.ts`; the first mainnet run is at Season 1's close (Nov 15, 00:50 UTC) | `near-seasons`, `status-season` |
+| Seasons on chain | At a season's close the standings are frozen with a Merkle root, and `record_season` stores it and mints soulbound trophies to the top 10 | `apps/wgp/src/server/near/season.ts`, `season-record.ts`, `contracts/wgp/src/lib.rs` (`record_season`) | `apps/wgp/src/server/near/season-record.test.ts`; Season 1's record on mainnet: `get_season("s1")`, written Nov 15, 2026 at 01:26 UTC | `near-seasons`, `status-season-after`, `proven-record-season` |
 | Safe upgrades | `upgrade` uses low-level promise calls, and a script refuses a wasm that imports host functions mainnet lacks | `contracts/wgp/src/lib.rs` (`upgrade`), `scripts/near/check-wasm-imports.mjs` | `apps/wgp/src/evidence/wasm-imports.test.ts` | `near-upgrades` |
 | The evidence ledger | Every quoted README sentence maps to a test or a read-only check | `scripts/evidence.mjs`, `docs/evidence.json` | `pnpm evidence --chain` | `evidence-output` |
 
@@ -58,23 +58,30 @@ Transactions the evidence ledger looks up again on every `--chain` run (check id
 | The one-off seed: the operator's mint_rewards of 300 Bits to Sandwich Man, nonce 1, with the digest sha256("npc-seed:sandwich.wgpnear.near:v1") | [`Hjvobzmddf…`](https://nearblocks.io/txns/HjvobzmddfFdFeKoifAZP9wf1YMSEA6qkqpBRC5kFPG7) | `tx-npc-seed` |
 | Sandwich Man's first trade: a market_buy of 2 Sybil goo from Gwei for 72 Bits, signed by his own key (not relayed), with no deposit and the fee burned | [`AcmNAmHr1F…`](https://nearblocks.io/txns/AcmNAmHr1FDHEzW6YNMFC3ULwnMmGWnyBCyihmk6LVSf) | `tx-npc-first-trade` |
 | The Nov 13, 2026 top-up of the contract's storage balance: a transfer from the relayer's account to game.wgpnear.near | [`FH2tpfkzDk…`](https://nearblocks.io/txns/FH2tpfkzDkY8MtEX6fWCmMc7E7RRndGA8nibM1ZYEjuB) | `tx-contract-topup` |
+| A player's cancel_listing, relayed: 2 Sybil goo back from escrow | [`J8rLL9GWab…`](https://nearblocks.io/txns/J8rLL9GWab9AeB1DTNy8fC7GCa9NbpyXXpKWKeXAKF8t) | `tx-cancel-listing` |
+| The Nov 14, 2026 transfer from game.wgpnear.near to the relayer that ended the relayer outage | [`GU8GVkK3a2…`](https://nearblocks.io/txns/GU8GVkK3a2mDkypzEz1cAVnHihVQLKQBUJKQ9oeyYs2d) | `tx-relayer-refill` |
+| game.wgpnear.near registers the relayer on wrap.near (Nov 14, 2026) | [`DWFUoozvVD…`](https://nearblocks.io/txns/DWFUoozvVD7ZLDwxCvrQusKd13mXFVSR9g5qCrx4gvAr) | `tx-wrap-register` |
+| Season 1's record_season, with trophy:s1:1 to trophy:s1:10 (Nov 15, 2026, 01:26 UTC) | [`AxLWpz5m6m…`](https://nearblocks.io/txns/AxLWpz5m6mAkpem3WoXyLuUqZ29K3Pudx4Q5To1YD5ZX) | `tx-record-season` |
+| The owner's set_rules (Nov 15, 2026, after the deadline) | [`GzMYer3o5C…`](https://nearblocks.io/txns/GzMYer3o5CoxzaUmHGRn3K7nweHLWLxoCVj61Wo51EXY) | `tx-set-rules` |
+| The owner's set_market_params: 5% fee, 250-Bit crafting, four new pools (Nov 15, 2026, after the deadline) | [`BskDQS99TN…`](https://nearblocks.io/txns/BskDQS99TNYaxZqmhEHD5WA8B2R8HqcEW69fkXkhJuoK) | `tx-new-market-params` |
+| A Sandwich Man market_buy of Nov 15, 2026, signed by his own key | [`6cjd1ffrZU…`](https://nearblocks.io/txns/6cjd1ffrZUXqoafzBydwQAZmjdBAKfna9B3PNMFtZuAN) | `tx-npc-llm-trade` |
 
 The player transactions above come from five different accounts, none of them the author's (check `player-senders`).
 
 ## The evidence ledger at a glance
 
-`docs/evidence.json` holds 230 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
+`docs/evidence.json` holds 246 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
 
 | Status | Claims |
 |---|---|
-| `proven by test` | 105 |
-| `proven on chain` | 45 |
-| `live check` | 18 |
+| `proven by test` | 121 |
+| `proven on chain` | 59 |
+| `live check` | 20 |
 | `pinned by test` | 8 |
 | `simulation only` | 24 |
-| `built, off on mainnet` | 3 |
-| `checked in git` | 4 |
-| `owner action needed` | 9 |
+| `built, off on mainnet` | 0 |
+| `checked in git` | 6 |
+| `owner action needed` | 8 |
 
 What is not live, so a review doesn't have to dig for it (details in the README's opening table and "Limits and what's next"):
 
@@ -82,7 +89,8 @@ What is not live, so a review doesn't have to dig for it (details in the README'
 - `/lab/economy` is a simulation of bot players, not mainnet.
 - The NEAR Intents gas tank's quotes are live; its first real refill had not landed when this was written.
 - NEAR Auth is built and waits on NEAR adding the site to its mainnet client.
-- Season 1's on-chain record is written at its close (Nov 15, 2026, 00:50 UTC); check `season-s1` follows it through open, closed and recorded.
+- Season 1's on-chain record landed on Nov 15, 2026 at 01:26 UTC (`AxLWpz5m…`, check `tx-record-season`); check `season-s1` asserts the recorded state in full.
+- Some of what the README describes changed after the 2026-11-14 23:59 UTC deadline (the tag `hackathon-submission` marks it); the README's "Changed after the deadline (Nov 15, 2026)" lists each change.
 - Traffic is a small, incentivised playtest (daily airdrops, sent outside the game); "By the numbers" in the README has the counts and their caveats, and [docs/TRACTION.md](docs/TRACTION.md) breaks them down by day (`pnpm traction`).
 - Costs and runway are measured from mainnet history in [docs/SUSTAINABILITY.md](docs/SUSTAINABILITY.md) under "Measured costs" (`pnpm costs`); there is no revenue yet.
 - Trust: the owner key is in the production environment, and `game.wgpnear.near` has a full-access key held by the owner; both are disclosed under Limits, with the plan to remove them after judging.
@@ -123,8 +131,8 @@ Times are from a fresh anonymous clone on Nov 14, 2026 (Apple silicon laptop).
 | `pnpm install --frozen-lockfile` | Exit 0 | about 25 s |
 | `pnpm test` | game-core `284 passed`, app `1785 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
 | `pnpm verify` | `5/5 runs reproduced from https://www.wgponnear.fun.` (replays the All-time top 5 from the live site) | about 5 s |
-| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `230 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
-| `pnpm evidence --chain` | `230 claims: 230 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
+| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `246 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
+| `pnpm evidence --chain` | `246 claims: 246 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
 | `pnpm evidence --chain --only <id>,<id>` | Re-runs single claims (ids are in `docs/EVIDENCE.md`) | seconds |
 | `pnpm typecheck` / `pnpm lint` / `pnpm build` | Exit 0; the build needs no database URL | under 1 min each |
 | `pnpm stats` | Counts from NearBlocks and `/api/stats`; NearBlocks rate-limits, so it can take a couple of minutes | 1–3 min |

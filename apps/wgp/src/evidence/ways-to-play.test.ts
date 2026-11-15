@@ -64,6 +64,7 @@ describe("the ways to play are the ones the code has", () => {
   it("the README's table names exactly these ways, and its count is theirs", () => {
     const rows = tableAfter(read("README.md"), "## Ways to play").map((cells) => cells[0]!.replace(/[*`]/g, "").replace(/\s*\(.*$/, ""));
     expect(rows).toEqual(WAYS.map((w) => w.row));
-    expect(plainDoc("README.md")).toContain(`${WAYS.length} ways to play; all are built.`);
+    // Built, and honest in the same sentence about the one way nobody has a verified run in yet.
+    expect(plainDoc("README.md")).toContain(`${WAYS.length} ways to play; all are built, and one of them, Duels, has no verified run yet.`);
   });
 });
