@@ -70,7 +70,7 @@ The player transactions above come from five different accounts, none of them th
 
 ## The evidence ledger at a glance
 
-`docs/evidence.json` holds 255 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
+`docs/evidence.json` holds 256 claims quoted from the README and docs; `docs/EVIDENCE.md` is generated from it. Each claim has a status that says how far its proof reaches (defined in the README's "How verification works"):
 
 | Status | Claims |
 |---|---|
@@ -80,7 +80,7 @@ The player transactions above come from five different accounts, none of them th
 | `pinned by test` | 8 |
 | `simulation only` | 24 |
 | `built, off on mainnet` | 0 |
-| `checked in git` | 6 |
+| `checked in git` | 7 |
 | `owner action needed` | 8 |
 
 What is not live, so a review doesn't have to dig for it (details in the README's opening table and "Limits and what's next"):
@@ -131,8 +131,8 @@ Times are from a fresh anonymous clone on Nov 14, 2026 (Apple silicon laptop).
 | `pnpm install --frozen-lockfile` | Exit 0 | about 25 s |
 | `pnpm test` | game-core `284 passed`, app `1811 passed` (a few skipped). Tests use in-memory PGlite and make no network request | about 3–4 min |
 | `pnpm verify` | `5/5 runs reproduced from https://www.wgponnear.fun.` (replays the All-time top 5 from the live site) | about 5 s |
-| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `255 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
-| `pnpm evidence --chain` | `255 claims: 255 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
+| `pnpm evidence` | One PASS, FAIL or SKIP line per claim, then `256 claims: … 0 FAIL …`. Rows whose proof is on chain or on the live site SKIP without `--chain` | about 2–3 min |
+| `pnpm evidence --chain` | `256 claims: 256 PASS, 0 FAIL, 0 SKIP.` Reads mainnet and the live site; read-only | about 4–6 min |
 | `pnpm evidence --chain --only <id>,<id>` | Re-runs single claims (ids are in `docs/EVIDENCE.md`) | seconds |
 | `pnpm typecheck` / `pnpm lint` / `pnpm build` | Exit 0; the build needs no database URL | under 1 min each |
 | `pnpm stats` | Counts from NearBlocks and `/api/stats`; NearBlocks rate-limits, so it can take a couple of minutes | 1–3 min |

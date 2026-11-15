@@ -7536,6 +7536,16 @@
       ]
     },
     {
+      "id": "disclosures-after-deadline-79",
+      "section": "disclosures",
+      "source": "README.md",
+      "quote": "Pull request #79 merged (eb54c6a) and deployed: NEAR AI Cloud as Sandwich Man's preferred brain, with each answer's attestation and signature checked, which stays off until NEARAI_API_KEY is set in production (until then Kimi K3 picks)",
+      "status": "checked in git",
+      "chain": [
+        "after-deadline-79"
+      ]
+    },
+    {
       "id": "disclosures-ai-trailer",
       "section": "disclosures",
       "source": "README.md",
@@ -8568,7 +8578,7 @@
     "site-npc": {
       "kind": "http",
       "url": "https://www.wgponnear.fun/api/market/npc",
-      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says an LLM picks his moves (brain.mode is llm: the server has LLM_API_KEY).",
+      "about": "The live game says Sandwich Man trades on chain from his own account, links it to the explorer, shows at least one move with its transaction, and says an LLM picks his moves (brain.mode is llm: the server has LLM_API_KEY); brain.provider names the LLM provider (near-ai once NEARAI_API_KEY is set, moonshot for Kimi K3).",
       "expect": [
         {
           "path": "mode",
@@ -8609,6 +8619,11 @@
           "path": "brain.mode",
           "op": "eq",
           "value": "llm"
+        },
+        {
+          "path": "brain.provider",
+          "op": "anyMatch",
+          "value": "^(near-ai|moonshot)$"
         }
       ],
       "whenFails": "If mode is off, his account id or key was removed from production: say so in the README's track table and docs/npc-trader.md. If brain.mode is missing, production runs a build from before the brain (feat/npc-agent). If brain.mode is rules, LLM_API_KEY is missing from production: set it, or say so in the README and docs/npc-trader.md."
@@ -10199,6 +10214,32 @@
           "path": "logs",
           "op": "anyMatch",
           "value": "\"event\":\"season\".*\"season_id\":\"s1\""
+        }
+      ]
+    },
+    "after-deadline-79": {
+      "kind": "git",
+      "order": [
+        "e55d3b540668ba964c7a121081c5e7ca5985e80a",
+        "10b1380436860cbe70939955a5309f4d1693d3be",
+        "eb54c6a78fa2ac48ba51b7a6587f11575438ad01"
+      ],
+      "about": "The later merges: e55d3b5 (pull request #77) is in the history of 10b1380 (pull request #78), which is in the history of eb54c6a (pull request #79), all on Nov 15. Local: needs this clone's history, no network.",
+      "expect": [
+        {
+          "path": "inOrder",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "dates.1",
+          "op": "anyMatch",
+          "value": "^2026-11-15 "
+        },
+        {
+          "path": "dates.2",
+          "op": "anyMatch",
+          "value": "^2026-11-15 "
         }
       ]
     }
