@@ -12,9 +12,9 @@ import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId, Rarity } from "@wgp/game-core/types";
 
 import { Economy, LAB_INVESTORS, type BotKind, type DaySnapshot, type EconomyConfig } from "./bots";
-import { BITS_TOKEN, CURVES, DEFAULT_PARAMS, defaultPoolConfigs, type MarketParams, type PoolConfig } from "./config";
+import { BITS_TOKEN, CURVES, DEFAULT_PARAMS, PROPOSED_PARAMS, defaultPoolConfigs, type MarketParams, type PoolConfig } from "./config";
 import { sellQuote, type Pool } from "./math";
-import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, taperedNightBits, type Taper } from "./rewards";
+import { BITS_FOR_LEVEL_UP, BITS_FOR_SHOWING_UP, NIGHT_TAPER, taperedNightBits, type Taper } from "./rewards";
 
 export interface Setting {
   id: string;
@@ -31,8 +31,11 @@ export interface Setting {
   taper: Taper | null;
 }
 
-/** What game.wgpnear.near holds today: 2% fee, free crafting, the seeded curves. */
-export const MAINNET: Setting = { id: "mainnet", label: "Mainnet today", craftBits: 0, feeBps: 200, priceScale: 1, depthScale: 1, taper: null };
+/**
+ * Before the proposal: what game.wgpnear.near held until the owner's `set_market_params`
+ * (2% fee, free crafting, the seeded curves), with the flat faucet nights paid before the taper.
+ */
+export const MAINNET: Setting = { id: "mainnet", label: "Before", craftBits: 0, feeBps: 200, priceScale: 1, depthScale: 1, taper: null };
 
 const rarityOf = (item: string) => (ITEMS[item as ItemId] as { rarity: Rarity }).rarity;
 
@@ -288,12 +291,20 @@ export function verdict(season: Measure, sixty: Measure): Verdict {
 
 /* ------------------------------------------------------------------ the settings */
 
-/** Step 1, one owner transaction: crafting burns Bits and the gas fee goes to 5%. Curves stay. */
-export const RECOMMENDED: Setting = { id: "recommended", label: "Recommended", craftBits: 250, feeBps: 500, priceScale: 1, depthScale: 1, taper: null };
+/**
+ * The owner's part, one `set_market_params` transaction: crafting burns 250 Bits a suit and
+ * the gas fee goes to 10%, the contract's cap. Curves stay. Measured here with the flat faucet.
+ */
+export const RECOMMENDED: Setting = { id: "recommended", label: "Recommended", craftBits: PROPOSED_PARAMS.craftBits, feeBps: PROPOSED_PARAMS.feeBps, priceScale: 1, depthScale: 1, taper: null };
 
-/** Step 2, a server rule: the faucet slows above a suit's price and stops at twice it. */
-export const RECOMMENDED_TAPER: Taper = { fullBelow: RECOMMENDED.craftBits, floorAt: 2 * RECOMMENDED.craftBits };
-export const RECOMMENDED_WITH_TAPER: Setting = { ...RECOMMENDED, id: "recommended-taper", label: "Recommended + faucet taper", taper: RECOMMENDED_TAPER };
+/** The server's part: the wallet taper verified nights are paid with (rewards.ts `NIGHT_TAPER`, live in runs.ts). */
+export const RECOMMENDED_TAPER: Taper = NIGHT_TAPER;
+
+/** The whole proposal, the owner's settings and the live taper: what /lab/economy opens on. */
+export const RECOMMENDED_WITH_TAPER: Setting = { ...RECOMMENDED, id: "recommended-taper", label: "Proposed: owner's settings + faucet taper", taper: RECOMMENDED_TAPER };
+
+/** Between the deploy and the owner's call: the taper pays nights, the market still has the old settings. */
+export const TAPER_ONLY: Setting = { ...MAINNET, id: "taper-only", label: "Taper live, owner's call pending", taper: NIGHT_TAPER };
 
 /**
  * A stress run that shows Gwei's two limits on mainnet's own rules and curves: three
