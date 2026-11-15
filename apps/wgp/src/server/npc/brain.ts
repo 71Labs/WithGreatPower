@@ -81,7 +81,17 @@ function contentOf(body: unknown): string | null {
  * when `config` is given and `callsLeft` > 0; otherwise, or when its answer is unusable,
  * the rules' first move. Never throws.
  */
-export async function chooseMove(input: BrainInput, opts: { config: BrainConfig | null; callsLeft: number; fetch?: BrainFetch; timeoutMs?: number }): Promise<NpcChoice> {
+export async function chooseMove(
+  input: BrainInput,
+  opts: {
+    config: BrainConfig | null;
+    callsLeft: number;
+    fetch?: BrainFetch;
+    timeoutMs?: number;
+    /** Runs (and is awaited) just before the request goes out, so the call is counted even if the function dies mid-call. */
+    onCall?: () => Promise<void>;
+  },
+): Promise<NpcChoice> {
   const { options } = input;
   if (options.length === 0) return { action: null, by: RULES_BRAIN, reason: "", fallback: null, called: false };
   const { config } = opts;
@@ -90,8 +100,10 @@ export async function chooseMove(input: BrainInput, opts: { config: BrainConfig 
 
   const send: BrainFetch = opts.fetch ?? ((url, init) => fetch(url, init));
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? NPC_BRAIN.timeoutMs);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    await opts.onCall?.();
+    timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? NPC_BRAIN.timeoutMs);
     const res = await send(config.url, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },

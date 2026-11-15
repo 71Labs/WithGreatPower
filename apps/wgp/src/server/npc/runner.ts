@@ -35,7 +35,7 @@ import { chooseMove, npcBrainConfig, type BrainConfig, type BrainFetch } from ".
 import { sendNpcAction, type NpcSent } from "./chain";
 import { NPC_SIM_ACCOUNT, npcTraderEnv } from "./env";
 import { npcSimTurn } from "./sim";
-import { brainCallsToday, claimRun, finishRun, withBrainCall, type NpcDecision, type NpcState } from "./store";
+import { brainCallsToday, claimRun, finishRun, recordBrainCall, withBrainCall, type NpcDecision, type NpcState } from "./store";
 
 /** No look within this long of the last one, whatever triggers it. */
 export const MIN_GAP_MS = 20_000;
@@ -119,8 +119,14 @@ async function chainTurn(db: Db, state: NpcState, env: KeyedAccountEnv, chain: N
   const options = decide(market, wallet, listings, t);
   if (options.length === 0) return { books: seen.books, events: seen.events, report: { why: "nothing_to_do" } as const };
 
-  const choice = await chooseMove(brainInput(options, wallet, booksToday(seen.books, w.bits, t), listings, t), { ...brain, callsLeft: NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, t) });
-  if (choice.called) meter.brain = withBrainCall(state, t);
+  const choice = await chooseMove(brainInput(options, wallet, booksToday(seen.books, w.bits, t), listings, t), {
+    ...brain,
+    callsLeft: NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, t),
+    onCall: async () => {
+      meter.brain = await recordBrainCall(db, true, state, t);
+    },
+  });
+  if (choice.called) meter.brain ??= withBrainCall(state, t);
   const action = choice.action;
   const decision: NpcDecision = { at: t, by: choice.by, pick: action?.kind ?? "pass", text: action?.text ?? null, reason: choice.reason, fallback: choice.fallback, options: options.length };
   const said = { brain: choice.by, fallback: choice.fallback } as const;

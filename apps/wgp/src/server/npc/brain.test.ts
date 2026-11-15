@@ -257,6 +257,18 @@ describe("cost", () => {
     expect(llm.calls).toHaveLength(NPC_BRAIN.maxCallsPerDay + 1);
     expect(NPC_RULES.maxActionsPerDay).toBe(10);
   });
+
+  it("books each call before it goes out, so a function that dies mid-call can't slip past the cap", async () => {
+    const { chain } = fakeChain([listing(7, 13)]);
+    let countedDuringCall = -1;
+    const llm: BrainFetch = async () => {
+      countedDuringCall = (await readNpcState(db, true, NPC.accountId)).brainCalls;
+      return completion(pick(1));
+    };
+    await runNpcTrader(db, { now: NOW, onChain: true, env: NPC, chain, brain: LLM, brainFetch: llm });
+    expect(countedDuringCall).toBe(1);
+    expect((await readNpcState(db, true, NPC.accountId)).brainCalls).toBe(1);
+  });
 });
 
 describe("what the LLM's answer may change", () => {

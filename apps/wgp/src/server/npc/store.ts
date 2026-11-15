@@ -95,6 +95,16 @@ export async function claimRun(db: Db, onChain: boolean, accountId: string, nowM
   });
 }
 
+/**
+ * Books one LLM call before it goes out, while the run holds the lock: the day's count is
+ * then on record even if the function dies mid-call, so the daily cap holds whatever happens.
+ */
+export async function recordBrainCall(db: Db, onChain: boolean, state: NpcState, nowMs: number): Promise<Pick<NpcState, "brainDay" | "brainCalls">> {
+  const counted = withBrainCall(state, nowMs);
+  await db.update(marketSim).set({ state: { ...state, ...counted }, updatedAt: new Date(nowMs) }).where(eq(marketSim.id, npcRowId(onChain)));
+  return counted;
+}
+
 /** Writes the run's books and ledger lines and frees the lock. */
 export async function finishRun(
   db: Db,
