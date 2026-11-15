@@ -9,7 +9,7 @@
  */
 import { connection } from "next/server";
 
-import { npcTraderSoon } from "@/server/background";
+import { npcTraderSoon, npcVisitSoon } from "@/server/background";
 import { clientIp, handle, json } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
 import { npcTraderView } from "@/server/npc/view";
@@ -20,6 +20,7 @@ export const GET = handle("market/npc", (request: Request) =>
     await connection();
     rateLimiter.enforce("market-ip", clientIp(request), MARKET_LIMITS.readPerIp);
     npcTraderSoon("read");
+    npcVisitSoon();
     return json(await npcTraderView());
   }),
 );

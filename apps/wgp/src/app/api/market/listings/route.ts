@@ -9,6 +9,7 @@ import { z } from "zod";
 import { ITEMS } from "@wgp/game-core/data";
 import type { ItemId } from "@wgp/game-core/types";
 
+import { npcVisitSoon } from "@/server/background";
 import { badRequest, clientIp, handle, json } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
 import { marketListings } from "@/server/market/view";
@@ -25,6 +26,7 @@ export const GET = handle("market/listings", (request: NextRequest) =>
     const parsed = query.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) throw badRequest("Bad listings query", { issues: parsed.error.issues.map((i) => i.message) });
     rateLimiter.enforce("market-ip", clientIp(request), MARKET_LIMITS.readPerIp);
+    npcVisitSoon();
     const { item, from, limit } = parsed.data;
     const all = await marketListings();
     const rows = item ? all.listings.filter((l) => l.item === item) : all.listings;

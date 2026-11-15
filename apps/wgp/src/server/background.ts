@@ -25,8 +25,11 @@
  *   runs (no window); the grant is idempotent by its table's primary key.
  * - Sandwich Man, the market's NPC trader (src/server/npc/runner.ts): takes one look at the
  *   market after a player's trade or listing lands, and when the market is read, at most
- *   once every 5 minutes. A look is at most one action; his own lock keeps looks at least
- *   20 seconds apart and never overlapping.
+ *   once every 5 minutes. Any visit to a busy route (/api/stats, the leaderboards, seasons,
+ *   /api/me, /api/market/*) also gives him a turn if his last one started 15 minutes ago or
+ *   more: with no visitors there is no turn; with visitors he takes at most one turn every
+ *   15 minutes this way, still capped at 10 actions a day. A look is at most one action; his
+ *   own lock keeps looks at least 20 seconds apart and never overlapping.
  *
  * Every job is idempotent, and the windows are rows in budget_counters, so they hold
  * across serverless instances. The /api/cron/* routes stay as manual triggers, guarded by
@@ -183,6 +186,38 @@ export function checkReferralsSoon(input: { friend?: string; referrer?: string }
 export function npcTraderSoon(trigger: "activity" | "read"): void {
   if (trigger === "read") whenDue("npcTrader", (db) => runNpcTrader(db));
   else afterResponse("npcTrader", (db) => runNpcTrader(db));
+}
+
+/** A visit gives Sandwich Man a turn when his last one started at least this long ago. */
+export const NPC_VISIT_GAP_MS = 15 * 60_000;
+/** Per instance: after a visit asked for a turn, the next visit on this instance asks again only after this long. */
+export const NPC_VISIT_RECHECK_MS = 60_000;
+
+const npcVisitClock: { nextAt: number } = ((globalThis as typeof globalThis & { __wgpNpcVisitClock?: { nextAt: number } }).__wgpNpcVisitClock ??= {
+  nextAt: 0,
+});
+
+/**
+ * One visit's turn for Sandwich Man: a look at the market if his last one, whatever
+ * triggered it, started at least NPC_VISIT_GAP_MS ago. The gap is checked by his lock
+ * (src/server/npc/store.ts `claimRun`, a row lock in one transaction), so visits arriving
+ * together on several instances still give one turn. His caps don't change: at most one
+ * action a look, 10 a UTC day, 10 LLM calls a UTC day.
+ */
+export function npcVisitTurn(db: Db, now = new Date()) {
+  return runNpcTrader(db, { now, minGapMs: NPC_VISIT_GAP_MS });
+}
+
+/**
+ * Lets any visit give Sandwich Man a turn, after the response: call it from a busy route.
+ * Most calls cost nothing: an instance asks at most once every NPC_VISIT_RECHECK_MS, and
+ * the turn itself happens only if 15 minutes have passed since his last one. No visitors,
+ * no turn: nothing is scheduled.
+ */
+export function npcVisitSoon(now = Date.now()): void {
+  if (now < npcVisitClock.nextAt) return;
+  npcVisitClock.nextAt = now + NPC_VISIT_RECHECK_MS;
+  afterResponse("npcVisit", (db) => npcVisitTurn(db));
 }
 
 /** Seasons are dated weeks ahead; with nothing due, an instance looks again after this long at most. */

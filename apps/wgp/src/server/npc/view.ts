@@ -2,7 +2,8 @@
  * What the market screen's "Other traders" strip reads about Sandwich Man: whether he is
  * trading on chain, in the simulated market or off, his wallet, what he holds, his open
  * listings, the last lines of his ledger with their reasons, and who picks his moves
- * (`brain.mode`: "llm" with its model, or "rules"; the brain on each ledger line). Cached with the market
+ * (`brain.mode`: "llm" with its model and `brain.provider`, or "rules"; the brain on each ledger line),
+ * and what was checked about the last LLM answer he acted on (`brain.lastVerification`). Cached with the market
  * (tag "market", about 10 seconds); his own actions expire it.
  */
 import { cacheLife, cacheTag } from "next/cache";
@@ -46,16 +47,28 @@ const off = (now: number): NpcTraderView => ({
   now: new Date(now).toISOString(),
 });
 
+/** The newest LLM answer he acted on and what was checked about it: the last decision's, else the newest ledger line's. */
+function lastVerification(state: NpcState): NonNullable<NpcTraderView["brain"]>["lastVerification"] {
+  const d = state.lastDecision;
+  const line = [...state.log].reverse().find((e) => e.verification);
+  const pick = d?.verification ? { v: d.verification, at: d.at } : line?.verification ? { v: line.verification, at: line.at } : null;
+  if (!pick) return null;
+  const { v, at } = pick;
+  return { at: new Date(at).toISOString(), provider: v.provider, model: v.model, chatId: v.chatId, signingAddress: v.signingAddress, signatureKind: v.signatureKind, verified: v.verified, reason: v.reason };
+}
+
 /** Who picks his moves here, the day's LLM calls left and the last pick, from his state. */
 function brainView(onChain: boolean, state: NpcState, now: number): NonNullable<NpcTraderView["brain"]> {
-  const { mode, model } = npcBrainMode(onChain);
+  const { mode, model, provider } = npcBrainMode(onChain);
   const d = state.lastDecision;
   return {
     mode,
     model,
+    provider,
     maxCallsPerDay: NPC_BRAIN.maxCallsPerDay,
     callsLeft: Math.max(0, NPC_BRAIN.maxCallsPerDay - brainCallsToday(state, now)),
     last: d ? { at: new Date(d.at).toISOString(), by: d.by, pick: d.pick, text: d.text, reason: d.reason, fallback: d.fallback, options: d.options } : null,
+    lastVerification: lastVerification(state),
   };
 }
 
@@ -117,6 +130,7 @@ export async function buildNpcView(now = new Date()): Promise<NpcTraderView> {
         txHash: e.txHash,
         txUrl: e.txHash ? `${EXPLORER_URL}/txns/${e.txHash}` : null,
         brain: e.brain ?? null,
+        verified: e.verification ? e.verification.verified : null,
       })),
     brain: brainView(source.onChain, state, t),
     signerKey: source.onChain ? npcSignerKey() : null,

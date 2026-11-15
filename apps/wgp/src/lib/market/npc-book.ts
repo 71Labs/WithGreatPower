@@ -11,6 +11,7 @@
 import { ITEMS } from "@wgp/game-core/data";
 
 import type { Listing } from "./engine";
+import type { BrainVerification } from "./npc-brain";
 import { bitsText } from "./format";
 import { feeOf, spotMilli, type Pool } from "./math";
 
@@ -72,6 +73,8 @@ export interface NpcEvent {
   txHash: string | null;
   /** Which brain picked the move (./npc-brain.ts): the LLM's model id (e.g. "kimi-k3") or "rules". Absent on lines no brain decided (a sale, the seed) and on older lines. */
   brain?: string;
+  /** For a move an LLM picked: what was checked about its answer (provider, model, chat id, signer, verified and why not). Absent otherwise. */
+  verification?: BrainVerification;
 }
 
 export const itemName = (item: string) => (item in ITEMS ? ITEMS[item as keyof typeof ITEMS].name : item);

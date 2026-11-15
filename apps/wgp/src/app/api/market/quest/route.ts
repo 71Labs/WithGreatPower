@@ -6,6 +6,7 @@
  * 401 when signed out.
  */
 import { requireSession } from "@/server/auth/session";
+import { npcVisitSoon } from "@/server/background";
 import { getDb } from "@/server/db/client";
 import { handle, json } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
@@ -16,6 +17,7 @@ export const GET = handle("market/quest", (request: Request) =>
   marketRoute(async () => {
     const session = await requireSession(request);
     rateLimiter.enforce("market-quest", session.playerId, MARKET_LIMITS.mePerPlayer);
+    npcVisitSoon();
     const { view } = await marketQuestStatus(await getDb(), { playerId: session.playerId, accountId: session.player.nearAccountId });
     return json(view);
   }),

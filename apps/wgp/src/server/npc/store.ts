@@ -10,7 +10,7 @@
  */
 import { eq } from "drizzle-orm";
 
-import type { BrainFallback, NpcBrain } from "@/lib/market/npc-brain";
+import type { BrainFallback, BrainProvider, BrainVerification, NpcBrain } from "@/lib/market/npc-brain";
 import { newBooks, type NpcBooks, type NpcEvent, type NpcEventKind } from "@/lib/market/npc-book";
 
 import type { Db } from "../db/client";
@@ -34,6 +34,10 @@ export interface NpcDecision {
   fallback: BrainFallback | null;
   /** How many legal moves there were to pick from (a pass aside). */
   options: number;
+  /** Which LLM provider was asked, if one was (absent on older records). */
+  provider?: BrainProvider | null;
+  /** What was checked about the LLM's answer when he acted on it; null when the rules picked (absent on older records). */
+  verification?: BrainVerification | null;
 }
 
 export interface NpcState {

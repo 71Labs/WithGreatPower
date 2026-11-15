@@ -10,7 +10,7 @@
  */
 import type { NextRequest } from "next/server";
 
-import { closeSeasonsSoon, settleDailiesSoon } from "@/server/background";
+import { closeSeasonsSoon, npcVisitSoon, settleDailiesSoon } from "@/server/background";
 import { getSession } from "@/server/auth/session";
 import { leaderboardQuery, loadLeaderboard } from "@/server/db/board-view";
 import { competeBoard } from "@/server/db/compete";
@@ -22,6 +22,7 @@ export const GET = handle("leaderboard", async (request: NextRequest) => {
   const params = Object.fromEntries(request.nextUrl.searchParams);
   const now = new Date();
   const compete = typeof params.board === "string" ? competeBoard(params.board, params.period, now) : null;
+  npcVisitSoon();
   if (compete) {
     rateLimiter.enforce("leaderboard-ip", clientIp(request), RATE_LIMITS.leaderboardPerIp);
     if (compete.board === "daily") settleDailiesSoon();

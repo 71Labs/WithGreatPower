@@ -7,6 +7,7 @@
  */
 import { connection } from "next/server";
 
+import { npcVisitSoon } from "@/server/background";
 import { getDb } from "@/server/db/client";
 import { HttpError, clientIp, handle, json } from "@/server/http";
 import { MARKET_LIMITS, marketRoute } from "@/server/market/http";
@@ -17,6 +18,7 @@ export const GET = handle("market/wanted", (request: Request) =>
   marketRoute(async () => {
     await connection();
     rateLimiter.enforce("market-ip", clientIp(request), MARKET_LIMITS.readPerIp);
+    npcVisitSoon();
     const list = await wantedToday(await getDb());
     if (!list) throw new HttpError(503, "market_unavailable", "Gwei’s list isn’t posted yet; try again in a moment");
     return json(list, { cacheSeconds: 30 });
